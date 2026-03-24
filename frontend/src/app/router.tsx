@@ -5,6 +5,7 @@ import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
+import { createBrowserRouter } from 'react-router-dom'
 
 export function AppRouter() {
   return (
@@ -19,3 +20,12 @@ export function AppRouter() {
     </Routes>
   );
 }
+
+import { SurveyPage } from '@/pages/survey-page/ui/SurveyPage'
+
+export const router = createBrowserRouter([
+  {
+    path: '/survey/:id',
+    element: <SurveyPage />,
+  },
+])
