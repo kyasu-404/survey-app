@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "../../shared/api/supabase";
+import { apiClient } from "../../shared/api";
 
 type AuthContextValue = {
   user: User | null;
@@ -23,13 +23,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    apiClient.auth.getCurrentUser().then(({ data }) => {
       if (!mounted) return;
       setUser(data.user ?? null);
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = apiClient.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 

@@ -3,15 +3,19 @@ import DashboardPage from "../pages/DashboardPage/DashboardPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
+import { routes } from "./routes";
+import { AppLayout } from "./layout/AppLayout";
 
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/survey/:id" element={<SurveyPage />} />
-      <Route path="/builder" element={<BuilderPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route element={<AppLayout />}>
+        <Route path={routes.home} element={<DashboardPage />} />
+        <Route path={routes.surveyById} element={<SurveyPage />} />
+        <Route path={routes.builder} element={<BuilderPage />} />
+        <Route path={routes.login} element={<LoginPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to={routes.home} replace />} />
     </Routes>
   );
 }
