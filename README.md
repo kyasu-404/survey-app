@@ -61,6 +61,12 @@ create table responses (
   created_at timestamp default now()  
 );  
 
+create table surveys (
+  id uuid primary key default gen_random_uuid(),
+  title text,
+  schema jsonb
+);
+
 # Пользователи и роли  
 # Профили  
 create table profiles (  
