@@ -4,6 +4,7 @@ import { exportToExcel } from "../utils/export";
 
 export default function FormResponses({ formId }) {
   const [responses, setResponses] = useState([]);
+  const [columnsMap, setColumnsMap] = useState({});
   const [selectedColumns, setSelectedColumns] = useState([]);
 
   useEffect(() => {
@@ -11,18 +12,33 @@ export default function FormResponses({ formId }) {
   }, []);
 
   async function load() {
-    const { data } = await supabase
+    // 🔹 получаем форму
+    const { data: form } = await supabase
+      .from("forms")
+      .select("*")
+      .eq("id", formId)
+      .single();
+
+    // 🔥 строим map name → title
+    const map = {};
+    form.schema.pages?.forEach(page => {
+      page.elements?.forEach(el => {
+        map[el.name] = el.title;
+      });
+    });
+
+    setColumnsMap(map);
+
+    // 🔹 получаем ответы
+    const { data: responsesData } = await supabase
       .from("responses")
       .select("*")
       .eq("form_id", formId);
 
-    setResponses(data);
+    setResponses(responsesData);
   }
 
-  // 🔥 получаем все ключи из data
-  const allColumns = responses.length
-    ? Object.keys(responses[0].data || {})
-    : [];
+  const allColumns = Object.keys(columnsMap);
 
   function toggleColumn(col) {
     setSelectedColumns(prev =>
@@ -35,9 +51,12 @@ export default function FormResponses({ formId }) {
   function handleExport() {
     const filtered = responses.map(r => {
       const row = {};
+
       selectedColumns.forEach(col => {
-        row[col] = r.data?.[col];
+        const title = columnsMap[col]; // 👈 название
+        row[title] = r.data?.[col];
       });
+
       return row;
     });
 
@@ -48,25 +67,20 @@ export default function FormResponses({ formId }) {
     <div>
       <h2>Ответы</h2>
 
-      {/* 🔹 выбор колонок */}
-      <div>
-        <h4>Выбери колонки:</h4>
-        {allColumns.map(col => (
-          <label key={col} style={{ display: "block" }}>
-            <input
-              type="checkbox"
-              onChange={() => toggleColumn(col)}
-            />
-            {col}
-          </label>
-        ))}
-      </div>
+      <h4>Выбери колонки:</h4>
+      {allColumns.map(col => (
+        <label key={col} style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            onChange={() => toggleColumn(col)}
+          />
+          {columnsMap[col]} {/* 👈 название */}
+        </label>
+      ))}
 
       <button onClick={handleExport}>
         Экспорт в XLS
       </button>
-
-      <pre>{JSON.stringify(responses, null, 2)}</pre>
     </div>
   );
 }
