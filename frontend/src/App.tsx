@@ -1,19 +1,22 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-
-import Builder from "./pages/Builder";
-import Form from "./pages/Form";
-import FormsList from "./pages/FormsList";
-import AdminUsers from "./pages/AdminUsers";
+import { BrowserRouter } from "react-router-dom";
+import { AppRouter } from "./app/router";
+import { AuthProvider } from "./app/providers/AuthProvider";
+import { QueryProvider } from "./app/providers/QueryProvider";
+import { Sidebar } from "./widgets/Sidebar/Sidebar";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<FormsList />} />
-        <Route path="/builder" element={<Builder />} />
-        <Route path="/form/:id" element={<Form />} />
-        <Route path="/admin/users" element={<AdminUsers />} />
-      </Routes>
+      <QueryProvider>
+        <AuthProvider>
+          <div style={{ display: "flex", minHeight: "100vh" }}>
+            <Sidebar />
+            <main style={{ padding: 16, flex: 1 }}>
+              <AppRouter />
+            </main>
+          </div>
+        </AuthProvider>
+      </QueryProvider>
     </BrowserRouter>
   );
 }
