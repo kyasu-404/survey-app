@@ -1,15 +1,27 @@
 import { useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { login, register } from "../../features/auth/api";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { routes } from "../../app/routes";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+  const targetPath = from ?? routes.home;
+
+  if (!loading && user) {
+    return <Navigate to={targetPath} replace />;
+  }
 
   async function onLogin() {
     try {
       await login(email, password);
-      setMessage("Вход выполнен");
+      navigate(targetPath, { replace: true });
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -18,7 +30,7 @@ export default function LoginPage() {
   async function onRegister() {
     try {
       await register(email, password);
-      setMessage("Регистрация выполнена");
+      setMessage("Регистрация выполнена. Проверьте почту для подтверждения, если оно включено.");
     } catch (error) {
       setMessage((error as Error).message);
     }
