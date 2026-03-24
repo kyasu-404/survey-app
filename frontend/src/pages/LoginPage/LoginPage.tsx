@@ -37,20 +37,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 320 }}>
-      <h2>Вход</h2>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-      <input
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Пароль"
-        type="password"
-      />
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button onClick={onLogin}>Войти</button>
-        <button onClick={onRegister}>Регистрация</button>
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 16,
+          background: "#fff"
+        }}
+      >
+        <h2>Вход</h2>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Пароль"
+          type="password"
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={onLogin}>Войти</button>
+          <button onClick={onRegister}>Регистрация</button>
+        </div>
+        {message && <p>{message}</p>}
       </div>
-      {message && <p>{message}</p>}
     </div>
   );
 }

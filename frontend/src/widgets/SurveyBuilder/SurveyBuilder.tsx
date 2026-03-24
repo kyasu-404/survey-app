@@ -32,5 +32,9 @@ export function SurveyBuilder() {
     return nextCreator;
   }, []);
 
-  return <SurveyCreatorComponent creator={creator} />;
+  return (
+    <div style={{ height: "100%" }}>
+      <SurveyCreatorComponent creator={creator} />
+    </div>
+  );
 }
