@@ -1,0 +1,14 @@
+{
+  "name": "survey-app",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "survey-core": "^1.9.120",
+    "survey-react-ui": "^1.9.120",
+    "survey-creator-react": "^1.9.120",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}
