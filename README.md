@@ -19,6 +19,7 @@ cp -r supabase/docker ./supabase
 
 # Запуск
 docker compose up --build
+npm install xlsx
 
 http://localhost:3000
 
@@ -139,3 +140,8 @@ using (
     where id = auth.uid() and role = 'admin'  
   )  
 );  
+
+# Проверка ролей в UI
+if (profile?.role === "admin") {
+  // показываем управление пользователями
+}
