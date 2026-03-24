@@ -1,10 +1,10 @@
-import { supabase } from '@/shared/api/supabase'
+import { supabase } from "../../../shared/api/supabase";
 
-export const submitResponse = async (surveyId: string, answers: any) => {
-  const { error } = await supabase.from('responses').insert({
-    survey_id: surveyId,
-    answers,
-  })
+export const submitResponse = async (formId: string, data: Record<string, unknown>) => {
+  const { error } = await supabase.from("responses").insert({
+    form_id: formId,
+    data,
+  });
 
-  if (error) throw error
-}
+  if (error) throw error;
+};
