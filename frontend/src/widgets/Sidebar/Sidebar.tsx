@@ -19,8 +19,6 @@ export function Sidebar() {
   return (
     <aside style={{ minWidth: 220, borderRight: "1px solid #eee", padding: 16 }}>
       <h3>Survey App</h3>
-      {!loading && user?.email && <p>Вы вошли как {user.email}</p>}
-
       <nav style={{ display: "grid", gap: 8 }}>
         {loading && <span>Загрузка...</span>}
 

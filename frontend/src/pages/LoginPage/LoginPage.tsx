@@ -4,10 +4,13 @@ import { login, register } from "../../features/auth/api";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { routes } from "../../app/routes";
 
+type MessageType = "success" | "error";
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<MessageType>("success");
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,8 +24,12 @@ export default function LoginPage() {
   async function onLogin() {
     try {
       await login(email, password);
-      navigate(targetPath, { replace: true });
+      navigate(targetPath, {
+        replace: true,
+        state: { toast: `Добро пожаловать, ${email}` },
+      });
     } catch (error) {
+      setMessageType("error");
       setMessage((error as Error).message);
     }
   }
@@ -30,8 +37,12 @@ export default function LoginPage() {
   async function onRegister() {
     try {
       await register(email, password);
-      setMessage("Регистрация выполнена. Проверьте почту для подтверждения, если оно включено.");
+      navigate(targetPath, {
+        replace: true,
+        state: { toast: "Вы успешно вошли" },
+      });
     } catch (error) {
+      setMessageType("error");
       setMessage((error as Error).message);
     }
   }
@@ -58,7 +69,19 @@ export default function LoginPage() {
           <button onClick={onLogin}>Войти</button>
           <button onClick={onRegister}>Регистрация</button>
         </div>
-        {message && <p>{message}</p>}
+        {message && (
+          <p
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 8,
+              background: messageType === "error" ? "#fee2e2" : "#dcfce7",
+              color: messageType === "error" ? "#991b1b" : "#166534",
+            }}
+          >
+            {message}
+          </p>
+        )}
       </div>
     </div>
   );
