@@ -10,29 +10,33 @@
 <div id="survey"></div>
 
 <script>
-const urlParams = new URLSearchParams(window.location.search);
-const id = urlParams.get("id");
+const supabase = window.supabase.createClient(
+  "https://YOUR_PROJECT.supabase.co",
+  "PUBLIC_ANON_KEY"
+);
 
-fetch(`http://localhost:3000/forms/${id}`)
-  .then(r => r.json())
-  .then(form => {
-    const survey = new Survey.Model(form.schema);
+const id = new URLSearchParams(location.search).get("id");
 
-    survey.onComplete.add(async (sender) => {
-      await fetch("http://localhost:3000/responses", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          formId: id,
-          data: sender.data
-        })
-      });
+async function load() {
+  const { data } = await supabase
+    .from("forms")
+    .select("*")
+    .eq("id", id)
+    .single();
 
-      alert("Ответ отправлен");
+  const survey = new Survey.Model(data.schema);
+
+  survey.onComplete.add(async (sender) => {
+    await supabase.from("responses").insert({
+      form_id: id,
+      data: sender.data
     });
-
-    survey.render("survey");
   });
+
+  survey.render("survey");
+}
+
+load();
 </script>
 
 </body>
