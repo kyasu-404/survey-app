@@ -10,12 +10,34 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   useEffect(() => {
     getForms({ search, dateFrom, dateTo }).then(setForms).catch(console.error);
   }, [search, dateFrom, dateTo]);
 
   const formsCountText = useMemo(() => `Всего форм: ${forms.length}`, [forms.length]);
+
+  const handleCopyLink = async (formId: string, link: string) => {
+    if (!navigator.clipboard) {
+      setCopyError("Копирование недоступно в этом браузере. Используйте HTTPS или скопируйте ссылку вручную.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedFormId(formId);
+      setCopyError(null);
+
+      window.setTimeout(() => {
+        setCopiedFormId((previousValue) => (previousValue === formId ? null : previousValue));
+      }, 2000);
+    } catch (error) {
+      console.error("Не удалось скопировать ссылку", error);
+      setCopyError("Не удалось скопировать ссылку. Проверьте доступ к буферу обмена.");
+    }
+  };
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -44,11 +66,15 @@ export default function DashboardPage() {
                 <strong>{getSurveyDisplayTitle(form)}</strong>
                 <p>{new Date(form.created_at).toLocaleString()}</p>
                 <Link to={routes.survey(form.id)}>Открыть</Link>
-                <button onClick={() => navigator.clipboard.writeText(link)}>Скопировать ссылку</button>
+                <button onClick={() => handleCopyLink(form.id, link)}>
+                  {copiedFormId === form.id ? "Скопировано" : "Скопировать ссылку"}
+                </button>
               </div>
             );
           })}
         </div>
+
+        {copyError && <p style={{ color: "#dc2626" }}>{copyError}</p>}
       </div>
     </div>
   );
