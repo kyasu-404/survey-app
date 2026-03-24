@@ -32,7 +32,6 @@ survey-app/
 git clone https://github.com/supabase/supabase  
 cd supabase/docker  
 cp .env.example .env  
-cd ../../  
 docker compose up --build  
 cd /var/www/survey-app/frontend  
 npm install  
