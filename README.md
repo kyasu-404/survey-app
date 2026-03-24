@@ -28,14 +28,19 @@ survey-app/
 │       │   ├── AdminUsers.tsx     # управление пользователями  
 │       │   └── login.ts           # авторизация  
 
-git clone https://github.com/supabase/supabase  
-cp -r supabase/docker ./supabase
-
 # Запуск
-docker compose up --build
+git clone https://github.com/supabase/supabase  
+cd supabase/docker  
+cp .env.example .env  
+cd ../../  
+docker compose up --build  
 npm install xlsx
 
+# Supabase Studio (админка)
 http://localhost:3000
+
+# React приложение
+http://localhost:5173
 
 # SQL  
 # Таблицы для форм и ответов  
