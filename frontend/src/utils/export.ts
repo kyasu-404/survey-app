@@ -1,10 +1,12 @@
 import * as XLSX from "xlsx";
 
 export function exportToExcel(data: any[]) {
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
+  if (!data.length) return;
 
-  XLSX.utils.book_append_sheet(wb, ws, "Responses");
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
 
-  XLSX.writeFile(wb, "responses.xlsx");
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Responses");
+
+  XLSX.writeFile(workbook, "responses.xlsx");
 }
