@@ -13,6 +13,7 @@ create table if not exists public.forms (
   form_type text not null,
   form_reason text not null,
   schema jsonb not null,
+  is_public boolean not null default true,
   author_id uuid not null references public.profiles(id) on delete restrict,
   created_at timestamptz not null default now()
 );
@@ -59,9 +60,23 @@ for update to authenticated
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
-create policy "forms_select_all" on public.forms
-for select to authenticated, anon
-using (true);
+drop policy if exists "forms_select_all" on public.forms;
+
+create policy "forms_select_public_or_author_or_admin" on public.forms
+for select to authenticated
+using (
+  is_public = true
+  or author_id = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  )
+);
+
+create policy "forms_select_public_anon" on public.forms
+for select to anon
+using (is_public = true);
 
 create policy "forms_insert_authenticated" on public.forms
 for insert to authenticated
