@@ -27,3 +27,23 @@ export type SurveyForm = {
   schema: SurveySchema;
   created_at: string;
 };
+
+export type Question =
+  | {
+      id: string
+      type: 'text'
+      label: string
+      required?: boolean
+    }
+  | {
+      id: string
+      type: 'radio'
+      label: string
+      options: string[]
+    }
+
+export type Survey = {
+  id: string
+  title: string
+  schema: Question[]
+}
