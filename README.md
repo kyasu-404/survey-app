@@ -14,6 +14,9 @@ survey-app/
  │    │    ├── lib/supabase.ts  
  │    │    ├── App.tsx  
 
+git clone https://github.com/supabase/supabase  
+cp -r supabase/docker ./supabase
+
 # Запуск
 docker compose up --build
 
