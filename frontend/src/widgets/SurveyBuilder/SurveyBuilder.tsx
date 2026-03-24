@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
+import { editorLocalization } from "survey-creator-core";
+import "survey-core/survey.i18n";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 
@@ -12,7 +14,9 @@ export function SurveyBuilder() {
   const [messageType, setMessageType] = useState<"success" | "error">("success");
 
   const creator = useMemo(() => {
+    editorLocalization.currentLocale = "ru";
     const nextCreator = new SurveyCreator({ showLogicTab: true, isAutoSave: false });
+    nextCreator.locale = "ru";
 
     if (!nextCreator.JSON?.pages?.length) {
       nextCreator.JSON = createEmptySurveySchema();
@@ -45,7 +49,7 @@ export function SurveyBuilder() {
   }, []);
 
   return (
-    <div style={{ height: "100%" }}>
+    <div className="builder-host">
       {message && (
         <div
           style={{

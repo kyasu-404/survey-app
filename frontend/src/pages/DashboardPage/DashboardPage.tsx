@@ -40,20 +40,13 @@ export default function DashboardPage() {
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 16,
-          background: "#fff"
-        }}
-      >
-        <h2>Дашборд форм</h2>
-        <p>{formsCountText}</p>
+    <div style={{ maxWidth: 980, margin: "0 auto" }}>
+      <div className="card" style={{ padding: 20 }}>
+        <h2 style={{ marginTop: 4 }}>Дашборд форм</h2>
+        <p style={{ color: "#475569" }}>{formsCountText}</p>
 
-        <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
@@ -62,13 +55,20 @@ export default function DashboardPage() {
           {forms.map((form) => {
             const link = `${window.location.origin}${routes.survey(form.id)}`;
             return (
-              <div key={form.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+              <div
+                key={form.id}
+                style={{ border: "1px solid #e2e8f0", padding: 14, borderRadius: 12, background: "#f8fafc" }}
+              >
                 <strong>{getSurveyDisplayTitle(form)}</strong>
-                <p>{new Date(form.created_at).toLocaleString()}</p>
-                <Link to={routes.survey(form.id)}>Открыть</Link>
-                <button onClick={() => handleCopyLink(form.id, link)}>
-                  {copiedFormId === form.id ? "Скопировано" : "Скопировать ссылку"}
-                </button>
+                <p style={{ color: "#64748b" }}>{new Date(form.created_at).toLocaleString()}</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Link className="nav-link" to={routes.survey(form.id)}>
+                    Открыть
+                  </Link>
+                  <button onClick={() => handleCopyLink(form.id, link)}>
+                    {copiedFormId === form.id ? "Скопировано" : "Скопировать ссылку"}
+                  </button>
+                </div>
               </div>
             );
           })}

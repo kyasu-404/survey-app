@@ -26,7 +26,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate(targetPath, {
         replace: true,
-        state: { toast: `Добро пожаловать, ${email}` },
+        state: { toast: `Добро пожаловать, ${email}` }
       });
     } catch (error) {
       setMessageType("error");
@@ -39,7 +39,7 @@ export default function LoginPage() {
       await register(email, password);
       navigate(targetPath, {
         replace: true,
-        state: { toast: "Вы успешно вошли" },
+        state: { toast: "Вы успешно вошли" }
       });
     } catch (error) {
       setMessageType("error");
@@ -48,24 +48,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto" }}>
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 16,
-          background: "#fff"
-        }}
-      >
-        <h2>Вход</h2>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Пароль"
-          type="password"
-        />
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+    <div style={{ maxWidth: 520, margin: "40px auto" }}>
+      <div className="card" style={{ padding: 20 }}>
+        <h2 style={{ marginTop: 4 }}>Вход</h2>
+        <div style={{ display: "grid", gap: 10 }}>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Пароль"
+            type="password"
+          />
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button onClick={onLogin}>Войти</button>
           <button onClick={onRegister}>Регистрация</button>
         </div>
@@ -76,7 +71,7 @@ export default function LoginPage() {
               padding: 10,
               borderRadius: 8,
               background: messageType === "error" ? "#fee2e2" : "#dcfce7",
-              color: messageType === "error" ? "#991b1b" : "#166534",
+              color: messageType === "error" ? "#991b1b" : "#166534"
             }}
           >
             {message}
