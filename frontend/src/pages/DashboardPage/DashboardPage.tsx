@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getForms } from "../../entities/survey/api/surveysApi";
+import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm } from "../../entities/survey/types";
+import { routes } from "../../app/routes";
 
 export default function DashboardPage() {
   const [forms, setForms] = useState<SurveyForm[]>([]);
@@ -28,12 +30,12 @@ export default function DashboardPage() {
 
       <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
         {forms.map((form) => {
-          const link = `${window.location.origin}/survey/${form.id}`;
+          const link = `${window.location.origin}${routes.survey(form.id)}`;
           return (
             <div key={form.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
-              <strong>{form.title}</strong>
+              <strong>{getSurveyDisplayTitle(form)}</strong>
               <p>{new Date(form.created_at).toLocaleString()}</p>
-              <Link to={`/survey/${form.id}`}>Открыть</Link>
+              <Link to={routes.survey(form.id)}>Открыть</Link>
               <button onClick={() => navigator.clipboard.writeText(link)}>Скопировать ссылку</button>
             </div>
           );

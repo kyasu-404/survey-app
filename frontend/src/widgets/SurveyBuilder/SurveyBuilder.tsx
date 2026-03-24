@@ -4,9 +4,14 @@ import "survey-creator-core/survey-creator-core.min.css";
 
 import { createSurveyForCurrentUser } from "../../features/create-survey/useCreateSurvey";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
+import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
 
 export function SurveyBuilder() {
   const creator = new SurveyCreator({ showLogicTab: true, isAutoSave: false });
+
+  if (!creator.JSON?.pages?.length) {
+    creator.JSON = createEmptySurveySchema();
+  }
 
   creator.saveSurveyFunc = async (_saveNo, callback) => {
     try {

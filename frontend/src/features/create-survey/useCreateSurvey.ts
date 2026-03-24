@@ -1,9 +1,9 @@
 import { createSurvey } from "../../entities/survey/api/surveysApi";
 import type { SurveySchema } from "../../entities/survey/types";
-import { supabase } from "../../shared/api/supabase";
+import { apiClient } from "../../shared/api";
 
 export async function createSurveyForCurrentUser(schema: SurveySchema, title: string) {
-  const { data } = await supabase.auth.getUser();
+  const { data } = await apiClient.auth.getCurrentUser();
   const userId = data.user?.id;
 
   if (!userId) {
