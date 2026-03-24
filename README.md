@@ -4,12 +4,12 @@ Form Generator
 survey-app/  
 ├── docker-compose.yml  
 ├── backend/  
-│    ├── Dockerfile  
-│    ├── index.js  
-│    ├── db.js  
+│       ├── Dockerfile  
+│       ├── index.js  
+│       ├── db.js  
 ├── frontend/  
-│    ├── builder.html  
-│    ├── form.html  
+│       ├── builder.html  
+│       ├── form.html  
 
 # Запуск
 docker compose up --build
