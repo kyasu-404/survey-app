@@ -36,7 +36,7 @@ cd ../../
 docker compose up --build  
 cd /var/www/survey-app/frontend  
 npm install  
-npm run dev  
+npm run build  
 
 # Supabase Studio (админка)
 http://localhost:3000
