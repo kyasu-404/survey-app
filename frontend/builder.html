@@ -19,23 +19,22 @@
 
 <button onclick="save()">Сохранить</button>
 
-<script>
-const creator = new SurveyCreator.SurveyCreator();
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
-creator.render("creator");
+<script>
+const supabase = window.supabase.createClient(
+  "https://YOUR_PROJECT.supabase.co",
+  "PUBLIC_ANON_KEY"
+);
 
 async function save() {
   const schema = creator.JSON;
 
-  await fetch("http://localhost:3000/forms", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      title: document.getElementById("title").value,
-      formType: document.getElementById("type").value,
-      formReason: document.getElementById("reason").value,
-      schema
-    })
+  await supabase.from("forms").insert({
+    title: document.getElementById("title").value,
+    form_type: document.getElementById("type").value,
+    form_reason: document.getElementById("reason").value,
+    schema
   });
 
   alert("Сохранено");
