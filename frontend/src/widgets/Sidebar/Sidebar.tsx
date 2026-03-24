@@ -17,20 +17,34 @@ export function Sidebar() {
   }
 
   return (
-    <aside style={{ minWidth: 220, borderRight: "1px solid #eee", padding: 16 }}>
-      <h3>Survey App</h3>
-      <nav style={{ display: "grid", gap: 8 }}>
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="logo" aria-label="Логотип приложения">
+          SA
+        </div>
+        <h3 className="brand-title">Survey App</h3>
+      </div>
+
+      <nav className="sidebar-nav">
         {loading && <span>Загрузка...</span>}
 
         {!loading && user && (
           <>
-            <Link to={routes.home}>Дашборд</Link>
-            <Link to={routes.builder}>Конструктор</Link>
+            <Link className="nav-link" to={routes.home}>
+              Дашборд
+            </Link>
+            <Link className="nav-link" to={routes.builder}>
+              Конструктор
+            </Link>
             <button onClick={onLogout}>Выйти</button>
           </>
         )}
 
-        {!loading && !user && <Link to={routes.login}>Войти</Link>}
+        {!loading && !user && (
+          <Link className="nav-link" to={routes.login}>
+            Войти
+          </Link>
+        )}
       </nav>
     </aside>
   );

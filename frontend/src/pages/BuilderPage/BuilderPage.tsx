@@ -2,9 +2,9 @@ import { SurveyBuilder } from "../../widgets/SurveyBuilder/SurveyBuilder";
 
 export default function BuilderPage() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 32px)" }}>
-      <h2>Конструктор формы</h2>
-      <div style={{ flex: 1, minHeight: 0 }}>
+    <div className="builder-page">
+      <h2 style={{ margin: "4px 0 12px" }}>Конструктор формы</h2>
+      <div className="builder-container">
         <SurveyBuilder />
       </div>
     </div>

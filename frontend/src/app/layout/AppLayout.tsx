@@ -33,18 +33,10 @@ export function AppLayout() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="app-shell">
       <Sidebar />
-      <main
-        style={{
-          flex: 1,
-          minHeight: "100vh",
-          width: "100%",
-          padding: 16,
-          boxSizing: "border-box"
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "flex-end", minHeight: 24, marginBottom: 12 }}>
+      <main className="app-main">
+        <div className="topbar">
           {user?.email && (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <span>Вы вошли как {user.email}</span>
