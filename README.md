@@ -45,14 +45,8 @@ http://localhost:5173
 
 # SQL  
 # Таблицы для форм и ответов  
-create table forms (  
-  id uuid primary key default gen_random_uuid(),  
-  title text,  
-  form_type text,  
-  form_reason text,  
-  schema jsonb,  
-  created_at timestamp default now()  
-);  
+
+alter table surveys add column author_id uuid;
 
 create table responses (  
   id uuid primary key default gen_random_uuid(),  
@@ -61,11 +55,11 @@ create table responses (
   created_at timestamp default now()  
 );  
 
-create table surveys (
-  id uuid primary key default gen_random_uuid(),
-  title text,
-  schema jsonb
-);
+create table surveys (  
+  id uuid primary key default gen_random_uuid(),  
+  title text,  
+  schema jsonb  
+);  
 
 # Пользователи и роли  
 # Профили  
@@ -173,13 +167,6 @@ if (profile?.role === "admin") {
 }
 
 # Шаринг форм  
-# Разрешаем читать формы ВСЕМ (даже без логина)  
-create policy "public can read forms"  
-on forms  
-for select  
-to anon, authenticated  
-using (true);  
-
 # Разрешаем отправлять ответы ВСЕМ  
 create policy "public can insert responses"  
 on responses  
