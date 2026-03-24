@@ -4,42 +4,70 @@ import { supabase } from "../lib/supabase";
 export default function FormsList() {
   const [forms, setForms] = useState([]);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     load();
-  }, []);
+  }, [search, dateFrom, dateTo]);
 
   async function load() {
-    const { data } = await supabase
-      .from("forms")
-      .select("*")
-      .ilike("title", `%${search}%`); // 🔥 поиск
+    let query = supabase.from("forms").select("*");
+
+    // 🔍 поиск
+    if (search) {
+      query = query.ilike("title", `%${search}%`);
+    }
+
+    // 📅 фильтр по дате
+    if (dateFrom) {
+      query = query.gte("created_at", dateFrom);
+    }
+
+    if (dateTo) {
+      query = query.lte("created_at", dateTo);
+    }
+
+    const { data } = await query;
 
     setForms(data);
   }
-
-  function handleSearch(e) {
-    setSearch(e.target.value);
-  }
-
-  useEffect(() => {
-    const timeout = setTimeout(load, 300); // debounce
-    return () => clearTimeout(timeout);
-  }, [search]);
 
   return (
     <div>
       <h2>Формы</h2>
 
+      {/* 🔍 поиск */}
       <input
-        placeholder="Поиск по названию..."
+        placeholder="Поиск..."
         value={search}
-        onChange={handleSearch}
+        onChange={e => setSearch(e.target.value)}
       />
+
+      {/* 📅 фильтры */}
+      <div>
+        <label>
+          С даты:
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+          />
+        </label>
+
+        <label>
+          По дату:
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+          />
+        </label>
+      </div>
 
       {forms.map(f => (
         <div key={f.id}>
-          <b>{f.title}</b>
+          <b>{f.title}</b> — {f.created_at}
         </div>
       ))}
     </div>
