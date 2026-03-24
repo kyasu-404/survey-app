@@ -12,9 +12,26 @@ export default function SurveyPage() {
   useEffect(() => {
     if (!id) return;
 
+    setError(null);
+    setForm(null);
+
     getFormById(id)
-      .then(setForm)
-      .catch((e: Error) => setError(e.message));
+      .then((nextForm) => {
+        if (!nextForm) {
+          setError("Форма не найдена или недоступна.");
+          return;
+        }
+
+        setForm(nextForm);
+      })
+      .catch((requestError: unknown) => {
+        const errorMessage =
+          requestError instanceof Error
+            ? requestError.message
+            : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
+
+        setError(errorMessage);
+      });
   }, [id]);
 
   if (!id) return <p>Форма не найдена</p>;
