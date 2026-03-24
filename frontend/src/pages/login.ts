@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase } from "../shared/api/supabase";
 
 export async function login(email, password) {
   return supabase.auth.signInWithPassword({
