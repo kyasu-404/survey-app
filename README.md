@@ -34,7 +34,9 @@ cd supabase/docker
 cp .env.example .env  
 cd ../../  
 docker compose up --build  
-npm install xlsx
+cd /var/www/survey-app/frontend  
+npm install  
+npm run dev  
 
 # Supabase Studio (админка)
 http://localhost:3000
