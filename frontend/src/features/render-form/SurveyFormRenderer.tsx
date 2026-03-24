@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import type { SurveySchema } from "../../entities/survey/types";
@@ -10,12 +11,20 @@ type SurveyFormRendererProps = {
 };
 
 export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) {
-  const model = new Model(schema);
+  const model = useMemo(() => new Model(schema), [schema]);
 
-  model.onComplete.add(async (sender) => {
-    const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
-    await submitResponse(payload.formId, payload.answers);
-  });
+  useEffect(() => {
+    const handleComplete = async (sender: Model) => {
+      const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
+      await submitResponse(payload.formId, payload.answers);
+    };
+
+    model.onComplete.add(handleComplete);
+
+    return () => {
+      model.onComplete.remove(handleComplete);
+    };
+  }, [formId, model]);
 
   return <Survey model={model} />;
 }
