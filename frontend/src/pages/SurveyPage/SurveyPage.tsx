@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import type { SurveyForm } from "../../entities/survey/types";
-import { getSurvey } from '@/entities/survey/api/getSurvey'
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
 export default function SurveyPage() {
@@ -15,7 +14,7 @@ export default function SurveyPage() {
 
     getFormById(id)
       .then(setForm)
-      .catch((e) => setError(e.message));
+      .catch((e: Error) => setError(e.message));
   }, [id]);
 
   if (!id) return <p>Форма не найдена</p>;
@@ -28,19 +27,4 @@ export default function SurveyPage() {
       <SurveyRenderer schema={form.schema} formId={form.id} />
     </div>
   );
-}
-
-export const SurveyPage = () => {
-  const { id } = useParams()
-  const [survey, setSurvey] = useState<any>(null)
-
-  useEffect(() => {
-    if (!id) return
-
-    getSurvey(id).then(setSurvey)
-  }, [id])
-
-  if (!survey) return <div>Loading...</div>
-
-  return <SurveyRenderer survey={survey} />
 }
