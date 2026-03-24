@@ -5,14 +5,21 @@ survey-app/
  ├── docker-compose.yml  
  ├── supabase/          # официальный self-hosted  
  ├── frontend/          # React + SurveyJS  
- │    ├── Dockerfile  
- │    ├── src/  
- │    │    ├── pages/  
- │    │    │    ├── Builder.tsx  
- │    │    │    ├── Form.tsx  
- │    │    │    ├── FormsList.tsx  
- │    │    ├── lib/supabase.ts  
- │    │    ├── App.tsx  
+ ├── src/  
+ │    ├── pages/  
+ │    │    ├── Builder.tsx        # создание форм  
+ │    │    ├── Form.tsx           # заполнение формы  
+ │    │    ├── FormResponses.tsx  # ← СЮДА XLS  
+ │    │    ├── FormsList.tsx      # список форм  
+ │  
+ │    ├── hooks/  
+ │    │    ├── useUser.ts         # ← роли здесь  
+ │  
+ │    ├── utils/  
+ │    │    ├── export.ts          # XLS логика  
+ │  
+ │    ├── lib/  
+ │    │    ├── supabase.ts        # клиент  
 
 git clone https://github.com/supabase/supabase  
 cp -r supabase/docker ./supabase
