@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="https://unpkg.com/survey-core/survey-core.min.css" rel="stylesheet"/>
+  <link href="https://unpkg.com/survey-creator-core/survey-creator-core.min.css" rel="stylesheet"/>
+
+  <script src="https://unpkg.com/survey-core/survey.core.min.js"></script>
+  <script src="https://unpkg.com/survey-creator-js/survey-creator-js.min.js"></script>
+</head>
+<body>
+
+<h2>Создание формы</h2>
+
+<input id="title" placeholder="Название"><br>
+<input id="type" placeholder="Тип формы"><br>
+<input id="reason" placeholder="Основание"><br>
+
+<div id="creator"></div>
+
+<button onclick="save()">Сохранить</button>
+
+<script>
+const creator = new SurveyCreator.SurveyCreator();
+
+creator.render("creator");
+
+async function save() {
+  const schema = creator.JSON;
+
+  await fetch("http://localhost:3000/forms", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      title: document.getElementById("title").value,
+      formType: document.getElementById("type").value,
+      formReason: document.getElementById("reason").value,
+      schema
+    })
+  });
+
+  alert("Сохранено");
+}
+</script>
+
+</body>
+</html>
