@@ -108,3 +108,34 @@ for insert
 to authenticated  
 with check (true);  
 
+# PROFILES (управление пользователями)  
+# 👤 Пользователь видит себя  
+create policy "users see own profile"  
+on profiles  
+for select  
+to authenticated  
+using (auth.uid() = id);  
+
+# 👑 Админ видит всех  
+create policy "admin sees all"  
+on profiles  
+for select  
+to authenticated  
+using (  
+  exists (  
+    select 1 from profiles  
+    where id = auth.uid() and role = 'admin'  
+  )  
+);  
+
+# ✏️ Админ меняет роли
+create policy "admin updates users"  
+on profiles  
+for update  
+to authenticated  
+using (  
+  exists (  
+    select 1 from profiles  
+    where id = auth.uid() and role = 'admin'  
+  )  
+);  
