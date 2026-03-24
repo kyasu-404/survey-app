@@ -11,6 +11,14 @@ export default function FormsList() {
     load();
   }, [search, dateFrom, dateTo]);
 
+  function getLink(id) {
+  return `${window.location.origin}/form/${id}`;
+  }
+
+  <button onClick={() => navigator.clipboard.writeText(getLink(f.id))}>
+  Скопировать ссылку
+  </button>
+  
   async function load() {
     let query = supabase.from("forms").select("*");
 
