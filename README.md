@@ -2,24 +2,31 @@
 Form Generator
 
 survey-app/  
- ├── docker-compose.yml  
- ├── supabase/          # официальный self-hosted  
- ├── frontend/          # React + SurveyJS  
- ├── src/  
- │    ├── pages/  
- │    │    ├── Builder.tsx        # создание форм  
- │    │    ├── Form.tsx           # заполнение формы  
- │    │    ├── FormResponses.tsx  # ← СЮДА XLS  
- │    │    ├── FormsList.tsx      # список форм  
- │  
- │    ├── hooks/  
- │    │    ├── useUser.ts         # ← роли здесь  
- │  
- │    ├── utils/  
- │    │    ├── export.ts          # XLS логика  
- │  
- │    ├── lib/  
- │    │    ├── supabase.ts        # клиент  
+├── frontend/                 # React + SurveyJS  
+│   ├── Dockerfile  
+│   ├── package.json  
+│   ├── vite.config.ts  
+│  
+│   └── src/  
+│       ├── main.tsx  
+│       ├── App.tsx  
+│  
+│       ├── lib/  
+│       │   └── supabase.ts        # подключение к Supabase  
+│  
+│       ├── hooks/  
+│       │   └── useUser.ts         # пользователь + роль  
+│  
+│       ├── utils/  
+│       │   └── export.ts          # XLS экспорт  
+│  
+│       ├── pages/  
+│       │   ├── Builder.tsx        # создание форм  
+│       │   ├── Form.tsx           # прохождение формы (public)  
+│       │   ├── FormResponses.tsx  # ответы + экспорт  
+│       │   ├── FormsList.tsx      # список + поиск + фильтр  
+│       │   ├── AdminUsers.tsx     # управление пользователями  
+│       │   └── login.ts           # авторизация  
 
 git clone https://github.com/supabase/supabase  
 cp -r supabase/docker ./supabase
