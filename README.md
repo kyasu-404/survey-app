@@ -152,3 +152,18 @@ using (
 if (profile?.role === "admin") {
   // показываем управление пользователями
 }
+
+# Шаринг форм  
+# Разрешаем читать формы ВСЕМ (даже без логина)  
+create policy "public can read forms"  
+on forms  
+for select  
+to anon, authenticated  
+using (true);  
+
+# Разрешаем отправлять ответы ВСЕМ  
+create policy "public can insert responses"  
+on responses  
+for insert  
+to anon, authenticated  
+with check (true);  
