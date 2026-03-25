@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -12,6 +12,10 @@ import type { SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+
+type DashboardPageProps = {
+  viewMode: "mine" | "all";
+};
 
 type LoadingResponsesMap = Record<string, boolean>;
 type ResponsesMap = Record<string, SurveyResponse[]>;
@@ -50,8 +54,9 @@ function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow
   });
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -67,8 +72,8 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
 
   const formsQueryKey = useMemo(
-    () => ["forms", { search, dateFrom, dateTo }],
-    [search, dateFrom, dateTo],
+    () => ["forms", { search, dateFrom, dateTo, viewMode, userId: user?.id ?? null }],
+    [dateFrom, dateTo, search, user?.id, viewMode],
   );
 
   const {
@@ -79,7 +84,13 @@ export default function DashboardPage() {
     refetch: reloadForms,
   } = useQuery({
     queryKey: formsQueryKey,
-    queryFn: () => getForms({ search, dateFrom, dateTo }),
+    queryFn: () =>
+      getForms({
+        search,
+        dateFrom,
+        dateTo,
+        authorId: viewMode === "mine" ? user?.id : undefined,
+      }),
     retry: 1,
   });
 
@@ -228,6 +239,23 @@ export default function DashboardPage() {
       <div className="card" style={{ padding: 20 }}>
         <h2 style={{ marginTop: 4 }}>Дашборд форм</h2>
         <p style={{ color: "#475569" }}>{formsCountText}</p>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button
+            onClick={() => navigate(routes.dashboardMy)}
+            disabled={viewMode === "mine"}
+            aria-pressed={viewMode === "mine"}
+          >
+            Мои формы
+          </button>
+          <button
+            onClick={() => navigate(routes.dashboardAll)}
+            disabled={viewMode === "all"}
+            aria-pressed={viewMode === "all"}
+          >
+            Все формы
+          </button>
+        </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />

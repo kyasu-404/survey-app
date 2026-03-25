@@ -15,7 +15,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-  const targetPath = from ?? routes.home;
+  const targetPath = from ?? routes.dashboardMy;
 
   if (!loading && user) {
     return <Navigate to={targetPath} replace />;
