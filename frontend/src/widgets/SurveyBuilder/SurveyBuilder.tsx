@@ -8,10 +8,11 @@ import "survey-creator-core/survey-creator-core.min.css";
 import { createSurveyForCurrentUser } from "../../features/create-survey/useCreateSurvey";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
+import { useToast } from "../../app/providers/ToastProvider";
 
 export function SurveyBuilder() {
-  const [message, setMessage] = useState<string | null>(null);
-  const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const [isSaving, setIsSaving] = useState(false);
+  const { showToast } = useToast();
 
   const creator = useMemo(() => {
     editorLocalization.currentLocale = "ru";
@@ -23,46 +24,36 @@ export function SurveyBuilder() {
     }
 
     nextCreator.saveSurveyFunc = async (saveNo, callback) => {
+      setIsSaving(true);
       try {
         if (!validateSurveySchema(nextCreator.JSON)) {
-          throw new Error("Некорректная JSON schema формы");
+          throw new Error("Некорректная JSON-схема формы");
         }
 
         await createSurveyForCurrentUser(nextCreator.JSON, nextCreator.JSON.title ?? "Новая форма");
-        setMessageType("success");
-        setMessage("Форма сохранена!");
+        showToast("Форма сохранена", "success");
         callback(saveNo, true);
       } catch (error) {
         console.error(error);
         const errorMessage = error instanceof Error ? error.message : "Не удалось сохранить форму";
-        setMessageType("error");
-        setMessage(
+        showToast(
           errorMessage === "Пользователь не авторизован"
-            ? "Вы не авторизованы. Войдите в систему и повторите попытку."
-            : errorMessage
+            ? "Вы не авторизованы. Войдите в систему и повторите попытку"
+            : errorMessage,
+          "error"
         );
         callback(saveNo, false);
+      } finally {
+        setIsSaving(false);
       }
     };
 
     return nextCreator;
-  }, []);
+  }, [showToast]);
 
   return (
     <div className="builder-host">
-      {message && (
-        <div
-          style={{
-            marginBottom: 10,
-            padding: 10,
-            borderRadius: 8,
-            background: messageType === "success" ? "#dcfce7" : "#fee2e2",
-            color: messageType === "success" ? "#166534" : "#991b1b"
-          }}
-        >
-          {message}
-        </div>
-      )}
+      {isSaving && <p style={{ marginBottom: 10, color: "#334155" }}>Сохранение формы...</p>}
       <SurveyCreatorComponent creator={creator} />
     </div>
   );

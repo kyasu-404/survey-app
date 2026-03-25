@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 import { logout } from "../../features/auth/api";
 import { routes } from "../routes";
 import { Sidebar } from "../../widgets/Sidebar/Sidebar";
+import { useToast } from "../providers/ToastProvider";
 
 export function AppLayout() {
   const { user } = useAuth();
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { showToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -15,13 +16,9 @@ export function AppLayout() {
     const toast = (location.state as { toast?: string } | null)?.toast;
     if (!toast) return;
 
-    setToastMessage(toast);
-
-    const timer = window.setTimeout(() => setToastMessage(null), 3000);
+    showToast(toast, "success");
     navigate(location.pathname, { replace: true, state: null });
-
-    return () => window.clearTimeout(timer);
-  }, [location.pathname, location.state, navigate]);
+  }, [location.pathname, location.state, navigate, showToast]);
 
   async function onLogout() {
     try {
@@ -29,6 +26,7 @@ export function AppLayout() {
       navigate(routes.login, { replace: true });
     } catch (error) {
       console.error(error);
+      showToast("Не удалось выйти из системы", "error");
     }
   }
 
@@ -44,20 +42,6 @@ export function AppLayout() {
             </div>
           )}
         </div>
-        {toastMessage && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 10,
-              borderRadius: 8,
-              background: "#dcfce7",
-              color: "#166534",
-              border: "1px solid #86efac"
-            }}
-          >
-            {toastMessage}
-          </div>
-        )}
         <Outlet />
       </main>
     </div>

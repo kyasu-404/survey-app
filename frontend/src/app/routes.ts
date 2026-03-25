@@ -1,7 +1,8 @@
 export const routes = {
   home: "/",
-  surveyById: "/survey/:id",
-  survey: (id: string) => `/survey/${id}`,
+  surveyById: "/form/:id",
+  survey: (id: string) => `/form/${id}`,
+  legacySurveyById: "/survey/:id",
   builder: "/builder",
   login: "/login",
 } as const;

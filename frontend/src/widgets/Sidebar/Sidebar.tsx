@@ -22,7 +22,7 @@ export function Sidebar() {
         <div className="logo" aria-label="Логотип приложения">
           SA
         </div>
-        <h3 className="brand-title">Survey App</h3>
+        <h3 className="brand-title">Опросы</h3>
       </div>
 
       <nav className="sidebar-nav">
