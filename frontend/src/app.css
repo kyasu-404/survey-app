@@ -16,6 +16,11 @@ body,
   height: 100%;
 }
 
+.sv-alert,
+.sv-license-message {
+    display: none !important;
+}
+
 a {
   color: #2563eb;
   text-decoration: none;
