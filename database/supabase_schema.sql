@@ -2,10 +2,14 @@ create extension if not exists "pgcrypto";
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
+  name text not null default '',
   email text not null,
   role text not null default 'user' check (role in ('admin', 'user')),
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists name text not null default '';
 
 create table if not exists public.forms (
   id uuid primary key default gen_random_uuid(),
@@ -34,9 +38,14 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email)
-  values (new.id, coalesce(new.email, ''))
-  on conflict (id) do update set email = excluded.email;
+  insert into public.profiles (id, name, email)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'name', split_part(coalesce(new.email, ''), '@', 1), ''),
+    coalesce(new.email, '')
+  )
+  on conflict (id) do update
+    set email = excluded.email;
 
   return new;
 end;
@@ -51,14 +60,47 @@ alter table public.profiles enable row level security;
 alter table public.forms enable row level security;
 alter table public.responses enable row level security;
 
-create policy "profiles_select_self" on public.profiles
+drop policy if exists "profiles_select_self" on public.profiles;
+create policy "profiles_select_self_or_admin" on public.profiles
 for select to authenticated
-using (auth.uid() = id);
+using (
+  auth.uid() = id
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  )
+);
 
-create policy "profiles_update_self" on public.profiles
+create policy "profiles_insert_admin" on public.profiles
+for insert to authenticated
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  )
+);
+
+drop policy if exists "profiles_update_self" on public.profiles;
+create policy "profiles_update_self_or_admin" on public.profiles
 for update to authenticated
-using (auth.uid() = id)
-with check (auth.uid() = id);
+using (
+  auth.uid() = id
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  )
+)
+with check (
+  auth.uid() = id
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  )
+);
 
 drop policy if exists "forms_select_all" on public.forms;
 

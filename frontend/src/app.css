@@ -63,6 +63,24 @@ input:focus {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
+.app-shell-login {
+  display: block;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.app-main-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-page {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .sidebar {
   width: 260px;
   border-right: 1px solid #e2e8f0;

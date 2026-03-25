@@ -8,15 +8,15 @@ export type FormsFilters = {
   authorId?: string;
 };
 
-type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
-  profiles?: { email?: string | null } | null;
+type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_name"> & {
+  profiles?: { email?: string | null; name?: string | null } | null;
   responses?: Array<{ count?: number | null }> | null;
 };
 
 export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> {
   let query = apiClient
     .from("forms")
-    .select("*, profiles:author_id(email), responses(count)")
+    .select("*, profiles:author_id(email, name), responses(count)")
     .order("created_at", { ascending: false });
 
   if (filters?.search) query = query.ilike("title", `%${filters.search}%`);
@@ -30,6 +30,7 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   return ((data ?? []) as RawForm[]).map((form) => ({
     ...form,
     author_email: form.profiles?.email ?? null,
+    author_name: form.profiles?.name ?? null,
     responses_count: form.responses?.[0]?.count ?? 0,
   }));
 }

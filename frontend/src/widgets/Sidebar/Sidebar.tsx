@@ -4,7 +4,7 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
 
 export function Sidebar() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
   async function onLogout() {
@@ -36,6 +36,11 @@ export function Sidebar() {
             <Link className="nav-link" to={routes.builder}>
               Конструктор
             </Link>
+            {profile?.role === "admin" && (
+              <Link className="nav-link" to={routes.users}>
+                Пользователи
+              </Link>
+            )}
             <button onClick={onLogout}>Выйти</button>
           </>
         )}

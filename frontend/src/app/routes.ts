@@ -6,5 +6,6 @@ export const routes = {
   survey: (id: string) => `/form/${id}`,
   legacySurveyById: "/survey/:id",
   builder: "/builder",
+  users: "/users",
   login: "/login",
 } as const;
