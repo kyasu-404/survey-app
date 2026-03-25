@@ -16,6 +16,13 @@ body,
   height: 100%;
 }
 
+.sv-watermark,
+.sv-footer__watermark,
+.sv-editor-footer__watermark,
+div[class*="watermark"] {
+    display: none !important;
+}
+
 .sv-alert,
 .sv-license-message {
     display: none !important;
