@@ -1,21 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getForms } from "../../entities/survey/api/surveysApi";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { routes } from "../../app/routes";
+import { cloneForm, getForms, removeForm, renameForm } from "../../entities/survey/api/surveysApi";
 import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm } from "../../entities/survey/types";
-import { routes } from "../../app/routes";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [forms, setForms] = useState<SurveyForm[]>([]);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const loadForms = useCallback(async () => {
+    const nextForms = await getForms({ search, dateFrom, dateTo });
+    setForms(nextForms);
+  }, [search, dateFrom, dateTo]);
 
   useEffect(() => {
-    getForms({ search, dateFrom, dateTo }).then(setForms).catch(console.error);
-  }, [search, dateFrom, dateTo]);
+    loadForms().catch((error) => {
+      console.error(error);
+      setActionError("Не удалось загрузить формы.");
+    });
+  }, [loadForms]);
 
   const formsCountText = useMemo(() => `Всего форм: ${forms.length}`, [forms.length]);
 
@@ -39,8 +50,52 @@ export default function DashboardPage() {
     }
   };
 
+  const handleRename = async (form: SurveyForm) => {
+    const newTitle = window.prompt("Введите новое название формы", form.title);
+    if (!newTitle || !newTitle.trim() || newTitle === form.title) return;
+
+    try {
+      await renameForm(form.id, newTitle.trim());
+      await loadForms();
+      setActionError(null);
+    } catch (error) {
+      console.error(error);
+      setActionError("Не удалось переименовать форму.");
+    }
+  };
+
+  const handleDelete = async (form: SurveyForm) => {
+    const shouldDelete = window.confirm(`Удалить форму \"${form.title}\"?`);
+    if (!shouldDelete) return;
+
+    try {
+      await removeForm(form.id);
+      await loadForms();
+      setActionError(null);
+    } catch (error) {
+      console.error(error);
+      setActionError("Не удалось удалить форму.");
+    }
+  };
+
+  const handleDuplicate = async (form: SurveyForm) => {
+    if (!user?.id) {
+      setActionError("Для дублирования формы нужно войти в систему.");
+      return;
+    }
+
+    try {
+      await cloneForm(form, user.id);
+      await loadForms();
+      setActionError(null);
+    } catch (error) {
+      console.error(error);
+      setActionError("Не удалось дублировать форму.");
+    }
+  };
+
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto" }}>
+    <div className="dashboard-page">
       <div className="card" style={{ padding: 20 }}>
         <h2 style={{ marginTop: 4 }}>Дашборд форм</h2>
         <p style={{ color: "#475569" }}>{formsCountText}</p>
@@ -54,20 +109,29 @@ export default function DashboardPage() {
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {forms.map((form) => {
             const link = `${window.location.origin}${routes.survey(form.id)}`;
+            const authorLabel = form.author_email || form.author_id;
+            const responsesCount = form.responses_count ?? 0;
+
             return (
               <div
                 key={form.id}
                 style={{ border: "1px solid #e2e8f0", padding: 14, borderRadius: 12, background: "#f8fafc" }}
               >
                 <strong>{getSurveyDisplayTitle(form)}</strong>
-                <p style={{ color: "#64748b" }}>{new Date(form.created_at).toLocaleString()}</p>
-                <div style={{ display: "flex", gap: 8 }}>
+                <p style={{ color: "#64748b", marginBottom: 6 }}>{new Date(form.created_at).toLocaleString()}</p>
+                <p style={{ color: "#475569", margin: "0 0 4px" }}>Автор: {authorLabel}</p>
+                <p style={{ color: "#475569", margin: "0 0 10px" }}>Ответов: {responsesCount}</p>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Link className="nav-link" to={routes.survey(form.id)}>
                     Открыть
                   </Link>
                   <button onClick={() => handleCopyLink(form.id, link)}>
                     {copiedFormId === form.id ? "Скопировано" : "Скопировать ссылку"}
                   </button>
+                  <button onClick={() => handleRename(form)}>Переименовать</button>
+                  <button onClick={() => handleDuplicate(form)}>Дублировать</button>
+                  <button onClick={() => handleDelete(form)}>Удалить</button>
                 </div>
               </div>
             );
@@ -75,6 +139,7 @@ export default function DashboardPage() {
         </div>
 
         {copyError && <p style={{ color: "#dc2626" }}>{copyError}</p>}
+        {actionError && <p style={{ color: "#dc2626" }}>{actionError}</p>}
       </div>
     </div>
   );

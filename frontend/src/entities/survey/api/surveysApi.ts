@@ -1,4 +1,12 @@
-import { fetchFormById, fetchForms, insertForm, type FormsFilters } from "../../../shared/api";
+import {
+  deleteForm,
+  duplicateForm,
+  fetchFormById,
+  fetchForms,
+  insertForm,
+  updateFormTitle,
+  type FormsFilters,
+} from "../../../shared/api";
 import type { SurveyForm, SurveySchema } from "../types";
 
 export type { FormsFilters };
@@ -19,4 +27,17 @@ export async function createSurvey(params: {
   authorId: string;
 }) {
   return insertForm(params);
+}
+
+
+export async function renameForm(id: string, title: string) {
+  return updateFormTitle(id, title);
+}
+
+export async function removeForm(id: string) {
+  return deleteForm(id);
+}
+
+export async function cloneForm(form: SurveyForm, authorId: string) {
+  return duplicateForm(form, authorId);
 }
