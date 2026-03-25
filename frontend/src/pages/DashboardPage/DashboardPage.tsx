@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -56,7 +56,6 @@ function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -259,25 +258,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       <div className="card" style={{ padding: 20 }}>
         <h2 style={{ marginTop: 4 }}>Список форм</h2>
         <p style={{ color: "var(--text-muted)" }}>{formsCountText}</p>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button
-            className="dashboard-view-button"
-            onClick={() => navigate(routes.dashboardMy)}
-            disabled={viewMode === "mine"}
-            aria-pressed={viewMode === "mine"}
-          >
-            Мои формы
-          </button>
-          <button
-            className="dashboard-view-button"
-            onClick={() => navigate(routes.dashboardAll)}
-            disabled={viewMode === "all"}
-            aria-pressed={viewMode === "all"}
-          >
-            Все формы
-          </button>
-        </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           <input
