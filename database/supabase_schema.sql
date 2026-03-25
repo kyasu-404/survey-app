@@ -30,6 +30,13 @@ create table if not exists public.responses (
   created_at timestamptz not null default now()
 );
 
+alter table public.forms
+  drop constraint if exists forms_schema_is_object,
+  add constraint forms_schema_is_object check (jsonb_typeof(schema) = 'object');
+
+alter table public.responses
+  drop constraint if exists responses_data_is_object,
+  add constraint responses_data_is_object check (jsonb_typeof(data) = 'object');
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -61,6 +68,7 @@ alter table public.forms enable row level security;
 alter table public.responses enable row level security;
 
 drop policy if exists "profiles_select_self" on public.profiles;
+drop policy if exists "profiles_select_self_or_admin" on public.profiles;
 create policy "profiles_select_self_or_admin" on public.profiles
 for select to authenticated
 using (
@@ -72,6 +80,7 @@ using (
   )
 );
 
+drop policy if exists "profiles_insert_admin" on public.profiles;
 create policy "profiles_insert_admin" on public.profiles
 for insert to authenticated
 with check (
@@ -88,6 +97,7 @@ for insert to authenticated
 with check (auth.uid() = id);
 
 drop policy if exists "profiles_update_self" on public.profiles;
+drop policy if exists "profiles_update_self_or_admin" on public.profiles;
 create policy "profiles_update_self_or_admin" on public.profiles
 for update to authenticated
 using (
@@ -108,7 +118,7 @@ with check (
 );
 
 drop policy if exists "forms_select_all" on public.forms;
-
+drop policy if exists "forms_select_public_or_author_or_admin" on public.forms;
 create policy "forms_select_public_or_author_or_admin" on public.forms
 for select to authenticated
 using (
@@ -121,14 +131,17 @@ using (
   )
 );
 
+drop policy if exists "forms_select_public_anon" on public.forms;
 create policy "forms_select_public_anon" on public.forms
 for select to anon
 using (is_public = true);
 
+drop policy if exists "forms_insert_authenticated" on public.forms;
 create policy "forms_insert_authenticated" on public.forms
 for insert to authenticated
 with check (auth.uid() = author_id);
 
+drop policy if exists "forms_update_author_or_admin" on public.forms;
 create policy "forms_update_author_or_admin" on public.forms
 for update to authenticated
 using (
@@ -148,6 +161,7 @@ with check (
   )
 );
 
+drop policy if exists "responses_select_author_or_admin" on public.responses;
 create policy "responses_select_author_or_admin" on public.responses
 for select to authenticated
 using (
@@ -163,9 +177,17 @@ using (
   )
 );
 
+drop policy if exists "responses_insert_any" on public.responses;
 create policy "responses_insert_any" on public.responses
 for insert to authenticated, anon
-with check (true);
+with check (
+  exists (
+    select 1
+    from public.forms f
+    where f.id = responses.form_id and f.is_public = true
+  )
+  or auth.role() = 'authenticated'
+);
 
 create index if not exists idx_forms_author_id on public.forms(author_id);
 create index if not exists idx_responses_form_id on public.responses(form_id);

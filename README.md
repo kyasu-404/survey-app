@@ -103,6 +103,21 @@ npm install
 npm run dev
 ```
 
+## Запуск unit-тестов
+
+```bash
+cd frontend
+npm install
+npm run test
+```
+
+Для запуска в watch-режиме:
+
+```bash
+cd frontend
+npm run test:watch
+```
+
 ## Как выдать пользователю роль admin в Supabase
 
 1. Откройте Supabase Studio → **SQL Editor**.
