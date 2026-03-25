@@ -22,7 +22,7 @@ export function SurveyBuilder() {
   const creatorRef = useRef<SurveyCreator | null>(null);
   if (!creatorRef.current) {
     editorLocalization.currentLocale = "ru";
-    const nextCreator = new SurveyCreator({ showLogicTab: true, isAutoSave: false });
+    const nextCreator = new SurveyCreator({ showLogicTab: false, isAutoSave: false });
     nextCreator.theme = "default-light";
     nextCreator.locale = "ru";
 

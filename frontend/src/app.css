@@ -114,8 +114,9 @@ input:focus {
 }
 
 .brand-imc {
-  width: 40px;
+  min-width: 52px;
   height: 40px;
+  padding: 0 12px;
   border-radius: 12px;
   display: inline-flex;
   align-items: center;
@@ -329,9 +330,11 @@ input:focus {
   background: #fee2e2;
   border-color: #fca5a5;
   color: #b91c1c;
-  font-size: 13px;
+  display: inline-flex;
+  width: fit-content;
+  font-size: 12px;
   line-height: 1;
-  padding: 6px 10px;
+  padding: 4px 8px;
   align-self: flex-start;
 }
 
