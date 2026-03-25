@@ -2,6 +2,13 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   color: #0f172a;
   background: #f5f7fb;
+  --app-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  --sidebar-bg: #ffffffcc;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --sidebar-border: #e2e8f0;
+  --text-muted: #475569;
+  --surface-muted: #f8fafc;
 }
 
 * {
@@ -60,12 +67,12 @@ input:focus {
 .app-shell {
   display: flex;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--app-bg);
 }
 
 .app-shell-login {
   display: block;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--app-bg);
 }
 
 .app-main-login {
@@ -83,10 +90,12 @@ input:focus {
 
 .sidebar {
   width: 260px;
-  border-right: 1px solid #e2e8f0;
-  background: #ffffffcc;
+  border-right: 1px solid var(--sidebar-border);
+  background: var(--sidebar-bg);
   backdrop-filter: blur(4px);
   padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -147,9 +156,9 @@ input:focus {
 }
 
 .card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--card-border);
   border-radius: 16px;
-  background: white;
+  background: var(--card-bg);
   box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
 }
 
@@ -183,10 +192,10 @@ input:focus {
 }
 
 .dashboard-form-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--card-border);
   padding: 14px;
   border-radius: 12px;
-  background: #f8fafc;
+  background: var(--surface-muted);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -260,6 +269,67 @@ input:focus {
   justify-content: center;
   z-index: 1100;
   padding: 16px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.theme-toggle-button {
+  width: 100%;
+}
+
+.dashboard-view-button {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.dashboard-view-button:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+}
+
+:root[data-theme="dark"] {
+  color: #e2e8f0;
+  background: #0f172a;
+  --app-bg: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  --sidebar-bg: rgba(15, 23, 42, 0.9);
+  --card-bg: #111827;
+  --card-border: #334155;
+  --sidebar-border: #334155;
+  --text-muted: #cbd5e1;
+  --surface-muted: #1f2937;
+}
+
+:root[data-theme="dark"] a {
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] button {
+  background: #1f2937;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+:root[data-theme="dark"] button:hover {
+  background: #334155;
+  border-color: #64748b;
+}
+
+:root[data-theme="dark"] input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+:root[data-theme="dark"] .responses-table th {
+  background: #334155;
+}
+
+:root[data-theme="dark"] .responses-table th,
+:root[data-theme="dark"] .responses-table td {
+  border-color: #475569;
 }
 
 .modal-card {
