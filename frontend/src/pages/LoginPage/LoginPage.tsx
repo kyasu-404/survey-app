@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { login, register } from "../../features/auth/api";
+import { login } from "../../features/auth/api";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { routes } from "../../app/routes";
 
@@ -34,22 +34,9 @@ export default function LoginPage() {
     }
   }
 
-  async function onRegister() {
-    try {
-      await register(email, password);
-      navigate(targetPath, {
-        replace: true,
-        state: { toast: "Вы успешно вошли" }
-      });
-    } catch (error) {
-      setMessageType("error");
-      setMessage((error as Error).message);
-    }
-  }
-
   return (
-    <div style={{ maxWidth: 520, margin: "40px auto" }}>
-      <div className="card" style={{ padding: 20 }}>
+    <div className="login-page">
+      <div className="card" style={{ padding: 20, width: "min(420px, 100%)" }}>
         <h2 style={{ marginTop: 4 }}>Авторизация</h2>
         <div style={{ display: "grid", gap: 10 }}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
@@ -62,7 +49,6 @@ export default function LoginPage() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button onClick={onLogin}>Войти</button>
-          <button onClick={onRegister}>Зарегистрироваться</button>
         </div>
         {message && (
           <p

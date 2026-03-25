@@ -10,6 +10,8 @@ export const apiClient = {
       supabaseClient.auth.signInWithPassword({ email, password }),
     register: (email: string, password: string) =>
       supabaseClient.auth.signUp({ email, password }),
+    updateCurrentUserPassword: (password: string) =>
+      supabaseClient.auth.updateUser({ password }),
     logout: () => supabaseClient.auth.signOut(),
     onAuthStateChange: supabaseClient.auth.onAuthStateChange.bind(supabaseClient.auth),
   },

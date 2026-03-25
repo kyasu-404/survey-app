@@ -3,9 +3,11 @@ import DashboardPage from "../pages/DashboardPage/DashboardPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
+import UsersPage from "../pages/UsersPage/UsersPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
 import { ProtectedRoute } from "./router/ProtectedRoute";
+import { AdminRoute } from "./router/AdminRoute";
 
 function LegacySurveyRedirect() {
   const { id } = useParams();
@@ -47,6 +49,16 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <BuilderPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: routes.users,
+        element: (
+          <ProtectedRoute>
+            <AdminRoute>
+              <UsersPage />
+            </AdminRoute>
           </ProtectedRoute>
         ),
       },

@@ -271,7 +271,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {forms.map((form) => {
             const link = `${appOrigin}${routes.survey(form.id)}`;
-            const authorLabel = form.author_email || form.author_id;
+            const authorLabel = form.author_name || form.author_email || form.author_id;
             const responsesCount = form.responses_count ?? 0;
             const isResponsesOpen = openedResponsesByFormId[form.id];
             const isResponsesLoading = loadingResponsesByFormId[form.id];

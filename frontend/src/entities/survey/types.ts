@@ -27,6 +27,7 @@ export type SurveyForm = {
   schema: SurveySchema;
   created_at: string;
   author_email?: string | null;
+  author_name?: string | null;
   responses_count?: number;
 };
 
