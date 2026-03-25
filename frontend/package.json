@@ -8,6 +8,7 @@
   "dependencies": {
     "react": "^18",
     "react-dom": "^18",
+    "@tanstack/react-query": "^5.90.5",
     "react-router-dom": "^6",
     "@supabase/supabase-js": "^2",
     "survey-core": "^1.9.120",
