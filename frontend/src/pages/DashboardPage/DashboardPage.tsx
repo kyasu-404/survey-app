@@ -72,8 +72,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const queryClient = useQueryClient();
 
   const formsQueryKey = useMemo(
-    () => ["forms", { search, dateFrom, dateTo, viewMode, userId: user?.id ?? null }],
-    [dateFrom, dateTo, search, user?.id, viewMode],
+    () => ["forms", { dateFrom, dateTo, viewMode, userId: user?.id ?? null }],
+    [dateFrom, dateTo, user?.id, viewMode],
   );
 
   const {
@@ -85,8 +85,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   } = useQuery({
     queryKey: formsQueryKey,
     queryFn: () =>
-      getForms({
-        search,
+        getForms({
         dateFrom,
         dateTo,
         authorId: viewMode === "mine" ? user?.id : undefined,
@@ -94,7 +93,28 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
   });
 
-  const formsCountText = useMemo(() => `Всего форм: ${forms.length}`, [forms.length]);
+  const filteredForms = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return forms;
+    }
+
+    return forms.filter((form) => {
+      const title = form.title?.toLowerCase() ?? "";
+      const authorName = form.author_name?.toLowerCase() ?? "";
+      const authorEmail = form.author_email?.toLowerCase() ?? "";
+      const authorId = form.author_id?.toLowerCase() ?? "";
+
+      return (
+        title.includes(normalizedSearch) ||
+        authorName.includes(normalizedSearch) ||
+        authorEmail.includes(normalizedSearch) ||
+        authorId.includes(normalizedSearch)
+      );
+    });
+  }, [forms, search]);
+
+  const formsCountText = useMemo(() => `Всего форм: ${filteredForms.length}`, [filteredForms.length]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
 
   useEffect(() => {
@@ -237,11 +257,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   return (
     <div className="dashboard-page">
       <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ marginTop: 4 }}>Дашборд форм</h2>
-        <p style={{ color: "#475569" }}>{formsCountText}</p>
+        <h2 style={{ marginTop: 4 }}>Список форм</h2>
+        <p style={{ color: "var(--text-muted)" }}>{formsCountText}</p>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button
+            className="dashboard-view-button"
             onClick={() => navigate(routes.dashboardMy)}
             disabled={viewMode === "mine"}
             aria-pressed={viewMode === "mine"}
@@ -249,6 +270,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             Мои формы
           </button>
           <button
+            className="dashboard-view-button"
             onClick={() => navigate(routes.dashboardAll)}
             disabled={viewMode === "all"}
             aria-pressed={viewMode === "all"}
@@ -258,7 +280,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-          <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            placeholder="Поиск по названию и автору"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
@@ -269,7 +295,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         {(isFormsLoading || isActionLoading || isFormsFetching) && <p style={{ color: "#334155" }}>Загрузка...</p>}
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          {forms.map((form) => {
+          {filteredForms.map((form) => {
             const link = `${appOrigin}${routes.survey(form.id)}`;
             const authorLabel = form.author_name || form.author_email || form.author_id;
             const responsesCount = form.responses_count ?? 0;

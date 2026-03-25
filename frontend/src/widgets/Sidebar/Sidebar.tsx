@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
@@ -6,6 +7,25 @@ import { logout } from "../../features/auth/api";
 export function Sidebar() {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const shouldUseDark = savedTheme ? savedTheme === "dark" : prefersDark;
+
+    setIsDarkTheme(shouldUseDark);
+    document.documentElement.setAttribute("data-theme", shouldUseDark ? "dark" : "light");
+  }, []);
+
+  function toggleTheme() {
+    setIsDarkTheme((prev) => {
+      const next = !prev;
+      document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+      window.localStorage.setItem("theme", next ? "dark" : "light");
+      return next;
+    });
+  }
 
   async function onLogout() {
     try {
@@ -22,7 +42,7 @@ export function Sidebar() {
         <div className="logo" aria-label="Логотип приложения">
           SA
         </div>
-        <h3 className="brand-title">Опросы</h3>
+        <h3 className="brand-title">Формы</h3>
       </div>
 
       <nav className="sidebar-nav">
@@ -51,6 +71,11 @@ export function Sidebar() {
           </Link>
         )}
       </nav>
+      <div className="sidebar-footer">
+        <button className="theme-toggle-button" onClick={toggleTheme}>
+          {isDarkTheme ? "Светлая тема" : "Тёмная тема"}
+        </button>
+      </div>
     </aside>
   );
 }
