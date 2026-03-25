@@ -12,22 +12,16 @@ export async function getAllUsers(): Promise<UserProfile[]> {
 }
 
 export async function createUser(payload: { name: string; email: string; password: string; role: UserRole }) {
-  const { data, error } = await apiClient.auth.register(payload.email, payload.password);
+  const { data, error } = await apiClient.auth.register(payload.email, payload.password, {
+    name: payload.name,
+    role: payload.role,
+  });
   if (error) throw error;
 
   const userId = data.user?.id;
   if (!userId) {
     throw new Error("Не удалось создать пользователя");
   }
-
-  const { error: upsertError } = await apiClient.from("profiles").upsert({
-    id: userId,
-    name: payload.name,
-    email: payload.email,
-    role: payload.role,
-  });
-
-  if (upsertError) throw upsertError;
 }
 
 export async function updateMyPassword(password: string) {
