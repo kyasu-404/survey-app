@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
 import "survey-core/survey.i18n";
+import "survey-creator-core/i18n/russian";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 
