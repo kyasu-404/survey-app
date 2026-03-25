@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
 import "survey-core/survey.i18n";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 
-import { createSurveyForCurrentUser } from "../../features/create-survey/useCreateSurvey";
+import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -13,8 +13,10 @@ import { useToast } from "../../app/providers/ToastProvider";
 export function SurveyBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
+  const createSurveyMutation = useCreateSurveyMutation();
 
-  const creator = useMemo(() => {
+  const creatorRef = useRef<SurveyCreator | null>(null);
+  if (!creatorRef.current) {
     editorLocalization.currentLocale = "ru";
     const nextCreator = new SurveyCreator({ showLogicTab: true, isAutoSave: false });
     nextCreator.locale = "ru";
@@ -23,14 +25,25 @@ export function SurveyBuilder() {
       nextCreator.JSON = createEmptySurveySchema();
     }
 
-    nextCreator.saveSurveyFunc = async (saveNo, callback) => {
+    creatorRef.current = nextCreator;
+  }
+
+  useEffect(() => {
+    if (!creatorRef.current) {
+      return;
+    }
+
+    creatorRef.current.saveSurveyFunc = async (saveNo, callback) => {
       setIsSaving(true);
       try {
-        if (!validateSurveySchema(nextCreator.JSON)) {
+        if (!validateSurveySchema(creatorRef.current?.JSON)) {
           throw new Error("Некорректная JSON-схема формы");
         }
 
-        await createSurveyForCurrentUser(nextCreator.JSON, nextCreator.JSON.title ?? "Новая форма");
+        await createSurveyMutation.mutateAsync({
+          schema: creatorRef.current.JSON,
+          title: creatorRef.current.JSON.title ?? "Новая форма",
+        });
         showToast("Форма сохранена", "success");
         callback(saveNo, true);
       } catch (error) {
@@ -47,9 +60,9 @@ export function SurveyBuilder() {
         setIsSaving(false);
       }
     };
+  }, [createSurveyMutation, showToast]);
 
-    return nextCreator;
-  }, [showToast]);
+  const creator = creatorRef.current;
 
   return (
     <div className="builder-host">

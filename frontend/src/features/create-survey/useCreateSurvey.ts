@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query";
 import { createSurvey } from "../../entities/survey/api/surveysApi";
 import type { SurveySchema } from "../../entities/survey/types";
 import { apiClient } from "../../shared/api";
@@ -16,5 +17,12 @@ export async function createSurveyForCurrentUser(schema: SurveySchema, title: st
     formReason: "plan",
     schema,
     authorId: userId,
+  });
+}
+
+export function useCreateSurveyMutation() {
+  return useMutation({
+    mutationFn: ({ schema, title }: { schema: SurveySchema; title: string }) =>
+      createSurveyForCurrentUser(schema, title),
   });
 }

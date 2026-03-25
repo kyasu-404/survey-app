@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -53,11 +54,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [forms, setForms] = useState<SurveyForm[]>([]);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [isFormsLoading, setIsFormsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
 
@@ -65,51 +64,48 @@ export default function DashboardPage() {
   const [loadingResponsesByFormId, setLoadingResponsesByFormId] = useState<LoadingResponsesMap>({});
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
 
-  const lastLoadedFilterKeyRef = useRef<string | null>(null);
-  const inFlightLoadRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
+  const queryClient = useQueryClient();
 
-  const filterKey = `${search}|${dateFrom}|${dateTo}`;
+  const formsQueryKey = useMemo(
+    () => ["forms", { search, dateFrom, dateTo }],
+    [search, dateFrom, dateTo],
+  );
 
-  const loadForms = useCallback(async (force = false) => {
-    if (!force) {
-      if (inFlightLoadRef.current?.key === filterKey) {
-        return inFlightLoadRef.current.promise;
-      }
-
-      if (lastLoadedFilterKeyRef.current === filterKey) {
-        return;
-      }
-    }
-
-    const requestPromise = (async () => {
-      setIsFormsLoading(true);
-
-      try {
-        const nextForms = await getForms({ search, dateFrom, dateTo });
-        setForms(nextForms);
-        lastLoadedFilterKeyRef.current = filterKey;
-      } catch (error) {
-        console.error(error);
-        showToast(getErrorMessage(error, "Не удалось загрузить формы"), "error");
-      } finally {
-        setIsFormsLoading(false);
-        if (inFlightLoadRef.current?.key === filterKey) {
-          inFlightLoadRef.current = null;
-        }
-      }
-    })();
-
-    inFlightLoadRef.current = { key: filterKey, promise: requestPromise };
-
-    return requestPromise;
-  }, [dateFrom, dateTo, filterKey, search, showToast]);
-
-  useEffect(() => {
-    void loadForms();
-  }, [loadForms]);
+  const {
+    data: forms = [],
+    isLoading: isFormsLoading,
+    isFetching: isFormsFetching,
+    error: formsError,
+    refetch: reloadForms,
+  } = useQuery({
+    queryKey: formsQueryKey,
+    queryFn: () => getForms({ search, dateFrom, dateTo }),
+    retry: 1,
+  });
 
   const formsCountText = useMemo(() => `Всего форм: ${forms.length}`, [forms.length]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
+
+  useEffect(() => {
+    if (formsError) {
+      showToast(getErrorMessage(formsError, "Не удалось загрузить формы"), "error");
+    }
+  }, [formsError, showToast]);
+
+  const invalidateForms = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["forms"] });
+    await reloadForms();
+  };
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => renameForm(id, title),
+  });
+  const removeMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) => removeForm(id),
+  });
+  const duplicateMutation = useMutation({
+    mutationFn: ({ form, authorId }: { form: SurveyForm; authorId: string }) => cloneForm(form, authorId),
+  });
 
   const runAction = async (
     action: () => Promise<void>,
@@ -120,7 +116,7 @@ export default function DashboardPage() {
     try {
       await action();
       if (options.shouldReloadForms ?? true) {
-        await loadForms(true);
+        await invalidateForms();
       }
 
       showToast(options.successMessage, "success");
@@ -152,7 +148,7 @@ export default function DashboardPage() {
     const newTitle = window.prompt("Введите новое название формы", form.title);
     if (!newTitle || !newTitle.trim() || newTitle === form.title) return;
 
-    await runAction(() => renameForm(form.id, newTitle.trim()), {
+    await runAction(() => renameMutation.mutateAsync({ id: form.id, title: newTitle.trim() }), {
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось переименовать форму",
     });
@@ -170,7 +166,7 @@ export default function DashboardPage() {
     const deletingForm = formToDelete;
     setFormToDelete(null);
 
-    await runAction(() => removeForm(deletingForm.id), {
+    await runAction(() => removeMutation.mutateAsync({ id: deletingForm.id }), {
       successMessage: "Форма удалена",
       errorMessage: "Не удалось удалить форму",
     });
@@ -182,7 +178,7 @@ export default function DashboardPage() {
       return;
     }
 
-    await runAction(() => cloneForm(form, user.id), {
+    await runAction(() => duplicateMutation.mutateAsync({ form, authorId: user.id }), {
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось дублировать форму",
     });
@@ -237,12 +233,12 @@ export default function DashboardPage() {
           <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          <button onClick={() => loadForms(true)} disabled={isFormsLoading || isActionLoading}>
-            {isFormsLoading ? "Загрузка..." : "Обновить"}
+          <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
+            {isFormsLoading || isFormsFetching ? "Загрузка..." : "Обновить"}
           </button>
         </div>
 
-        {(isFormsLoading || isActionLoading) && <p style={{ color: "#334155" }}>Загрузка...</p>}
+        {(isFormsLoading || isActionLoading || isFormsFetching) && <p style={{ color: "#334155" }}>Загрузка...</p>}
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {forms.map((form) => {
@@ -291,13 +287,16 @@ export default function DashboardPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {rows.map((row, index) => (
-                              <tr key={`${form.id}-${index}`}>
-                                {headers.map((header) => (
-                                  <td key={header}>{row[header]}</td>
-                                ))}
-                              </tr>
-                            ))}
+                            {rows.map((row, index) => {
+                              const rowId = responses[index]?.id ?? `${form.id}-${index}`;
+                              return (
+                                <tr key={rowId}>
+                                  {headers.map((header, columnIndex) => (
+                                    <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>

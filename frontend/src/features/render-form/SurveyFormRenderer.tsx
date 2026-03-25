@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import type { SurveySchema } from "../../entities/survey/types";
-import { submitResponse } from "../submit-response/useSubmitResponse";
+import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getSubmitResponseErrorMessage } from "../../shared/lib/error";
@@ -16,6 +16,7 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
+  const submitResponseMutation = useSubmitResponseMutation();
   const model = useMemo(() => new Model(schema), [schema]);
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
 
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
-        await submitResponse(payload.formId, payload.answers);
+        await submitResponseMutation.mutateAsync({ formId: payload.formId, data: payload.answers });
         showToast("Ответ успешно отправлен", "success");
       } catch (error) {
         console.error(error);
@@ -43,7 +44,7 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
     return () => {
       model.onComplete.remove(handleComplete);
     };
-  }, [formId, model, showToast]);
+  }, [formId, model, showToast, submitResponseMutation]);
 
   return (
     <>
