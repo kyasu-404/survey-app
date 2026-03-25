@@ -13,6 +13,23 @@ type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_nam
   responses?: Array<{ count?: number | null }> | null;
 };
 
+async function getAuthenticatedUserId(): Promise<string> {
+  const {
+    data: { user },
+    error,
+  } = await apiClient.auth.getCurrentUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user?.id) {
+    throw new Error("Пользователь не авторизован");
+  }
+
+  return user.id;
+}
+
 export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> {
   let query = apiClient
     .from("forms")
@@ -48,6 +65,12 @@ export async function insertForm(payload: {
   schema: SurveySchema;
   authorId: string;
 }) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (payload.authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
   const { data, error } = await apiClient
     .from("forms")
     .insert({
@@ -55,7 +78,7 @@ export async function insertForm(payload: {
       form_type: payload.formType,
       form_reason: payload.formReason,
       schema: payload.schema,
-      author_id: payload.authorId,
+      author_id: currentUserId,
     })
     .select("id")
     .single();
@@ -75,6 +98,12 @@ export async function deleteForm(id: string) {
 }
 
 export async function duplicateForm(form: SurveyForm, authorId: string) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
   const title = `${form.title} (копия)`;
 
   const { data, error } = await apiClient
@@ -84,7 +113,7 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
       form_type: form.form_type,
       form_reason: form.form_reason,
       schema: form.schema,
-      author_id: authorId,
+      author_id: currentUserId,
     })
     .select("id")
     .single();
