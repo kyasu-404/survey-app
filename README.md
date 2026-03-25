@@ -58,3 +58,24 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Как выдать пользователю роль admin в Supabase
+
+1. Откройте Supabase Studio → **SQL Editor**.
+2. Выполните запрос (замените email на нужный):
+
+```sql
+update public.profiles
+set role = 'admin'
+where email = 'admin@example.com';
+```
+
+Проверить результат можно так:
+
+```sql
+select id, email, role, created_at
+from public.profiles
+where email = 'admin@example.com';
+```
+
+Если пользователя ещё нет в `public.profiles`, сначала зарегистрируйте его через Auth (или дождитесь первого входа), чтобы сработал триггер `handle_new_user()`.
