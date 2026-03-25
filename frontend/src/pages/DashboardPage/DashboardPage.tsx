@@ -281,6 +281,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           <input
+            className="dashboard-search-input"
             placeholder="Поиск по названию и автору"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

@@ -1,10 +1,8 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
-import blackLogo from "../../img/black_logo.png";
-import whiteLogo from "../../img/white_logo.png";
 import darkThemeIcon from "../../img/dark.svg";
 import lightThemeIcon from "../../img/light.svg";
 
@@ -43,7 +41,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img className="logo-image" src={isDarkTheme ? whiteLogo : blackLogo} alt="Логотип приложения" />
+        <div className="brand-imc">ИМЦ</div>
         <h3 className="brand-title">Формы</h3>
       </div>
 
@@ -52,9 +50,12 @@ export function Sidebar() {
 
         {!loading && user && (
           <>
-            <Link className="nav-link" to={routes.dashboardMy}>
-              Дашборд
-            </Link>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
+              Мои формы
+            </NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardAll}>
+              Все формы
+            </NavLink>
             <Link className="nav-link" to={routes.builder}>
               Конструктор
             </Link>
@@ -63,7 +64,7 @@ export function Sidebar() {
                 Пользователи
               </Link>
             )}
-            <button onClick={onLogout}>Выйти</button>
+            <button className="logout-button" onClick={onLogout}>Выйти</button>
           </>
         )}
 
