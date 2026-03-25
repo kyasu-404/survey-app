@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import DashboardPage from "../pages/DashboardPage/DashboardPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
@@ -6,6 +6,15 @@ import LoginPage from "../pages/LoginPage/LoginPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
 import { ProtectedRoute } from "./router/ProtectedRoute";
+
+function LegacySurveyRedirect() {
+  const { id } = useParams();
+  if (!id) {
+    return <Navigate to={routes.home} replace />;
+  }
+
+  return <Navigate to={routes.survey(id)} replace />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +29,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: routes.surveyById, element: <SurveyPage /> },
+      { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {
         path: routes.builder,
         element: (
