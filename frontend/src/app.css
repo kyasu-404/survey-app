@@ -232,3 +232,19 @@ input:focus {
   color: #1d4ed8;
   border-color: #93c5fd;
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(460px, 100%);
+  padding: 18px;
+}

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type ToastType = "success" | "error" | "info";
 
@@ -17,6 +17,7 @@ const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const lastToastShownAtRef = useRef<Map<string, number>>(new Map());
+  const timeoutIdsRef = useRef<number[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
     const key = `${type}:${message}`;
@@ -32,9 +33,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
 
-    window.setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      timeoutIdsRef.current = timeoutIdsRef.current.filter((item) => item !== timeoutId);
     }, 3000);
+
+    timeoutIdsRef.current.push(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      timeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+      timeoutIdsRef.current = [];
+    };
   }, []);
 
   const value = useMemo(() => ({ showToast }), [showToast]);
