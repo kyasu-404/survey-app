@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -8,6 +8,8 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { cloneForm, getForms, removeForm, renameForm } from "../../entities/survey/api/surveysApi";
 import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm } from "../../entities/survey/types";
+import { copyTextToClipboard } from "../../shared/lib/browser";
+import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 
 type LoadingResponsesMap = Record<string, boolean>;
@@ -57,55 +59,92 @@ export default function DashboardPage() {
   const [dateTo, setDateTo] = useState("");
   const [isFormsLoading, setIsFormsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
 
   const [responsesByFormId, setResponsesByFormId] = useState<ResponsesMap>({});
   const [loadingResponsesByFormId, setLoadingResponsesByFormId] = useState<LoadingResponsesMap>({});
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
 
-  const loadForms = useCallback(async () => {
-    setIsFormsLoading(true);
+  const lastLoadedFilterKeyRef = useRef<string | null>(null);
+  const inFlightLoadRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
 
-    try {
-      const nextForms = await getForms({ search, dateFrom, dateTo });
-      setForms(nextForms);
-    } catch (error) {
-      console.error(error);
-      showToast("Не удалось загрузить формы", "error");
-    } finally {
-      setIsFormsLoading(false);
+  const filterKey = `${search}|${dateFrom}|${dateTo}`;
+
+  const loadForms = useCallback(async (force = false) => {
+    if (!force) {
+      if (inFlightLoadRef.current?.key === filterKey) {
+        return inFlightLoadRef.current.promise;
+      }
+
+      if (lastLoadedFilterKeyRef.current === filterKey) {
+        return;
+      }
     }
-  }, [search, dateFrom, dateTo, showToast]);
+
+    const requestPromise = (async () => {
+      setIsFormsLoading(true);
+
+      try {
+        const nextForms = await getForms({ search, dateFrom, dateTo });
+        setForms(nextForms);
+        lastLoadedFilterKeyRef.current = filterKey;
+      } catch (error) {
+        console.error(error);
+        showToast(getErrorMessage(error, "Не удалось загрузить формы"), "error");
+      } finally {
+        setIsFormsLoading(false);
+        if (inFlightLoadRef.current?.key === filterKey) {
+          inFlightLoadRef.current = null;
+        }
+      }
+    })();
+
+    inFlightLoadRef.current = { key: filterKey, promise: requestPromise };
+
+    return requestPromise;
+  }, [dateFrom, dateTo, filterKey, search, showToast]);
 
   useEffect(() => {
-    loadForms().catch((error) => {
-      console.error(error);
-      showToast("Не удалось загрузить формы", "error");
-    });
-  }, [loadForms, showToast]);
+    void loadForms();
+  }, [loadForms]);
 
   const formsCountText = useMemo(() => `Всего форм: ${forms.length}`, [forms.length]);
+  const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
 
-  const handleCopyLink = async (link: string) => {
-    if (!navigator.clipboard) {
-      showToast("Копирование недоступно в этом браузере", "error");
-      return;
-    }
+  const runAction = async (
+    action: () => Promise<void>,
+    options: { successMessage: string; errorMessage: string; shouldReloadForms?: boolean },
+  ) => {
+    setIsActionLoading(true);
 
     try {
-      await navigator.clipboard.writeText(link);
-      showToast("Ссылка скопирована", "success");
+      await action();
+      if (options.shouldReloadForms ?? true) {
+        await loadForms(true);
+      }
+
+      showToast(options.successMessage, "success");
     } catch (error) {
-      console.error("Не удалось скопировать ссылку", error);
-      showToast("Не удалось скопировать ссылку", "error");
+      console.error(error);
+      showToast(getErrorMessage(error, options.errorMessage), "error");
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const runAction = async (action: () => Promise<void>) => {
-    setIsActionLoading(true);
+  const handleCopyLink = async (link: string) => {
     try {
-      await action();
-    } finally {
-      setIsActionLoading(false);
+      const copied = await copyTextToClipboard(link);
+
+      if (!copied) {
+        showToast("Автокопирование недоступно. Скопируйте ссылку вручную.", "info");
+        return;
+      }
+
+      showToast("Ссылка скопирована", "success");
+    } catch (error) {
+      console.error("Не удалось скопировать ссылку", error);
+      showToast(getErrorMessage(error, "Не удалось скопировать ссылку"), "error");
     }
   };
 
@@ -113,31 +152,27 @@ export default function DashboardPage() {
     const newTitle = window.prompt("Введите новое название формы", form.title);
     if (!newTitle || !newTitle.trim() || newTitle === form.title) return;
 
-    await runAction(async () => {
-      try {
-        await renameForm(form.id, newTitle.trim());
-        await loadForms();
-        showToast("Форма сохранена", "success");
-      } catch (error) {
-        console.error(error);
-        showToast("Не удалось переименовать форму", "error");
-      }
+    await runAction(() => renameForm(form.id, newTitle.trim()), {
+      successMessage: "Форма сохранена",
+      errorMessage: "Не удалось переименовать форму",
     });
   };
 
   const handleDelete = async (form: SurveyForm) => {
-    const shouldDelete = window.confirm(`Удалить форму \"${form.title}\"?`);
-    if (!shouldDelete) return;
+    setFormToDelete(form);
+  };
 
-    await runAction(async () => {
-      try {
-        await removeForm(form.id);
-        await loadForms();
-        showToast("Форма удалена", "success");
-      } catch (error) {
-        console.error(error);
-        showToast("Не удалось удалить форму", "error");
-      }
+  const confirmDelete = async () => {
+    if (!formToDelete) {
+      return;
+    }
+
+    const deletingForm = formToDelete;
+    setFormToDelete(null);
+
+    await runAction(() => removeForm(deletingForm.id), {
+      successMessage: "Форма удалена",
+      errorMessage: "Не удалось удалить форму",
     });
   };
 
@@ -147,15 +182,9 @@ export default function DashboardPage() {
       return;
     }
 
-    await runAction(async () => {
-      try {
-        await cloneForm(form, user.id);
-        await loadForms();
-        showToast("Форма сохранена", "success");
-      } catch (error) {
-        console.error(error);
-        showToast("Не удалось дублировать форму", "error");
-      }
+    await runAction(() => cloneForm(form, user.id), {
+      successMessage: "Форма сохранена",
+      errorMessage: "Не удалось дублировать форму",
     });
   };
 
@@ -179,7 +208,7 @@ export default function DashboardPage() {
       setResponsesByFormId((prev) => ({ ...prev, [formId]: responses }));
     } catch (error) {
       console.error(error);
-      showToast("Не удалось загрузить ответы", "error");
+      showToast(getErrorMessage(error, "Не удалось загрузить ответы"), "error");
     } finally {
       setLoadingResponsesByFormId((prev) => ({ ...prev, [formId]: false }));
     }
@@ -208,7 +237,7 @@ export default function DashboardPage() {
           <input placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          <button onClick={() => loadForms()} disabled={isFormsLoading || isActionLoading}>
+          <button onClick={() => loadForms(true)} disabled={isFormsLoading || isActionLoading}>
             {isFormsLoading ? "Загрузка..." : "Обновить"}
           </button>
         </div>
@@ -217,7 +246,7 @@ export default function DashboardPage() {
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {forms.map((form) => {
-            const link = `${window.location.origin}${routes.survey(form.id)}`;
+            const link = `${appOrigin}${routes.survey(form.id)}`;
             const authorLabel = form.author_email || form.author_id;
             const responsesCount = form.responses_count ?? 0;
             const isResponsesOpen = openedResponsesByFormId[form.id];
@@ -280,6 +309,19 @@ export default function DashboardPage() {
           })}
         </div>
       </div>
+
+      {formToDelete && (
+        <div className="modal-backdrop">
+          <div className="modal-card card">
+            <h3 style={{ marginTop: 0 }}>Удаление формы</h3>
+            <p>Удалить форму «{formToDelete.title}»? Это действие нельзя отменить.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setFormToDelete(null)} disabled={isActionLoading}>Отмена</button>
+              <button onClick={() => void confirmDelete()} disabled={isActionLoading}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
