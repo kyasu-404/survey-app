@@ -5,6 +5,7 @@ export type FormsFilters = {
   search?: string;
   dateFrom?: string;
   dateTo?: string;
+  authorId?: string;
 };
 
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
@@ -21,6 +22,7 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   if (filters?.search) query = query.ilike("title", `%${filters.search}%`);
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom);
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo);
+  if (filters?.authorId) query = query.eq("author_id", filters.authorId);
 
   const { data, error } = await query;
   if (error) throw error;

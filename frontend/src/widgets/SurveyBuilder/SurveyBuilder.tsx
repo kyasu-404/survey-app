@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
 import "survey-core/survey.i18n";
@@ -9,11 +10,13 @@ import { useCreateSurveyMutation } from "../../features/create-survey/useCreateS
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
 import { useToast } from "../../app/providers/ToastProvider";
+import { routes } from "../../app/routes";
 
 export function SurveyBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
+  const navigate = useNavigate();
 
   const creatorRef = useRef<SurveyCreator | null>(null);
   if (!creatorRef.current) {
@@ -45,6 +48,7 @@ export function SurveyBuilder() {
           title: creatorRef.current.JSON.title ?? "Новая форма",
         });
         showToast("Форма сохранена", "success");
+        navigate(routes.dashboardMy, { replace: true });
         callback(saveNo, true);
       } catch (error) {
         console.error(error);
@@ -60,7 +64,7 @@ export function SurveyBuilder() {
         setIsSaving(false);
       }
     };
-  }, [createSurveyMutation, showToast]);
+  }, [createSurveyMutation, navigate, showToast]);
 
   const creator = creatorRef.current;
 

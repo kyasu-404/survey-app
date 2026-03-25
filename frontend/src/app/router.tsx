@@ -10,7 +10,7 @@ import { ProtectedRoute } from "./router/ProtectedRoute";
 function LegacySurveyRedirect() {
   const { id } = useParams();
   if (!id) {
-    return <Navigate to={routes.home} replace />;
+    return <Navigate to={routes.dashboardMy} replace />;
   }
 
   return <Navigate to={routes.survey(id)} replace />;
@@ -22,9 +22,21 @@ export const router = createBrowserRouter([
     children: [
       {
         path: routes.home,
+        element: <Navigate to={routes.dashboardMy} replace />,
+      },
+      {
+        path: routes.dashboardMy,
         element: (
           <ProtectedRoute>
-            <DashboardPage />
+            <DashboardPage viewMode="mine" />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: routes.dashboardAll,
+        element: (
+          <ProtectedRoute>
+            <DashboardPage viewMode="all" />
           </ProtectedRoute>
         ),
       },
@@ -39,7 +51,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: routes.login, element: <LoginPage /> },
-      { path: "*", element: <Navigate to={routes.home} replace /> },
+      { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },
     ],
   },
 ]);

@@ -30,7 +30,7 @@ export function Sidebar() {
 
         {!loading && user && (
           <>
-            <Link className="nav-link" to={routes.home}>
+            <Link className="nav-link" to={routes.dashboardMy}>
               Дашборд
             </Link>
             <Link className="nav-link" to={routes.builder}>
