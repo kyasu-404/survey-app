@@ -105,17 +105,12 @@ input:focus {
   margin-bottom: 16px;
 }
 
-.logo {
+.logo-image {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: white;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  border-radius: 10px;
+  object-fit: contain;
+  background: transparent;
 }
 
 .brand-title {
@@ -278,6 +273,13 @@ input:focus {
 
 .theme-toggle-button {
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle-button img {
+  display: block;
 }
 
 .dashboard-view-button {
@@ -321,6 +323,40 @@ input:focus {
   background: #0f172a;
   border-color: #475569;
   color: #e2e8f0;
+}
+
+:root[data-theme="dark"] .dashboard-view-button,
+:root[data-theme="dark"] .dashboard-view-button:disabled {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+:root[data-theme="dark"] .dashboard-view-button:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+}
+
+:root[data-theme="dark"] .builder-host .svc-creator,
+:root[data-theme="dark"] .builder-host .svc-creator * {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] .builder-host .svc-creator button {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #0f172a;
+}
+
+:root[data-theme="dark"] .builder-host .svc-creator button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+:root[data-theme="dark"] .builder-host .svc-creator input {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #0f172a;
 }
 
 :root[data-theme="dark"] .responses-table th {

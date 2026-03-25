@@ -3,6 +3,10 @@ import { useEffect, useState } from "react";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
+import blackLogo from "../../img/black_logo.png";
+import whiteLogo from "../../img/white_logo.png";
+import darkThemeIcon from "../../img/dark.svg";
+import lightThemeIcon from "../../img/light.svg";
 
 export function Sidebar() {
   const { user, profile, loading } = useAuth();
@@ -39,9 +43,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="logo" aria-label="Логотип приложения">
-          SA
-        </div>
+        <img className="logo-image" src={isDarkTheme ? whiteLogo : blackLogo} alt="Логотип приложения" />
         <h3 className="brand-title">Формы</h3>
       </div>
 
@@ -72,8 +74,13 @@ export function Sidebar() {
         )}
       </nav>
       <div className="sidebar-footer">
-        <button className="theme-toggle-button" onClick={toggleTheme}>
-          {isDarkTheme ? "Светлая тема" : "Тёмная тема"}
+        <button className="theme-toggle-button" onClick={toggleTheme} aria-label="Переключить тему">
+          <img
+            src={isDarkTheme ? lightThemeIcon : darkThemeIcon}
+            alt={isDarkTheme ? "Светлая тема" : "Тёмная тема"}
+            width={18}
+            height={18}
+          />
         </button>
       </div>
     </aside>
