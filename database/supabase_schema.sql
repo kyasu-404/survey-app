@@ -18,6 +18,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null default '',
   email text not null,
+  role text not null default 'user' check (role in ('admin', 'user')),
   created_at timestamptz not null default now()
 );
 
@@ -60,16 +61,32 @@ language plpgsql
 security definer
 as $$
 begin
-  insert into public.profiles (id, name, email)
+  insert into public.profiles (id, name, email, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
-    new.email
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'role', 'user')
   )
-  on conflict (id) do nothing;
+  on conflict (id) do update
+    set name = excluded.name,
+        email = excluded.email,
+        role = coalesce(new.raw_user_meta_data ->> 'role', public.profiles.role, 'user');
 
   return new;
 end;
+$$;
+
+create or replace function public.request_role()
+returns text
+language sql
+stable
+as $$
+  select coalesce(
+    auth.jwt() ->> 'role',
+    auth.jwt() -> 'user_metadata' ->> 'role',
+    'user'
+  );
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
@@ -96,7 +113,7 @@ for select
 to authenticated
 using (
   id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 );
 
 create policy "profiles_update"
@@ -105,11 +122,11 @@ for update
 to authenticated
 using (
   id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 )
 with check (
   id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 );
 
 -- =========================
@@ -123,7 +140,7 @@ to authenticated
 using (
   is_public = true
   OR author_id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 );
 
 create policy "forms_select_anon"
@@ -144,11 +161,11 @@ for update
 to authenticated
 using (
   author_id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 )
 with check (
   author_id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 );
 
 create policy "forms_delete"
@@ -157,7 +174,7 @@ for delete
 to authenticated
 using (
   author_id = auth.uid()
-  OR auth.jwt() ->> 'role' = 'admin'
+  OR public.request_role() = 'admin'
 );
 
 -- =========================
@@ -169,7 +186,7 @@ on public.responses
 for select
 to authenticated
 using (
-  auth.jwt() ->> 'role' = 'admin'
+  public.request_role() = 'admin'
 );
 
 create policy "responses_insert"

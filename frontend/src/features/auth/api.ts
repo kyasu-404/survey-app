@@ -6,7 +6,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function register(email: string, password: string) {
-  const { error } = await apiClient.auth.register(email, password);
+  const { error } = await apiClient.auth.register(email, password, { role: "user" });
   if (error) throw error;
 }
 
