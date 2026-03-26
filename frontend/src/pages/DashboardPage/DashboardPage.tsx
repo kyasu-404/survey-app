@@ -294,7 +294,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <p style={{ color: "#475569", margin: "0 0 10px" }}>Ответов: {responsesCount}</p>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link className="nav-link" to={routes.survey(form.id)}>
+                  <Link className="button-link" to={routes.survey(form.id)}>
                     Открыть
                   </Link>
                   <button onClick={() => handleCopyLink(link)}>Скопировать ссылку</button>
