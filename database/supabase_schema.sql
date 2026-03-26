@@ -19,6 +19,7 @@ create table public.profiles (
   name text not null default '',
   email text not null,
   role text not null default 'user' check (role in ('admin', 'user')),
+  is_disabled boolean not null default false,
   created_at timestamptz not null default now()
 );
 

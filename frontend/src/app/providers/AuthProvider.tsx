@@ -32,7 +32,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const loadProfile = async (userId: string) => {
     const { data, error } = await apiClient
       .from("profiles")
-      .select("id, name, email, role, created_at")
+      .select("id, name, email, role, is_disabled, created_at")
       .eq("id", userId)
       .single();
 
