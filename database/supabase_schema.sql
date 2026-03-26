@@ -29,6 +29,7 @@ create table public.forms (
   form_reason text not null,
   schema jsonb not null,
   is_public boolean not null default true,
+  deadline_at timestamptz,
   author_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now()
 );
@@ -138,7 +139,10 @@ on public.forms
 for select
 to authenticated
 using (
-  is_public = true
+  (
+    is_public = true
+    and (deadline_at is null or deadline_at > now())
+  )
   OR author_id = (select auth.uid())
   OR (select public.request_role()) = 'admin'
 );
@@ -147,7 +151,10 @@ create policy "forms_select_anon"
 on public.forms
 for select
 to anon
-using (is_public = true);
+using (
+  is_public = true
+  and (deadline_at is null or deadline_at > now())
+);
 
 create policy "forms_insert"
 on public.forms
@@ -193,7 +200,15 @@ create policy "responses_insert"
 on public.responses
 for insert
 to authenticated, anon
-with check (true);
+with check (
+  exists (
+    select 1
+    from public.forms f
+    where f.id = form_id
+      and f.is_public = true
+      and (f.deadline_at is null or f.deadline_at > now())
+  )
+);
 
 -- =========================
 -- INDEXES

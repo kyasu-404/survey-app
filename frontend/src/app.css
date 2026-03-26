@@ -211,6 +211,7 @@ input:focus {
 }
 
 .dashboard-form-card {
+  position: relative;
   border: 2px solid var(--card-border);
   padding: 14px;
   border-radius: 12px;
@@ -246,6 +247,30 @@ input:focus {
   border-color: #93c5fd;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
   transform: translateY(-1px);
+}
+
+.form-status-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #fff;
+  border: none;
+}
+
+.form-status-active {
+  background: #16a34a;
+}
+
+.form-status-active:hover {
+  background: #15803d;
+}
+
+.form-status-closed {
+  background: #dc2626;
+}
+
+.form-status-closed:hover {
+  background: #b91c1c;
 }
 
 .responses-table {

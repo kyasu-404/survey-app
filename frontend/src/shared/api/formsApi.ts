@@ -92,6 +92,16 @@ export async function updateFormTitle(id: string, title: string) {
   if (error) throw error;
 }
 
+export async function updateFormStatus(id: string, isPublic: boolean) {
+  const { error } = await apiClient.from("forms").update({ is_public: isPublic }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateFormDeadline(id: string, deadlineAt: string | null) {
+  const { error } = await apiClient.from("forms").update({ deadline_at: deadlineAt }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteForm(id: string) {
   const { error } = await apiClient.from("forms").delete().eq("id", id);
   if (error) throw error;

@@ -6,7 +6,14 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import { getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
-import { cloneForm, getForms, removeForm, renameForm } from "../../entities/survey/api/surveysApi";
+import {
+  changeFormStatus,
+  cloneForm,
+  getForms,
+  removeForm,
+  renameForm,
+  setFormDeadline,
+} from "../../entities/survey/api/surveysApi";
 import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
@@ -137,6 +144,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const duplicateMutation = useMutation({
     mutationFn: ({ form, authorId }: { form: SurveyForm; authorId: string }) => cloneForm(form, authorId),
   });
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) => changeFormStatus(id, isPublic),
+  });
+  const deadlineMutation = useMutation({
+    mutationFn: ({ id, deadlineAt }: { id: string; deadlineAt: string | null }) => setFormDeadline(id, deadlineAt),
+  });
 
   const runAction = async (
     action: () => Promise<void>,
@@ -215,6 +228,46 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
+  const handleToggleFormStatus = async (form: SurveyForm) => {
+    const nextStatus = !form.is_public;
+    await runAction(() => statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus }), {
+      successMessage: nextStatus ? "Форма активирована" : "Форма закрыта",
+      errorMessage: "Не удалось изменить статус формы",
+    });
+  };
+
+  const handleSetDeadline = async (form: SurveyForm) => {
+    const currentDeadline = form.deadline_at ? new Date(form.deadline_at).toISOString().slice(0, 16) : "";
+    const input = window.prompt(
+      "Укажите дедлайн в формате YYYY-MM-DDTHH:mm или оставьте пустым для снятия ограничения",
+      currentDeadline,
+    );
+
+    if (input === null) {
+      return;
+    }
+
+    const normalizedInput = input.trim();
+    if (!normalizedInput) {
+      await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null }), {
+        successMessage: "Дедлайн снят",
+        errorMessage: "Не удалось обновить дедлайн",
+      });
+      return;
+    }
+
+    const parsedDate = new Date(normalizedInput);
+    if (Number.isNaN(parsedDate.getTime())) {
+      showToast("Некорректный формат даты дедлайна", "error");
+      return;
+    }
+
+    await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: parsedDate.toISOString() }), {
+      successMessage: "Дедлайн установлен",
+      errorMessage: "Не удалось обновить дедлайн",
+    });
+  };
+
   const toggleResponses = async (formId: string) => {
     const isOpen = openedResponsesByFormId[formId];
     if (isOpen) {
@@ -286,19 +339,45 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const responses = responsesByFormId[form.id] ?? [];
             const rows = formatResponsesForTable(responses);
             const headers = rows[0] ? Object.keys(rows[0]) : [];
+            const isFormActive = form.is_public;
+            const deadlineLabel = form.deadline_at
+              ? new Date(form.deadline_at).toLocaleString("ru-RU")
+              : "Не установлен";
 
             return (
               <div key={form.id} className="dashboard-form-card">
+                <button
+                  className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`}
+                  onClick={() => void handleToggleFormStatus(form)}
+                  disabled={isActionLoading}
+                >
+                  {isFormActive ? "Активна" : "Закрыта"}
+                </button>
                 <strong>{getSurveyDisplayTitle(form)}</strong>
                 <p style={{ color: "#64748b", marginBottom: 6 }}>{new Date(form.created_at).toLocaleString("ru-RU")}</p>
                 <p style={{ color: "#475569", margin: "0 0 4px" }}>Автор: {authorLabel}</p>
                 <p style={{ color: "#475569", margin: "0 0 10px" }}>Ответов: {responsesCount}</p>
+                <p style={{ color: "#475569", margin: "0 0 10px" }}>Дедлайн: {deadlineLabel}</p>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link className="button-link" to={routes.survey(form.id)}>
+                  <Link
+                    className="button-link"
+                    to={routes.survey(form.id)}
+                    onClick={(event) => {
+                      if (!isFormActive) {
+                        event.preventDefault();
+                        showToast("Ссылка закрыта: форма неактивна", "info");
+                      }
+                    }}
+                  >
                     Открыть
                   </Link>
-                  <button onClick={() => handleCopyLink(link)}>Скопировать ссылку</button>
+                  <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
+                    Скопировать ссылку
+                  </button>
+                  <button onClick={() => void handleSetDeadline(form)} disabled={isActionLoading}>
+                    Установить дедлайн
+                  </button>
                   <button onClick={() => handleRename(form)} disabled={isActionLoading}>Переименовать</button>
                   <button onClick={() => handleDuplicate(form)} disabled={isActionLoading}>Дублировать</button>
                   <button onClick={() => handleDelete(form)} disabled={isActionLoading}>Удалить</button>

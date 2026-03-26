@@ -4,6 +4,8 @@ import {
   fetchFormById,
   fetchForms,
   insertForm,
+  updateFormDeadline,
+  updateFormStatus,
   updateFormTitle,
   type FormsFilters,
 } from "../../../shared/api";
@@ -32,6 +34,14 @@ export async function createSurvey(params: {
 
 export async function renameForm(id: string, title: string) {
   return updateFormTitle(id, title);
+}
+
+export async function changeFormStatus(id: string, isPublic: boolean) {
+  return updateFormStatus(id, isPublic);
+}
+
+export async function setFormDeadline(id: string, deadlineAt: string | null) {
+  return updateFormDeadline(id, deadlineAt);
 }
 
 export async function removeForm(id: string) {
