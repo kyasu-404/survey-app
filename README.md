@@ -99,7 +99,7 @@ using (bucket_id = 'survey-files');
 
 ## Edge Function для админ-операций пользователей
 
-Создание пользователя, удаление, смена пароля пользователя и отключение/включение теперь выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
+Создание пользователя, удаление, смена пароля пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
 
 Цепочка:
 
@@ -107,9 +107,9 @@ using (bucket_id = 'survey-files');
 
 ### Как включить
 
-1. Установите и авторизуйте Supabase CLI.
-2. Проверьте, что в проекте есть файл функции: `supabase/functions/user-admin/index.ts`.
-3. Задеплойте функцию:
+1. mv /survey-app/supabase/functions/user-admin /survey-app/supabase/docker/volumes/functions/
+2. cd /survey-app/supabase/docker/
+3. docker compose restart functions --no-deps
 
 ```bash
 supabase functions deploy user-admin
