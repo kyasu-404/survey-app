@@ -55,7 +55,7 @@ function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow
 }
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
-  const { user } = useAuth();
+  const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -84,11 +84,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   } = useQuery({
     queryKey: formsQueryKey,
     queryFn: () =>
-        getForms({
+      getForms({
         dateFrom,
         dateTo,
         authorId: viewMode === "mine" ? user?.id : undefined,
       }),
+    enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
     retry: 1,
   });
 

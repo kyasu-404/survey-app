@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
@@ -18,6 +19,7 @@ export function SurveyBuilder() {
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const creatorRef = useRef<SurveyCreator | null>(null);
   if (!creatorRef.current) {
@@ -48,6 +50,7 @@ export function SurveyBuilder() {
           schema: creatorRef.current.JSON,
           title: creatorRef.current.JSON.title ?? "Новая форма",
         });
+        await queryClient.invalidateQueries({ queryKey: ["forms"] });
         showToast("Форма сохранена", "success");
         navigate(routes.dashboardMy, { replace: true });
         callback(saveNo, true);
@@ -65,7 +68,7 @@ export function SurveyBuilder() {
         setIsSaving(false);
       }
     };
-  }, [createSurveyMutation, navigate, showToast]);
+  }, [createSurveyMutation, navigate, queryClient, showToast]);
 
   const creator = creatorRef.current;
 
