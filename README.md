@@ -77,6 +77,7 @@ using (bucket_id = 'survey-files');
   - `id uuid`
   - `email text`
   - `role text` (`admin` / `user`)
+  - `is_disabled boolean`
   - `created_at timestamptz`
 - `public.forms`
   - `id uuid`
@@ -94,6 +95,30 @@ using (bucket_id = 'survey-files');
   - `created_at timestamptz`
 
 Схема в `database/supabase_schema.sql` соответствует этим ожиданиям.
+
+
+## Edge Function для админ-операций пользователей
+
+Создание пользователя, удаление, смена пароля пользователя и отключение/включение теперь выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
+
+Цепочка:
+
+`Frontend (React) -> Edge Function (проверка прав admin) -> Supabase auth.admin API`
+
+### Как включить
+
+1. Установите и авторизуйте Supabase CLI.
+2. Проверьте, что в проекте есть файл функции: `supabase/functions/user-admin/index.ts`.
+3. Задеплойте функцию:
+
+```bash
+supabase functions deploy user-admin
+```
+
+4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions (через Secrets в Supabase).
+5. Фронтенд вызывает функцию через `supabase.functions.invoke("user-admin")` и передаёт JWT текущего пользователя автоматически; функция дополнительно проверяет, что вызывающий пользователь имеет роль `admin` в `public.profiles`.
+
+> Для корректного отображения статуса блокировки пользователей в таблице используется поле `public.profiles.is_disabled`.
 
 ## Запуск frontend
 

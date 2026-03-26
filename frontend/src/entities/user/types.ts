@@ -5,5 +5,6 @@ export type UserProfile = {
   name: string;
   email: string;
   role: UserRole;
+  is_disabled: boolean;
   created_at?: string;
 };

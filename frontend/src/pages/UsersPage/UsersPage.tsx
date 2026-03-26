@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createUser, getAllUsers, updateMyPassword } from "../../features/users/api";
+import {
+  createUser,
+  deleteUser,
+  getAllUsers,
+  setUserDisabled,
+  updateMyPassword,
+  updateUserPassword,
+} from "../../features/users/api";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getErrorMessage } from "../../shared/lib/error";
+import { useAuth } from "../../app/providers/AuthProvider";
 import type { UserRole } from "../../entities/user/types";
 
 type NewUserForm = {
@@ -14,6 +22,7 @@ type NewUserForm = {
 
 export default function UsersPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [newUser, setNewUser] = useState<NewUserForm>({
     name: "",
     email: "",
@@ -21,6 +30,7 @@ export default function UsersPage() {
     role: "user",
   });
   const [newPassword, setNewPassword] = useState("");
+  const [passwordByUserId, setPasswordByUserId] = useState<Record<string, string>>({});
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -36,6 +46,41 @@ export default function UsersPage() {
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось создать пользователя"), "error");
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: async () => {
+      showToast("Пользователь удалён", "success");
+      await usersQuery.refetch();
+    },
+    onError: (error) => {
+      showToast(getErrorMessage(error, "Не удалось удалить пользователя"), "error");
+    },
+  });
+
+  const setUserDisabledMutation = useMutation({
+    mutationFn: ({ userId, disabled }: { userId: string; disabled: boolean }) =>
+      setUserDisabled(userId, disabled),
+    onSuccess: async (_data, variables) => {
+      showToast(variables.disabled ? "Пользователь отключён" : "Пользователь включён", "success");
+      await usersQuery.refetch();
+    },
+    onError: (error) => {
+      showToast(getErrorMessage(error, "Не удалось изменить статус пользователя"), "error");
+    },
+  });
+
+  const updateUserPasswordMutation = useMutation({
+    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
+      updateUserPassword(userId, password),
+    onSuccess: async (_data, variables) => {
+      setPasswordByUserId((prev) => ({ ...prev, [variables.userId]: "" }));
+      showToast("Пароль пользователя обновлён", "success");
+    },
+    onError: (error) => {
+      showToast(getErrorMessage(error, "Не удалось обновить пароль пользователя"), "error");
     },
   });
 
@@ -78,6 +123,17 @@ export default function UsersPage() {
     }
 
     await updatePasswordMutation.mutateAsync(newPassword);
+  };
+
+  const onChangeUserPassword = async (userId: string) => {
+    const nextPassword = passwordByUserId[userId] ?? "";
+
+    if (nextPassword.length < 8) {
+      showToast("Пароль должен быть не короче 8 символов", "error");
+      return;
+    }
+
+    await updateUserPasswordMutation.mutateAsync({ userId, password: nextPassword });
   };
 
   return (
@@ -128,7 +184,10 @@ export default function UsersPage() {
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Новый пароль (минимум 8 символов)"
           />
-          <button onClick={() => void onChangeMyPassword()} disabled={updatePasswordMutation.isPending || !isCurrentPasswordValid}>
+          <button
+            onClick={() => void onChangeMyPassword()}
+            disabled={updatePasswordMutation.isPending || !isCurrentPasswordValid}
+          >
             Сменить пароль
           </button>
         </div>
@@ -139,18 +198,70 @@ export default function UsersPage() {
               <th>Имя</th>
               <th>Email</th>
               <th>Роль</th>
+              <th>Статус</th>
               <th>Создан</th>
+              <th>Действия</th>
             </tr>
           </thead>
           <tbody>
-            {(usersQuery.data ?? []).map((profile) => (
-              <tr key={profile.id}>
-                <td>{profile.name || "—"}</td>
-                <td>{profile.email}</td>
-                <td>{profile.role}</td>
-                <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
-              </tr>
-            ))}
+            {(usersQuery.data ?? []).map((profile) => {
+              const rowPassword = passwordByUserId[profile.id] ?? "";
+              const isOwnUser = profile.id === user?.id;
+
+              return (
+                <tr key={profile.id}>
+                  <td>{profile.name || "—"}</td>
+                  <td>{profile.email}</td>
+                  <td>{profile.role}</td>
+                  <td>{profile.is_disabled ? "Отключён" : "Активен"}</td>
+                  <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
+                  <td>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="password"
+                          value={rowPassword}
+                          onChange={(e) =>
+                            setPasswordByUserId((prev) => ({
+                              ...prev,
+                              [profile.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Новый пароль"
+                          disabled={isOwnUser}
+                        />
+                        <button
+                          onClick={() => void onChangeUserPassword(profile.id)}
+                          disabled={updateUserPasswordMutation.isPending || rowPassword.length < 8 || isOwnUser}
+                        >
+                          Сменить пароль
+                        </button>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() =>
+                            void setUserDisabledMutation.mutateAsync({
+                              userId: profile.id,
+                              disabled: !profile.is_disabled,
+                            })
+                          }
+                          disabled={setUserDisabledMutation.isPending || isOwnUser}
+                        >
+                          {profile.is_disabled ? "Включить" : "Отключить"}
+                        </button>
+                        <button
+                          onClick={() => void deleteUserMutation.mutateAsync(profile.id)}
+                          disabled={deleteUserMutation.isPending || isOwnUser}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
