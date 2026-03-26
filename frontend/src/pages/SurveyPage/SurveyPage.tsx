@@ -1,42 +1,42 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { getFormById } from "../../entities/survey/api/surveysApi";
-import type { SurveyForm } from "../../entities/survey/types";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
 export default function SurveyPage() {
   const { id } = useParams();
-  const [form, setForm] = useState<SurveyForm | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
+  const {
+    data: form,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["survey-form", id],
+    queryFn: async () => {
+      if (!id) {
+        return null;
+      }
 
-    setError(null);
-    setForm(null);
+      return getFormById(id);
+    },
+    enabled: Boolean(id),
+  });
 
-    getFormById(id)
-      .then((nextForm) => {
-        if (!nextForm) {
-          setError("Форма не найдена или недоступна.");
-          return;
-        }
+  const errorMessage = useMemo(() => {
+    if (!error) {
+      return null;
+    }
 
-        setForm(nextForm);
-      })
-      .catch((requestError: unknown) => {
-        const errorMessage =
-          requestError instanceof Error
-            ? requestError.message
-            : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
-
-        setError(errorMessage);
-      });
-  }, [id]);
+    return error instanceof Error
+      ? error.message
+      : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
+  }, [error]);
 
   if (!id) return <p>Форма не найдена</p>;
-  if (error) return <p>Ошибка: {error}</p>;
-  if (!form) return <p>Загрузка...</p>;
+  if (isLoading) return <p>Загрузка...</p>;
+  if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
+  if (!form) return <p>Форма не найдена или недоступна.</p>;
 
   return (
     <div>
