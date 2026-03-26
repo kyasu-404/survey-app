@@ -112,8 +112,8 @@ on public.profiles
 for select
 to authenticated
 using (
-  id = auth.uid()
-  OR public.request_role() = 'admin'
+  id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 );
 
 create policy "profiles_update"
@@ -121,12 +121,12 @@ on public.profiles
 for update
 to authenticated
 using (
-  id = auth.uid()
-  OR public.request_role() = 'admin'
+  id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 )
 with check (
-  id = auth.uid()
-  OR public.request_role() = 'admin'
+  id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 );
 
 -- =========================
@@ -139,8 +139,8 @@ for select
 to authenticated
 using (
   is_public = true
-  OR author_id = auth.uid()
-  OR public.request_role() = 'admin'
+  OR author_id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 );
 
 create policy "forms_select_anon"
@@ -153,19 +153,19 @@ create policy "forms_insert"
 on public.forms
 for insert
 to authenticated
-with check (author_id = auth.uid());
+with check (author_id = (select auth.uid()));
 
 create policy "forms_update"
 on public.forms
 for update
 to authenticated
 using (
-  author_id = auth.uid()
-  OR public.request_role() = 'admin'
+  author_id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 )
 with check (
-  author_id = auth.uid()
-  OR public.request_role() = 'admin'
+  author_id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 );
 
 create policy "forms_delete"
@@ -173,8 +173,8 @@ on public.forms
 for delete
 to authenticated
 using (
-  author_id = auth.uid()
-  OR public.request_role() = 'admin'
+  author_id = (select auth.uid())
+  OR (select public.request_role()) = 'admin'
 );
 
 -- =========================
@@ -186,7 +186,7 @@ on public.responses
 for select
 to authenticated
 using (
-  public.request_role() = 'admin'
+  (select public.request_role()) = 'admin'
 );
 
 create policy "responses_insert"
