@@ -107,7 +107,7 @@ using (bucket_id = 'survey-files');
 
 ### Как включить
 
-1. mv /survey-app/supabase/functions/user-admin /survey-app/supabase/docker/volumes/functions/
+1. mv /survey-app/functions/user-admin /survey-app/supabase/docker/volumes/functions/
 2. cd /survey-app/supabase/docker/
 3. docker compose restart functions --no-deps
 
