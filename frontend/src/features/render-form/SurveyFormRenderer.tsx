@@ -35,7 +35,11 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
-  const model = useMemo(() => new Model(schema), [schema]);
+  const model = useMemo(() => {
+    const nextModel = new Model(schema);
+    nextModel.locale = schema.locale ?? "ru";
+    return nextModel;
+  }, [schema]);
 
   useEffect(() => {
     const handleUploadFiles = async (

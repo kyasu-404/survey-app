@@ -40,7 +40,6 @@ export default function SurveyPage() {
 
   return (
     <div>
-      <h2>{form.title}</h2>
       <SurveyRenderer schema={form.schema} formId={form.id} />
     </div>
   );

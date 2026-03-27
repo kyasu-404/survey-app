@@ -102,7 +102,9 @@ input:focus {
 }
 
 .sidebar {
-  width: 260px;
+  width: fit-content;
+  min-width: 210px;
+  max-width: 260px;
   border-right: 1px solid var(--sidebar-border);
   background: var(--sidebar-bg);
   backdrop-filter: blur(4px);
