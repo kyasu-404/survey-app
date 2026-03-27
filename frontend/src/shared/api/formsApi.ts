@@ -92,6 +92,11 @@ export async function updateFormTitle(id: string, title: string) {
   if (error) throw error;
 }
 
+export async function updateFormSchema(id: string, schema: SurveySchema, title: string) {
+  const { error } = await apiClient.from("forms").update({ schema, title }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function updateFormStatus(id: string, isPublic: boolean) {
   const { error } = await apiClient.from("forms").update({ is_public: isPublic }).eq("id", id);
   if (error) throw error;

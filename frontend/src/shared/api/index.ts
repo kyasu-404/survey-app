@@ -3,6 +3,7 @@ export {
   fetchForms,
   fetchFormById,
   insertForm,
+  updateFormSchema,
   updateFormTitle,
   updateFormStatus,
   updateFormDeadline,
