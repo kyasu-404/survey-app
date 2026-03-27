@@ -9,6 +9,8 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isLoginPage = location.pathname === routes.login;
+  const isSurveyPage = location.pathname.startsWith("/form/");
+  const shouldHideSidebar = isLoginPage || isSurveyPage;
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   useEffect(() => {
@@ -20,8 +22,8 @@ export function AppLayout() {
   }, [location.pathname, location.state, navigate, showToast]);
 
   return (
-    <div className={isLoginPage ? "app-shell app-shell-login" : `app-shell ${isSidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()}>
-      {!isLoginPage && isSidebarHidden && (
+    <div className={shouldHideSidebar ? "app-shell app-shell-login" : `app-shell ${isSidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()}>
+      {!shouldHideSidebar && isSidebarHidden && (
         <button
           type="button"
           className="sidebar-open-button"
@@ -31,8 +33,8 @@ export function AppLayout() {
           →
         </button>
       )}
-      {!isLoginPage && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
-      <main className={isLoginPage ? "app-main app-main-login" : "app-main"}>
+      {!shouldHideSidebar && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
+      <main className={shouldHideSidebar ? "app-main app-main-login" : "app-main"}>
         <Outlet />
       </main>
     </div>

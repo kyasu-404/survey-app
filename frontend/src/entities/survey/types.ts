@@ -13,6 +13,7 @@ export type SurveyPageSchema = {
 };
 
 export type SurveySchema = {
+  locale?: string;
   title?: string;
   description?: string;
   pages: SurveyPageSchema[];

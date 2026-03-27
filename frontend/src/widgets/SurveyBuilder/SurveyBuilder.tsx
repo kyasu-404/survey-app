@@ -3,8 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
-import "survey-core/survey.i18n";
-import "survey-creator-core/i18n/russian";
+import { surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 
@@ -23,12 +22,37 @@ export function SurveyBuilder() {
 
   const creatorRef = useRef<SurveyCreator | null>(null);
   if (!creatorRef.current) {
+    surveyLocalization.defaultLocale = "ru";
     editorLocalization.currentLocale = "ru";
     const nextCreator = new SurveyCreator({ showLogicTab: true, showTestSurveyTab: true, isAutoSave: false });
     nextCreator.locale = "ru";
+    nextCreator.JSON = {
+      ...nextCreator.JSON,
+      locale: "ru",
+    };
+    nextCreator.showJSONEditorTab = false;
+
+    const designerTab = nextCreator.tabs.find((tab) => tab.name === "designer");
+    if (designerTab) {
+      designerTab.title = "Генератор";
+    }
+
+    const testSurveyTab = nextCreator.tabs.find((tab) => tab.name === "test");
+    if (testSurveyTab) {
+      testSurveyTab.title = "Превью";
+    }
+
+    nextCreator.onQuestionAdded.add((_sender, options) => {
+      if (options.question) {
+        options.question.isRequired = true;
+      }
+    });
 
     if (!nextCreator.JSON?.pages?.length) {
-      nextCreator.JSON = createEmptySurveySchema();
+      nextCreator.JSON = {
+        ...createEmptySurveySchema(),
+        locale: "ru",
+      };
     }
 
     creatorRef.current = nextCreator;
