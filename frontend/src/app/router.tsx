@@ -53,6 +53,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: routes.builderById,
+        element: (
+          <ProtectedRoute>
+            <BuilderPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: routes.users,
         element: (
           <ProtectedRoute>

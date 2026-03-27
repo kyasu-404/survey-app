@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -70,12 +70,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [dateTo, setDateTo] = useState("");
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
+  const [openedMenuFormId, setOpenedMenuFormId] = useState<string | null>(null);
 
   const [responsesByFormId, setResponsesByFormId] = useState<ResponsesMap>({});
   const [loadingResponsesByFormId, setLoadingResponsesByFormId] = useState<LoadingResponsesMap>({});
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const formsQueryKey = useMemo(
     () => ["forms", { dateFrom, dateTo, viewMode, userId: user?.id ?? null }],
@@ -228,6 +230,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
+  const handleEditForm = (form: SurveyForm) => {
+    navigate(routes.builderEdit(form.id));
+  };
+
   const handleToggleFormStatus = async (form: SurveyForm) => {
     const nextStatus = !form.is_public;
     await runAction(() => statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus }), {
@@ -357,6 +363,60 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   >
                     {isFormActive ? "Активна" : "Закрыта"}
                   </button>
+                  <div className="form-menu">
+                    <button
+                      className="form-menu-trigger"
+                      onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
+                      disabled={isActionLoading}
+                      aria-label="Действия с формой"
+                    >
+                      ⋯
+                    </button>
+                    {openedMenuFormId === form.id && (
+                      <div className="form-menu-dropdown">
+                        <button
+                          className="form-menu-item"
+                          onClick={() => {
+                            setOpenedMenuFormId(null);
+                            void handleRename(form);
+                          }}
+                          disabled={isActionLoading}
+                        >
+                          Переименовать
+                        </button>
+                        <button
+                          className="form-menu-item"
+                          onClick={() => {
+                            setOpenedMenuFormId(null);
+                            handleEditForm(form);
+                          }}
+                          disabled={isActionLoading}
+                        >
+                          Редактировать
+                        </button>
+                        <button
+                          className="form-menu-item"
+                          onClick={() => {
+                            setOpenedMenuFormId(null);
+                            void handleDuplicate(form);
+                          }}
+                          disabled={isActionLoading}
+                        >
+                          Дублировать
+                        </button>
+                        <button
+                          className="form-menu-item form-menu-item-danger"
+                          onClick={() => {
+                            setOpenedMenuFormId(null);
+                            void handleDelete(form);
+                          }}
+                          disabled={isActionLoading}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <strong>{getSurveyDisplayTitle(form)}</strong>
                 <div className="form-meta-line">
@@ -382,9 +442,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
                     Скопировать ссылку
                   </button>
-                  <button onClick={() => handleRename(form)} disabled={isActionLoading}>Переименовать</button>
-                  <button onClick={() => handleDuplicate(form)} disabled={isActionLoading}>Дублировать</button>
-                  <button onClick={() => handleDelete(form)} disabled={isActionLoading}>Удалить</button>
                   <button onClick={() => toggleResponses(form.id)}>
                     {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
                   </button>

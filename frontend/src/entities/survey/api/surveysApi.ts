@@ -4,6 +4,7 @@ import {
   fetchFormById,
   fetchForms,
   insertForm,
+  updateFormSchema,
   updateFormDeadline,
   updateFormStatus,
   updateFormTitle,
@@ -34,6 +35,10 @@ export async function createSurvey(params: {
 
 export async function renameForm(id: string, title: string) {
   return updateFormTitle(id, title);
+}
+
+export async function saveSurveySchema(id: string, schema: SurveySchema, title: string) {
+  return updateFormSchema(id, schema, title);
 }
 
 export async function changeFormStatus(id: string, isPublic: boolean) {
