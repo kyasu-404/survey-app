@@ -78,16 +78,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: "ru",
     };
     nextCreator.showJSONEditorTab = false;
+    nextCreator.tabs = nextCreator.tabs.filter((tab) => tab.name !== "json");
 
-    const designerTab = nextCreator.tabs.find((tab) => tab.name === "designer");
-    if (designerTab) {
-      designerTab.title = "Генератор";
-    }
+    nextCreator.tabs.forEach((tab) => {
+      if (tab.name === "designer") {
+        tab.title = "Генератор";
+      }
 
-    const testSurveyTab = nextCreator.tabs.find((tab) => tab.name === "test");
-    if (testSurveyTab) {
-      testSurveyTab.title = "Превью";
-    }
+      if (tab.name === "test" || tab.name === "preview") {
+        tab.title = "Превью";
+      }
+    });
 
     const toolbox = nextCreator.toolbox as unknown as {
       changeCategories: (
