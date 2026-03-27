@@ -14,5 +14,5 @@ export function createEmptySurveySchema(title = "Новая форма"): Survey
 }
 
 export function getSurveyDisplayTitle(survey: Pick<SurveyForm, "title" | "created_at">): string {
-  return `${survey.title} · ${new Date(survey.created_at).toLocaleString()}`;
+  return survey.title;
 }

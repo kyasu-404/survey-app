@@ -4,7 +4,11 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
 import blackLogo from "../../img/black_logo.png";
 
-export function Sidebar() {
+type SidebarProps = {
+  onToggle: () => void;
+};
+
+export function Sidebar({ onToggle }: SidebarProps) {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -22,6 +26,9 @@ export function Sidebar() {
       <div className="brand">
         <img src={blackLogo} alt="Логотип ИМЦ" className="logo-image" />
         <h3 className="brand-title">Формы</h3>
+        <button type="button" className="sidebar-toggle-button" onClick={onToggle} aria-label="Скрыть меню">
+          ←
+        </button>
       </div>
 
       <nav className="sidebar-nav">

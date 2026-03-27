@@ -37,7 +37,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="card" style={{ padding: 20, width: "min(420px, 100%)" }}>
-        <h2 style={{ marginTop: 4 }}>Авторизация</h2>
+        <h2 className="login-title">Авторизация</h2>
         <div style={{ display: "grid", gap: 10 }}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
           <input
@@ -47,7 +47,7 @@ export default function LoginPage() {
             type="password"
           />
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div className="login-actions">
           <button onClick={onLogin}>Войти</button>
         </div>
         {message && (

@@ -68,6 +68,7 @@ input:focus {
   display: flex;
   min-height: 100vh;
   background: var(--app-bg);
+  position: relative;
 }
 
 .app-shell-login {
@@ -88,6 +89,18 @@ input:focus {
   justify-content: center;
 }
 
+.login-title {
+  margin-top: 4px;
+  text-align: center;
+}
+
+.login-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
 .sidebar {
   width: 260px;
   border-right: 1px solid var(--sidebar-border);
@@ -96,6 +109,14 @@ input:focus {
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
+}
+
+.sidebar-toggle-button {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  padding: 0;
 }
 
 .brand {
@@ -167,6 +188,21 @@ input:focus {
   flex-direction: column;
 }
 
+.app-shell-sidebar-hidden .app-main {
+  padding-left: 56px;
+}
+
+.sidebar-open-button {
+  position: absolute;
+  left: 12px;
+  top: 16px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  padding: 0;
+}
+
 .topbar {
   display: flex;
   justify-content: flex-end;
@@ -190,6 +226,7 @@ input:focus {
 
 .dashboard-page {
   width: 100%;
+  flex: 1;
 }
 
 .builder-container {
@@ -250,11 +287,24 @@ input:focus {
 }
 
 .form-status-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   color: #fff;
   border: none;
+}
+
+.form-control-buttons {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.form-meta-line {
+  margin: 8px 0 10px;
+  color: #475569;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 
 .form-status-active {
@@ -365,9 +415,9 @@ input:focus {
   color: #b91c1c;
   display: inline-flex;
   width: fit-content;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
-  padding: 4px 8px;
+  padding: 8px 14px;
   align-self: flex-start;
 }
 
