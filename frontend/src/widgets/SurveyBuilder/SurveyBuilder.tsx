@@ -57,6 +57,7 @@ type SurveyBuilderProps = {
 
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [creator, setCreator] = useState<SurveyCreator | null>(null);
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
@@ -68,7 +69,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const isEditMode = Boolean(formId);
 
   const creatorRef = useRef<SurveyCreator | null>(null);
-  if (!creatorRef.current) {
+  useEffect(() => {
+    if (creatorRef.current) {
+      setCreator(creatorRef.current);
+      return;
+    }
+
     surveyLocalization.defaultLocale = "ru";
     editorLocalization.currentLocale = "ru";
     const nextCreator = new SurveyCreator({ showLogicTab: true, showTestSurveyTab: true, isAutoSave: false });
@@ -95,7 +101,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         categories: Array<{ name: string; title: string; category: string; items: string[] }>
       ) => void;
       addItem: (item: Record<string, unknown>) => void;
+      showCategoryTitles: boolean;
     };
+    toolbox.showCategoryTitles = true;
 
     toolbox.addItem({
       name: "text_phone",
@@ -193,7 +201,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     creatorRef.current = nextCreator;
-  }
+    setCreator(nextCreator);
+  }, []);
 
   const {
     data: editableForm,
@@ -270,13 +279,11 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     };
   }, [createSurveyMutation, editableForm?.title, formId, navigate, queryClient, saveSurveyMutation, showToast]);
 
-  const creator = creatorRef.current;
-
   return (
     <div className="builder-host">
       {isEditableFormLoading && <p style={{ marginBottom: 10, color: "#334155" }}>Загрузка формы...</p>}
       {isSaving && <p style={{ marginBottom: 10, color: "#334155" }}>Сохранение формы...</p>}
-      <SurveyCreatorComponent creator={creator} />
+      {creator && <SurveyCreatorComponent creator={creator} />}
     </div>
   );
 }
