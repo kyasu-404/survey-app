@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "../routes";
 import { Sidebar } from "../../widgets/Sidebar/Sidebar";
@@ -9,6 +9,7 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isLoginPage = location.pathname === routes.login;
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   useEffect(() => {
     const toast = (location.state as { toast?: string } | null)?.toast;
@@ -19,8 +20,18 @@ export function AppLayout() {
   }, [location.pathname, location.state, navigate, showToast]);
 
   return (
-    <div className={isLoginPage ? "app-shell app-shell-login" : "app-shell"}>
-      {!isLoginPage && <Sidebar />}
+    <div className={isLoginPage ? "app-shell app-shell-login" : `app-shell ${isSidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()}>
+      {!isLoginPage && isSidebarHidden && (
+        <button
+          type="button"
+          className="sidebar-open-button"
+          onClick={() => setIsSidebarHidden(false)}
+          aria-label="Показать меню"
+        >
+          →
+        </button>
+      )}
+      {!isLoginPage && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
       <main className={isLoginPage ? "app-main app-main-login" : "app-main"}>
         <Outlet />
       </main>

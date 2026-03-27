@@ -346,18 +346,25 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
             return (
               <div key={form.id} className="dashboard-form-card">
-                <button
-                  className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`}
-                  onClick={() => void handleToggleFormStatus(form)}
-                  disabled={isActionLoading}
-                >
-                  {isFormActive ? "Активна" : "Закрыта"}
-                </button>
+                <div className="form-control-buttons">
+                  <button onClick={() => void handleSetDeadline(form)} disabled={isActionLoading}>
+                    Установить дедлайн
+                  </button>
+                  <button
+                    className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`}
+                    onClick={() => void handleToggleFormStatus(form)}
+                    disabled={isActionLoading}
+                  >
+                    {isFormActive ? "Активна" : "Закрыта"}
+                  </button>
+                </div>
                 <strong>{getSurveyDisplayTitle(form)}</strong>
-                <p style={{ color: "#64748b", marginBottom: 6 }}>{new Date(form.created_at).toLocaleString("ru-RU")}</p>
-                <p style={{ color: "#475569", margin: "0 0 4px" }}>Автор: {authorLabel}</p>
-                <p style={{ color: "#475569", margin: "0 0 10px" }}>Ответов: {responsesCount}</p>
-                <p style={{ color: "#475569", margin: "0 0 10px" }}>Дедлайн: {deadlineLabel}</p>
+                <div className="form-meta-line">
+                  <span>Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
+                  <span>Автор: {authorLabel}</span>
+                  <span>Ответов: {responsesCount}</span>
+                  <span>Дедлайн: {deadlineLabel}</span>
+                </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Link
@@ -374,9 +381,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   </Link>
                   <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
                     Скопировать ссылку
-                  </button>
-                  <button onClick={() => void handleSetDeadline(form)} disabled={isActionLoading}>
-                    Установить дедлайн
                   </button>
                   <button onClick={() => handleRename(form)} disabled={isActionLoading}>Переименовать</button>
                   <button onClick={() => handleDuplicate(form)} disabled={isActionLoading}>Дублировать</button>
