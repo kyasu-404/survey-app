@@ -162,4 +162,33 @@ from public.profiles
 where email = 'admin@example.com';
 ```
 
-Если пользователя ещё нет в `public.profiles`, сначала зарегистрируйте его через Auth (или дождитесь первого входа), чтобы сработал триггер `handle_new_user()`.
+## Как добавить админа без ручных действий в Auth UI
+
+Ниже вариант, когда пользователь уже есть в `auth.users`, но вы не хотите заходить в раздел **Auth → Users** и менять роль вручную.
+
+1. Откройте Supabase Studio → **SQL Editor**.
+2. Выполните SQL (замените email):
+
+```sql
+-- 1) Гарантируем профиль (если триггер ещё не отработал)
+insert into public.profiles (id, name, email, role)
+select
+  au.id,
+  coalesce(au.raw_user_meta_data ->> 'name', split_part(au.email, '@', 1)) as name,
+  au.email,
+  'admin' as role
+from auth.users au
+where au.email = 'admin@example.com'
+on conflict (id) do update
+set role = 'admin',
+    email = excluded.email,
+    name = excluded.name;
+
+-- 2) Синхронизируем роль в JWT-метаданных,
+--    чтобы RLS-проверки по auth.jwt() сразу видели admin
+update auth.users
+set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+where email = 'admin@example.com';
+```
+
+3. Попросите пользователя выйти и войти заново, чтобы обновился JWT с новой ролью.

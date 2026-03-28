@@ -137,6 +137,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await reloadForms();
   };
 
+  const invalidateFormDetails = async (formId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["form", formId] }),
+      queryClient.invalidateQueries({ queryKey: ["survey-form", formId] }),
+    ]);
+  };
+
   const renameMutation = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => renameForm(id, title),
   });
@@ -155,12 +162,16 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const runAction = async (
     action: () => Promise<void>,
-    options: { successMessage: string; errorMessage: string; shouldReloadForms?: boolean },
+    options: { successMessage: string; errorMessage: string; shouldReloadForms?: boolean; affectedFormId?: string },
   ) => {
     setIsActionLoading(true);
 
     try {
       await action();
+      if (options.affectedFormId) {
+        await invalidateFormDetails(options.affectedFormId);
+      }
+
       if (options.shouldReloadForms ?? true) {
         await invalidateForms();
       }
@@ -197,6 +208,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await runAction(() => renameMutation.mutateAsync({ id: form.id, title: newTitle.trim() }), {
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось переименовать форму",
+      affectedFormId: form.id,
     });
   };
 
@@ -215,6 +227,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await runAction(() => removeMutation.mutateAsync({ id: deletingForm.id }), {
       successMessage: "Форма удалена",
       errorMessage: "Не удалось удалить форму",
+      affectedFormId: deletingForm.id,
     });
   };
 
@@ -239,6 +252,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await runAction(() => statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus }), {
       successMessage: nextStatus ? "Форма активирована" : "Форма закрыта",
       errorMessage: "Не удалось изменить статус формы",
+      affectedFormId: form.id,
     });
   };
 
@@ -258,6 +272,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null }), {
         successMessage: "Дедлайн снят",
         errorMessage: "Не удалось обновить дедлайн",
+        affectedFormId: form.id,
       });
       return;
     }
@@ -271,6 +286,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: parsedDate.toISOString() }), {
       successMessage: "Дедлайн установлен",
       errorMessage: "Не удалось обновить дедлайн",
+      affectedFormId: form.id,
     });
   };
 

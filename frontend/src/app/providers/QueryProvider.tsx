@@ -17,9 +17,9 @@ const queryClient = new QueryClient({
 
         return failureCount < 2;
       },
-      staleTime: 30_000,
+      staleTime: 5_000,
       gcTime: 5 * 60_000,
-      refetchOnMount: true,
+      refetchOnMount: "always",
       refetchOnReconnect: true,
       refetchOnWindowFocus: false,
     },
