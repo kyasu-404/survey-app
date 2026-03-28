@@ -379,6 +379,35 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   >
                     {isFormActive ? "Активна" : "Закрыта"}
                   </button>
+                </div>
+                <strong>{getSurveyDisplayTitle(form)}</strong>
+                <div className="form-meta-line">
+                  <span>Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
+                  <span>Автор: {authorLabel}</span>
+                  <span>Ответов: {responsesCount}</span>
+                  <span>Дедлайн: {deadlineLabel}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Link
+                    className="button-link"
+                    to={routes.survey(form.id)}
+                    onClick={(event) => {
+                      if (!isFormActive) {
+                        event.preventDefault();
+                        showToast("Ссылка закрыта: форма неактивна", "info");
+                      }
+                    }}
+                  >
+                    Открыть
+                  </Link>
+                  <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
+                    Скопировать ссылку
+                  </button>
+                  <button onClick={() => toggleResponses(form.id)}>
+                    {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
+                  </button>
+                  <button onClick={() => handleExportResponses(form.id, form.title)}>Выгрузить XLS</button>
                   <div className="form-menu">
                     <button
                       className="form-menu-trigger"
@@ -433,35 +462,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       </div>
                     )}
                   </div>
-                </div>
-                <strong>{getSurveyDisplayTitle(form)}</strong>
-                <div className="form-meta-line">
-                  <span>Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
-                  <span>Автор: {authorLabel}</span>
-                  <span>Ответов: {responsesCount}</span>
-                  <span>Дедлайн: {deadlineLabel}</span>
-                </div>
-
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link
-                    className="button-link"
-                    to={routes.survey(form.id)}
-                    onClick={(event) => {
-                      if (!isFormActive) {
-                        event.preventDefault();
-                        showToast("Ссылка закрыта: форма неактивна", "info");
-                      }
-                    }}
-                  >
-                    Открыть
-                  </Link>
-                  <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
-                    Скопировать ссылку
-                  </button>
-                  <button onClick={() => toggleResponses(form.id)}>
-                    {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
-                  </button>
-                  <button onClick={() => handleExportResponses(form.id, form.title)}>Выгрузить XLS</button>
                 </div>
 
                 {isResponsesOpen && (
