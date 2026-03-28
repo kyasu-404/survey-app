@@ -39,8 +39,10 @@ export default function SurveyPage() {
   if (!form) return <p>Форма не найдена или недоступна.</p>;
 
   return (
-    <div>
-      <SurveyRenderer schema={form.schema} formId={form.id} />
+    <div className="survey-page">
+      <div className="survey-page-card card">
+        <SurveyRenderer schema={form.schema} formId={form.id} />
+      </div>
     </div>
   );
 }
