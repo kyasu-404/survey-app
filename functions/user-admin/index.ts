@@ -108,16 +108,50 @@ Deno.serve(async (req) => {
 
   switch (payload.action) {
     case "list": {
-      const { data, error } = await adminClient
+      const { data: profiles, error: profilesError } = await adminClient
         .from("profiles")
         .select("id, name, email, role, is_disabled, created_at")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        return jsonResponse(400, { error: error.message });
+      if (profilesError) {
+        return jsonResponse(400, { error: profilesError.message });
       }
 
-      return jsonResponse(200, { users: data ?? [] });
+      const { data: authUsersData, error: authUsersError } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+
+      if (authUsersError) {
+        return jsonResponse(400, { error: authUsersError.message });
+      }
+
+      const profilesById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      const mergedUsers = (authUsersData?.users ?? []).map((authUser) => {
+        const profile = profilesById.get(authUser.id);
+        const userMetadata = authUser.user_metadata ?? {};
+
+        return {
+          id: authUser.id,
+          name:
+            profile?.name ??
+            (typeof userMetadata.name === "string" ? userMetadata.name : null),
+          email: profile?.email ?? authUser.email ?? "",
+          role:
+            profile?.role ??
+            (userMetadata.role === "admin" || userMetadata.role === "user" ? userMetadata.role : "user"),
+          is_disabled: profile?.is_disabled ?? Boolean(authUser.banned_until),
+          created_at: profile?.created_at ?? authUser.created_at,
+        };
+      });
+
+      mergedUsers.sort((a, b) => {
+        const first = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const second = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return second - first;
+      });
+
+      return jsonResponse(200, { users: mergedUsers });
     }
 
     case "create": {

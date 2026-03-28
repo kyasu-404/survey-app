@@ -20,23 +20,23 @@ import { getErrorMessage } from "../../shared/lib/error";
 const BASIC_TYPES = [
   "text",
   "comment",
-  "text_integer",
-  "text_number",
   "radiogroup",
   "checkbox",
-  "text_phone",
-  "text_email",
-  "text_date",
-  "text_time",
-  "text_datetime-local",
+  "dropdown",
 ];
 
 const ADVANCED_TYPES = [
   "boolean",
   "rating",
   "ranking",
-  "dropdown",
   "tagbox",
+  "text_phone",
+  "text_email",
+  "text_integer",
+  "text_number",
+  "text_date",
+  "text_time",
+  "text_datetime-local",
   "matrix",
   "matrixdropdown",
   "matrixdynamic",
@@ -84,7 +84,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: "ru",
     };
     nextCreator.showJSONEditorTab = false;
-    nextCreator.tabs = nextCreator.tabs.filter((tab) => tab.name !== "json");
+    nextCreator.tabs = nextCreator.tabs.filter((tab) => !tab.name.toLowerCase().includes("json"));
 
     nextCreator.tabs.forEach((tab) => {
       if (tab.name === "designer") {
@@ -109,7 +109,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_phone",
       iconName: "icon-text",
       title: "Телефон",
-      category: "basic",
+      category: "advanced",
       json: {
         type: "text",
         inputType: "tel",
@@ -124,7 +124,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_email",
       iconName: "icon-text",
       title: "Email",
-      category: "basic",
+      category: "advanced",
       json: {
         type: "text",
         inputType: "email",
@@ -136,7 +136,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_integer",
       iconName: "icon-text",
       title: "Целое число",
-      category: "basic",
+      category: "advanced",
       json: { type: "text", inputType: "number", step: 1 },
     });
 
@@ -144,7 +144,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_number",
       iconName: "icon-text",
       title: "Число",
-      category: "basic",
+      category: "advanced",
       json: { type: "text", inputType: "number", step: "any" },
     });
 
@@ -152,7 +152,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_date",
       iconName: "icon-text",
       title: "Дата",
-      category: "basic",
+      category: "advanced",
       json: { type: "text", inputType: "date" },
     });
 
@@ -160,7 +160,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_time",
       iconName: "icon-text",
       title: "Время",
-      category: "basic",
+      category: "advanced",
       json: { type: "text", inputType: "time" },
     });
 
@@ -168,7 +168,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_datetime-local",
       iconName: "icon-text",
       title: "Дата и время",
-      category: "basic",
+      category: "advanced",
       json: { type: "text", inputType: "datetime-local" },
     });
 
@@ -186,6 +186,18 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         items: ADVANCED_TYPES,
       },
     ]);
+
+    const textItem = nextCreator.toolbox.getItemByName("text");
+    if (textItem) {
+      textItem.title = "Строка";
+      textItem.category = "basic";
+    }
+
+    const commentItem = nextCreator.toolbox.getItemByName("comment");
+    if (commentItem) {
+      commentItem.title = "Абзац";
+      commentItem.category = "basic";
+    }
 
     nextCreator.onQuestionAdded.add((_sender, options) => {
       if (options.question) {
