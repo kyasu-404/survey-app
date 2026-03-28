@@ -303,7 +303,7 @@ input:focus {
 
 .form-menu {
   position: relative;
-  z-index: 40;
+  z-index: 120;
 }
 
 .form-menu-trigger {
@@ -323,9 +323,27 @@ input:focus {
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
   padding: 4px;
   min-width: 170px;
-  z-index: 50;
+  z-index: 130;
   display: grid;
   gap: 2px;
+}
+
+.survey-page {
+  width: 100%;
+  min-height: calc(100vh - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.survey-page-card {
+  width: 50vw;
+  min-width: 320px;
+  max-width: 960px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  padding: 20px;
 }
 
 .form-menu-item {

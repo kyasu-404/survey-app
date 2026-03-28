@@ -84,7 +84,10 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: "ru",
     };
     nextCreator.showJSONEditorTab = false;
-    nextCreator.tabs = nextCreator.tabs.filter((tab) => !tab.name.toLowerCase().includes("json"));
+    nextCreator.tabs = nextCreator.tabs.filter((tab) => {
+      const normalizedName = tab.name?.toLowerCase?.() ?? "";
+      return !normalizedName.includes("json");
+    });
 
     nextCreator.tabs.forEach((tab) => {
       if (tab.name === "designer") {
