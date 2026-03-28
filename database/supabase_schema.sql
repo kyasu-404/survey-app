@@ -81,14 +81,26 @@ $$;
 
 create or replace function public.request_role()
 returns text
-language sql
+language plpgsql
 stable
+security definer
+set search_path = public
 as $$
-  select coalesce(
+declare
+  profile_role text;
+begin
+  select p.role
+  into profile_role
+  from public.profiles p
+  where p.id = auth.uid();
+
+  return coalesce(
+    profile_role,
     auth.jwt() ->> 'role',
     auth.jwt() -> 'user_metadata' ->> 'role',
     'user'
   );
+end;
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;

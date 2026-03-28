@@ -260,6 +260,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
           });
         }
         await queryClient.invalidateQueries({ queryKey: ["forms"] });
+        if (formId) {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["form", formId] }),
+            queryClient.invalidateQueries({ queryKey: ["survey-form", formId] }),
+          ]);
+        }
         showToast(formId ? "Форма обновлена" : "Форма сохранена", "success");
         navigate(routes.dashboardMy, { replace: true });
         callback(saveNo, true);

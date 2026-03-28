@@ -1,8 +1,11 @@
-import { apiClient } from "../../shared/api";
 import { supabase } from "../../shared/api/supabase";
+import { apiClient } from "../../shared/api";
 import type { UserProfile, UserRole } from "../../entities/user/types";
 
 type UserAdminAction =
+  | {
+      action: "list";
+    }
   | {
       action: "create";
       name: string;
@@ -25,24 +28,24 @@ type UserAdminAction =
       disabled: boolean;
     };
 
-async function callUserAdminAction(payload: UserAdminAction) {
-  const { error } = await supabase.functions.invoke("user-admin", {
+async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
+  const { data, error } = await supabase.functions.invoke<TData>("user-admin", {
     body: payload,
   });
 
   if (error) {
     throw error;
   }
+
+  return data;
 }
 
 export async function getAllUsers(): Promise<UserProfile[]> {
-  const { data, error } = await apiClient
-    .from("profiles")
-    .select("id, name, email, role, is_disabled, created_at")
-    .order("created_at", { ascending: false });
+  const data = await callUserAdminAction<{ users?: UserProfile[] }>({
+    action: "list",
+  });
 
-  if (error) throw error;
-  return (data ?? []) as UserProfile[];
+  return data?.users ?? [];
 }
 
 export async function createUser(payload: { name: string; email: string; password: string; role: UserRole }) {

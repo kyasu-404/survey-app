@@ -4,6 +4,9 @@ type UserRole = "admin" | "user";
 
 type UserAdminAction =
   | {
+      action: "list";
+    }
+  | {
       action: "create";
       name: string;
       email: string;
@@ -104,6 +107,19 @@ Deno.serve(async (req) => {
   }
 
   switch (payload.action) {
+    case "list": {
+      const { data, error } = await adminClient
+        .from("profiles")
+        .select("id, name, email, role, is_disabled, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return jsonResponse(400, { error: error.message });
+      }
+
+      return jsonResponse(200, { users: data ?? [] });
+    }
+
     case "create": {
       if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8) {
         return jsonResponse(400, { error: "Invalid create payload" });
@@ -121,6 +137,23 @@ Deno.serve(async (req) => {
 
       if (error) {
         return jsonResponse(400, { error: error.message });
+      }
+
+      if (data.user?.id) {
+        const { error: profileError } = await adminClient.from("profiles").upsert(
+          {
+            id: data.user.id,
+            name: payload.name.trim(),
+            email: payload.email.trim(),
+            role: payload.role,
+            is_disabled: false,
+          },
+          { onConflict: "id" }
+        );
+
+        if (profileError) {
+          return jsonResponse(400, { error: profileError.message });
+        }
       }
 
       return jsonResponse(200, { userId: data.user?.id ?? null });
