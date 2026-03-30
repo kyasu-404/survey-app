@@ -84,10 +84,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: "ru",
     };
     nextCreator.showJSONEditorTab = false;
-    nextCreator.tabs = nextCreator.tabs.filter((tab) => {
-      const normalizedName = tab.name?.toLowerCase?.() ?? "";
-      return !normalizedName.includes("json");
-    });
 
     nextCreator.tabs.forEach((tab) => {
       if (tab.name === "designer") {
@@ -100,7 +96,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     });
 
     const toolbox = nextCreator.toolbox as unknown as {
-      changeCategories: (
+      defineCategories: (
         categories: Array<{ name: string; title: string; category: string; items: string[] }>
       ) => void;
       addItem: (item: Record<string, unknown>) => void;
@@ -175,7 +171,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       json: { type: "text", inputType: "datetime-local" },
     });
 
-    toolbox.changeCategories([
+    toolbox.defineCategories([
       {
         name: "basic",
         title: "Базовые",
