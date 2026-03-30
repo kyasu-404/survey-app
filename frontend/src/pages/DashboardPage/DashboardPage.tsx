@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -26,6 +26,11 @@ type DashboardPageProps = {
 
 type ResponsesTableRow = {
   [key: string]: string;
+};
+
+type FormResponsesSectionProps = {
+  formId: string;
+  isOpen: boolean;
 };
 
 function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow[] {
@@ -56,6 +61,58 @@ function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow
 
     return base;
   });
+}
+
+function FormResponsesSection({ formId, isOpen }: FormResponsesSectionProps) {
+  const responsesQuery = useQuery({
+    queryKey: ["form-responses", formId],
+    queryFn: () => getResponsesByForm(formId),
+    enabled: isOpen,
+    retry: 1,
+  });
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const responses = responsesQuery.data ?? [];
+  const rows = formatResponsesForTable(responses);
+  const headers = rows[0] ? Object.keys(rows[0]) : [];
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      {responsesQuery.isLoading && <p>Загрузка ответов...</p>}
+      {!responsesQuery.isLoading && responsesQuery.error && (
+        <p style={{ color: "#b91c1c" }}>{getErrorMessage(responsesQuery.error, "Не удалось загрузить ответы")}</p>
+      )}
+      {!responsesQuery.isLoading && !responsesQuery.error && !rows.length && <p>Ответов пока нет.</p>}
+      {!responsesQuery.isLoading && !responsesQuery.error && !!rows.length && (
+        <div style={{ overflowX: "auto" }}>
+          <table className="responses-table">
+            <thead>
+              <tr>
+                {headers.map((header) => (
+                  <th key={header}>{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const rowId = responses[index]?.id ?? `${formId}-${index}`;
+                return (
+                  <tr key={rowId}>
+                    {headers.map((header, columnIndex) => (
+                      <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
@@ -118,42 +175,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   }, [forms, search]);
 
-  const responsesQueries = useQueries({
-    queries: filteredForms.map((form) => ({
-      queryKey: ["form-responses", form.id],
-      queryFn: () => getResponsesByForm(form.id),
-      enabled: Boolean(openedResponsesByFormId[form.id]),
-      retry: 1,
-    })),
-  });
-
-  const responsesByFormId = useMemo(
-    () =>
-      Object.fromEntries(
-        filteredForms.map((form, index) => [form.id, responsesQueries[index]?.data ?? []] as const),
-      ) as Record<string, SurveyResponse[]>,
-    [filteredForms, responsesQueries],
-  );
-
-  const loadingResponsesByFormId = useMemo(
-    () =>
-      Object.fromEntries(filteredForms.map((form, index) => [form.id, Boolean(responsesQueries[index]?.isLoading)])) as Record<
-        string,
-        boolean
-      >,
-    [filteredForms, responsesQueries],
-  );
-  const responsesErrorByFormId = useMemo(
-    () =>
-      Object.fromEntries(filteredForms.map((form, index) => [form.id, responsesQueries[index]?.error ?? null])) as Record<
-        string,
-        unknown
-      >,
-    [filteredForms, responsesQueries],
-  );
-
   const formsCountText = useMemo(() => `Всего форм: ${filteredForms.length}`, [filteredForms.length]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
+  const isInitialFormsLoading = isFormsLoading && forms.length === 0;
 
   useEffect(() => {
     if (formsError) {
@@ -328,17 +352,24 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     setOpenedResponsesByFormId((prev) => ({ ...prev, [formId]: true }));
   };
 
-  const handleExportResponses = (formId: string, formTitle: string) => {
-    const responses = responsesByFormId[formId] ?? [];
-    const tableRows = formatResponsesForTable(responses);
+  const handleExportResponses = async (formId: string, formTitle: string) => {
+    try {
+      const responses = await queryClient.fetchQuery({
+        queryKey: ["form-responses", formId],
+        queryFn: () => getResponsesByForm(formId),
+      });
+      const tableRows = formatResponsesForTable(responses);
 
-    if (!tableRows.length) {
-      showToast("Нет данных для выгрузки", "info");
-      return;
+      if (!tableRows.length) {
+        showToast("Нет данных для выгрузки", "info");
+        return;
+      }
+
+      exportToExcel(tableRows, `ответы-${formTitle}`);
+      showToast("Ответы выгружены в XLS", "success");
+    } catch (error) {
+      showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
     }
-
-    exportToExcel(tableRows, `ответы-${formTitle}`);
-    showToast("Ответы выгружены в XLS", "success");
   };
 
   return (
@@ -361,7 +392,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </button>
         </div>
 
-        {(isFormsLoading || isActionLoading) && <p style={{ color: "#334155" }}>Загрузка...</p>}
+        {isInitialFormsLoading && <p style={{ color: "#334155" }}>Загрузка...</p>}
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {filteredForms.map((form) => {
@@ -369,11 +400,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const authorLabel = form.author_name || form.author_email || form.author_id;
             const responsesCount = form.responses_count ?? 0;
             const isResponsesOpen = openedResponsesByFormId[form.id];
-            const isResponsesLoading = loadingResponsesByFormId[form.id];
-            const responsesError = responsesErrorByFormId[form.id];
-            const responses = responsesByFormId[form.id] ?? [];
-            const rows = formatResponsesForTable(responses);
-            const headers = rows[0] ? Object.keys(rows[0]) : [];
             const isFormActive = form.is_public;
             const deadlineLabel = form.deadline_at
               ? new Date(form.deadline_at).toLocaleString("ru-RU")
@@ -420,7 +446,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   <button onClick={() => toggleResponses(form.id)}>
                     {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
                   </button>
-                  <button onClick={() => handleExportResponses(form.id, form.title)}>Выгрузить XLS</button>
+                  <button onClick={() => void handleExportResponses(form.id, form.title)}>Выгрузить XLS</button>
                   <div className="form-menu">
                     <button
                       className="form-menu-trigger"
@@ -477,40 +503,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   </div>
                 </div>
 
-                {isResponsesOpen && (
-                  <div style={{ marginTop: 12 }}>
-                    {isResponsesLoading && <p>Загрузка ответов...</p>}
-                    {!isResponsesLoading && responsesError && (
-                      <p style={{ color: "#b91c1c" }}>{getErrorMessage(responsesError, "Не удалось загрузить ответы")}</p>
-                    )}
-                    {!isResponsesLoading && !responsesError && !rows.length && <p>Ответов пока нет.</p>}
-                    {!isResponsesLoading && !responsesError && !!rows.length && (
-                      <div style={{ overflowX: "auto" }}>
-                        <table className="responses-table">
-                          <thead>
-                            <tr>
-                              {headers.map((header) => (
-                                <th key={header}>{header}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((row, index) => {
-                              const rowId = responses[index]?.id ?? `${form.id}-${index}`;
-                              return (
-                                <tr key={rowId}>
-                                  {headers.map((header, columnIndex) => (
-                                    <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
-                                  ))}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <FormResponsesSection formId={form.id} isOpen={Boolean(isResponsesOpen)} />
               </div>
             );
           })}
