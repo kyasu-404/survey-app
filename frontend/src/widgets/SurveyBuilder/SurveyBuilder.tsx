@@ -19,6 +19,8 @@ import { getErrorMessage } from "../../shared/lib/error";
 
 const BASIC_TYPES = [
   "text",
+  "text_phone",
+  "text_email",
   "comment",
   "radiogroup",
   "checkbox",
@@ -30,8 +32,6 @@ const ADVANCED_TYPES = [
   "rating",
   "ranking",
   "tagbox",
-  "text_phone",
-  "text_email",
   "text_integer",
   "text_number",
   "text_date",
@@ -91,11 +91,15 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     nextCreator.tabs.forEach((tab) => {
       if (tab.name === "designer") {
-        tab.title = "Генератор";
+        tab.title = "Конструктор";
       }
 
       if (tab.name === "test" || tab.name === "preview") {
         tab.title = "Превью";
+      }
+
+      if (tab.name === "logic") {
+        tab.title = "Логика формы";
       }
     });
 
@@ -112,13 +116,20 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       name: "text_phone",
       iconName: "icon-text",
       title: "Телефон",
-      category: "advanced",
+      category: "basic",
       json: {
         type: "text",
         inputType: "tel",
         maskType: "pattern",
-        maskSettings: { pattern: "+7(999)999-99-99" },
-        placeholder: "+7(999)999-99-99",
+        maskSettings: { pattern: "+7(999)-999-99-99" },
+        placeholder: "+7(999)-999-99-99",
+        validators: [
+          {
+            type: "regex",
+            regex: "^\\+7\\(\\d{3}\\)-\\d{3}-\\d{2}-\\d{2}$",
+            text: "Введите телефон в формате +7(999)-999-99-99",
+          },
+        ],
         titleLocation: "top",
       },
     });
@@ -126,8 +137,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     toolbox.addItem({
       name: "text_email",
       iconName: "icon-text",
-      title: "Email",
-      category: "advanced",
+      title: "email",
+      category: "basic",
       json: {
         type: "text",
         inputType: "email",
