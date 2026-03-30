@@ -12,6 +12,7 @@ export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export const apiClient = {
   auth: {
     getCurrentUser: () => supabaseClient.auth.getUser(),
+    getCurrentSession: () => supabaseClient.auth.getSession(),
     login: (email: string, password: string) =>
       supabaseClient.auth.signInWithPassword({ email, password }),
     register: (email: string, password: string, metadata?: Record<string, unknown>) =>

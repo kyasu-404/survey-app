@@ -56,18 +56,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    apiClient.auth.getCurrentUser().then(async ({ data }) => {
-      if (!mounted) return;
+    apiClient.auth
+      .getCurrentSession()
+      .then(async ({ data }) => {
+        if (!mounted) return;
 
-      const currentUser = data.user ?? null;
-      setUser(currentUser);
+        const currentUser = data.session?.user ?? null;
+        setUser(currentUser);
 
-      if (currentUser?.id) {
-        await loadProfile(currentUser.id);
-      }
-
-      setLoading(false);
-    });
+        if (currentUser?.id) {
+          await loadProfile(currentUser.id);
+        }
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
 
     const { data: listener } = apiClient.auth.onAuthStateChange(async (_event, session) => {
       const sessionUser = session?.user ?? null;
