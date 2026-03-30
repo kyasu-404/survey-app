@@ -22,7 +22,7 @@ type NewUserForm = {
 
 export default function UsersPage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, loading: isAuthLoading } = useAuth();
   const [newUser, setNewUser] = useState<NewUserForm>({
     name: "",
     email: "",
@@ -35,6 +35,7 @@ export default function UsersPage() {
   const usersQuery = useQuery({
     queryKey: ["users"],
     queryFn: getAllUsers,
+    enabled: !isAuthLoading && Boolean(user),
   });
 
   const createUserMutation = useMutation({
@@ -192,78 +193,91 @@ export default function UsersPage() {
           </button>
         </div>
 
-        <table className="responses-table">
-          <thead>
-            <tr>
-              <th>Имя</th>
-              <th>Email</th>
-              <th>Роль</th>
-              <th>Статус</th>
-              <th>Создан</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(usersQuery.data ?? []).map((profile) => {
-              const rowPassword = passwordByUserId[profile.id] ?? "";
-              const isOwnUser = profile.id === user?.id;
+        {isAuthLoading || usersQuery.isLoading ? (
+          <p style={{ margin: "8px 0 0", color: "#334155" }}>Загрузка пользователей...</p>
+        ) : !user ? (
+          <p style={{ margin: "8px 0 0", color: "#b45309" }}>Требуется авторизация для просмотра пользователей.</p>
+        ) : usersQuery.error ? (
+          <div style={{ marginTop: 8, color: "#b91c1c" }}>
+            <p style={{ margin: 0 }}>{getErrorMessage(usersQuery.error, "Не удалось загрузить пользователей")}</p>
+            <button onClick={() => void usersQuery.refetch()} style={{ marginTop: 8 }}>
+              Повторить
+            </button>
+          </div>
+        ) : (
+          <table className="responses-table">
+            <thead>
+              <tr>
+                <th>Имя</th>
+                <th>Email</th>
+                <th>Роль</th>
+                <th>Статус</th>
+                <th>Создан</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(usersQuery.data ?? []).map((profile) => {
+                const rowPassword = passwordByUserId[profile.id] ?? "";
+                const isOwnUser = profile.id === user?.id;
 
-              return (
-                <tr key={profile.id}>
-                  <td>{profile.name || "—"}</td>
-                  <td>{profile.email}</td>
-                  <td>{profile.role}</td>
-                  <td>{profile.is_disabled ? "Отключён" : "Активен"}</td>
-                  <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
-                  <td>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <input
-                          type="password"
-                          value={rowPassword}
-                          onChange={(e) =>
-                            setPasswordByUserId((prev) => ({
-                              ...prev,
-                              [profile.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="Новый пароль"
-                          disabled={isOwnUser}
-                        />
-                        <button
-                          onClick={() => void onChangeUserPassword(profile.id)}
-                          disabled={updateUserPasswordMutation.isPending || rowPassword.length < 8 || isOwnUser}
-                        >
-                          Сменить пароль
-                        </button>
-                      </div>
+                return (
+                  <tr key={profile.id}>
+                    <td>{profile.name || "—"}</td>
+                    <td>{profile.email}</td>
+                    <td>{profile.role}</td>
+                    <td>{profile.is_disabled ? "Отключён" : "Активен"}</td>
+                    <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
+                    <td>
+                      <div style={{ display: "grid", gap: 8 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            type="password"
+                            value={rowPassword}
+                            onChange={(e) =>
+                              setPasswordByUserId((prev) => ({
+                                ...prev,
+                                [profile.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="Новый пароль"
+                            disabled={isOwnUser}
+                          />
+                          <button
+                            onClick={() => void onChangeUserPassword(profile.id)}
+                            disabled={updateUserPasswordMutation.isPending || rowPassword.length < 8 || isOwnUser}
+                          >
+                            Сменить пароль
+                          </button>
+                        </div>
 
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() =>
-                            void setUserDisabledMutation.mutateAsync({
-                              userId: profile.id,
-                              disabled: !profile.is_disabled,
-                            })
-                          }
-                          disabled={setUserDisabledMutation.isPending || isOwnUser}
-                        >
-                          {profile.is_disabled ? "Включить" : "Отключить"}
-                        </button>
-                        <button
-                          onClick={() => void deleteUserMutation.mutateAsync(profile.id)}
-                          disabled={deleteUserMutation.isPending || isOwnUser}
-                        >
-                          Удалить
-                        </button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            onClick={() =>
+                              void setUserDisabledMutation.mutateAsync({
+                                userId: profile.id,
+                                disabled: !profile.is_disabled,
+                              })
+                            }
+                            disabled={setUserDisabledMutation.isPending || isOwnUser}
+                          >
+                            {profile.is_disabled ? "Включить" : "Отключить"}
+                          </button>
+                          <button
+                            onClick={() => void deleteUserMutation.mutateAsync(profile.id)}
+                            disabled={deleteUserMutation.isPending || isOwnUser}
+                          >
+                            Удалить
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
