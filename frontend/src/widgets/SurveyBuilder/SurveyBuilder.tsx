@@ -77,13 +77,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     surveyLocalization.defaultLocale = "ru";
     editorLocalization.currentLocale = "ru";
-    const nextCreator = new SurveyCreator({ showLogicTab: true, showTestSurveyTab: true, isAutoSave: false });
+    const nextCreator = new SurveyCreator({
+      showLogicTab: true,
+      showPreviewTab: true,
+      showJSONEditorTab: false,
+      isAutoSave: false,
+    });
     nextCreator.locale = "ru";
     nextCreator.JSON = {
       ...nextCreator.JSON,
       locale: "ru",
     };
-    nextCreator.showJSONEditorTab = false;
 
     nextCreator.tabs.forEach((tab) => {
       if (tab.name === "designer") {
@@ -97,7 +101,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     const toolbox = nextCreator.toolbox as unknown as {
       defineCategories: (
-        categories: Array<{ name: string; title: string; category: string; items: string[] }>
+        categories: Array<{ category: string; title: string; items: string[] }>
       ) => void;
       addItem: (item: Record<string, unknown>) => void;
       showCategoryTitles: boolean;
@@ -173,15 +177,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     toolbox.defineCategories([
       {
-        name: "basic",
+        category: "basic",
         title: "Базовые",
-        category: "general",
         items: BASIC_TYPES,
       },
       {
-        name: "advanced",
+        category: "advanced",
         title: "Расширенные",
-        category: "general",
         items: ADVANCED_TYPES,
       },
     ]);

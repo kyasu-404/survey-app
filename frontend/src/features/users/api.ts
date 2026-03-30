@@ -29,8 +29,20 @@ type UserAdminAction =
     };
 
 async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
   const { data, error } = await supabase.functions.invoke<TData>("user-admin", {
     body: payload,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 
   if (error) {
