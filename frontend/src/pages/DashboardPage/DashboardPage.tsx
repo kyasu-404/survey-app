@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -23,9 +23,6 @@ import { exportToExcel } from "../../shared/lib/export";
 type DashboardPageProps = {
   viewMode: "mine" | "all";
 };
-
-type LoadingResponsesMap = Record<string, boolean>;
-type ResponsesMap = Record<string, SurveyResponse[]>;
 
 type ResponsesTableRow = {
   [key: string]: string;
@@ -72,8 +69,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenuFormId, setOpenedMenuFormId] = useState<string | null>(null);
 
-  const [responsesByFormId, setResponsesByFormId] = useState<ResponsesMap>({});
-  const [loadingResponsesByFormId, setLoadingResponsesByFormId] = useState<LoadingResponsesMap>({});
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
 
   const queryClient = useQueryClient();
@@ -122,6 +117,40 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       );
     });
   }, [forms, search]);
+
+  const responsesQueries = useQueries({
+    queries: filteredForms.map((form) => ({
+      queryKey: ["form-responses", form.id],
+      queryFn: () => getResponsesByForm(form.id),
+      enabled: Boolean(openedResponsesByFormId[form.id]),
+      retry: 1,
+    })),
+  });
+
+  const responsesByFormId = useMemo(
+    () =>
+      Object.fromEntries(
+        filteredForms.map((form, index) => [form.id, responsesQueries[index]?.data ?? []] as const),
+      ) as Record<string, SurveyResponse[]>,
+    [filteredForms, responsesQueries],
+  );
+
+  const loadingResponsesByFormId = useMemo(
+    () =>
+      Object.fromEntries(filteredForms.map((form, index) => [form.id, Boolean(responsesQueries[index]?.isLoading)])) as Record<
+        string,
+        boolean
+      >,
+    [filteredForms, responsesQueries],
+  );
+  const responsesErrorByFormId = useMemo(
+    () =>
+      Object.fromEntries(filteredForms.map((form, index) => [form.id, responsesQueries[index]?.error ?? null])) as Record<
+        string,
+        unknown
+      >,
+    [filteredForms, responsesQueries],
+  );
 
   const formsCountText = useMemo(() => `Всего форм: ${filteredForms.length}`, [filteredForms.length]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
@@ -289,7 +318,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
-  const toggleResponses = async (formId: string) => {
+  const toggleResponses = (formId: string) => {
     const isOpen = openedResponsesByFormId[formId];
     if (isOpen) {
       setOpenedResponsesByFormId((prev) => ({ ...prev, [formId]: false }));
@@ -297,22 +326,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
 
     setOpenedResponsesByFormId((prev) => ({ ...prev, [formId]: true }));
-
-    if (responsesByFormId[formId]) {
-      return;
-    }
-
-    setLoadingResponsesByFormId((prev) => ({ ...prev, [formId]: true }));
-
-    try {
-      const responses = await getResponsesByForm(formId);
-      setResponsesByFormId((prev) => ({ ...prev, [formId]: responses }));
-    } catch (error) {
-      console.error(error);
-      showToast(getErrorMessage(error, "Не удалось загрузить ответы"), "error");
-    } finally {
-      setLoadingResponsesByFormId((prev) => ({ ...prev, [formId]: false }));
-    }
   };
 
   const handleExportResponses = (formId: string, formTitle: string) => {
@@ -344,11 +357,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
-            {isFormsLoading || isFormsFetching ? "Загрузка..." : "Обновить"}
+            {isFormsFetching ? "Обновляется..." : "Обновить"}
           </button>
         </div>
 
-        {(isFormsLoading || isActionLoading || isFormsFetching) && <p style={{ color: "#334155" }}>Загрузка...</p>}
+        {(isFormsLoading || isActionLoading) && <p style={{ color: "#334155" }}>Загрузка...</p>}
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           {filteredForms.map((form) => {
@@ -357,6 +370,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const responsesCount = form.responses_count ?? 0;
             const isResponsesOpen = openedResponsesByFormId[form.id];
             const isResponsesLoading = loadingResponsesByFormId[form.id];
+            const responsesError = responsesErrorByFormId[form.id];
             const responses = responsesByFormId[form.id] ?? [];
             const rows = formatResponsesForTable(responses);
             const headers = rows[0] ? Object.keys(rows[0]) : [];
@@ -466,8 +480,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 {isResponsesOpen && (
                   <div style={{ marginTop: 12 }}>
                     {isResponsesLoading && <p>Загрузка ответов...</p>}
-                    {!isResponsesLoading && !rows.length && <p>Ответов пока нет.</p>}
-                    {!isResponsesLoading && !!rows.length && (
+                    {!isResponsesLoading && responsesError && (
+                      <p style={{ color: "#b91c1c" }}>{getErrorMessage(responsesError, "Не удалось загрузить ответы")}</p>
+                    )}
+                    {!isResponsesLoading && !responsesError && !rows.length && <p>Ответов пока нет.</p>}
+                    {!isResponsesLoading && !responsesError && !!rows.length && (
                       <div style={{ overflowX: "auto" }}>
                         <table className="responses-table">
                           <thead>
