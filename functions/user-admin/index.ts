@@ -37,6 +37,8 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const LIST_USERS_PER_PAGE = 50;
+const MAX_LIST_USERS_PAGES = 200;
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -46,6 +48,33 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
       "Content-Type": "application/json",
     },
   });
+}
+
+async function listAllAuthUsers(adminClient: ReturnType<typeof createClient>) {
+  const users = [];
+  let page = 1;
+
+  while (page <= MAX_LIST_USERS_PAGES) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: LIST_USERS_PER_PAGE,
+    });
+
+    if (error) {
+      return { users: null, error };
+    }
+
+    const pageUsers = data?.users ?? [];
+    users.push(...pageUsers);
+
+    if (pageUsers.length < LIST_USERS_PER_PAGE) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return { users, error: null };
 }
 
 Deno.serve(async (req) => {
@@ -117,17 +146,14 @@ Deno.serve(async (req) => {
         return jsonResponse(400, { error: profilesError.message });
       }
 
-      const { data: authUsersData, error: authUsersError } = await adminClient.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      });
+      const { users: authUsers, error: authUsersError } = await listAllAuthUsers(adminClient);
 
       if (authUsersError) {
         return jsonResponse(400, { error: authUsersError.message });
       }
 
       const profilesById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-      const mergedUsers = (authUsersData?.users ?? []).map((authUser) => {
+      const mergedUsers = (authUsers ?? []).map((authUser) => {
         const profile = profilesById.get(authUser.id);
         const userMetadata = authUser.user_metadata ?? {};
 
