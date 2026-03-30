@@ -134,7 +134,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const invalidateForms = async () => {
     await queryClient.invalidateQueries({ queryKey: ["forms"] });
-    await reloadForms();
   };
 
   const invalidateFormDetails = async (formId: string) => {
