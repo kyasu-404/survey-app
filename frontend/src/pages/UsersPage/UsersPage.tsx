@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createUser,
   deleteUser,
@@ -23,6 +23,7 @@ type NewUserForm = {
 export default function UsersPage() {
   const { showToast } = useToast();
   const { user, loading: isAuthLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [newUser, setNewUser] = useState<NewUserForm>({
     name: "",
     email: "",
@@ -43,7 +44,7 @@ export default function UsersPage() {
     onSuccess: async () => {
       setNewUser({ name: "", email: "", password: "", role: "user" });
       showToast("Пользователь создан", "success");
-      await usersQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось создать пользователя"), "error");
@@ -54,7 +55,7 @@ export default function UsersPage() {
     mutationFn: deleteUser,
     onSuccess: async () => {
       showToast("Пользователь удалён", "success");
-      await usersQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось удалить пользователя"), "error");
@@ -66,7 +67,7 @@ export default function UsersPage() {
       setUserDisabled(userId, disabled),
     onSuccess: async (_data, variables) => {
       showToast(variables.disabled ? "Пользователь отключён" : "Пользователь включён", "success");
-      await usersQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось изменить статус пользователя"), "error");
