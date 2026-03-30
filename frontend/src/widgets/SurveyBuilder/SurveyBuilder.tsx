@@ -18,7 +18,6 @@ import type { SurveySchema } from "../../entities/survey/types";
 import { getErrorMessage } from "../../shared/lib/error";
 
 const BASIC_TYPES = [
-  "text",
   "text_phone",
   "text_email",
   "comment",
@@ -89,17 +88,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: "ru",
     };
 
-    nextCreator.tabs.forEach((tab) => {
-      if (tab.name === "designer") {
-        tab.title = "Конструктор";
+    nextCreator.onGetTabTitle.add((_sender, options) => {
+      if (options.tabName === "designer") {
+        options.title = "Конструктор";
       }
 
-      if (tab.name === "test" || tab.name === "preview") {
-        tab.title = "Превью";
+      if (options.tabName === "preview") {
+        options.title = "Превью";
       }
 
-      if (tab.name === "logic") {
-        tab.title = "Логика формы";
+      if (options.tabName === "logic") {
+        options.title = "Логика формы";
       }
     });
 
@@ -120,8 +119,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       json: {
         type: "text",
         inputType: "tel",
-        maskType: "pattern",
-        maskSettings: { pattern: "+7(999)-999-99-99" },
         placeholder: "+7(999)-999-99-99",
         validators: [
           {
@@ -186,6 +183,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       json: { type: "text", inputType: "datetime-local" },
     });
 
+    nextCreator.toolbox.removeItem("text");
+
     toolbox.defineCategories([
       {
         category: "basic",
@@ -198,12 +197,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         items: ADVANCED_TYPES,
       },
     ]);
-
-    const textItem = nextCreator.toolbox.getItemByName("text");
-    if (textItem) {
-      textItem.title = "Строка";
-      textItem.category = "basic";
-    }
 
     const commentItem = nextCreator.toolbox.getItemByName("comment");
     if (commentItem) {
