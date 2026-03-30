@@ -37,6 +37,8 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const LIST_USERS_PER_PAGE = 50;
+const MAX_LIST_USERS_PAGES = 200;
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -46,6 +48,33 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
       "Content-Type": "application/json",
     },
   });
+}
+
+async function listAllAuthUsers(adminClient: ReturnType<typeof createClient>) {
+  const users = [];
+  let page = 1;
+
+  while (page <= MAX_LIST_USERS_PAGES) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: LIST_USERS_PER_PAGE,
+    });
+
+    if (error) {
+      return { users: null, error };
+    }
+
+    const pageUsers = data?.users ?? [];
+    users.push(...pageUsers);
+
+    if (pageUsers.length < LIST_USERS_PER_PAGE) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return { users, error: null };
 }
 
 Deno.serve(async (req) => {
@@ -117,7 +146,38 @@ Deno.serve(async (req) => {
         return jsonResponse(400, { error: profilesError.message });
       }
 
-      return jsonResponse(200, { users: profiles ?? [] });
+      const { users: authUsers, error: authUsersError } = await listAllAuthUsers(adminClient);
+
+      if (authUsersError) {
+        return jsonResponse(400, { error: authUsersError.message });
+      }
+
+      const profilesById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      const mergedUsers = (authUsers ?? []).map((authUser) => {
+        const profile = profilesById.get(authUser.id);
+        const userMetadata = authUser.user_metadata ?? {};
+
+        return {
+          id: authUser.id,
+          name:
+            profile?.name ??
+            (typeof userMetadata.name === "string" ? userMetadata.name : null),
+          email: profile?.email ?? authUser.email ?? "",
+          role:
+            profile?.role ??
+            (userMetadata.role === "admin" || userMetadata.role === "user" ? userMetadata.role : "user"),
+          is_disabled: profile?.is_disabled ?? Boolean(authUser.banned_until),
+          created_at: profile?.created_at ?? authUser.created_at,
+        };
+      });
+
+      mergedUsers.sort((a, b) => {
+        const first = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const second = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return second - first;
+      });
+
+      return jsonResponse(200, { users: mergedUsers });
     }
 
     case "create": {
