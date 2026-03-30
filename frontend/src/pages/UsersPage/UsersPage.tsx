@@ -198,7 +198,7 @@ export default function UsersPage() {
           <p style={{ margin: "8px 0 0", color: "#334155" }}>Загрузка пользователей...</p>
         ) : !user ? (
           <p style={{ margin: "8px 0 0", color: "#b45309" }}>Требуется авторизация для просмотра пользователей.</p>
-        ) : usersQuery.error ? (
+        ) : usersQuery.isError ? (
           <div style={{ marginTop: 8, color: "#b91c1c" }}>
             <p style={{ margin: 0 }}>{getErrorMessage(usersQuery.error, "Не удалось загрузить пользователей")}</p>
             <button onClick={() => void usersQuery.refetch()} style={{ marginTop: 8 }}>
