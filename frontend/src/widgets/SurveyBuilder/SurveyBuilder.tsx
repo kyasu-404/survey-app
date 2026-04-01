@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { SurveyCreatorComponent, SurveyCreator } from "survey-creator-react";
 import { editorLocalization } from "survey-creator-core";
@@ -54,6 +53,145 @@ type SurveyBuilderProps = {
   formId?: string;
 };
 
+function configureCreatorLocalization() {
+  surveyLocalization.defaultLocale = "ru";
+  editorLocalization.currentLocale = "ru";
+
+  const ruEditorStrings = editorLocalization.getLocaleStrings("ru");
+  if (ruEditorStrings?.tabs) {
+    ruEditorStrings.tabs.designer = "Конструктор";
+    ruEditorStrings.tabs.preview = "Превью";
+    ruEditorStrings.tabs.logic = "Логика формы";
+  }
+}
+
+function configureCreatorToolbox(nextCreator: SurveyCreator) {
+  const toolbox = nextCreator.toolbox;
+
+  toolbox.showCategoryTitles = true;
+
+  toolbox.addItem({
+    name: "text_phone",
+    iconName: "icon-text",
+    title: "Телефон",
+    category: "basic",
+    json: {
+      type: "text",
+      inputType: "tel",
+      placeholder: "+7(999)-999-99-99",
+      validators: [
+        {
+          type: "regex",
+          regex: "^\\+7\\(\\d{3}\\)-\\d{3}-\\d{2}-\\d{2}$",
+          text: "Введите телефон в формате +7(999)-999-99-99",
+        },
+      ],
+      titleLocation: "top",
+    },
+  });
+
+  toolbox.addItem({
+    name: "text_email",
+    iconName: "icon-text",
+    title: "Email",
+    category: "basic",
+    json: {
+      type: "text",
+      inputType: "email",
+      titleLocation: "top",
+    },
+  });
+
+  toolbox.addItem({
+    name: "text_integer",
+    iconName: "icon-text",
+    title: "Целое число",
+    category: "advanced",
+    json: { type: "text", inputType: "number", step: 1 },
+  });
+
+  toolbox.addItem({
+    name: "text_number",
+    iconName: "icon-text",
+    title: "Число",
+    category: "advanced",
+    json: { type: "text", inputType: "number", step: "any" },
+  });
+
+  toolbox.addItem({
+    name: "text_date",
+    iconName: "icon-text",
+    title: "Дата",
+    category: "advanced",
+    json: { type: "text", inputType: "date" },
+  });
+
+  toolbox.addItem({
+    name: "text_time",
+    iconName: "icon-text",
+    title: "Время",
+    category: "advanced",
+    json: { type: "text", inputType: "time" },
+  });
+
+  toolbox.addItem({
+    name: "text_datetime-local",
+    iconName: "icon-text",
+    title: "Дата и время",
+    category: "advanced",
+    json: { type: "text", inputType: "datetime-local" },
+  });
+
+  toolbox.removeItem("text");
+
+  toolbox.defineCategories([
+    {
+      category: "basic",
+      title: "Базовые",
+      items: BASIC_TYPES,
+    },
+    {
+      category: "advanced",
+      title: "Расширенные",
+      items: ADVANCED_TYPES,
+    },
+  ]);
+
+  const commentItem = toolbox.getItemByName("comment");
+  if (commentItem) {
+    commentItem.title = "Абзац";
+    commentItem.category = "basic";
+  }
+}
+
+function createCreatorInstance() {
+  configureCreatorLocalization();
+
+  const nextCreator = new SurveyCreator({
+    showLogicTab: true,
+    showPreviewTab: true,
+    showJSONEditorTab: false,
+    showSaveButton: true,
+    isAutoSave: false,
+  });
+
+  nextCreator.locale = "ru";
+  nextCreator.JSON = {
+    ...createEmptySurveySchema(),
+    locale: "ru",
+  };
+
+  configureCreatorToolbox(nextCreator);
+
+  nextCreator.onQuestionAdded.add((_sender, options) => {
+    if (options.question) {
+      options.question.isRequired = true;
+    }
+  });
+
+  return nextCreator;
+}
+
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
@@ -67,158 +205,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const queryClient = useQueryClient();
   const isEditMode = Boolean(formId);
 
-  const creatorRef = useRef<SurveyCreator | null>(null);
   useEffect(() => {
-    if (creatorRef.current) {
-      setCreator(creatorRef.current);
-      return;
-    }
-
-    surveyLocalization.defaultLocale = "ru";
-    editorLocalization.currentLocale = "ru";
-    const nextCreator = new SurveyCreator({
-      showLogicTab: true,
-      showPreviewTab: true,
-      showJSONEditorTab: false,
-      isAutoSave: false,
-    });
-    nextCreator.locale = "ru";
-    nextCreator.JSON = {
-      ...nextCreator.JSON,
-      locale: "ru",
-    };
-
-    nextCreator.onGetTabTitle.add((_sender, options) => {
-      if (options.tabName === "designer") {
-        options.title = "Конструктор";
-      }
-
-      if (options.tabName === "preview") {
-        options.title = "Превью";
-      }
-
-      if (options.tabName === "logic") {
-        options.title = "Логика формы";
-      }
-    });
-
-    const toolbox = nextCreator.toolbox as unknown as {
-      defineCategories: (
-        categories: Array<{ category: string; title: string; items: string[] }>
-      ) => void;
-      addItem: (item: Record<string, unknown>) => void;
-      showCategoryTitles: boolean;
-    };
-    toolbox.showCategoryTitles = true;
-
-    toolbox.addItem({
-      name: "text_phone",
-      iconName: "icon-text",
-      title: "Телефон",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "tel",
-        placeholder: "+7(999)-999-99-99",
-        validators: [
-          {
-            type: "regex",
-            regex: "^\\+7\\(\\d{3}\\)-\\d{3}-\\d{2}-\\d{2}$",
-            text: "Введите телефон в формате +7(999)-999-99-99",
-          },
-        ],
-        titleLocation: "top",
-      },
-    });
-
-    toolbox.addItem({
-      name: "text_email",
-      iconName: "icon-text",
-      title: "email",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "email",
-        titleLocation: "top",
-      },
-    });
-
-    toolbox.addItem({
-      name: "text_integer",
-      iconName: "icon-text",
-      title: "Целое число",
-      category: "advanced",
-      json: { type: "text", inputType: "number", step: 1 },
-    });
-
-    toolbox.addItem({
-      name: "text_number",
-      iconName: "icon-text",
-      title: "Число",
-      category: "advanced",
-      json: { type: "text", inputType: "number", step: "any" },
-    });
-
-    toolbox.addItem({
-      name: "text_date",
-      iconName: "icon-text",
-      title: "Дата",
-      category: "advanced",
-      json: { type: "text", inputType: "date" },
-    });
-
-    toolbox.addItem({
-      name: "text_time",
-      iconName: "icon-text",
-      title: "Время",
-      category: "advanced",
-      json: { type: "text", inputType: "time" },
-    });
-
-    toolbox.addItem({
-      name: "text_datetime-local",
-      iconName: "icon-text",
-      title: "Дата и время",
-      category: "advanced",
-      json: { type: "text", inputType: "datetime-local" },
-    });
-
-    nextCreator.toolbox.removeItem("text");
-
-    toolbox.defineCategories([
-      {
-        category: "basic",
-        title: "Базовые",
-        items: BASIC_TYPES,
-      },
-      {
-        category: "advanced",
-        title: "Расширенные",
-        items: ADVANCED_TYPES,
-      },
-    ]);
-
-    const commentItem = nextCreator.toolbox.getItemByName("comment");
-    if (commentItem) {
-      commentItem.title = "Абзац";
-      commentItem.category = "basic";
-    }
-
-    nextCreator.onQuestionAdded.add((_sender, options) => {
-      if (options.question) {
-        options.question.isRequired = true;
-      }
-    });
-
-    if (!nextCreator.JSON?.pages?.length) {
-      nextCreator.JSON = {
-        ...createEmptySurveySchema(),
-        locale: "ru",
-      };
-    }
-
-    creatorRef.current = nextCreator;
+    const nextCreator = createCreatorInstance();
     setCreator(nextCreator);
+
+    return () => {
+      nextCreator.dispose();
+    };
   }, []);
 
   const {
@@ -240,40 +233,43 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   }, [editableFormError, showToast]);
 
   useEffect(() => {
-    if (!creatorRef.current || !editableForm) {
+    if (!creator || !editableForm) {
       return;
     }
 
-    creatorRef.current.JSON = editableForm.schema;
-    creatorRef.current.JSON = {
-      ...creatorRef.current.JSON,
+    creator.locale = editableForm.schema.locale ?? "ru";
+    creator.JSON = {
+      ...editableForm.schema,
       title: editableForm.title,
       locale: editableForm.schema.locale ?? "ru",
     };
-  }, [editableForm]);
+  }, [creator, editableForm]);
 
   useEffect(() => {
-    if (!creatorRef.current) {
+    if (!creator) {
       return;
     }
 
-    creatorRef.current.saveSurveyFunc = async (saveNo, callback) => {
+    creator.saveSurveyFunc = async (saveNo, callback) => {
       setIsSaving(true);
       try {
-        if (!validateSurveySchema(creatorRef.current?.JSON)) {
+        const schema = creator.JSON;
+        if (!validateSurveySchema(schema)) {
           throw new Error("Некорректная JSON-схема формы");
         }
+
+        const title = schema.title ?? editableForm?.title ?? "Новая форма";
 
         if (formId) {
           await saveSurveyMutation.mutateAsync({
             id: formId,
-            schema: creatorRef.current.JSON,
-            title: creatorRef.current.JSON.title ?? editableForm?.title ?? "Новая форма",
+            schema,
+            title,
           });
         } else {
           await createSurveyMutation.mutateAsync({
-            schema: creatorRef.current.JSON,
-            title: creatorRef.current.JSON.title ?? "Новая форма",
+            schema,
+            title,
           });
         }
         await queryClient.invalidateQueries({ queryKey: ["forms"] });
@@ -300,7 +296,11 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         setIsSaving(false);
       }
     };
-  }, [createSurveyMutation, editableForm?.title, formId, navigate, queryClient, saveSurveyMutation, showToast]);
+
+    return () => {
+      creator.saveSurveyFunc = undefined;
+    };
+  }, [creator, createSurveyMutation, editableForm?.title, formId, navigate, queryClient, saveSurveyMutation, showToast]);
 
   return (
     <div className="builder-host">

@@ -14,9 +14,10 @@
     "@tanstack/react-query": "^5.90.5",
     "react-router-dom": "^6",
     "@supabase/supabase-js": "^2",
-    "survey-core": "^1.9.120",
-    "survey-react-ui": "^1.9.120",
-    "survey-creator-react": "^1.9.120",
+    "survey-core": "1.12.61",
+    "survey-react-ui": "1.12.61",
+    "survey-creator-core": "1.12.61",
+    "survey-creator-react": "1.12.61",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
