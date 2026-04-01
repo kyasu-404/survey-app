@@ -16,7 +16,7 @@ import {
   renameForm,
   setFormDeadline,
 } from "../../entities/survey/api/surveysApi";
-import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
+import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
@@ -40,6 +40,22 @@ type DeadlineEditorState = {
   form: SurveyForm;
   value: string;
 };
+
+function isFormAcceptingResponses(form: Pick<SurveyForm, "is_public" | "deadline_at" | "form_type">) {
+  if (isTemplateForm(form)) {
+    return false;
+  }
+
+  if (!form.is_public) {
+    return false;
+  }
+
+  if (!form.deadline_at) {
+    return true;
+  }
+
+  return new Date(form.deadline_at).getTime() > Date.now();
+}
 
 function getQuestionChoiceMap(schema: SurveySchema) {
   const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
@@ -230,13 +246,18 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
   });
 
+  const visibleForms = useMemo(
+    () => (viewMode === "all" ? forms.filter((form) => !isTemplateForm(form)) : forms),
+    [forms, viewMode],
+  );
+
   const filteredForms = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     if (!normalizedSearch) {
-      return forms;
+      return visibleForms;
     }
 
-    return forms.filter((form) => {
+    return visibleForms.filter((form) => {
       const title = form.title?.toLowerCase() ?? "";
       const authorName = form.author_name?.toLowerCase() ?? "";
       const authorEmail = form.author_email?.toLowerCase() ?? "";
@@ -249,7 +270,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         authorId.includes(normalizedSearch)
       );
     });
-  }, [forms, search]);
+  }, [search, visibleForms]);
 
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
   const isInitialFormsLoading = isFormsLoading && forms.length === 0;
@@ -293,12 +314,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const invalidateForms = async () => {
     await queryClient.invalidateQueries({ queryKey: ["forms"] });
+    await queryClient.refetchQueries({ queryKey: ["forms"], type: "active" });
   };
 
   const invalidateFormDetails = async (formId: string) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["form", formId] }),
       queryClient.invalidateQueries({ queryKey: ["survey-form", formId] }),
+      queryClient.refetchQueries({ queryKey: ["form", formId], type: "active" }),
+      queryClient.refetchQueries({ queryKey: ["survey-form", formId], type: "active" }),
     ]);
   };
 
@@ -481,6 +505,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const isResponsesOpen = openedResponsesByFormId[form.id];
             const isFormActive = form.is_public;
             const isOwnForm = form.author_id === user?.id;
+            const isTemplate = isTemplateForm(form);
+            const isFormOpenForResponses = isFormAcceptingResponses(form);
             const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : "Не установлен";
 
             return (
@@ -488,15 +514,17 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <div className="dashboard-form-top">
                   <div className="dashboard-form-mainline">
                     <div className="dashboard-form-status-row">
-                      <span className={`dashboard-status-pill ${isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"}`}>
-                        {isFormActive ? "Активна" : "Закрыта"}
+                      <span
+                        className={`dashboard-status-pill ${isTemplate ? "dashboard-status-pill-template" : isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"}`}
+                      >
+                        {isTemplate ? "Шаблон" : isFormActive ? "Активна" : "Закрыта"}
                       </span>
                       {isOwnForm && <span className="dashboard-owner-badge">Моя форма</span>}
                     </div>
                     <strong className="dashboard-form-title">{getSurveyDisplayTitle(form)}</strong>
                   </div>
 
-                  {isOwnForm && (
+                  {isOwnForm && !isTemplate && (
                     <div className="dashboard-form-controls">
                       <button className="dashboard-secondary-button" onClick={() => setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) })} disabled={isActionLoading}>
                         {form.deadline_at ? "Изменить дедлайн" : "Установить дедлайн"}
@@ -510,49 +538,85 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
                 <div className="dashboard-form-meta-grid">
                   <span className="dashboard-meta-pill">Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
-                  <span className="dashboard-meta-pill">Автор: {authorLabel}</span>
-                  <span className="dashboard-meta-pill">Ответов: {responsesCount}</span>
-                  <span className="dashboard-meta-pill">Дедлайн: {deadlineLabel}</span>
+                  {!isTemplate && <span className="dashboard-meta-pill">Автор: {authorLabel}</span>}
+                  {!isTemplate && <span className="dashboard-meta-pill">Ответов: {responsesCount}</span>}
+                  {!isTemplate && <span className="dashboard-meta-pill">Дедлайн: {deadlineLabel}</span>}
                 </div>
 
                 <div className="dashboard-form-actions">
-                  <Link
-                    className="button-link"
-                    to={routes.survey(form.id)}
-                    onClick={(event) => {
-                      if (!isFormActive) {
-                        event.preventDefault();
-                        showToast("Ссылка закрыта: форма неактивна", "info");
-                      }
-                    }}
-                  >
-                    Открыть
-                  </Link>
-                  <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>Скопировать ссылку</button>
-                  <button onClick={() => setOpenedResponsesByFormId((prev) => ({ ...prev, [form.id]: !prev[form.id] }))}>
-                    {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
-                  </button>
-                  <button onClick={() => void handleExportResponses(form)}>XLS</button>
-                  {isOwnForm ? (
+                  {isTemplate ? (
                     <div className="form-menu">
-                      <button className="form-menu-trigger" onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))} disabled={isActionLoading} aria-label="Действия с формой" aria-expanded={openedMenuFormId === form.id}>...</button>
+                      <button
+                        className="form-menu-trigger"
+                        onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
+                        disabled={isActionLoading}
+                        aria-label="Действия с шаблоном"
+                        aria-expanded={openedMenuFormId === form.id}
+                      >
+                        ...
+                      </button>
                       {openedMenuFormId === form.id && (
                         <div className="form-menu-dropdown">
                           <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isActionLoading}>Переименовать</button>
                           <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isActionLoading}>Редактировать</button>
-                          <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleDuplicate(form); }} disabled={isActionLoading}>Дублировать</button>
                           <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isActionLoading}>Удалить</button>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <button className="icon-action-button" onClick={() => void handleDuplicate(form)} disabled={isActionLoading} aria-label="Дублировать" title="Дублировать">
-                      <img src={copyIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-                    </button>
+                    <>
+                      <Link
+                        className="button-link"
+                        to={routes.survey(form.id)}
+                        onClick={(event) => {
+                          if (!isFormOpenForResponses) {
+                            event.preventDefault();
+                            showToast(
+                              form.deadline_at && new Date(form.deadline_at).getTime() <= Date.now()
+                                ? "Ссылка недоступна: дедлайн формы уже истёк"
+                                : "Ссылка закрыта: форма неактивна",
+                              "info",
+                            );
+                          }
+                        }}
+                      >
+                        Открыть
+                      </Link>
+                      <button onClick={() => handleCopyLink(link)} disabled={!isFormOpenForResponses}>Скопировать ссылку</button>
+                      <button onClick={() => setOpenedResponsesByFormId((prev) => ({ ...prev, [form.id]: !prev[form.id] }))}>
+                        {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
+                      </button>
+                      <button onClick={() => void handleExportResponses(form)}>XLS</button>
+                      {isOwnForm ? (
+                        <div className="form-menu">
+                          <button
+                            className="form-menu-trigger"
+                            onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
+                            disabled={isActionLoading}
+                            aria-label="Действия с формой"
+                            aria-expanded={openedMenuFormId === form.id}
+                          >
+                            ...
+                          </button>
+                          {openedMenuFormId === form.id && (
+                            <div className="form-menu-dropdown">
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isActionLoading}>Переименовать</button>
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isActionLoading}>Редактировать</button>
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleDuplicate(form); }} disabled={isActionLoading}>Дублировать</button>
+                              <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isActionLoading}>Удалить</button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button className="icon-action-button" onClick={() => void handleDuplicate(form)} disabled={isActionLoading} aria-label="Дублировать" title="Дублировать">
+                          <img src={copyIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 
-                <FormResponsesSection form={form} formId={form.id} isOpen={Boolean(isResponsesOpen)} />
+                {!isTemplate && <FormResponsesSection form={form} formId={form.id} isOpen={Boolean(isResponsesOpen)} />}
               </div>
             );
           })}

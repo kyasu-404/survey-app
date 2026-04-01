@@ -3,6 +3,7 @@ import {
   duplicateForm,
   fetchFormById,
   fetchForms,
+  fetchPublicFormById,
   insertForm,
   updateFormSchema,
   updateFormDeadline,
@@ -20,6 +21,10 @@ export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
 
 export async function getFormById(id: string): Promise<SurveyForm> {
   return fetchFormById(id);
+}
+
+export async function getPublicFormById(id: string): Promise<SurveyForm | null> {
+  return fetchPublicFormById(id);
 }
 
 export async function createSurvey(params: {

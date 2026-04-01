@@ -267,6 +267,7 @@ textarea:focus {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  width: 100%;
 }
 
 .dashboard-page {
@@ -281,21 +282,92 @@ textarea:focus {
 }
 
 .builder-container {
+  display: flex;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .builder-host {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
-.builder-host .svc-creator {
+.builder-status-stack {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 12;
+  display: grid;
+  gap: 4px;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.builder-status-text {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(148, 163, 184, 0.18);
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.builder-creator-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.builder-creator-shell .svc-creator {
   height: 100% !important;
   border: 1px solid rgba(151, 165, 193, 0.28);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
+}
+
+.builder-toolbar-action-item {
+  margin-right: 8px;
+}
+
+.builder-toolbar-action-button {
+  border: 1px solid rgba(133, 149, 178, 0.34) !important;
+  border-radius: 12px !important;
+  padding: 7px 12px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #172033 !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  font-family: "Manrope", "Segoe UI", sans-serif !important;
+  line-height: 1.15 !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+  box-shadow: 0 6px 18px rgba(148, 163, 184, 0.12) !important;
+}
+
+.builder-toolbar-action-button *,
+.builder-toolbar-action-button span {
+  font-family: "Manrope", "Segoe UI", sans-serif !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+}
+
+.builder-toolbar-action-button:hover {
+  border-color: rgba(15, 159, 110, 0.45) !important;
+  background: #f9fffc !important;
+  box-shadow: 0 10px 24px rgba(15, 159, 110, 0.12) !important;
+}
+
+.builder-toolbar-action-button.builder-toolbar-action-button-secondary {
+  background: rgba(247, 250, 252, 0.92) !important;
 }
 
 .button-link {
@@ -561,6 +633,11 @@ textarea:focus {
 .dashboard-status-pill-closed {
   background: rgba(239, 68, 68, 0.12);
   color: #b91c1c;
+}
+
+.dashboard-status-pill-template {
+  background: rgba(168, 85, 247, 0.14);
+  color: #7e22ce;
 }
 
 .dashboard-owner-badge {
@@ -906,6 +983,64 @@ textarea:focus {
   gap: 10px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+.builder-template-modal {
+  width: min(560px, 100%);
+}
+
+.builder-template-title {
+  margin: 0 0 8px;
+}
+
+.builder-template-subtitle {
+  margin: 0 0 18px;
+  color: var(--text-muted);
+}
+
+.builder-template-empty-state {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(151, 165, 193, 0.4);
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.builder-template-empty-state h4 {
+  margin: 0 0 6px;
+}
+
+.builder-template-empty-state p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.builder-template-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  max-height: min(50vh, 420px);
+  overflow: auto;
+}
+
+.builder-template-card {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.builder-template-card-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #172033;
+}
+
+.builder-template-card-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .deadline-clear-button {

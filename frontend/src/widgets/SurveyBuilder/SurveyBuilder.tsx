@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
@@ -7,12 +7,13 @@ import { surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 
+import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
-import { getFormById, saveSurveySchema } from "../../entities/survey/api/surveysApi";
-import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
+import { getFormById, getForms, saveSurveySchema } from "../../entities/survey/api/surveysApi";
+import { TEMPLATE_FORM_TYPE, createEmptySurveySchema, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
-import type { SurveySchema } from "../../entities/survey/types";
+import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
 import { getErrorMessage } from "../../shared/lib/error";
 
@@ -226,9 +227,40 @@ function createCreatorInstance() {
   return creator;
 }
 
+function cloneSchema(schema: SurveySchema): SurveySchema {
+  return JSON.parse(JSON.stringify(schema)) as SurveySchema;
+}
+
+function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
+  const normalizedTitle = schema.title?.trim();
+  return normalizedTitle || fallbackTitle;
+}
+
+function collapseSidebarOnNextPaint(creator: SurveyCreator) {
+  creator.setShowSidebar(false);
+
+  const frameId = window.requestAnimationFrame(() => {
+    creator.setShowSidebar(false);
+    creator.sidebar?.collapseSidebar?.();
+  });
+
+  const timeoutId = window.setTimeout(() => {
+    creator.setShowSidebar(false);
+    creator.sidebar?.collapseSidebar?.();
+  }, 120);
+
+  return () => {
+    window.cancelAnimationFrame(frameId);
+    window.clearTimeout(timeoutId);
+  };
+}
+
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+  const [isTemplateActionLoading, setIsTemplateActionLoading] = useState<"save" | "create" | null>(null);
+  const { user } = useAuth();
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
@@ -238,6 +270,32 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditMode = Boolean(formId);
+  const isBusy = isSaving || saveSurveyMutation.isPending || createSurveyMutation.isPending || isTemplateActionLoading !== null;
+  const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
+  const createFromTemplateHandlerRef = useRef<() => void>(() => undefined);
+
+  const {
+    data: editableForm,
+    isLoading: isEditableFormLoading,
+    error: editableFormError,
+  } = useQuery({
+    queryKey: ["form", formId],
+    queryFn: () => getFormById(formId ?? ""),
+    enabled: isEditMode,
+  });
+
+  const {
+    data: templateForms = [],
+    isLoading: isTemplateFormsLoading,
+    error: templateFormsError,
+  } = useQuery({
+    queryKey: ["builder-templates", user?.id],
+    queryFn: async () => {
+      const forms = await getForms({ authorId: user?.id });
+      return forms.filter((form) => isTemplateForm(form));
+    },
+    enabled: Boolean(user?.id),
+  });
 
   useEffect(() => {
     const nextCreator = createCreatorInstance();
@@ -253,28 +311,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
-    const frame = window.requestAnimationFrame(() => {
-      if (creator.sidebar && typeof creator.sidebar.collapseSidebar === "function") {
-        creator.sidebar.collapseSidebar();
-      } else {
-        creator.setShowSidebar(false);
-      }
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
+    return collapseSidebarOnNextPaint(creator);
   }, [creator]);
-
-  const {
-    data: editableForm,
-    isLoading: isEditableFormLoading,
-    error: editableFormError,
-  } = useQuery({
-    queryKey: ["form", formId],
-    queryFn: () => getFormById(formId ?? ""),
-    enabled: isEditMode,
-  });
 
   useEffect(() => {
     if (!editableFormError) {
@@ -283,6 +321,14 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     showToast(getErrorMessage(editableFormError, "Не удалось загрузить форму"), "error");
   }, [editableFormError, showToast]);
+
+  useEffect(() => {
+    if (!templateFormsError) {
+      return;
+    }
+
+    showToast(getErrorMessage(templateFormsError, "Не удалось загрузить шаблоны"), "error");
+  }, [showToast, templateFormsError]);
 
   useEffect(() => {
     if (!creator || !editableForm) {
@@ -296,12 +342,161 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: editableForm.schema.locale ?? "ru",
     };
 
-    window.requestAnimationFrame(() => {
-      if (creator.sidebar && typeof creator.sidebar.collapseSidebar === "function") {
-        creator.sidebar.collapseSidebar();
-      }
-    });
+    return collapseSidebarOnNextPaint(creator);
   }, [creator, editableForm]);
+
+  const invalidateBuilderQueries = async (affectedFormId?: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["forms"] }),
+      queryClient.invalidateQueries({ queryKey: ["builder-templates"] }),
+      queryClient.refetchQueries({ queryKey: ["forms"], type: "active" }),
+      queryClient.refetchQueries({ queryKey: ["builder-templates"], type: "active" }),
+    ]);
+
+    if (affectedFormId) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["form", affectedFormId] }),
+        queryClient.invalidateQueries({ queryKey: ["survey-form", affectedFormId] }),
+        queryClient.refetchQueries({ queryKey: ["form", affectedFormId], type: "active" }),
+        queryClient.refetchQueries({ queryKey: ["survey-form", affectedFormId], type: "active" }),
+      ]);
+    }
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!creator) {
+      return;
+    }
+
+    setIsTemplateActionLoading("save");
+
+    try {
+      const schema = cloneSchema(creator.JSON as SurveySchema);
+      if (!validateSurveySchema(schema)) {
+        throw new Error("Некорректная JSON-схема формы");
+      }
+
+      const title = getSchemaTitle(schema, editableForm?.title ?? "Новый шаблон");
+
+      await createSurveyMutation.mutateAsync({
+        schema,
+        title,
+        formType: TEMPLATE_FORM_TYPE,
+      });
+
+      await invalidateBuilderQueries();
+      showToast("Шаблон сохранён", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, "Не удалось сохранить шаблон"), "error");
+    } finally {
+      setIsTemplateActionLoading(null);
+    }
+  };
+
+  const handleCreateFromTemplate = async (templateForm: SurveyForm) => {
+    setIsTemplateActionLoading("create");
+
+    try {
+      const schema = cloneSchema({
+        ...templateForm.schema,
+        title: templateForm.title,
+      });
+
+      const createdForm = await createSurveyMutation.mutateAsync({
+        schema,
+        title: templateForm.title,
+      });
+
+      await invalidateBuilderQueries(createdForm.id);
+      setIsTemplatePickerOpen(false);
+      showToast("Форма создана из шаблона", "success");
+      navigate(routes.builderEdit(createdForm.id));
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, "Не удалось создать форму из шаблона"), "error");
+    } finally {
+      setIsTemplateActionLoading(null);
+    }
+  };
+
+  saveTemplateHandlerRef.current = () => {
+    void handleSaveAsTemplate();
+  };
+
+  createFromTemplateHandlerRef.current = () => {
+    setIsTemplatePickerOpen(true);
+  };
+
+  useEffect(() => {
+    if (!creator) {
+      return;
+    }
+
+    creator.toolbar.addAction(
+      {
+        id: "builder-save-template",
+        title: "Сохранить как шаблон",
+        showTitle: true,
+        disableShrink: true,
+        css: "builder-toolbar-action-item",
+        innerCss: "builder-toolbar-action-button",
+        action: () => {
+          saveTemplateHandlerRef.current();
+        },
+      },
+      true,
+    );
+
+    creator.toolbar.addAction(
+      {
+        id: "builder-create-template",
+        title: "Создать из шаблона",
+        showTitle: true,
+        disableShrink: true,
+        css: "builder-toolbar-action-item",
+        innerCss: "builder-toolbar-action-button builder-toolbar-action-button-secondary",
+        action: () => {
+          createFromTemplateHandlerRef.current();
+        },
+      },
+      true,
+    );
+
+    const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
+    const createFromTemplateAction = creator.toolbar.getActionById("builder-create-template");
+
+    if (saveTemplateAction) {
+      saveTemplateAction.visibleIndex = 10;
+    }
+
+    if (createFromTemplateAction) {
+      createFromTemplateAction.visibleIndex = 11;
+    }
+
+    return () => {
+      creator.toolbar.actions = creator.toolbar.actions.filter(
+        (action) => action.id !== "builder-save-template" && action.id !== "builder-create-template",
+      );
+    };
+  }, [creator]);
+
+  useEffect(() => {
+    if (!creator) {
+      return;
+    }
+
+    const saveTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-save-template");
+    const createFromTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-create-template");
+
+    if (saveTemplateAction) {
+      saveTemplateAction.enabled = !isBusy;
+    }
+
+    if (createFromTemplateAction) {
+      createFromTemplateAction.enabled = !isBusy;
+    }
+  }, [creator, isBusy]);
 
   useEffect(() => {
     if (!creator) {
@@ -312,12 +507,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       setIsSaving(true);
 
       try {
-        const schema = creator.JSON;
+        const schema = creator.JSON as SurveySchema;
         if (!validateSurveySchema(schema)) {
           throw new Error("Некорректная JSON-схема формы");
         }
 
-        const title = schema.title ?? editableForm?.title ?? "Новая форма";
+        const title = getSchemaTitle(schema, editableForm?.title ?? "Новая форма");
 
         if (formId) {
           await saveSurveyMutation.mutateAsync({
@@ -332,15 +527,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
           });
         }
 
-        await queryClient.invalidateQueries({ queryKey: ["forms"] });
-        if (formId) {
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["form", formId] }),
-            queryClient.invalidateQueries({ queryKey: ["survey-form", formId] }),
-          ]);
-        }
+        await invalidateBuilderQueries(formId);
 
-        showToast(formId ? "Форма обновлена" : "Форма сохранена", "success");
+        showToast(
+          formId ? (editableForm && isTemplateForm(editableForm) ? "Шаблон обновлён" : "Форма обновлена") : "Форма сохранена",
+          "success",
+        );
         navigate(routes.dashboardMy, { replace: true });
         callback(saveNo, true);
       } catch (error) {
@@ -361,13 +553,63 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     return () => {
       creator.saveSurveyFunc = undefined;
     };
-  }, [creator, createSurveyMutation, editableForm?.title, formId, navigate, queryClient, saveSurveyMutation, showToast]);
+  }, [creator, createSurveyMutation, editableForm, formId, navigate, queryClient, saveSurveyMutation, showToast]);
 
   return (
     <div className="builder-host">
-      {isEditableFormLoading && <p style={{ marginBottom: 10, color: "#334155" }}>Загрузка формы...</p>}
-      {isSaving && <p style={{ marginBottom: 10, color: "#334155" }}>Сохранение формы...</p>}
-      {creator && <SurveyCreatorComponent creator={creator} />}
+      <div className="builder-status-stack">
+        {isEditableFormLoading && <p className="builder-status-text">Загрузка формы...</p>}
+        {isSaving && <p className="builder-status-text">Сохранение формы...</p>}
+        {isTemplateActionLoading === "save" && <p className="builder-status-text">Сохранение шаблона...</p>}
+        {isTemplateActionLoading === "create" && <p className="builder-status-text">Создание формы из шаблона...</p>}
+      </div>
+
+      <div className="builder-creator-shell">
+        {creator && <SurveyCreatorComponent creator={creator} />}
+      </div>
+
+      {isTemplatePickerOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card card builder-template-modal">
+            <h3 className="builder-template-title">Выберите шаблон</h3>
+            <p className="builder-template-subtitle">Для создания новой формы доступны только сохранённые шаблоны.</p>
+
+            {isTemplateFormsLoading && <p className="builder-status-text">Загрузка шаблонов...</p>}
+
+            {!isTemplateFormsLoading && templateForms.length === 0 && (
+              <div className="builder-template-empty-state">
+                <h4>Шаблонов пока нет</h4>
+                <p>Сначала сохраните текущую форму как шаблон, а затем создавайте из неё новые формы.</p>
+              </div>
+            )}
+
+            {!isTemplateFormsLoading && templateForms.length > 0 && (
+              <div className="builder-template-list">
+                {templateForms.map((templateForm) => (
+                  <button
+                    key={templateForm.id}
+                    type="button"
+                    className="builder-template-card"
+                    onClick={() => void handleCreateFromTemplate(templateForm)}
+                    disabled={isBusy}
+                  >
+                    <span className="builder-template-card-title">{templateForm.title}</span>
+                    <span className="builder-template-card-meta">
+                      Создан {new Date(templateForm.created_at).toLocaleString("ru-RU")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="deadline-modal-actions">
+              <button type="button" onClick={() => setIsTemplatePickerOpen(false)} disabled={isBusy}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

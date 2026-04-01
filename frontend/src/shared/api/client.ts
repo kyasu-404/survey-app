@@ -9,6 +9,17 @@ export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+// Stateless public client for routes that should remain accessible even if the
+// current browser auth state is stale or absent.
+export const publicSupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storageKey: "sb-public-form-client",
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
+
 export const apiClient = {
   auth: {
     getCurrentUser: () => supabaseClient.auth.getUser(),
@@ -29,4 +40,8 @@ export const apiClient = {
     onAuthStateChange: supabaseClient.auth.onAuthStateChange.bind(supabaseClient.auth),
   },
   from: <TTable extends string>(table: TTable) => supabaseClient.from(table),
+};
+
+export const publicApiClient = {
+  from: <TTable extends string>(table: TTable) => publicSupabaseClient.from(table),
 };

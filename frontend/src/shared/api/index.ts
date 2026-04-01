@@ -1,7 +1,8 @@
-export { apiClient, supabaseClient } from "./client";
+export { apiClient, publicApiClient, publicSupabaseClient, supabaseClient } from "./client";
 export {
   fetchForms,
   fetchFormById,
+  fetchPublicFormById,
   insertForm,
   updateFormSchema,
   updateFormTitle,

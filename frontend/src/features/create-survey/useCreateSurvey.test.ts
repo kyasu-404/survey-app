@@ -24,7 +24,7 @@ describe("createSurveyForCurrentUser", () => {
     vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } } } as never);
     vi.mocked(createSurvey).mockResolvedValue({ id: "form-1" } as never);
 
-    await createSurveyForCurrentUser({ pages: [] }, "Test form");
+    await createSurveyForCurrentUser({ schema: { pages: [] }, title: "Test form" });
 
     expect(createSurvey).toHaveBeenCalledWith({
       title: "Test form",
@@ -38,7 +38,7 @@ describe("createSurveyForCurrentUser", () => {
   it("throws when user is not authenticated", async () => {
     vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: null } } as never);
 
-    await expect(createSurveyForCurrentUser({ pages: [] }, "Test form")).rejects.toThrow(
+    await expect(createSurveyForCurrentUser({ schema: { pages: [] }, title: "Test form" })).rejects.toThrow(
       "Пользователь не авторизован",
     );
   });

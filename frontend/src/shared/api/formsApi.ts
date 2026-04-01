@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, publicApiClient } from "./client";
 import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 
 export type FormsFilters = {
@@ -56,6 +56,12 @@ export async function fetchFormById(id: string): Promise<SurveyForm> {
   const { data, error } = await apiClient.from("forms").select("*").eq("id", id).single();
   if (error) throw error;
   return data as SurveyForm;
+}
+
+export async function fetchPublicFormById(id: string): Promise<SurveyForm | null> {
+  const { data, error } = await publicApiClient.from("forms").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return (data as SurveyForm | null) ?? null;
 }
 
 export async function insertForm(payload: {
