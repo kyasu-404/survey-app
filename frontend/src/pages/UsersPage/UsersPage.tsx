@@ -20,6 +20,13 @@ type NewUserForm = {
   role: UserRole;
 };
 
+type PasswordModalState = {
+  userId: string;
+  title: string;
+  password: string;
+  isOwnPassword: boolean;
+};
+
 export default function UsersPage() {
   const { showToast } = useToast();
   const { user, loading: isAuthLoading } = useAuth();
@@ -30,8 +37,7 @@ export default function UsersPage() {
     password: "",
     role: "user",
   });
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordByUserId, setPasswordByUserId] = useState<Record<string, string>>({});
+  const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -63,8 +69,7 @@ export default function UsersPage() {
   });
 
   const setUserDisabledMutation = useMutation({
-    mutationFn: ({ userId, disabled }: { userId: string; disabled: boolean }) =>
-      setUserDisabled(userId, disabled),
+    mutationFn: ({ userId, disabled }: { userId: string; disabled: boolean }) => setUserDisabled(userId, disabled),
     onSuccess: async (_data, variables) => {
       showToast(variables.disabled ? "Пользователь отключён" : "Пользователь включён", "success");
       await queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -75,10 +80,9 @@ export default function UsersPage() {
   });
 
   const updateUserPasswordMutation = useMutation({
-    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
-      updateUserPassword(userId, password),
-    onSuccess: async (_data, variables) => {
-      setPasswordByUserId((prev) => ({ ...prev, [variables.userId]: "" }));
+    mutationFn: ({ userId, password }: { userId: string; password: string }) => updateUserPassword(userId, password),
+    onSuccess: () => {
+      setPasswordModal(null);
       showToast("Пароль пользователя обновлён", "success");
     },
     onError: (error) => {
@@ -89,7 +93,7 @@ export default function UsersPage() {
   const updatePasswordMutation = useMutation({
     mutationFn: updateMyPassword,
     onSuccess: () => {
-      setNewPassword("");
+      setPasswordModal(null);
       showToast("Пароль обновлён", "success");
     },
     onError: (error) => {
@@ -98,7 +102,7 @@ export default function UsersPage() {
   });
 
   const isPasswordValid = useMemo(() => newUser.password.length >= 8, [newUser.password.length]);
-  const isCurrentPasswordValid = useMemo(() => newPassword.length >= 8, [newPassword.length]);
+  const isModalPasswordValid = useMemo(() => (passwordModal?.password.length ?? 0) >= 8, [passwordModal?.password.length]);
 
   const onCreateUser = async () => {
     if (!newUser.name.trim()) {
@@ -118,24 +122,34 @@ export default function UsersPage() {
     });
   };
 
-  const onChangeMyPassword = async () => {
-    if (!isCurrentPasswordValid) {
-      showToast("Пароль должен быть не короче 8 символов", "error");
-      return;
-    }
-
-    await updatePasswordMutation.mutateAsync(newPassword);
+  const openPasswordModal = (userId: string, title: string, isOwnPassword: boolean) => {
+    setPasswordModal({
+      userId,
+      title,
+      password: "",
+      isOwnPassword,
+    });
   };
 
-  const onChangeUserPassword = async (userId: string) => {
-    const nextPassword = passwordByUserId[userId] ?? "";
+  const onChangePassword = async () => {
+    if (!passwordModal) {
+      return;
+    }
 
-    if (nextPassword.length < 8) {
+    if (!isModalPasswordValid) {
       showToast("Пароль должен быть не короче 8 символов", "error");
       return;
     }
 
-    await updateUserPasswordMutation.mutateAsync({ userId, password: nextPassword });
+    if (passwordModal.isOwnPassword) {
+      await updatePasswordMutation.mutateAsync(passwordModal.password);
+      return;
+    }
+
+    await updateUserPasswordMutation.mutateAsync({
+      userId: passwordModal.userId,
+      password: passwordModal.password,
+    });
   };
 
   return (
@@ -144,54 +158,30 @@ export default function UsersPage() {
         <h2 style={{ marginTop: 4 }}>Пользователи</h2>
 
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 14 }}>
-          <input
-            value={newUser.name}
-            onChange={(e) => setNewUser((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Имя"
-          />
-          <input
-            value={newUser.email}
-            onChange={(e) => setNewUser((prev) => ({ ...prev, email: e.target.value }))}
-            placeholder="Email"
-          />
+          <input value={newUser.name} onChange={(e) => setNewUser((prev) => ({ ...prev, name: e.target.value }))} placeholder="Имя" />
+          <input value={newUser.email} onChange={(e) => setNewUser((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
           <input
             type="password"
             value={newUser.password}
             onChange={(e) => setNewUser((prev) => ({ ...prev, password: e.target.value }))}
             placeholder="Пароль (минимум 8 символов)"
           />
-          <select
-            value={newUser.role}
-            onChange={(e) => setNewUser((prev) => ({ ...prev, role: e.target.value as UserRole }))}
-          >
+          <select value={newUser.role} onChange={(e) => setNewUser((prev) => ({ ...prev, role: e.target.value as UserRole }))}>
             <option value="user">user</option>
             <option value="admin">admin</option>
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => void onCreateUser()} disabled={createUserMutation.isPending || !isPasswordValid}>
             Создать пользователя
+          </button>
+          <button onClick={() => openPasswordModal(user?.id ?? "", "Смена моего пароля", true)} disabled={!user}>
+            Сменить пароль
           </button>
           {!isPasswordValid && newUser.password.length > 0 && (
             <span style={{ color: "#b45309", fontSize: 14 }}>Пароль должен быть не короче 8 символов</span>
           )}
-        </div>
-
-        <h3 style={{ marginBottom: 8 }}>Смена моего пароля</h3>
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Новый пароль (минимум 8 символов)"
-          />
-          <button
-            onClick={() => void onChangeMyPassword()}
-            disabled={updatePasswordMutation.isPending || !isCurrentPasswordValid}
-          >
-            Сменить пароль
-          </button>
         </div>
 
         {isAuthLoading || usersQuery.isLoading ? (
@@ -219,7 +209,6 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {(usersQuery.data ?? []).map((profile) => {
-                const rowPassword = passwordByUserId[profile.id] ?? "";
                 const isOwnUser = profile.id === user?.id;
 
                 return (
@@ -230,47 +219,32 @@ export default function UsersPage() {
                     <td>{profile.is_disabled ? "Отключён" : "Активен"}</td>
                     <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
                     <td>
-                      <div style={{ display: "grid", gap: 8 }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <input
-                            type="password"
-                            value={rowPassword}
-                            onChange={(e) =>
-                              setPasswordByUserId((prev) => ({
-                                ...prev,
-                                [profile.id]: e.target.value,
-                              }))
-                            }
-                            placeholder="Новый пароль"
-                            disabled={isOwnUser}
-                          />
-                          <button
-                            onClick={() => void onChangeUserPassword(profile.id)}
-                            disabled={updateUserPasswordMutation.isPending || rowPassword.length < 8 || isOwnUser}
-                          >
-                            Сменить пароль
-                          </button>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            onClick={() =>
-                              void setUserDisabledMutation.mutateAsync({
-                                userId: profile.id,
-                                disabled: !profile.is_disabled,
-                              })
-                            }
-                            disabled={setUserDisabledMutation.isPending || isOwnUser}
-                          >
-                            {profile.is_disabled ? "Включить" : "Отключить"}
-                          </button>
-                          <button
-                            onClick={() => void deleteUserMutation.mutateAsync(profile.id)}
-                            disabled={deleteUserMutation.isPending || isOwnUser}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          onClick={() =>
+                            openPasswordModal(
+                              profile.id,
+                              isOwnUser ? "Смена моего пароля" : `Смена пароля: ${profile.name || profile.email}`,
+                              isOwnUser,
+                            )
+                          }
+                        >
+                          Сменить пароль
+                        </button>
+                        <button
+                          onClick={() =>
+                            void setUserDisabledMutation.mutateAsync({
+                              userId: profile.id,
+                              disabled: !profile.is_disabled,
+                            })
+                          }
+                          disabled={setUserDisabledMutation.isPending || isOwnUser}
+                        >
+                          {profile.is_disabled ? "Включить" : "Отключить"}
+                        </button>
+                        <button onClick={() => void deleteUserMutation.mutateAsync(profile.id)} disabled={deleteUserMutation.isPending || isOwnUser}>
+                          Удалить
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -280,6 +254,38 @@ export default function UsersPage() {
           </table>
         )}
       </div>
+
+      {passwordModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card card">
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>{passwordModal.title}</h3>
+            <label className="deadline-field">
+              <span>Новый пароль</span>
+              <input
+                type="password"
+                value={passwordModal.password}
+                onChange={(e) =>
+                  setPasswordModal((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          password: e.target.value,
+                        }
+                      : prev,
+                  )
+                }
+                placeholder="Минимум 8 символов"
+              />
+            </label>
+            <div className="deadline-modal-actions">
+              <button onClick={() => setPasswordModal(null)}>Отмена</button>
+              <button onClick={() => void onChangePassword()} disabled={updatePasswordMutation.isPending || updateUserPasswordMutation.isPending || !isModalPasswordValid}>
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

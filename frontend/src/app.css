@@ -277,6 +277,7 @@ textarea:focus {
 .dashboard-shell {
   display: grid;
   gap: 22px;
+  align-content: start;
 }
 
 .builder-container {
@@ -338,6 +339,7 @@ textarea:focus {
   padding: 10px 16px;
   overflow: hidden;
   position: relative;
+  height: 92px;
 }
 
 .dashboard-hero::before {
@@ -363,12 +365,13 @@ textarea:focus {
   margin-bottom: 0;
   padding: 5px 9px;
   border-radius: 999px;
-  background: rgba(15, 159, 110, 0.1);
-  color: #0f6b50;
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .dashboard-title {
@@ -399,37 +402,29 @@ textarea:focus {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 248, 251, 0.92));
   border: 1px solid rgba(151, 165, 193, 0.22);
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .dashboard-stat-card span {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 0;
   color: var(--text-muted);
   font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .dashboard-stat-card strong {
   font-size: 1.16rem;
   letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 
 .dashboard-main-card {
   padding: 14px;
-}
-
-.dashboard-main-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
-.dashboard-section-meta {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  font-weight: 600;
 }
 
 .dashboard-toolbar {
@@ -523,8 +518,16 @@ textarea:focus {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 8px;
+}
+
+.dashboard-form-mainline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .dashboard-form-heading {
@@ -567,9 +570,10 @@ textarea:focus {
 
 .dashboard-form-title {
   display: block;
-  font-size: 0.96rem;
+  font-size: 1.06rem;
   line-height: 1.25;
   letter-spacing: -0.03em;
+  white-space: nowrap;
 }
 
 .dashboard-form-controls {
@@ -577,6 +581,7 @@ textarea:focus {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+  align-items: center;
 }
 
 .dashboard-secondary-button {
@@ -595,11 +600,43 @@ textarea:focus {
   color: #475569;
 }
 
+.dashboard-form-meta-grid .dashboard-meta-pill:nth-child(2),
+.dashboard-form-meta-grid .dashboard-meta-pill:nth-child(3) {
+  font-weight: 800;
+  color: #334155;
+}
+
 .dashboard-form-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+.dashboard-refresh-button,
+.icon-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.dashboard-refresh-button {
+  min-height: 42px;
+}
+
+.icon-action-button {
+  width: 40px;
+  height: 34px;
+  min-width: 40px;
+  padding: 0;
+}
+
+.toolbar-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .form-status-button {
@@ -648,9 +685,9 @@ textarea:focus {
 
 .form-menu-dropdown {
   position: absolute;
-  right: 0;
-  left: auto;
-  top: calc(100% + 8px);
+  left: calc(100% + 8px);
+  right: auto;
+  top: 0;
   border: 1px solid rgba(151, 165, 193, 0.35);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.96);
@@ -896,6 +933,7 @@ textarea:focus {
 @media (max-width: 1080px) {
   .dashboard-hero {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .dashboard-stats {
@@ -909,8 +947,9 @@ textarea:focus {
   }
 
   .dashboard-form-top,
-  .dashboard-main-header {
+  .dashboard-form-mainline {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .dashboard-form-controls {
@@ -919,6 +958,12 @@ textarea:focus {
 
   .dashboard-toolbar {
     justify-content: flex-start;
+  }
+
+  .form-menu-dropdown {
+    left: auto;
+    right: 0;
+    top: calc(100% + 8px);
   }
 }
 
