@@ -64,12 +64,12 @@ textarea {
 button {
   border: 1px solid rgba(133, 149, 178, 0.34);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   background: rgba(255, 255, 255, 0.88);
   color: #172033;
   cursor: pointer;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   letter-spacing: 0.01em;
   transition:
     transform 0.18s ease,
@@ -303,10 +303,11 @@ textarea:focus {
   justify-content: center;
   border: 1px solid rgba(133, 149, 178, 0.34);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   background: rgba(255, 255, 255, 0.88);
   cursor: pointer;
   font-weight: 700;
+  font-size: 0.84rem;
   color: inherit;
   text-decoration: none;
   transition:
@@ -331,9 +332,10 @@ textarea:focus {
 
 .dashboard-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.72fr);
-  gap: 14px;
-  padding: 18px 20px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
   overflow: hidden;
   position: relative;
 }
@@ -358,12 +360,12 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
-  padding: 6px 10px;
+  margin-bottom: 0;
+  padding: 5px 9px;
   border-radius: 999px;
   background: rgba(15, 159, 110, 0.1);
   color: #0f6b50;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -387,13 +389,13 @@ textarea:focus {
 .dashboard-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  align-content: start;
+  gap: 8px;
+  align-content: center;
 }
 
 .dashboard-stat-card {
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 8px 12px;
+  border-radius: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 248, 251, 0.92));
   border: 1px solid rgba(151, 165, 193, 0.22);
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
@@ -401,46 +403,43 @@ textarea:focus {
 
 .dashboard-stat-card span {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.74rem;
 }
 
 .dashboard-stat-card strong {
-  font-size: 1.4rem;
+  font-size: 1.16rem;
   letter-spacing: -0.04em;
 }
 
 .dashboard-main-card {
-  padding: 18px;
+  padding: 14px;
 }
 
 .dashboard-main-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
   gap: 16px;
-  margin-bottom: 12px;
-}
-
-.dashboard-section-title {
-  margin: 0 0 6px;
-  font-size: 1.35rem;
-  letter-spacing: -0.03em;
+  margin-bottom: 8px;
 }
 
 .dashboard-section-meta {
   margin: 0;
   color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .dashboard-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 12px;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
   border-radius: 18px;
   background: rgba(242, 247, 248, 0.82);
   border: 1px solid rgba(151, 165, 193, 0.18);
@@ -454,6 +453,7 @@ textarea:focus {
 .dashboard-filter-group {
   display: flex;
   flex-wrap: wrap;
+  align-items: end;
   gap: 12px;
 }
 
@@ -498,8 +498,8 @@ textarea:focus {
 
 .dashboard-form-card {
   position: relative;
-  padding: 14px;
-  border-radius: 18px;
+  padding: 12px;
+  border-radius: 16px;
   border: 1px solid rgba(151, 165, 193, 0.22);
   background: var(--surface-muted);
   box-shadow: 0 14px 36px rgba(30, 41, 59, 0.08);
@@ -522,9 +522,9 @@ textarea:focus {
 .dashboard-form-top {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .dashboard-form-heading {
@@ -543,10 +543,10 @@ textarea:focus {
 .dashboard-meta-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 28px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -567,7 +567,7 @@ textarea:focus {
 
 .dashboard-form-title {
   display: block;
-  font-size: 1rem;
+  font-size: 0.96rem;
   line-height: 1.25;
   letter-spacing: -0.03em;
 }
@@ -576,7 +576,7 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dashboard-secondary-button {
@@ -586,8 +586,8 @@ textarea:focus {
 .dashboard-form-meta-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 7px;
+  margin-bottom: 8px;
 }
 
 .dashboard-meta-pill {
@@ -598,7 +598,7 @@ textarea:focus {
 .dashboard-form-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -634,13 +634,14 @@ textarea:focus {
 
 .form-menu {
   position: relative;
-  margin-left: auto;
   z-index: 120;
 }
 
 .form-menu-trigger {
-  min-width: 36px;
-  padding: 6px 10px;
+  width: 40px;
+  height: 34px;
+  min-width: 40px;
+  padding: 0;
   line-height: 1;
   font-size: 18px;
 }
@@ -695,25 +696,29 @@ textarea:focus {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 12px 24px 18px;
+  padding: 18px 24px 18px;
+  position: relative;
 }
 
 .survey-page-card {
   width: min(1060px, 100%);
   min-width: 320px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 36px);
   overflow: auto;
-  padding: 18px 20px 28px;
+  padding: 24px 20px 32px;
 }
 
 .survey-page-brand {
+  position: absolute;
+  top: 20px;
+  left: 24px;
   display: flex;
   align-items: center;
-  margin-bottom: 14px;
+  z-index: 2;
 }
 
 .survey-page-logo {
-  width: 78px;
+  width: 88px;
   height: auto;
   object-fit: contain;
 }
@@ -911,6 +916,10 @@ textarea:focus {
   .dashboard-form-controls {
     justify-content: flex-start;
   }
+
+  .dashboard-toolbar {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 760px) {
@@ -937,6 +946,19 @@ textarea:focus {
   }
 
   .dashboard-form-card {
-    padding: 14px;
+    padding: 12px;
+  }
+
+  .survey-page {
+    padding: 78px 14px 14px;
+  }
+
+  .survey-page-brand {
+    top: 14px;
+    left: 14px;
+  }
+
+  .survey-page-logo {
+    width: 74px;
   }
 }

@@ -70,11 +70,7 @@ function getQuestionChoiceMap(schema: SurveySchema) {
   return choicesMap;
 }
 
-function formatAnswerValue(
-  questionName: string,
-  value: unknown,
-  choiceMap: Map<string, Map<string, string>>,
-): string {
+function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>): string {
   const questionChoices = choiceMap.get(questionName);
 
   if (Array.isArray(value)) {
@@ -365,7 +361,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const handleRename = async (form: SurveyForm) => {
     const newTitle = window.prompt("Введите новое название формы", form.title);
-    if (!newTitle || !newTitle.trim() || newTitle === form.title) return;
+    if (!newTitle || !newTitle.trim() || newTitle === form.title) {
+      return;
+    }
 
     await runAction(() => renameMutation.mutateAsync({ id: form.id, title: newTitle.trim() }), {
       successMessage: "Форма сохранена",
@@ -507,7 +505,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       <section className="card dashboard-hero">
         <div className="dashboard-hero-copy">
           <span className="dashboard-kicker">{viewMode === "all" ? "Общий каталог" : "Личное пространство"}</span>
-          <h2 className="dashboard-title">Формы и ответы</h2>
         </div>
         <div className="dashboard-stats">
           <div className="dashboard-stat-card">
@@ -527,13 +524,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
       <div className="card dashboard-main-card">
         <div className="dashboard-main-header">
-          <div>
-            <h3 className="dashboard-section-title">Список форм</h3>
-            <p className="dashboard-section-meta">{viewMode === "all" ? "Все доступные формы" : "Ваши формы"}</p>
-          </div>
-          <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
-            {isFormsFetching ? "Обновляется..." : "Обновить"}
-          </button>
+          <p className="dashboard-section-meta">{viewMode === "all" ? "Все доступные формы" : "Ваши формы"}</p>
         </div>
 
         <div className="dashboard-toolbar">
@@ -552,6 +543,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <span>Дата по</span>
               <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </label>
+            <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
+              {isFormsFetching ? "Обновляется..." : "Обновить"}
+            </button>
           </div>
         </div>
 
@@ -572,7 +566,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const isResponsesOpen = openedResponsesByFormId[form.id];
             const isFormActive = form.is_public;
             const isOwnForm = form.author_id === user?.id;
-            const canDeleteForm = viewMode !== "all" || isOwnForm;
             const deadlineLabel = form.deadline_at
               ? new Date(form.deadline_at).toLocaleString("ru-RU")
               : "Не установлен";
@@ -636,53 +629,51 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   <button onClick={() => handleCopyLink(link)} disabled={!isFormActive}>
                     Скопировать ссылку
                   </button>
-                  <button onClick={() => toggleResponses(form.id)}>
-                    {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
-                  </button>
+                  <button onClick={() => toggleResponses(form.id)}>{isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}</button>
                   <button onClick={() => void handleExportResponses(form)}>XLS</button>
-                  <div className="form-menu">
-                    <button
-                      className="form-menu-trigger"
-                      onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
-                      disabled={isActionLoading}
-                      aria-label="Действия с формой"
-                      aria-expanded={openedMenuFormId === form.id}
-                    >
-                      ⋯
-                    </button>
-                    {openedMenuFormId === form.id && (
-                      <div className="form-menu-dropdown">
-                        <button
-                          className="form-menu-item"
-                          onClick={() => {
-                            setOpenedMenuFormId(null);
-                            void handleRename(form);
-                          }}
-                          disabled={isActionLoading}
-                        >
-                          Переименовать
-                        </button>
-                        <button
-                          className="form-menu-item"
-                          onClick={() => {
-                            setOpenedMenuFormId(null);
-                            handleEditForm(form);
-                          }}
-                          disabled={isActionLoading}
-                        >
-                          Редактировать
-                        </button>
-                        <button
-                          className="form-menu-item"
-                          onClick={() => {
-                            setOpenedMenuFormId(null);
-                            void handleDuplicate(form);
-                          }}
-                          disabled={isActionLoading}
-                        >
-                          Дублировать
-                        </button>
-                        {canDeleteForm && (
+                  {isOwnForm && (
+                    <div className="form-menu">
+                      <button
+                        className="form-menu-trigger"
+                        onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
+                        disabled={isActionLoading}
+                        aria-label="Действия с формой"
+                        aria-expanded={openedMenuFormId === form.id}
+                      >
+                        ...
+                      </button>
+                      {openedMenuFormId === form.id && (
+                        <div className="form-menu-dropdown">
+                          <button
+                            className="form-menu-item"
+                            onClick={() => {
+                              setOpenedMenuFormId(null);
+                              void handleRename(form);
+                            }}
+                            disabled={isActionLoading}
+                          >
+                            Переименовать
+                          </button>
+                          <button
+                            className="form-menu-item"
+                            onClick={() => {
+                              setOpenedMenuFormId(null);
+                              handleEditForm(form);
+                            }}
+                            disabled={isActionLoading}
+                          >
+                            Редактировать
+                          </button>
+                          <button
+                            className="form-menu-item"
+                            onClick={() => {
+                              setOpenedMenuFormId(null);
+                              void handleDuplicate(form);
+                            }}
+                            disabled={isActionLoading}
+                          >
+                            Дублировать
+                          </button>
                           <button
                             className="form-menu-item form-menu-item-danger"
                             onClick={() => {
@@ -693,10 +684,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                           >
                             Удалить
                           </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <FormResponsesSection form={form} formId={form.id} isOpen={Boolean(isResponsesOpen)} />
@@ -714,11 +705,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
             <label className="deadline-field">
               <span>Дата и время окончания</span>
-              <input
-                type="datetime-local"
-                value={deadlineEditor.value}
-                onChange={(e) => handleDeadlineValueChange(e.target.value)}
-              />
+              <input type="datetime-local" value={deadlineEditor.value} onChange={(e) => handleDeadlineValueChange(e.target.value)} />
             </label>
 
             <p className="deadline-modal-hint">
@@ -729,11 +716,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <button onClick={() => setDeadlineEditor(null)} disabled={isActionLoading}>
                 Отмена
               </button>
-              <button
-                className="deadline-clear-button"
-                onClick={() => void handleClearDeadline()}
-                disabled={isActionLoading}
-              >
+              <button className="deadline-clear-button" onClick={() => void handleClearDeadline()} disabled={isActionLoading}>
                 Снять дедлайн
               </button>
               <button onClick={() => void handleSaveDeadline()} disabled={isActionLoading}>

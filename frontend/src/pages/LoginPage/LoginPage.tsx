@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { login } from "../../features/auth/api";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { routes } from "../../app/routes";
+import { login } from "../../features/auth/api";
+import { getAuthErrorMessage } from "../../shared/lib/error";
 
 type MessageType = "success" | "error";
 
@@ -23,14 +24,15 @@ export default function LoginPage() {
 
   async function onLogin() {
     try {
+      setMessage("");
       await login(email, password);
       navigate(targetPath, {
         replace: true,
-        state: { toast: `Добро пожаловать, ${email}` }
+        state: { toast: `Добро пожаловать, ${email}` },
       });
     } catch (error) {
       setMessageType("error");
-      setMessage((error as Error).message);
+      setMessage(getAuthErrorMessage(error));
     }
   }
 
@@ -38,18 +40,20 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="card" style={{ padding: 20, width: "min(420px, 100%)" }}>
         <h2 className="login-title">Авторизация</h2>
-        <div style={{ display: "grid", gap: 10 }}>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Пароль"
-            type="password"
-          />
-        </div>
-        <div className="login-actions">
-          <button onClick={onLogin}>Войти</button>
-        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onLogin();
+          }}
+        >
+          <div style={{ display: "grid", gap: 10 }}>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" type="password" />
+          </div>
+          <div className="login-actions">
+            <button type="submit">Войти</button>
+          </div>
+        </form>
         {message && (
           <p
             style={{
@@ -57,7 +61,7 @@ export default function LoginPage() {
               padding: 10,
               borderRadius: 8,
               background: messageType === "error" ? "#fee2e2" : "#dcfce7",
-              color: messageType === "error" ? "#991b1b" : "#166534"
+              color: messageType === "error" ? "#991b1b" : "#166534",
             }}
           >
             {message}

@@ -189,6 +189,7 @@ function createCreatorInstance() {
     ...createEmptySurveySchema(),
     locale: "ru",
   };
+  nextCreator.allowCollapseSidebar = true;
 
   configureCreatorToolbox(nextCreator);
 
@@ -197,6 +198,9 @@ function createCreatorInstance() {
       options.question.isRequired = true;
     }
   });
+
+  nextCreator.sidebar.expandSidebar();
+  nextCreator.sidebar.collapseSidebar();
 
   return nextCreator;
 }
