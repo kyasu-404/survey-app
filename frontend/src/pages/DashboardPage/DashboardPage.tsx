@@ -15,7 +15,7 @@ import {
   setFormDeadline,
 } from "../../entities/survey/api/surveysApi";
 import { getSurveyDisplayTitle } from "../../entities/survey/model/surveyModel";
-import type { SurveyForm } from "../../entities/survey/types";
+import type { SurveyForm, SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
@@ -29,41 +29,121 @@ type ResponsesTableRow = {
 };
 
 type FormResponsesSectionProps = {
+  form: SurveyForm;
   formId: string;
   isOpen: boolean;
 };
 
-function formatResponsesForTable(responses: SurveyResponse[]): ResponsesTableRow[] {
+type DeadlineEditorState = {
+  form: SurveyForm;
+  value: string;
+};
+
+function getQuestionChoiceMap(schema: SurveySchema) {
+  const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
+  const choicesMap = new Map<string, Map<string, string>>();
+
+  questions.forEach((question: SurveyQuestion) => {
+    if (!Array.isArray(question.choices) || !question.name) {
+      return;
+    }
+
+    const questionChoiceMap = new Map<string, string>();
+    question.choices.forEach((choice) => {
+      if (typeof choice === "string") {
+        questionChoiceMap.set(choice, choice);
+        return;
+      }
+
+      const value = String(choice.value ?? choice.text ?? "");
+      const text = String(choice.text ?? choice.value ?? "");
+      if (value) {
+        questionChoiceMap.set(value, text);
+      }
+    });
+
+    if (questionChoiceMap.size > 0) {
+      choicesMap.set(question.name, questionChoiceMap);
+    }
+  });
+
+  return choicesMap;
+}
+
+function formatAnswerValue(
+  questionName: string,
+  value: unknown,
+  choiceMap: Map<string, Map<string, string>>,
+): string {
+  const questionChoices = choiceMap.get(questionName);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string" && questionChoices?.has(item)) {
+          return questionChoices.get(item) ?? item;
+        }
+
+        if (item && typeof item === "object" && "name" in item && typeof item.name === "string") {
+          return item.name;
+        }
+
+        return String(item ?? "");
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (typeof value === "string" && questionChoices?.has(value)) {
+    return questionChoices.get(value) ?? value;
+  }
+
+  if (value === null || typeof value === "undefined") {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    if ("name" in value && typeof value.name === "string") {
+      return value.name;
+    }
+
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
+  const choiceMap = getQuestionChoiceMap(schema);
+
   return responses.map((response) => {
     const base: ResponsesTableRow = {
       "Дата ответа": new Date(response.created_at).toLocaleString("ru-RU"),
-      "ID ответа": response.id,
     };
 
     Object.entries(response.data).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        base[key] = value.join(", ");
-        return;
-      }
-
-      if (value === null || typeof value === "undefined") {
-        base[key] = "";
-        return;
-      }
-
-      if (typeof value === "object") {
-        base[key] = JSON.stringify(value);
-        return;
-      }
-
-      base[key] = String(value);
+      base[key] = formatAnswerValue(key, value, choiceMap);
     });
 
     return base;
   });
 }
 
-function FormResponsesSection({ formId, isOpen }: FormResponsesSectionProps) {
+function formatDateTimeLocalValue(dateTime: string | null) {
+  if (!dateTime) {
+    return "";
+  }
+
+  const date = new Date(dateTime);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const offsetInMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetInMs).toISOString().slice(0, 16);
+}
+
+function FormResponsesSection({ form, formId, isOpen }: FormResponsesSectionProps) {
   const responsesQuery = useQuery({
     queryKey: ["form-responses", formId],
     queryFn: () => getResponsesByForm(formId),
@@ -76,11 +156,11 @@ function FormResponsesSection({ formId, isOpen }: FormResponsesSectionProps) {
   }
 
   const responses = responsesQuery.data ?? [];
-  const rows = formatResponsesForTable(responses);
+  const rows = formatResponsesForTable(responses, form.schema);
   const headers = rows[0] ? Object.keys(rows[0]) : [];
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <div className="dashboard-responses">
       {responsesQuery.isLoading && <p>Загрузка ответов...</p>}
       {!responsesQuery.isLoading && responsesQuery.error && (
         <p style={{ color: "#b91c1c" }}>{getErrorMessage(responsesQuery.error, "Не удалось загрузить ответы")}</p>
@@ -125,8 +205,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenuFormId, setOpenedMenuFormId] = useState<string | null>(null);
-
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
+  const [deadlineEditor, setDeadlineEditor] = useState<DeadlineEditorState | null>(null);
 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -175,15 +255,45 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   }, [forms, search]);
 
-  const formsCountText = useMemo(() => `Всего форм: ${filteredForms.length}`, [filteredForms.length]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
   const isInitialFormsLoading = isFormsLoading && forms.length === 0;
+  const activeFormsCount = useMemo(() => filteredForms.filter((form) => form.is_public).length, [filteredForms]);
+  const formsWithDeadlineCount = useMemo(() => filteredForms.filter((form) => Boolean(form.deadline_at)).length, [filteredForms]);
 
   useEffect(() => {
     if (formsError) {
       showToast(getErrorMessage(formsError, "Не удалось загрузить формы"), "error");
     }
   }, [formsError, showToast]);
+
+  useEffect(() => {
+    if (!openedMenuFormId) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".form-menu")) {
+        return;
+      }
+
+      setOpenedMenuFormId(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenedMenuFormId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [openedMenuFormId]);
 
   const invalidateForms = async () => {
     await queryClient.invalidateQueries({ queryKey: ["forms"] });
@@ -309,23 +419,40 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   };
 
   const handleSetDeadline = async (form: SurveyForm) => {
-    const currentDeadline = form.deadline_at ? new Date(form.deadline_at).toISOString().slice(0, 16) : "";
-    const input = window.prompt(
-      "Укажите дедлайн в формате YYYY-MM-DDTHH:mm или оставьте пустым для снятия ограничения",
-      currentDeadline,
-    );
+    setOpenedMenuFormId(null);
+    setDeadlineEditor({
+      form,
+      value: formatDateTimeLocalValue(form.deadline_at),
+    });
+  };
 
-    if (input === null) {
+  const handleDeadlineValueChange = (value: string) => {
+    setDeadlineEditor((prev) => (prev ? { ...prev, value } : prev));
+  };
+
+  const handleClearDeadline = async () => {
+    if (!deadlineEditor) {
       return;
     }
 
-    const normalizedInput = input.trim();
+    const { form } = deadlineEditor;
+    setDeadlineEditor(null);
+
+    await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null }), {
+      successMessage: "Дедлайн снят",
+      errorMessage: "Не удалось обновить дедлайн",
+      affectedFormId: form.id,
+    });
+  };
+
+  const handleSaveDeadline = async () => {
+    if (!deadlineEditor) {
+      return;
+    }
+
+    const normalizedInput = deadlineEditor.value.trim();
     if (!normalizedInput) {
-      await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null }), {
-        successMessage: "Дедлайн снят",
-        errorMessage: "Не удалось обновить дедлайн",
-        affectedFormId: form.id,
-      });
+      showToast("Выберите дату и время или снимите дедлайн", "error");
       return;
     }
 
@@ -334,6 +461,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       showToast("Некорректный формат даты дедлайна", "error");
       return;
     }
+
+    const { form } = deadlineEditor;
+    setDeadlineEditor(null);
 
     await runAction(() => deadlineMutation.mutateAsync({ id: form.id, deadlineAt: parsedDate.toISOString() }), {
       successMessage: "Дедлайн установлен",
@@ -352,20 +482,20 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     setOpenedResponsesByFormId((prev) => ({ ...prev, [formId]: true }));
   };
 
-  const handleExportResponses = async (formId: string, formTitle: string) => {
+  const handleExportResponses = async (form: SurveyForm) => {
     try {
       const responses = await queryClient.fetchQuery({
-        queryKey: ["form-responses", formId],
-        queryFn: () => getResponsesByForm(formId),
+        queryKey: ["form-responses", form.id],
+        queryFn: () => getResponsesByForm(form.id),
       });
-      const tableRows = formatResponsesForTable(responses);
+      const tableRows = formatResponsesForTable(responses, form.schema);
 
       if (!tableRows.length) {
         showToast("Нет данных для выгрузки", "info");
         return;
       }
 
-      exportToExcel(tableRows, `ответы-${formTitle}`);
+      exportToExcel(tableRows, `ответы-${form.title}`);
       showToast("Ответы выгружены в XLS", "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
@@ -373,61 +503,124 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   };
 
   return (
-    <div className="dashboard-page">
-      <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ marginTop: 4 }}>Список форм</h2>
-        <p style={{ color: "var(--text-muted)" }}>{formsCountText}</p>
+    <div className="dashboard-page dashboard-shell">
+      <section className="card dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-kicker">{viewMode === "all" ? "Общий каталог" : "Личное пространство"}</span>
+          <h2 className="dashboard-title">Формы и ответы</h2>
+        </div>
+        <div className="dashboard-stats">
+          <div className="dashboard-stat-card">
+            <span>Всего форм</span>
+            <strong>{filteredForms.length}</strong>
+          </div>
+          <div className="dashboard-stat-card">
+            <span>Активных</span>
+            <strong>{activeFormsCount}</strong>
+          </div>
+          <div className="dashboard-stat-card">
+            <span>С дедлайном</span>
+            <strong>{formsWithDeadlineCount}</strong>
+          </div>
+        </div>
+      </section>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+      <div className="card dashboard-main-card">
+        <div className="dashboard-main-header">
+          <div>
+            <h3 className="dashboard-section-title">Список форм</h3>
+            <p className="dashboard-section-meta">{viewMode === "all" ? "Все доступные формы" : "Ваши формы"}</p>
+          </div>
+          <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
+            {isFormsFetching ? "Обновляется..." : "Обновить"}
+          </button>
+        </div>
+
+        <div className="dashboard-toolbar">
           <input
             className="dashboard-search-input"
             placeholder="Поиск по названию и автору"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          <button onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
-            {isFormsFetching ? "Обновляется..." : "Обновить"}
-          </button>
+          <div className="dashboard-filter-group">
+            <label className="dashboard-filter-field">
+              <span>Дата с</span>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            </label>
+            <label className="dashboard-filter-field">
+              <span>Дата по</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </label>
+          </div>
         </div>
 
-        {isInitialFormsLoading && <p style={{ color: "#334155" }}>Загрузка...</p>}
+        {isInitialFormsLoading && <p className="dashboard-loading-text">Загрузка...</p>}
 
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+        {!isInitialFormsLoading && filteredForms.length === 0 && (
+          <div className="dashboard-empty-state">
+            <h4>Форм пока нет</h4>
+            <p>Попробуйте изменить фильтры или создайте новую форму в конструкторе.</p>
+          </div>
+        )}
+
+        <div className="dashboard-forms-grid">
           {filteredForms.map((form) => {
             const link = `${appOrigin}${routes.survey(form.id)}`;
             const authorLabel = form.author_name || form.author_email || form.author_id;
             const responsesCount = form.responses_count ?? 0;
             const isResponsesOpen = openedResponsesByFormId[form.id];
             const isFormActive = form.is_public;
+            const isOwnForm = form.author_id === user?.id;
+            const canDeleteForm = viewMode !== "all" || isOwnForm;
             const deadlineLabel = form.deadline_at
               ? new Date(form.deadline_at).toLocaleString("ru-RU")
               : "Не установлен";
 
             return (
-              <div key={form.id} className="dashboard-form-card">
-                <div className="form-control-buttons">
-                  <button onClick={() => void handleSetDeadline(form)} disabled={isActionLoading}>
-                    Установить дедлайн
-                  </button>
-                  <button
-                    className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`}
-                    onClick={() => void handleToggleFormStatus(form)}
-                    disabled={isActionLoading}
-                  >
-                    {isFormActive ? "Активна" : "Закрыта"}
-                  </button>
-                </div>
-                <strong>{getSurveyDisplayTitle(form)}</strong>
-                <div className="form-meta-line">
-                  <span>Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
-                  <span>Автор: {authorLabel}</span>
-                  <span>Ответов: {responsesCount}</span>
-                  <span>Дедлайн: {deadlineLabel}</span>
+              <div
+                key={form.id}
+                className={`dashboard-form-card ${openedMenuFormId === form.id ? "dashboard-form-card-menu-open" : ""}`.trim()}
+              >
+                <div className="dashboard-form-top">
+                  <div className="dashboard-form-heading">
+                    <div className="dashboard-form-status-row">
+                      <span
+                        className={`dashboard-status-pill ${isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"}`}
+                      >
+                        {isFormActive ? "Активна" : "Закрыта"}
+                      </span>
+                      {isOwnForm && <span className="dashboard-owner-badge">Моя форма</span>}
+                    </div>
+                    <strong className="dashboard-form-title">{getSurveyDisplayTitle(form)}</strong>
+                  </div>
+
+                  <div className="dashboard-form-controls">
+                    <button
+                      className="dashboard-secondary-button"
+                      onClick={() => void handleSetDeadline(form)}
+                      disabled={isActionLoading}
+                    >
+                      {form.deadline_at ? "Изменить дедлайн" : "Установить дедлайн"}
+                    </button>
+                    <button
+                      className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`}
+                      onClick={() => void handleToggleFormStatus(form)}
+                      disabled={isActionLoading}
+                    >
+                      {isFormActive ? "Активна" : "Закрыта"}
+                    </button>
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="dashboard-form-meta-grid">
+                  <span className="dashboard-meta-pill">Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
+                  <span className="dashboard-meta-pill">Автор: {authorLabel}</span>
+                  <span className="dashboard-meta-pill">Ответов: {responsesCount}</span>
+                  <span className="dashboard-meta-pill">Дедлайн: {deadlineLabel}</span>
+                </div>
+
+                <div className="dashboard-form-actions">
                   <Link
                     className="button-link"
                     to={routes.survey(form.id)}
@@ -446,13 +639,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                   <button onClick={() => toggleResponses(form.id)}>
                     {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
                   </button>
-                  <button onClick={() => void handleExportResponses(form.id, form.title)}>Выгрузить XLS</button>
+                  <button onClick={() => void handleExportResponses(form)}>XLS</button>
                   <div className="form-menu">
                     <button
                       className="form-menu-trigger"
                       onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
                       disabled={isActionLoading}
                       aria-label="Действия с формой"
+                      aria-expanded={openedMenuFormId === form.id}
                     >
                       ⋯
                     </button>
@@ -488,27 +682,67 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         >
                           Дублировать
                         </button>
-                        <button
-                          className="form-menu-item form-menu-item-danger"
-                          onClick={() => {
-                            setOpenedMenuFormId(null);
-                            void handleDelete(form);
-                          }}
-                          disabled={isActionLoading}
-                        >
-                          Удалить
-                        </button>
+                        {canDeleteForm && (
+                          <button
+                            className="form-menu-item form-menu-item-danger"
+                            onClick={() => {
+                              setOpenedMenuFormId(null);
+                              void handleDelete(form);
+                            }}
+                            disabled={isActionLoading}
+                          >
+                            Удалить
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <FormResponsesSection formId={form.id} isOpen={Boolean(isResponsesOpen)} />
+                <FormResponsesSection form={form} formId={form.id} isOpen={Boolean(isResponsesOpen)} />
               </div>
             );
           })}
         </div>
       </div>
+
+      {deadlineEditor && (
+        <div className="modal-backdrop">
+          <div className="modal-card card deadline-modal">
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Дедлайн формы</h3>
+            <p className="deadline-modal-subtitle">{deadlineEditor.form.title}</p>
+
+            <label className="deadline-field">
+              <span>Дата и время окончания</span>
+              <input
+                type="datetime-local"
+                value={deadlineEditor.value}
+                onChange={(e) => handleDeadlineValueChange(e.target.value)}
+              />
+            </label>
+
+            <p className="deadline-modal-hint">
+              После наступления дедлайна форма останется видимой, но новые ответы отправить не получится.
+            </p>
+
+            <div className="deadline-modal-actions">
+              <button onClick={() => setDeadlineEditor(null)} disabled={isActionLoading}>
+                Отмена
+              </button>
+              <button
+                className="deadline-clear-button"
+                onClick={() => void handleClearDeadline()}
+                disabled={isActionLoading}
+              >
+                Снять дедлайн
+              </button>
+              <button onClick={() => void handleSaveDeadline()} disabled={isActionLoading}>
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {formToDelete && (
         <div className="modal-backdrop">
@@ -516,8 +750,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             <h3 style={{ marginTop: 0 }}>Удаление формы</h3>
             <p>Удалить форму «{formToDelete.title}»? Это действие нельзя отменить.</p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setFormToDelete(null)} disabled={isActionLoading}>Отмена</button>
-              <button onClick={() => void confirmDelete()} disabled={isActionLoading}>Удалить</button>
+              <button onClick={() => setFormToDelete(null)} disabled={isActionLoading}>
+                Отмена
+              </button>
+              <button onClick={() => void confirmDelete()} disabled={isActionLoading}>
+                Удалить
+              </button>
             </div>
           </div>
         </div>

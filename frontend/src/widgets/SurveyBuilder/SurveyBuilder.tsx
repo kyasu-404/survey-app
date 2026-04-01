@@ -17,6 +17,7 @@ import type { SurveySchema } from "../../entities/survey/types";
 import { getErrorMessage } from "../../shared/lib/error";
 
 const BASIC_TYPES = [
+  "text",
   "text_phone",
   "text_email",
   "comment",
@@ -78,6 +79,10 @@ function configureCreatorToolbox(nextCreator: SurveyCreator) {
     json: {
       type: "text",
       inputType: "tel",
+      maskType: "pattern",
+      maskSettings: {
+        pattern: "+7(999)-999-99-99",
+      },
       placeholder: "+7(999)-999-99-99",
       validators: [
         {
@@ -93,7 +98,7 @@ function configureCreatorToolbox(nextCreator: SurveyCreator) {
   toolbox.addItem({
     name: "text_email",
     iconName: "icon-text",
-    title: "Email",
+    title: "email",
     category: "basic",
     json: {
       type: "text",
@@ -142,8 +147,6 @@ function configureCreatorToolbox(nextCreator: SurveyCreator) {
     json: { type: "text", inputType: "datetime-local" },
   });
 
-  toolbox.removeItem("text");
-
   toolbox.defineCategories([
     {
       category: "basic",
@@ -161,6 +164,12 @@ function configureCreatorToolbox(nextCreator: SurveyCreator) {
   if (commentItem) {
     commentItem.title = "Абзац";
     commentItem.category = "basic";
+  }
+
+  const textItem = toolbox.getItemByName("text");
+  if (textItem) {
+    textItem.title = "Текст";
+    textItem.category = "basic";
   }
 }
 

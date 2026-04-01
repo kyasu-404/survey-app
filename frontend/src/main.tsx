@@ -1,4 +1,3 @@
-import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { surveyLocalization } from "survey-core";
@@ -14,15 +13,13 @@ import './app.css'
 surveyLocalization.defaultLocale = "ru";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <AppErrorBoundary>
-            <RouterProvider router={router} />
-          </AppErrorBoundary>
-        </ToastProvider>
-      </AuthProvider>
-    </QueryProvider>
-  </React.StrictMode>
+  <QueryProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <AppErrorBoundary>
+          <RouterProvider router={router} />
+        </AppErrorBoundary>
+      </ToastProvider>
+    </AuthProvider>
+  </QueryProvider>
 );

@@ -18,10 +18,11 @@ function createQueryClient() {
 
           return failureCount < 2;
         },
-        staleTime: 5_000,
+        staleTime: 0,
         gcTime: 5 * 60_000,
+        refetchOnMount: true,
         refetchOnReconnect: true,
-        refetchOnWindowFocus: false,
+        refetchOnWindowFocus: true,
       },
     },
   });

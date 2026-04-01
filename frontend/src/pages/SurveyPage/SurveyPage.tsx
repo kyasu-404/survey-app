@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
+import blackLogo from "../../img/black_logo.png";
 
 export default function SurveyPage() {
   const { id } = useParams();
@@ -41,6 +42,9 @@ export default function SurveyPage() {
   return (
     <div className="survey-page">
       <div className="survey-page-card card">
+        <div className="survey-page-brand">
+          <img src={blackLogo} alt="Логотип ИМЦ" className="survey-page-logo" />
+        </div>
         <SurveyRenderer schema={form.schema} formId={form.id} />
       </div>
     </div>
