@@ -433,59 +433,6 @@ textarea:focus {
   fill: #2563eb;
 }
 
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-phone-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-email-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-float-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-integer-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-date-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-time-custom .sv-svg-icon,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-datetime-custom .sv-svg-icon {
-  display: block;
-  width: 24px;
-  height: 24px;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 20px;
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-phone-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-email-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-float-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-integer-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-date-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-time-custom .sv-svg-icon use,
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-datetime-custom .sv-svg-icon use {
-  display: none;
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-phone-custom .sv-svg-icon {
-  background-image: url("./img/constructor/Phone.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-email-custom .sv-svg-icon {
-  background-image: url("./img/constructor/Email.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-float-custom .sv-svg-icon {
-  background-image: url("./img/constructor/float.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-integer-custom .sv-svg-icon {
-  background-image: url("./img/constructor/integer.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-date-custom .sv-svg-icon {
-  background-image: url("./img/constructor/Date.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-time-custom .sv-svg-icon {
-  background-image: url("./img/constructor/Time.svg");
-}
-
-.builder-creator-shell .svc-toolbox__item--icon-toolbox-datetime-custom .sv-svg-icon {
-  background-image: url("./img/constructor/Date-Time.svg");
-}
-
 .builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
 .builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus,
 .builder-creator-shell .spg-button-group__item--selected,

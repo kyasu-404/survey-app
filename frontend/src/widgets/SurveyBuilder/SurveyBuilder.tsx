@@ -3,9 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { surveyLocalization } from "survey-core";
+import { SvgRegistry, surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
+import phoneIcon from "../../img/constructor/Phone.svg?raw";
+import emailIcon from "../../img/constructor/Email.svg?raw";
+import floatIcon from "../../img/constructor/float.svg?raw";
+import integerIcon from "../../img/constructor/integer.svg?raw";
+import dateIcon from "../../img/constructor/Date.svg?raw";
+import timeIcon from "../../img/constructor/Time.svg?raw";
+import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
 
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -198,8 +205,30 @@ function configureCreatorToolbox(creator: SurveyCreator) {
   });
 }
 
+function registerCustomIcons() {
+  const registerSvgIcon = (iconName: string, iconSvg: string) => {
+    if (typeof SvgRegistry.registerIconFromSvg === "function") {
+      SvgRegistry.registerIconFromSvg(iconName, iconSvg);
+      return;
+    }
+
+    if (typeof (SvgRegistry as unknown as { registerIcon?: (id: string, svg: string) => void }).registerIcon === "function") {
+      (SvgRegistry as unknown as { registerIcon: (id: string, svg: string) => void }).registerIcon(iconName, iconSvg);
+    }
+  };
+
+  registerSvgIcon("icon-toolbox-phone-custom", phoneIcon);
+  registerSvgIcon("icon-toolbox-email-custom", emailIcon);
+  registerSvgIcon("icon-toolbox-float-custom", floatIcon);
+  registerSvgIcon("icon-toolbox-integer-custom", integerIcon);
+  registerSvgIcon("icon-toolbox-date-custom", dateIcon);
+  registerSvgIcon("icon-toolbox-time-custom", timeIcon);
+  registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
+}
+
 function createCreatorInstance() {
   configureCreatorLocalization();
+  registerCustomIcons();
 
   const creator = new SurveyCreator({
     showLogicTab: true,
@@ -222,6 +251,11 @@ function createCreatorInstance() {
     if (options.question) {
       options.question.isRequired = true;
     }
+  });
+
+  creator.onElementAllowOperations.add((_sender, options) => {
+    options.allowChangeType = false;
+    options.allowChangeInputType = false;
   });
 
   return creator;
