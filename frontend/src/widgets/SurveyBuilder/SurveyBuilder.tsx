@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { settings, SvgRegistry, surveyLocalization } from "survey-core";
+import { SvgRegistry, surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
@@ -28,13 +28,39 @@ type SurveyBuilderProps = {
   formId?: string;
 };
 
+const SUPPORTED_CREATOR_QUESTION_TYPES = [
+  "text",
+  "comment",
+  "radiogroup",
+  "checkbox",
+  "dropdown",
+  "boolean",
+  "rating",
+  "ranking",
+  "tagbox",
+  "matrix",
+  "matrixdropdown",
+  "matrixdynamic",
+  "multipletext",
+  "image",
+  "imagepicker",
+  "file",
+  "signaturepad",
+  "panel",
+  "paneldynamic",
+  "expression",
+  "html",
+] as const;
+
 function configureCreatorLocalization() {
   surveyLocalization.defaultLocale = "ru";
   editorLocalization.currentLocale = "ru";
   const ruEditorStrings = editorLocalization.getLocaleStrings("ru");
-  if (ruEditorStrings) {
-    ruEditorStrings.pagePlaceHolder = "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
-    ruEditorStrings.pagePlaceHolderMobile = "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
+  if (ruEditorStrings?.ed) {
+    ruEditorStrings.ed.pagePlaceHolder =
+      "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
+    ruEditorStrings.ed.pagePlaceHolderMobile =
+      "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
   }
   if (ruEditorStrings?.tabs) {
     ruEditorStrings.tabs.designer = "\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440";
@@ -90,6 +116,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-float-custom",
       title: "Число",
       category: "basic",
+      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "number",
@@ -102,6 +129,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-integer-custom",
       title: "Целое число",
       category: "basic",
+      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "number",
@@ -121,6 +149,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-date-custom",
       title: "Дата",
       category: "basic",
+      showInToolboxOnly: true,
       json: { type: "text", inputType: "date", titleLocation: "top" },
     },
     {
@@ -128,6 +157,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-time-custom",
       title: "Время",
       category: "basic",
+      showInToolboxOnly: true,
       json: { type: "text", inputType: "time", titleLocation: "top" },
     },
     {
@@ -135,6 +165,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-datetime-custom",
       title: "Дата и время",
       category: "basic",
+      showInToolboxOnly: true,
       json: { type: "text", inputType: "datetime-local", titleLocation: "top" },
     },
     {
@@ -142,6 +173,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-phone-custom",
       title: "Телефон",
       category: "basic",
+      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "tel",
@@ -166,6 +198,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-email-custom",
       title: "email",
       category: "basic",
+      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "email",
@@ -229,9 +262,9 @@ function registerCustomIcons() {
 function createCreatorInstance() {
   configureCreatorLocalization();
   registerCustomIcons();
-  settings.allowShowEmptyDescriptionInDesignMode = true;
 
   const creator = new SurveyCreator({
+    questionTypes: [...SUPPORTED_CREATOR_QUESTION_TYPES],
     showLogicTab: true,
     showPreviewTab: true,
     showJSONEditorTab: false,
@@ -259,7 +292,7 @@ function createCreatorInstance() {
 
   creator.onElementAllowOperations.add((_sender, options) => {
     options.allowChangeType = true;
-    options.allowChangeInputType = false;
+    options.allowChangeInputType = true;
   });
 
   return creator;
@@ -272,25 +305,6 @@ function cloneSchema(schema: SurveySchema): SurveySchema {
 function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
   const normalizedTitle = schema.title?.trim();
   return normalizedTitle || fallbackTitle;
-}
-
-function collapseSidebarOnNextPaint(creator: SurveyCreator) {
-  creator.setShowSidebar(false);
-
-  const frameId = window.requestAnimationFrame(() => {
-    creator.setShowSidebar(false);
-    creator.sidebar?.collapseSidebar?.();
-  });
-
-  const timeoutId = window.setTimeout(() => {
-    creator.setShowSidebar(false);
-    creator.sidebar?.collapseSidebar?.();
-  }, 120);
-
-  return () => {
-    window.cancelAnimationFrame(frameId);
-    window.clearTimeout(timeoutId);
-  };
 }
 
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
@@ -345,14 +359,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   }, []);
 
   useEffect(() => {
-    if (!creator) {
-      return;
-    }
-
-    return collapseSidebarOnNextPaint(creator);
-  }, [creator]);
-
-  useEffect(() => {
     if (!editableFormError) {
       return;
     }
@@ -380,8 +386,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       locale: editableForm.schema.locale ?? "ru",
       questionDescriptionLocation: editableForm.schema.questionDescriptionLocation ?? "underTitle",
     };
-
-    return collapseSidebarOnNextPaint(creator);
   }, [creator, editableForm]);
 
   const invalidateBuilderQueries = async (affectedFormId?: string) => {

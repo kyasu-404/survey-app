@@ -483,18 +483,15 @@ textarea:focus {
 }
 
 .builder-creator-shell .svc-surface-placeholder__text {
-  font-size: 0 !important;
-  color: transparent !important;
-}
-
-.builder-creator-shell .svc-surface-placeholder__text::after {
-  content: "\0421\0442\0440\0430\043d\0438\0446\0430 \043f\0443\0441\0442\0430. \041f\0435\0440\0435\0442\0430\0449\0438\0442\0435 \044d\043b\0435\043c\0435\043d\0442 \0441 \043f\0430\043d\0435\043b\0438 \0438\043d\0441\0442\0440\0443\043c\0435\043d\0442\043e\0432 \0438\043b\0438 \043d\0430\0436\043c\0438\0442\0435 \043d\0430 \043d\0435\0433\043e";
-  display: block;
   font-size: 1rem;
   line-height: 1.6;
   font-weight: 500;
   color: #4b6385;
   text-align: center;
+}
+
+.builder-creator-shell .svc-surface-placeholder__text::after {
+  content: none;
 }
 
 .builder-creator-shell .sd-header__text,
@@ -520,7 +517,6 @@ textarea:focus {
   display: inline-block;
   width: auto;
   max-width: min(100%, 640px);
-  min-width: 260px;
   margin-top: 10px;
   padding: 8px 12px;
   border: 1px solid rgba(96, 165, 250, 0.6);
@@ -528,18 +524,6 @@ textarea:focus {
   background: rgba(219, 234, 254, 0.75);
   color: #111827 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-
-.builder-creator-shell .sd-question .sd-description .sv-string-editor,
-.builder-creator-shell .sd-question__description .sv-string-editor {
-  min-height: 22px;
-  color: #111827 !important;
-}
-
-.builder-creator-shell .sd-question .sd-description .sv-string-editor[aria-placeholder]:empty::before,
-.builder-creator-shell .sd-question__description .sv-string-editor[aria-placeholder]:empty::before {
-  color: #111827 !important;
-  opacity: 0.72;
 }
 
 .builder-creator-shell .sd-btn,
