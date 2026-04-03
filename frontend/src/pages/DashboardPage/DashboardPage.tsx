@@ -539,7 +539,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <div className="dashboard-form-meta-grid">
                   <span className="dashboard-meta-pill">Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
                   {!isTemplate && <span className="dashboard-meta-pill">Автор: {authorLabel}</span>}
-                  {!isTemplate && <span className="dashboard-meta-pill">Ответов: {responsesCount}</span>}
+                  {!isTemplate && (
+                    <span className={`dashboard-meta-pill ${responsesCount > 0 ? "dashboard-meta-pill-responses-positive" : ""}`.trim()}>
+                      Ответов: {responsesCount}
+                    </span>
+                  )}
                   {!isTemplate && <span className="dashboard-meta-pill">Дедлайн: {deadlineLabel}</span>}
                 </div>
 

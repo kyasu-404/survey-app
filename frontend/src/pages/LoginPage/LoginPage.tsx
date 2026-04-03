@@ -60,8 +60,8 @@ export default function LoginPage() {
               marginTop: 12,
               padding: 10,
               borderRadius: 8,
-              background: messageType === "error" ? "#fee2e2" : "#dcfce7",
-              color: messageType === "error" ? "#991b1b" : "#166534",
+              background: messageType === "error" ? "#fee2e2" : "#dbeafe",
+              color: messageType === "error" ? "#991b1b" : "#1d4ed8",
             }}
           >
             {message}

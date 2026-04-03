@@ -38,6 +38,7 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
   const model = useMemo(() => {
     const nextModel = new Model(schema);
     nextModel.locale = schema.locale ?? "ru";
+    nextModel.completeText = "Завершить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
     return nextModel;
   }, [schema]);

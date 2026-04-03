@@ -27,6 +27,11 @@ type PasswordModalState = {
   isOwnPassword: boolean;
 };
 
+type DeleteUserModalState = {
+  userId: string;
+  userName: string;
+};
+
 export default function UsersPage() {
   const { showToast } = useToast();
   const { user, loading: isAuthLoading } = useAuth();
@@ -38,6 +43,7 @@ export default function UsersPage() {
     role: "user",
   });
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
+  const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -177,7 +183,7 @@ export default function UsersPage() {
             Создать пользователя
           </button>
           <button onClick={() => openPasswordModal(user?.id ?? "", "Смена моего пароля", true)} disabled={!user}>
-            Сменить пароль
+            Сменить мой пароль
           </button>
           {!isPasswordValid && newUser.password.length > 0 && (
             <span style={{ color: "#b45309", fontSize: 14 }}>Пароль должен быть не короче 8 символов</span>
@@ -216,7 +222,11 @@ export default function UsersPage() {
                     <td>{profile.name || "—"}</td>
                     <td>{profile.email}</td>
                     <td>{profile.role}</td>
-                    <td>{profile.is_disabled ? "Отключён" : "Активен"}</td>
+                    <td>
+                      <span className={profile.is_disabled ? "user-status-disabled" : "user-status-active"}>
+                        {profile.is_disabled ? "Отключён" : "Активен"}
+                      </span>
+                    </td>
                     <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
                     <td>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -242,7 +252,15 @@ export default function UsersPage() {
                         >
                           {profile.is_disabled ? "Включить" : "Отключить"}
                         </button>
-                        <button onClick={() => void deleteUserMutation.mutateAsync(profile.id)} disabled={deleteUserMutation.isPending || isOwnUser}>
+                        <button
+                          onClick={() =>
+                            setDeleteUserModal({
+                              userId: profile.id,
+                              userName: profile.name || profile.email,
+                            })
+                          }
+                          disabled={deleteUserMutation.isPending || isOwnUser}
+                        >
                           Удалить
                         </button>
                       </div>
@@ -281,6 +299,32 @@ export default function UsersPage() {
               <button onClick={() => setPasswordModal(null)}>Отмена</button>
               <button onClick={() => void onChangePassword()} disabled={updatePasswordMutation.isPending || updateUserPasswordMutation.isPending || !isModalPasswordValid}>
                 Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteUserModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card card">
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Удаление пользователя</h3>
+            <p style={{ marginTop: 0, marginBottom: 10 }}>
+              Вы уверены, что хотите удалить пользователя {deleteUserModal.userName}?
+            </p>
+            <p style={{ marginTop: 0, marginBottom: 16, color: "#b91c1c", fontWeight: 700 }}>
+              Внимание: вместе с пользователем удалятся все созданные им формы. Если формы нужны - лучше просто отключить пользователя.
+            </p>
+            <div className="deadline-modal-actions">
+              <button onClick={() => setDeleteUserModal(null)}>Отмена</button>
+              <button
+                onClick={async () => {
+                  await deleteUserMutation.mutateAsync(deleteUserModal.userId);
+                  setDeleteUserModal(null);
+                }}
+                disabled={deleteUserMutation.isPending}
+              >
+                Удалить пользователя
               </button>
             </div>
           </div>

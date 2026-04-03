@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { SvgRegistry, surveyLocalization } from "survey-core";
+import { settings, SvgRegistry, surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
@@ -31,12 +31,15 @@ type SurveyBuilderProps = {
 function configureCreatorLocalization() {
   surveyLocalization.defaultLocale = "ru";
   editorLocalization.currentLocale = "ru";
-
   const ruEditorStrings = editorLocalization.getLocaleStrings("ru");
+  if (ruEditorStrings) {
+    ruEditorStrings.pagePlaceHolder = "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
+    ruEditorStrings.pagePlaceHolderMobile = "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
+  }
   if (ruEditorStrings?.tabs) {
-    ruEditorStrings.tabs.designer = "Конструктор";
-    ruEditorStrings.tabs.preview = "Превью";
-    ruEditorStrings.tabs.logic = "Логика формы";
+    ruEditorStrings.tabs.designer = "\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440";
+    ruEditorStrings.tabs.preview = "\u041f\u0440\u0435\u0432\u044c\u044e";
+    ruEditorStrings.tabs.logic = "\u041b\u043e\u0433\u0438\u043a\u0430 \u0444\u043e\u0440\u043c\u044b";
   }
 }
 
@@ -48,11 +51,11 @@ function configureCreatorToolbox(creator: SurveyCreator) {
 
   const basicItems = [
     {
-      name: "text",
+      name: "text_plain",
       iconName: "icon-text",
       title: "Текст",
       category: "basic",
-      json: { type: "text", titleLocation: "top" },
+      json: { type: "text", inputType: "text", titleLocation: "top" },
     },
     {
       name: "comment",
@@ -206,15 +209,12 @@ function configureCreatorToolbox(creator: SurveyCreator) {
 }
 
 function registerCustomIcons() {
-  const registerSvgIcon = (iconName: string, iconSvg: string) => {
-    if (typeof SvgRegistry.registerIconFromSvg === "function") {
-      SvgRegistry.registerIconFromSvg(iconName, iconSvg);
-      return;
-    }
+  if (!SvgRegistry || typeof SvgRegistry.registerIconFromSvg !== "function") {
+    return;
+  }
 
-    if (typeof (SvgRegistry as unknown as { registerIcon?: (id: string, svg: string) => void }).registerIcon === "function") {
-      (SvgRegistry as unknown as { registerIcon: (id: string, svg: string) => void }).registerIcon(iconName, iconSvg);
-    }
+  const registerSvgIcon = (iconName: string, iconSvg: string) => {
+    SvgRegistry.registerIconFromSvg(iconName, iconSvg);
   };
 
   registerSvgIcon("icon-toolbox-phone-custom", phoneIcon);
@@ -229,6 +229,7 @@ function registerCustomIcons() {
 function createCreatorInstance() {
   configureCreatorLocalization();
   registerCustomIcons();
+  settings.allowShowEmptyDescriptionInDesignMode = true;
 
   const creator = new SurveyCreator({
     showLogicTab: true,
@@ -236,12 +237,14 @@ function createCreatorInstance() {
     showJSONEditorTab: false,
     showSaveButton: true,
     isAutoSave: false,
+    showAddQuestionButton: false,
   });
 
   creator.locale = "ru";
   creator.JSON = {
     ...createEmptySurveySchema(),
     locale: "ru",
+    questionDescriptionLocation: "underTitle",
   };
   creator.allowCollapseSidebar = true;
 
@@ -250,11 +253,12 @@ function createCreatorInstance() {
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
       options.question.isRequired = true;
+      options.question.descriptionLocation = "underTitle";
     }
   });
 
   creator.onElementAllowOperations.add((_sender, options) => {
-    options.allowChangeType = false;
+    options.allowChangeType = true;
     options.allowChangeInputType = false;
   });
 
@@ -374,6 +378,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       ...editableForm.schema,
       title: editableForm.title,
       locale: editableForm.schema.locale ?? "ru",
+      questionDescriptionLocation: editableForm.schema.questionDescriptionLocation ?? "underTitle",
     };
 
     return collapseSidebarOnNextPaint(creator);
@@ -647,3 +652,4 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     </div>
   );
 }
+
