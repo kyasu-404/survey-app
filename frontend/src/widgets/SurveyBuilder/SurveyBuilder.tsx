@@ -3,9 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { surveyLocalization } from "survey-core";
+import { SvgRegistry, surveyLocalization } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
+import phoneIcon from "../../img/constructor/Phone.svg?raw";
+import emailIcon from "../../img/constructor/Email.svg?raw";
+import floatIcon from "../../img/constructor/float.svg?raw";
+import integerIcon from "../../img/constructor/integer.svg?raw";
+import dateIcon from "../../img/constructor/Date.svg?raw";
+import timeIcon from "../../img/constructor/Time.svg?raw";
+import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
 
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -198,8 +205,19 @@ function configureCreatorToolbox(creator: SurveyCreator) {
   });
 }
 
+function registerCustomIcons() {
+  SvgRegistry.registerIcon("icon-toolbox-phone-custom", phoneIcon);
+  SvgRegistry.registerIcon("icon-toolbox-email-custom", emailIcon);
+  SvgRegistry.registerIcon("icon-toolbox-float-custom", floatIcon);
+  SvgRegistry.registerIcon("icon-toolbox-integer-custom", integerIcon);
+  SvgRegistry.registerIcon("icon-toolbox-date-custom", dateIcon);
+  SvgRegistry.registerIcon("icon-toolbox-time-custom", timeIcon);
+  SvgRegistry.registerIcon("icon-toolbox-datetime-custom", dateTimeIcon);
+}
+
 function createCreatorInstance() {
   configureCreatorLocalization();
+  registerCustomIcons();
 
   const creator = new SurveyCreator({
     showLogicTab: true,
@@ -222,6 +240,11 @@ function createCreatorInstance() {
     if (options.question) {
       options.question.isRequired = true;
     }
+  });
+
+  creator.onElementAllowOperations.add((_sender, options) => {
+    options.allowChangeType = false;
+    options.allowChangeInputType = false;
   });
 
   return creator;
