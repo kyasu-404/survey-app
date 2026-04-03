@@ -558,7 +558,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       {openedMenuFormId === form.id && (
                         <div className="form-menu-dropdown">
                           <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isActionLoading}>Переименовать</button>
-                          <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isActionLoading}>Редактировать</button>
                           <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isActionLoading}>Удалить</button>
                         </div>
                       )}

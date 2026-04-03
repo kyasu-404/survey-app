@@ -77,7 +77,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
     },
     {
       name: "text_number",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-float-custom",
       title: "Число",
       category: "basic",
       json: {
@@ -89,7 +89,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
     },
     {
       name: "text_integer",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-integer-custom",
       title: "Целое число",
       category: "basic",
       json: {
@@ -108,28 +108,28 @@ function configureCreatorToolbox(creator: SurveyCreator) {
     },
     {
       name: "text_date",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-date-custom",
       title: "Дата",
       category: "basic",
       json: { type: "text", inputType: "date", titleLocation: "top" },
     },
     {
       name: "text_time",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-time-custom",
       title: "Время",
       category: "basic",
       json: { type: "text", inputType: "time", titleLocation: "top" },
     },
     {
       name: "text_datetime-local",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-datetime-custom",
       title: "Дата и время",
       category: "basic",
       json: { type: "text", inputType: "datetime-local", titleLocation: "top" },
     },
     {
       name: "text_phone",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-phone-custom",
       title: "Телефон",
       category: "basic",
       json: {
@@ -153,7 +153,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
     },
     {
       name: "text_email",
-      iconName: "icon-text",
+      iconName: "icon-toolbox-email-custom",
       title: "email",
       category: "basic",
       json: {
