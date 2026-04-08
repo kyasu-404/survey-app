@@ -1,5 +1,6 @@
 import { apiClient, publicApiClient } from "./client";
 import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
+import { runRequest } from "./request";
 
 export type FormsFilters = {
   search?: string;
@@ -17,7 +18,7 @@ async function getAuthenticatedUserId(): Promise<string> {
   const {
     data: { user },
     error,
-  } = await apiClient.auth.getCurrentUser();
+  } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
 
   if (error) {
     throw error;
@@ -41,7 +42,11 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo);
   if (filters?.authorId) query = query.eq("author_id", filters.authorId);
 
-  const { data, error } = await query;
+  const { data, error } = await runRequest(
+    "forms.fetchList",
+    () => query,
+    { context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) } },
+  );
   if (error) throw error;
 
   return ((data ?? []) as RawForm[]).map((form) => ({
@@ -53,13 +58,21 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
 }
 
 export async function fetchFormById(id: string): Promise<SurveyForm> {
-  const { data, error } = await apiClient.from("forms").select("*").eq("id", id).single();
+  const { data, error } = await runRequest(
+    "forms.fetchById",
+    () => apiClient.from("forms").select("*").eq("id", id).single(),
+    { context: { formId: id } },
+  );
   if (error) throw error;
   return data as SurveyForm;
 }
 
 export async function fetchPublicFormById(id: string): Promise<SurveyForm | null> {
-  const { data, error } = await publicApiClient.from("forms").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await runRequest(
+    "forms.fetchPublicById",
+    () => publicApiClient.from("forms").select("*").eq("id", id).maybeSingle(),
+    { context: { formId: id } },
+  );
   if (error) throw error;
   return (data as SurveyForm | null) ?? null;
 }
@@ -77,44 +90,69 @@ export async function insertForm(payload: {
     throw new Error("author_id должен совпадать с текущим пользователем");
   }
 
-  const { data, error } = await apiClient
-    .from("forms")
-    .insert({
-      title: payload.title,
-      form_type: payload.formType,
-      form_reason: payload.formReason,
-      schema: payload.schema,
-      author_id: currentUserId,
-    })
-    .select("id")
-    .single();
+  const { data, error } = await runRequest(
+    "forms.insert",
+    () =>
+      apiClient
+        .from("forms")
+        .insert({
+          title: payload.title,
+          form_type: payload.formType,
+          form_reason: payload.formReason,
+          schema: payload.schema,
+          author_id: currentUserId,
+        })
+        .select("id")
+        .single(),
+    { context: { authorId: currentUserId, formType: payload.formType } },
+  );
 
   if (error) throw error;
   return data;
 }
 
 export async function updateFormTitle(id: string, title: string) {
-  const { error } = await apiClient.from("forms").update({ title }).eq("id", id);
+  const { error } = await runRequest(
+    "forms.updateTitle",
+    () => apiClient.from("forms").update({ title }).eq("id", id),
+    { context: { formId: id } },
+  );
   if (error) throw error;
 }
 
 export async function updateFormSchema(id: string, schema: SurveySchema, title: string) {
-  const { error } = await apiClient.from("forms").update({ schema, title }).eq("id", id);
+  const { error } = await runRequest(
+    "forms.updateSchema",
+    () => apiClient.from("forms").update({ schema, title }).eq("id", id),
+    { context: { formId: id, pageCount: schema.pages.length } },
+  );
   if (error) throw error;
 }
 
 export async function updateFormStatus(id: string, isPublic: boolean) {
-  const { error } = await apiClient.from("forms").update({ is_public: isPublic }).eq("id", id);
+  const { error } = await runRequest(
+    "forms.updateStatus",
+    () => apiClient.from("forms").update({ is_public: isPublic }).eq("id", id),
+    { context: { formId: id, isPublic } },
+  );
   if (error) throw error;
 }
 
 export async function updateFormDeadline(id: string, deadlineAt: string | null) {
-  const { error } = await apiClient.from("forms").update({ deadline_at: deadlineAt }).eq("id", id);
+  const { error } = await runRequest(
+    "forms.updateDeadline",
+    () => apiClient.from("forms").update({ deadline_at: deadlineAt }).eq("id", id),
+    { context: { formId: id, hasDeadline: Boolean(deadlineAt) } },
+  );
   if (error) throw error;
 }
 
 export async function deleteForm(id: string) {
-  const { error } = await apiClient.from("forms").delete().eq("id", id);
+  const { error } = await runRequest(
+    "forms.delete",
+    () => apiClient.from("forms").delete().eq("id", id),
+    { context: { formId: id } },
+  );
   if (error) throw error;
 }
 
@@ -127,17 +165,22 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
 
   const title = `${form.title} (копия)`;
 
-  const { data, error } = await apiClient
-    .from("forms")
-    .insert({
-      title,
-      form_type: form.form_type,
-      form_reason: form.form_reason,
-      schema: form.schema,
-      author_id: currentUserId,
-    })
-    .select("id")
-    .single();
+  const { data, error } = await runRequest(
+    "forms.duplicate",
+    () =>
+      apiClient
+        .from("forms")
+        .insert({
+          title,
+          form_type: form.form_type,
+          form_reason: form.form_reason,
+          schema: form.schema,
+          author_id: currentUserId,
+        })
+        .select("id")
+        .single(),
+    { context: { sourceFormId: form.id, authorId: currentUserId } },
+  );
 
   if (error) throw error;
   return data;

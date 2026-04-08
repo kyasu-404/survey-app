@@ -12,6 +12,7 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { getErrorMessage } from "../../shared/lib/error";
 import { useAuth } from "../../app/providers/AuthProvider";
 import type { UserRole } from "../../entities/user/types";
+import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 
 type NewUserForm = {
   name: string;
@@ -53,10 +54,10 @@ export default function UsersPage() {
 
   const createUserMutation = useMutation({
     mutationFn: createUser,
-    onSuccess: async () => {
+    onSuccess: () => {
       setNewUser({ name: "", email: "", password: "", role: "user" });
       showToast("Пользователь создан", "success");
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      scheduleQueryInvalidation(queryClient, "create user", [{ queryKey: ["users"] }]);
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось создать пользователя"), "error");
@@ -65,9 +66,9 @@ export default function UsersPage() {
 
   const deleteUserMutation = useMutation({
     mutationFn: deleteUser,
-    onSuccess: async () => {
+    onSuccess: () => {
       showToast("Пользователь удалён", "success");
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      scheduleQueryInvalidation(queryClient, "delete user", [{ queryKey: ["users"] }]);
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось удалить пользователя"), "error");
@@ -76,9 +77,9 @@ export default function UsersPage() {
 
   const setUserDisabledMutation = useMutation({
     mutationFn: ({ userId, disabled }: { userId: string; disabled: boolean }) => setUserDisabled(userId, disabled),
-    onSuccess: async (_data, variables) => {
+    onSuccess: (_data, variables) => {
       showToast(variables.disabled ? "Пользователь отключён" : "Пользователь включён", "success");
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      scheduleQueryInvalidation(queryClient, "toggle user disabled", [{ queryKey: ["users"] }]);
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось изменить статус пользователя"), "error");

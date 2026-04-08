@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { createSurvey } from "../../entities/survey/api/surveysApi";
 import type { SurveySchema } from "../../entities/survey/types";
 import { apiClient } from "../../shared/api";
+import { runRequest } from "../../shared/api/request";
 
 type CreateSurveyForCurrentUserParams = {
   schema: SurveySchema;
@@ -16,7 +17,7 @@ export async function createSurveyForCurrentUser({
   formType = "anketa",
   formReason = "plan",
 }: CreateSurveyForCurrentUserParams) {
-  const { data } = await apiClient.auth.getCurrentUser();
+  const { data } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
   const userId = data.user?.id;
 
   if (!userId) {

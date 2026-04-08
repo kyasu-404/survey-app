@@ -1,6 +1,7 @@
 import { supabase } from "../../shared/api/supabase";
 import { apiClient } from "../../shared/api";
 import type { UserProfile, UserRole } from "../../entities/user/types";
+import { runRequest } from "../../shared/api/request";
 
 type UserAdminAction =
   | {
@@ -31,19 +32,24 @@ type UserAdminAction =
 async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await runRequest("auth.getSession", () => supabase.auth.getSession());
   const accessToken = session?.access_token;
 
   if (!accessToken) {
     throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
   }
 
-  const { data, error } = await supabase.functions.invoke<TData>("user-admin", {
-    body: payload,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  const { data, error } = await runRequest(
+    "functions.user-admin",
+    () =>
+      supabase.functions.invoke<TData>("user-admin", {
+        body: payload,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }),
+    { context: { action: payload.action } },
+  );
 
   if (error) {
     throw error;
@@ -94,6 +100,9 @@ export async function updateUserPassword(userId: string, password: string) {
 }
 
 export async function updateMyPassword(password: string) {
-  const { error } = await apiClient.auth.updateCurrentUserPassword(password);
+  const { error } = await runRequest(
+    "auth.updateCurrentUserPassword",
+    () => apiClient.auth.updateCurrentUserPassword(password),
+  );
   if (error) throw error;
 }

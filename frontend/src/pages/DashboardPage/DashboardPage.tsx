@@ -21,6 +21,8 @@ import type { SurveyForm, SurveyPageSchema, SurveyQuestion, SurveySchema } from 
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
+import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 
 type DashboardPageProps = {
   viewMode: "mine" | "all";
@@ -39,6 +41,15 @@ type FormResponsesSectionProps = {
 type DeadlineEditorState = {
   form: SurveyForm;
   value: string;
+};
+
+type DashboardActionOptions = {
+  actionKey: string;
+  successMessage: string;
+  errorMessage: string;
+  shouldReloadForms?: boolean;
+  affectedFormId?: string;
+  logLabel: string;
 };
 
 function isFormAcceptingResponses(form: Pick<SurveyForm, "is_public" | "deadline_at" | "form_type">) {
@@ -215,7 +226,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenuFormId, setOpenedMenuFormId] = useState<string | null>(null);
   const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
@@ -312,17 +323,33 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     };
   }, [openedMenuFormId]);
 
-  const invalidateForms = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["forms"] });
-    await queryClient.refetchQueries({ queryKey: ["forms"], type: "active" });
+  const setActionPending = (actionKey: string, isPending: boolean) => {
+    setPendingActionKeys((current) => {
+      if (isPending) {
+        return {
+          ...current,
+          [actionKey]: true,
+        };
+      }
+
+      const nextState = { ...current };
+      delete nextState[actionKey];
+      return nextState;
+    });
   };
 
-  const invalidateFormDetails = async (formId: string) => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["form", formId] }),
-      queryClient.invalidateQueries({ queryKey: ["survey-form", formId] }),
-      queryClient.refetchQueries({ queryKey: ["form", formId], type: "active" }),
-      queryClient.refetchQueries({ queryKey: ["survey-form", formId], type: "active" }),
+  const getFormActionKey = (formId: string) => `form:${formId}`;
+
+  const isFormActionPending = (formId: string) => Boolean(pendingActionKeys[getFormActionKey(formId)]);
+
+  const scheduleFormsRefresh = () => {
+    scheduleQueryInvalidation(queryClient, "dashboard forms refresh", [{ queryKey: ["forms"] }]);
+  };
+
+  const scheduleFormDetailsRefresh = (formId: string) => {
+    scheduleQueryInvalidation(queryClient, `dashboard form ${formId} refresh`, [
+      { queryKey: ["form", formId] },
+      { queryKey: ["survey-form", formId] },
     ]);
   };
 
@@ -344,23 +371,26 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const runAction = async (
     action: () => Promise<void>,
-    options: { successMessage: string; errorMessage: string; shouldReloadForms?: boolean; affectedFormId?: string },
+    options: DashboardActionOptions,
   ) => {
-    setIsActionLoading(true);
+    setActionPending(options.actionKey, true);
+    const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
+
     try {
       await action();
       if (options.affectedFormId) {
-        await invalidateFormDetails(options.affectedFormId);
+        scheduleFormDetailsRefresh(options.affectedFormId);
       }
       if (options.shouldReloadForms ?? true) {
-        await invalidateForms();
+        scheduleFormsRefresh();
       }
       showToast(options.successMessage, "success");
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, options.errorMessage), "error");
     } finally {
-      setIsActionLoading(false);
+      stopPendingLogger();
+      setActionPending(options.actionKey, false);
     }
   };
 
@@ -384,9 +414,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
 
     await runAction(() => renameMutation.mutateAsync({ id: form.id, title: newTitle.trim() }), {
+      actionKey: getFormActionKey(form.id),
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось переименовать форму",
       affectedFormId: form.id,
+      logLabel: `dashboard rename ${form.id}`,
     });
   };
 
@@ -398,9 +430,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     const deletingForm = formToDelete;
     setFormToDelete(null);
     await runAction(() => removeMutation.mutateAsync({ id: deletingForm.id }), {
+      actionKey: getFormActionKey(deletingForm.id),
       successMessage: "Форма удалена",
       errorMessage: "Не удалось удалить форму",
       affectedFormId: deletingForm.id,
+      logLabel: `dashboard delete ${deletingForm.id}`,
     });
   };
 
@@ -411,17 +445,21 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
 
     await runAction(() => duplicateMutation.mutateAsync({ form, authorId: user.id }), {
+      actionKey: getFormActionKey(form.id),
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось дублировать форму",
+      logLabel: `dashboard duplicate ${form.id}`,
     });
   };
 
   const handleToggleFormStatus = async (form: SurveyForm) => {
     const nextStatus = !form.is_public;
     await runAction(() => statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus }), {
+      actionKey: getFormActionKey(form.id),
       successMessage: nextStatus ? "Форма активирована" : "Форма закрыта",
       errorMessage: "Не удалось изменить статус формы",
       affectedFormId: form.id,
+      logLabel: `dashboard status ${form.id}`,
     });
   };
 
@@ -482,7 +520,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <span>Дата по</span>
               <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </label>
-            <button className="dashboard-refresh-button" onClick={() => void reloadForms()} disabled={isFormsLoading || isActionLoading || isFormsFetching}>
+            <button className="dashboard-refresh-button" onClick={() => void reloadForms()} disabled={isFormsLoading || isFormsFetching}>
               <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
               <span>{isFormsFetching ? "Обновляется..." : "Обновить"}</span>
             </button>
@@ -508,6 +546,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const isTemplate = isTemplateForm(form);
             const isFormOpenForResponses = isFormAcceptingResponses(form);
             const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : "Не установлен";
+            const isCurrentFormPending = isFormActionPending(form.id);
 
             return (
               <div key={form.id} className={`dashboard-form-card ${openedMenuFormId === form.id ? "dashboard-form-card-menu-open" : ""}`.trim()}>
@@ -526,10 +565,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
                   {isOwnForm && !isTemplate && (
                     <div className="dashboard-form-controls">
-                      <button className="dashboard-secondary-button" onClick={() => setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) })} disabled={isActionLoading}>
+                      <button className="dashboard-secondary-button" onClick={() => setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) })} disabled={isCurrentFormPending}>
                         {form.deadline_at ? "Изменить дедлайн" : "Установить дедлайн"}
                       </button>
-                      <button className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`} onClick={() => void handleToggleFormStatus(form)} disabled={isActionLoading}>
+                      <button className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`} onClick={() => void handleToggleFormStatus(form)} disabled={isCurrentFormPending}>
                         {isFormActive ? "Активна" : "Закрыта"}
                       </button>
                     </div>
@@ -553,7 +592,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       <button
                         className="form-menu-trigger"
                         onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
-                        disabled={isActionLoading}
+                        disabled={isCurrentFormPending}
                         aria-label="Действия с шаблоном"
                         aria-expanded={openedMenuFormId === form.id}
                       >
@@ -561,8 +600,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       </button>
                       {openedMenuFormId === form.id && (
                         <div className="form-menu-dropdown">
-                          <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isActionLoading}>Переименовать</button>
-                          <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isActionLoading}>Удалить</button>
+                          <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isCurrentFormPending}>Переименовать</button>
+                          <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isCurrentFormPending}>Удалить</button>
                         </div>
                       )}
                     </div>
@@ -595,7 +634,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                           <button
                             className="form-menu-trigger"
                             onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
-                            disabled={isActionLoading}
+                            disabled={isCurrentFormPending}
                             aria-label="Действия с формой"
                             aria-expanded={openedMenuFormId === form.id}
                           >
@@ -603,15 +642,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                           </button>
                           {openedMenuFormId === form.id && (
                             <div className="form-menu-dropdown">
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isActionLoading}>Переименовать</button>
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isActionLoading}>Редактировать</button>
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleDuplicate(form); }} disabled={isActionLoading}>Дублировать</button>
-                              <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isActionLoading}>Удалить</button>
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isCurrentFormPending}>Переименовать</button>
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isCurrentFormPending}>Редактировать</button>
+                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleDuplicate(form); }} disabled={isCurrentFormPending}>Дублировать</button>
+                              <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isCurrentFormPending}>Удалить</button>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <button className="icon-action-button" onClick={() => void handleDuplicate(form)} disabled={isActionLoading} aria-label="Дублировать" title="Дублировать">
+                        <button className="icon-action-button" onClick={() => void handleDuplicate(form)} disabled={isCurrentFormPending} aria-label="Дублировать" title="Дублировать">
                           <img src={copyIcon} alt="" aria-hidden="true" className="toolbar-icon" />
                         </button>
                       )}
@@ -637,8 +676,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             </label>
             <p className="deadline-modal-hint">После наступления дедлайна форма останется видимой, но новые ответы отправить не получится.</p>
             <div className="deadline-modal-actions">
-              <button onClick={() => setDeadlineEditor(null)} disabled={isActionLoading}>Отмена</button>
-              <button className="deadline-clear-button" onClick={() => deadlineEditor && runAction(() => deadlineMutation.mutateAsync({ id: deadlineEditor.form.id, deadlineAt: null }), { successMessage: "Дедлайн снят", errorMessage: "Не удалось обновить дедлайн", affectedFormId: deadlineEditor.form.id }).finally(() => setDeadlineEditor(null))} disabled={isActionLoading}>Снять дедлайн</button>
+              <button onClick={() => setDeadlineEditor(null)} disabled={isFormActionPending(deadlineEditor.form.id)}>Отмена</button>
+              <button className="deadline-clear-button" onClick={() => deadlineEditor && runAction(() => deadlineMutation.mutateAsync({ id: deadlineEditor.form.id, deadlineAt: null }), { actionKey: getFormActionKey(deadlineEditor.form.id), successMessage: "Дедлайн снят", errorMessage: "Не удалось обновить дедлайн", affectedFormId: deadlineEditor.form.id, logLabel: `dashboard deadline clear ${deadlineEditor.form.id}` }).finally(() => setDeadlineEditor(null))} disabled={isFormActionPending(deadlineEditor.form.id)}>Снять дедлайн</button>
               <button
                 onClick={() => {
                   if (!deadlineEditor) {
@@ -655,12 +694,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                     return;
                   }
                   void runAction(() => deadlineMutation.mutateAsync({ id: deadlineEditor.form.id, deadlineAt: parsedDate.toISOString() }), {
+                    actionKey: getFormActionKey(deadlineEditor.form.id),
                     successMessage: "Дедлайн установлен",
                     errorMessage: "Не удалось обновить дедлайн",
                     affectedFormId: deadlineEditor.form.id,
+                    logLabel: `dashboard deadline save ${deadlineEditor.form.id}`,
                   }).finally(() => setDeadlineEditor(null));
                 }}
-                disabled={isActionLoading}
+                disabled={isFormActionPending(deadlineEditor.form.id)}
               >
                 Сохранить
               </button>
@@ -675,8 +716,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             <h3 style={{ marginTop: 0 }}>Удаление формы</h3>
             <p>Удалить форму «{formToDelete.title}»? Это действие нельзя отменить.</p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setFormToDelete(null)} disabled={isActionLoading}>Отмена</button>
-              <button onClick={() => void confirmDelete()} disabled={isActionLoading}>Удалить</button>
+              <button onClick={() => setFormToDelete(null)} disabled={isFormActionPending(formToDelete.id)}>Отмена</button>
+              <button onClick={() => void confirmDelete()} disabled={isFormActionPending(formToDelete.id)}>Удалить</button>
             </div>
           </div>
         </div>

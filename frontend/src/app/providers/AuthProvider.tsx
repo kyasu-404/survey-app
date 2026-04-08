@@ -11,6 +11,8 @@ import type { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/api";
 import type { UserProfile } from "../../entities/user/types";
+import { runRequest } from "../../shared/api/request";
+import { refreshAuthDependentQueries } from "./authCache";
 
 type AuthContextValue = {
   user: User | null;
@@ -34,11 +36,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const previousUserIdRef = useRef<string | null>(null);
 
   const loadProfile = async (userId: string) => {
-    const { data, error } = await apiClient
-      .from("profiles")
-      .select("id, name, email, role, is_disabled, created_at")
-      .eq("id", userId)
-      .single();
+    const { data, error } = await runRequest(
+      "profiles.load",
+      () =>
+        apiClient
+          .from("profiles")
+          .select("id, name, email, role, is_disabled, created_at")
+          .eq("id", userId)
+          .single(),
+      { context: { userId } },
+    );
 
     if (error) {
       setProfile(null);
@@ -60,8 +67,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    apiClient.auth
-      .getCurrentSession()
+    runRequest("auth.getCurrentSession", () => apiClient.auth.getCurrentSession())
       .then(async ({ data }) => {
         if (!mounted) return;
 
@@ -87,7 +93,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (previousUserIdRef.current !== nextUserId) {
         previousUserIdRef.current = nextUserId;
-        queryClient.clear();
+        refreshAuthDependentQueries(queryClient);
       }
 
       setUser(sessionUser);
