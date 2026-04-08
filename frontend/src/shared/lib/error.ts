@@ -16,7 +16,7 @@ export function getAuthErrorMessage(error: unknown) {
   const normalizedMessage = error.message.trim().toLowerCase();
 
   if (normalizedMessage.includes("invalid login credentials")) {
-    return "Неверная почта или пароль.";
+    return "Неверный логин или пароль";
   }
 
   if (normalizedMessage.includes("email not confirmed")) {

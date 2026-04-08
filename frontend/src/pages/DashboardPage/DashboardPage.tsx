@@ -5,9 +5,15 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import { getResponsesByForm } from "../../entities/response/api";
-import type { SurveyResponse } from "../../entities/response/types";
-import copyIcon from "../../img/copy.png";
+import { formatResponsesForTable } from "../../entities/response/model/responseTable";
+import activeStatusIcon from "../../img/active.svg";
+import closedStatusIcon from "../../img/closed.svg";
+import copyIcon from "../../img/copy.svg";
+import copyLinkIcon from "../../img/copy_link.svg";
+import deadlineIcon from "../../img/deadline.svg";
+import infoIcon from "../../img/info.svg";
 import refreshIcon from "../../img/refresh.png";
+import xlsIcon from "../../img/xls.png";
 import {
   changeFormStatus,
   cloneForm,
@@ -17,7 +23,7 @@ import {
   setFormDeadline,
 } from "../../entities/survey/api/surveysApi";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
-import type { SurveyForm, SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../entities/survey/types";
+import type { SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
@@ -26,16 +32,6 @@ import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 
 type DashboardPageProps = {
   viewMode: "mine" | "all";
-};
-
-type ResponsesTableRow = {
-  [key: string]: string;
-};
-
-type FormResponsesSectionProps = {
-  form: SurveyForm;
-  formId: string;
-  isOpen: boolean;
 };
 
 type DeadlineEditorState = {
@@ -52,7 +48,9 @@ type DashboardActionOptions = {
   logLabel: string;
 };
 
-function isFormAcceptingResponses(form: Pick<SurveyForm, "is_public" | "deadline_at" | "form_type">) {
+type MenuPlacement = "side" | "up";
+
+function isFormAcceptingResponses(form: Pick<SurveyForm, "is_public" | "deadline_at" | "form_type">, now = Date.now()) {
   if (isTemplateForm(form)) {
     return false;
   }
@@ -65,93 +63,29 @@ function isFormAcceptingResponses(form: Pick<SurveyForm, "is_public" | "deadline
     return true;
   }
 
-  return new Date(form.deadline_at).getTime() > Date.now();
+  return !isFormDeadlineExpired(form, now);
 }
 
-function getQuestionChoiceMap(schema: SurveySchema) {
-  const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
-  const choicesMap = new Map<string, Map<string, string>>();
+function isFormDeadlineExpired(form: Pick<SurveyForm, "deadline_at">, now = Date.now()) {
+  if (!form.deadline_at) {
+    return false;
+  }
 
-  questions.forEach((question: SurveyQuestion) => {
-    if (!Array.isArray(question.choices) || !question.name) {
-      return;
-    }
+  const deadlineTime = new Date(form.deadline_at).getTime();
 
-    const questionChoiceMap = new Map<string, string>();
-    question.choices.forEach((choice) => {
-      if (typeof choice === "string") {
-        questionChoiceMap.set(choice, choice);
-        return;
-      }
+  if (Number.isNaN(deadlineTime)) {
+    return false;
+  }
 
-      const value = String(choice.value ?? choice.text ?? "");
-      const text = String(choice.text ?? choice.value ?? "");
-      if (value) {
-        questionChoiceMap.set(value, text);
-      }
-    });
-
-    if (questionChoiceMap.size > 0) {
-      choicesMap.set(question.name, questionChoiceMap);
-    }
-  });
-
-  return choicesMap;
+  return deadlineTime <= now;
 }
 
-function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>): string {
-  const questionChoices = choiceMap.get(questionName);
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string" && questionChoices?.has(item)) {
-          return questionChoices.get(item) ?? item;
-        }
-
-        if (item && typeof item === "object" && "name" in item && typeof item.name === "string") {
-          return item.name;
-        }
-
-        return String(item ?? "");
-      })
-      .filter(Boolean)
-      .join(", ");
+function isFormEffectivelyActive(form: Pick<SurveyForm, "is_public" | "deadline_at" | "form_type">, now = Date.now()) {
+  if (!form.is_public || isTemplateForm(form)) {
+    return false;
   }
 
-  if (typeof value === "string" && questionChoices?.has(value)) {
-    return questionChoices.get(value) ?? value;
-  }
-
-  if (value === null || typeof value === "undefined") {
-    return "";
-  }
-
-  if (typeof value === "object") {
-    if ("name" in value && typeof value.name === "string") {
-      return value.name;
-    }
-
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-}
-
-function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
-  const choiceMap = getQuestionChoiceMap(schema);
-
-  return responses.map((response) => {
-    const base: ResponsesTableRow = {
-      "Дата ответа": new Date(response.created_at).toLocaleString("ru-RU"),
-    };
-
-    Object.entries(response.data).forEach(([key, value]) => {
-      base[key] = formatAnswerValue(key, value, choiceMap);
-    });
-
-    return base;
-  });
+  return !isFormDeadlineExpired(form, now);
 }
 
 function formatDateTimeLocalValue(dateTime: string | null) {
@@ -168,69 +102,30 @@ function formatDateTimeLocalValue(dateTime: string | null) {
   return new Date(date.getTime() - offsetInMs).toISOString().slice(0, 16);
 }
 
-function FormResponsesSection({ form, formId, isOpen }: FormResponsesSectionProps) {
-  const responsesQuery = useQuery({
-    queryKey: ["form-responses", formId],
-    queryFn: () => getResponsesByForm(formId),
-    enabled: isOpen,
-    retry: 1,
-  });
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const responses = responsesQuery.data ?? [];
-  const rows = formatResponsesForTable(responses, form.schema);
-  const headers = rows[0] ? Object.keys(rows[0]) : [];
-
-  return (
-    <div className="dashboard-responses">
-      {responsesQuery.isLoading && <p>Загрузка ответов...</p>}
-      {!responsesQuery.isLoading && responsesQuery.error && (
-        <p style={{ color: "#b91c1c" }}>{getErrorMessage(responsesQuery.error, "Не удалось загрузить ответы")}</p>
-      )}
-      {!responsesQuery.isLoading && !responsesQuery.error && !rows.length && <p>Ответов пока нет.</p>}
-      {!responsesQuery.isLoading && !responsesQuery.error && !!rows.length && (
-        <div style={{ overflowX: "auto" }}>
-          <table className="responses-table">
-            <thead>
-              <tr>
-                {headers.map((header) => (
-                  <th key={header}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => {
-                const rowId = responses[index]?.id ?? `${formId}-${index}`;
-                return (
-                  <tr key={rowId}>
-                    {headers.map((header, columnIndex) => (
-                      <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+function formatDashboardDate(dateTime: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(dateTime));
 }
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "closed">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isStatsInfoOpen, setIsStatsInfoOpen] = useState(false);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenuFormId, setOpenedMenuFormId] = useState<string | null>(null);
-  const [openedResponsesByFormId, setOpenedResponsesByFormId] = useState<Record<string, boolean>>({});
+  const [openedMenuPlacement, setOpenedMenuPlacement] = useState<MenuPlacement>("side");
   const [deadlineEditor, setDeadlineEditor] = useState<DeadlineEditorState | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -264,29 +159,47 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const filteredForms = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) {
-      return visibleForms;
-    }
-
     return visibleForms.filter((form) => {
       const title = form.title?.toLowerCase() ?? "";
       const authorName = form.author_name?.toLowerCase() ?? "";
       const authorEmail = form.author_email?.toLowerCase() ?? "";
       const authorId = form.author_id?.toLowerCase() ?? "";
-
-      return (
+      const matchesSearch =
+        !normalizedSearch ||
         title.includes(normalizedSearch) ||
         authorName.includes(normalizedSearch) ||
         authorEmail.includes(normalizedSearch) ||
-        authorId.includes(normalizedSearch)
-      );
+        authorId.includes(normalizedSearch);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && isFormEffectivelyActive(form, currentTime)) ||
+        (statusFilter === "closed" && !isFormEffectivelyActive(form, currentTime));
+
+      return matchesSearch && matchesStatus;
     });
-  }, [search, visibleForms]);
+  }, [currentTime, search, statusFilter, visibleForms]);
 
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
+  const showAuthorColumn = viewMode !== "mine";
   const isInitialFormsLoading = isFormsLoading && forms.length === 0;
-  const activeFormsCount = useMemo(() => filteredForms.filter((form) => form.is_public).length, [filteredForms]);
-  const formsWithDeadlineCount = useMemo(() => filteredForms.filter((form) => Boolean(form.deadline_at)).length, [filteredForms]);
+  const activeFormsCount = useMemo(() => filteredForms.filter((form) => isFormEffectivelyActive(form, currentTime)).length, [currentTime, filteredForms]);
+  const formsWithDeadlineCount = useMemo(() => filteredForms.filter((form) => Boolean(form.deadline_at) && !isFormDeadlineExpired(form, currentTime)).length, [currentTime, filteredForms]);
+  const nearestDeadlineForms = useMemo(
+    () =>
+      [...visibleForms]
+        .filter((form) => !isTemplateForm(form) && Boolean(form.deadline_at) && isFormAcceptingResponses(form, currentTime))
+        .sort((left, right) => new Date(left.deadline_at ?? "").getTime() - new Date(right.deadline_at ?? "").getTime())
+        .slice(0, 4),
+    [currentTime, visibleForms],
+  );
+  const recentForms = useMemo(
+    () =>
+      [...visibleForms]
+        .filter((form) => !isTemplateForm(form))
+        .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+        .slice(0, 4),
+    [visibleForms],
+  );
 
   useEffect(() => {
     if (formsError) {
@@ -322,6 +235,26 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [openedMenuFormId]);
+
+  useEffect(() => {
+    const upcomingDeadlines = forms
+      .filter((form) => !isTemplateForm(form) && form.is_public)
+      .map((form) => (form.deadline_at ? new Date(form.deadline_at).getTime() : Number.NaN))
+      .filter((deadlineTime) => !Number.isNaN(deadlineTime) && deadlineTime > currentTime);
+
+    if (!upcomingDeadlines.length) {
+      return;
+    }
+
+    const nextDeadlineTime = Math.min(...upcomingDeadlines);
+    const timeoutId = window.setTimeout(() => {
+      setCurrentTime(Date.now());
+    }, Math.max(nextDeadlineTime - currentTime, 0) + 1);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentTime, forms]);
 
   const setActionPending = (actionKey: string, isPending: boolean) => {
     setPendingActionKeys((current) => {
@@ -475,35 +408,88 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         return;
       }
       exportToExcel(tableRows, `ответы-${form.title}`);
-      showToast("Ответы выгружены в XLS", "success");
+      showToast("Ответы выгружены в XLSX", "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
     }
   };
 
+  const handleOpenForm = (form: SurveyForm) => {
+    if (!isFormAcceptingResponses(form, currentTime)) {
+      showToast(
+        isFormDeadlineExpired(form, currentTime)
+          ? "Ссылка недоступна: дедлайн формы уже истёк"
+          : "Ссылка закрыта: форма неактивна",
+        "info",
+      );
+      return;
+    }
+
+    navigate(`${routes.survey(form.id)}?mode=preview`);
+  };
+
+  const getMenuPlacement = (triggerElement: HTMLElement, itemCount: number): MenuPlacement => {
+    const triggerRect = triggerElement.getBoundingClientRect();
+    const estimatedMenuHeight = itemCount * 42 + 16;
+    const availableSpaceBelow = window.innerHeight - triggerRect.bottom;
+
+    if (availableSpaceBelow < estimatedMenuHeight && triggerRect.top > estimatedMenuHeight / 2) {
+      return "up";
+    }
+
+    return "side";
+  };
+
   return (
-    <div className="dashboard-page dashboard-shell">
-      <section className="card dashboard-hero">
+    <div className="dashboard-page dashboard-shell command-center-page">
+      <section className="card dashboard-hero command-center-hero">
         <div className="dashboard-hero-copy">
-          <span className="dashboard-kicker">{viewMode === "all" ? "Общий каталог" : "Личное пространство"}</span>
+          <span className="dashboard-kicker">{viewMode === "mine" ? "Мои формы" : "Все формы"}</span>
+          <h1 className="dashboard-title">Командный центр форм</h1>
+          <p className="dashboard-subtitle">
+            Следите за дедлайнами, быстрыми действиями и последними формами из одного рабочего пространства.
+          </p>
         </div>
         <div className="dashboard-stats">
-          <div className="dashboard-stat-card">
-            <span>Всего форм</span>
-            <strong>{filteredForms.length}</strong>
-          </div>
-          <div className="dashboard-stat-card">
-            <span>Активных</span>
-            <strong>{activeFormsCount}</strong>
-          </div>
-          <div className="dashboard-stat-card">
-            <span>С дедлайном</span>
-            <strong>{formsWithDeadlineCount}</strong>
-          </div>
+          <div className="dashboard-stat-card"><span>Всего форм</span><strong>{filteredForms.length}</strong></div>
+          <div className="dashboard-stat-card"><span>Активные</span><strong>{activeFormsCount}</strong></div>
+          <div className="dashboard-stat-card"><span>С дедлайном</span><strong>{formsWithDeadlineCount}</strong></div>
         </div>
       </section>
 
-      <div className="card dashboard-main-card">
+      <div className="command-center-grid">
+        <section className="card dashboard-module">
+          <div className="dashboard-module-header">
+            <h2>Ближайшие дедлайны</h2>
+            <span>{nearestDeadlineForms.length || "Нет активных дедлайнов"}</span>
+          </div>
+          <div className="dashboard-priority-list">
+            {nearestDeadlineForms.map((form) => (
+              <button key={form.id} className="dashboard-priority-item" onClick={() => handleOpenForm(form)}>
+                <strong>{getSurveyDisplayTitle(form)}</strong>
+                <span>{form.deadline_at ? formatDashboardDate(form.deadline_at) : "Без дедлайна"}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="card dashboard-module">
+          <div className="dashboard-module-header">
+            <h2>Недавние формы</h2>
+            <span>{recentForms.length}</span>
+          </div>
+          <div className="dashboard-priority-list">
+            {recentForms.map((form) => (
+              <button key={form.id} className="dashboard-priority-item" onClick={() => handleOpenForm(form)}>
+                <strong>{getSurveyDisplayTitle(form)}</strong>
+                <span>{formatDashboardDate(form.created_at)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="card dashboard-main-card dashboard-workspace-card">
         <div className="dashboard-toolbar">
           <input
             className="dashboard-search-input"
@@ -512,6 +498,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="dashboard-filter-group">
+            <label className="dashboard-filter-field">
+              <span>Статус</span>
+              <select aria-label="Статус" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "closed")}>
+                <option value="all">Все</option>
+                <option value="active">Активные</option>
+                <option value="closed">Закрытые</option>
+              </select>
+            </label>
             <label className="dashboard-filter-field">
               <span>Дата с</span>
               <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -524,6 +518,24 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
               <span>{isFormsFetching ? "Обновляется..." : "Обновить"}</span>
             </button>
+            <div className="dashboard-toolbar-info">
+              <button
+                className="dashboard-table-action-button"
+                onClick={() => setIsStatsInfoOpen((current) => !current)}
+                aria-label="Показать статистику"
+                title="Показать статистику"
+                aria-expanded={isStatsInfoOpen}
+              >
+                <img src={infoIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
+              </button>
+              {isStatsInfoOpen && (
+                <div className="dashboard-toolbar-info-popover">
+                  <p>Всего форм: {filteredForms.length}</p>
+                  <p>Активных: {activeFormsCount}</p>
+                  <p>С дедлайном: {formsWithDeadlineCount}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -535,135 +547,243 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         )}
 
-        <div className="dashboard-forms-grid">
-          {filteredForms.map((form) => {
-            const link = `${appOrigin}${routes.survey(form.id)}`;
-            const authorLabel = form.author_name || form.author_email || form.author_id;
-            const responsesCount = form.responses_count ?? 0;
-            const isResponsesOpen = openedResponsesByFormId[form.id];
-            const isFormActive = form.is_public;
-            const isOwnForm = form.author_id === user?.id;
-            const isTemplate = isTemplateForm(form);
-            const isFormOpenForResponses = isFormAcceptingResponses(form);
-            const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : "Не установлен";
-            const isCurrentFormPending = isFormActionPending(form.id);
+        <div className="dashboard-forms-table-wrapper">
+          <table className="dashboard-forms-table">
+            <thead>
+              <tr>
+                <th scope="col">Статус</th>
+                {showAuthorColumn && <th scope="col">Автор</th>}
+                <th scope="col">Название</th>
+                <th scope="col">Дата</th>
+                <th scope="col">Ответы</th>
+                <th scope="col" aria-label="Действия" />
+              </tr>
+            </thead>
+            <tbody>
+              {filteredForms.map((form) => {
+                const link = `${appOrigin}${routes.survey(form.id)}`;
+                const authorLabel = form.author_name || form.author_email || form.author_id || "Не указан";
+                const responsesCount = isTemplateForm(form) ? "—" : String(form.responses_count ?? 0);
+                const isFormActive = isFormEffectivelyActive(form, currentTime);
+                const isOwnForm = form.author_id === user?.id;
+                const isTemplate = isTemplateForm(form);
+                const isFormOpenForResponses = isFormAcceptingResponses(form, currentTime);
+                const deadlineLabel = form.deadline_at && !isFormDeadlineExpired(form, currentTime) ? formatDashboardDate(form.deadline_at) : null;
+                const statusLabel = !isTemplate && isFormActive ? "Активна" : "Закрыта";
+                const statusIcon = !isTemplate && isFormActive ? activeStatusIcon : closedStatusIcon;
+                const isCurrentFormPending = isFormActionPending(form.id);
+                const menuItemCount = isTemplate ? 2 : isOwnForm ? 5 : 0;
 
-            return (
-              <div key={form.id} className={`dashboard-form-card ${openedMenuFormId === form.id ? "dashboard-form-card-menu-open" : ""}`.trim()}>
-                <div className="dashboard-form-top">
-                  <div className="dashboard-form-mainline">
-                    <div className="dashboard-form-status-row">
-                      <span
-                        className={`dashboard-status-pill ${isTemplate ? "dashboard-status-pill-template" : isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"}`}
-                      >
-                        {isTemplate ? "Шаблон" : isFormActive ? "Активна" : "Закрыта"}
-                      </span>
-                      {isOwnForm && <span className="dashboard-owner-badge">Моя форма</span>}
-                    </div>
-                    <strong className="dashboard-form-title">{getSurveyDisplayTitle(form)}</strong>
-                  </div>
+                return (
+                  <tr
+                    key={form.id}
+                    className={`dashboard-table-row ${isOwnForm ? "dashboard-table-row-own" : ""} ${openedMenuFormId === form.id ? "dashboard-form-card-menu-open" : ""}`.trim()}
+                    onClick={(event) => {
+                      const target = event.target;
+                      if (target instanceof Element && target.closest("button, a, input, select, textarea, label")) {
+                        return;
+                      }
 
-                  {isOwnForm && !isTemplate && (
-                    <div className="dashboard-form-controls">
-                      <button className="dashboard-secondary-button" onClick={() => setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) })} disabled={isCurrentFormPending}>
-                        {form.deadline_at ? "Изменить дедлайн" : "Установить дедлайн"}
-                      </button>
-                      <button className={`form-status-button ${isFormActive ? "form-status-active" : "form-status-closed"}`} onClick={() => void handleToggleFormStatus(form)} disabled={isCurrentFormPending}>
-                        {isFormActive ? "Активна" : "Закрыта"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="dashboard-form-meta-grid">
-                  <span className="dashboard-meta-pill">Дата: {new Date(form.created_at).toLocaleString("ru-RU")}</span>
-                  {!isTemplate && <span className="dashboard-meta-pill">Автор: {authorLabel}</span>}
-                  {!isTemplate && (
-                    <span className={`dashboard-meta-pill ${responsesCount > 0 ? "dashboard-meta-pill-responses-positive" : ""}`.trim()}>
-                      Ответов: {responsesCount}
-                    </span>
-                  )}
-                  {!isTemplate && <span className="dashboard-meta-pill">Дедлайн: {deadlineLabel}</span>}
-                </div>
-
-                <div className="dashboard-form-actions">
-                  {isTemplate ? (
-                    <div className="form-menu">
-                      <button
-                        className="form-menu-trigger"
-                        onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
-                        disabled={isCurrentFormPending}
-                        aria-label="Действия с шаблоном"
-                        aria-expanded={openedMenuFormId === form.id}
-                      >
-                        ...
-                      </button>
-                      {openedMenuFormId === form.id && (
-                        <div className="form-menu-dropdown">
-                          <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isCurrentFormPending}>Переименовать</button>
-                          <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isCurrentFormPending}>Удалить</button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <Link
-                        className="button-link"
-                        to={routes.survey(form.id)}
-                        onClick={(event) => {
-                          if (!isFormOpenForResponses) {
-                            event.preventDefault();
-                            showToast(
-                              form.deadline_at && new Date(form.deadline_at).getTime() <= Date.now()
-                                ? "Ссылка недоступна: дедлайн формы уже истёк"
-                                : "Ссылка закрыта: форма неактивна",
-                              "info",
-                            );
-                          }
-                        }}
-                      >
-                        Открыть
-                      </Link>
-                      <button onClick={() => handleCopyLink(link)} disabled={!isFormOpenForResponses}>Скопировать ссылку</button>
-                      <button onClick={() => setOpenedResponsesByFormId((prev) => ({ ...prev, [form.id]: !prev[form.id] }))}>
-                        {isResponsesOpen ? "Скрыть ответы" : "Показать ответы"}
-                      </button>
-                      <button onClick={() => void handleExportResponses(form)}>XLS</button>
-                      {isOwnForm ? (
-                        <div className="form-menu">
+                      if (!isTemplate) {
+                        handleOpenForm(form);
+                      }
+                    }}
+                  >
+                    <td className="dashboard-table-status-cell">
+                      <div className="dashboard-table-status-content">
+                        {isTemplate ? (
+                          <span className="dashboard-table-template-badge">Шаблон</span>
+                        ) : isOwnForm ? (
                           <button
-                            className="form-menu-trigger"
-                            onClick={() => setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id))}
+                            className="dashboard-status-cell-button"
+                            onClick={() => void handleToggleFormStatus(form)}
                             disabled={isCurrentFormPending}
-                            aria-label="Действия с формой"
-                            aria-expanded={openedMenuFormId === form.id}
+                            aria-label={statusLabel}
+                            title={statusLabel}
                           >
-                            ...
+                            <img src={statusIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
                           </button>
-                          {openedMenuFormId === form.id && (
-                            <div className="form-menu-dropdown">
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleRename(form); }} disabled={isCurrentFormPending}>Переименовать</button>
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); navigate(routes.builderEdit(form.id)); }} disabled={isCurrentFormPending}>Редактировать</button>
-                              <button className="form-menu-item" onClick={() => { setOpenedMenuFormId(null); void handleDuplicate(form); }} disabled={isCurrentFormPending}>Дублировать</button>
-                              <button className="form-menu-item form-menu-item-danger" onClick={() => { setOpenedMenuFormId(null); setFormToDelete(form); }} disabled={isCurrentFormPending}>Удалить</button>
-                            </div>
+                        ) : (
+                          <span className="dashboard-status-icon" title={statusLabel}>
+                            <img src={statusIcon} alt={statusLabel} className="dashboard-table-action-icon" />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    {showAuthorColumn && (
+                      <td className={`dashboard-table-author-cell ${isOwnForm ? "dashboard-table-author-cell-own" : ""}`.trim()}>{authorLabel}</td>
+                    )}
+                    <td className="dashboard-table-title-cell">
+                      <strong className="dashboard-table-title">{getSurveyDisplayTitle(form)}</strong>
+                    </td>
+                    <td>
+                      <div className="dashboard-table-date-cell">
+                        <div className="dashboard-table-date-details">
+                          <span className="dashboard-table-date-value">{formatDashboardDate(form.created_at)}</span>
+                          {!isTemplate && deadlineLabel && (
+                            <span className="dashboard-table-date-meta">
+                              Дедлайн: <span className="dashboard-table-deadline-value">{deadlineLabel}</span>
+                            </span>
                           )}
                         </div>
+                        {isOwnForm && !isTemplate && (
+                          <button
+                            className="dashboard-table-action-button"
+                            onClick={() => setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) })}
+                            disabled={isCurrentFormPending}
+                            aria-label="Установить дедлайн"
+                            title="Установить дедлайн"
+                          >
+                            <img src={deadlineIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="dashboard-table-responses-cell">
+                      {!isTemplate ? (
+                        <Link
+                          className="dashboard-table-responses-button"
+                          to={routes.formResponses(form.id)}
+                          aria-label="Показать ответы"
+                          title="Показать ответы"
+                        >
+                          <span className={(form.responses_count ?? 0) > 0 ? "dashboard-table-responses-value dashboard-table-responses-value-positive" : "dashboard-table-responses-value"}>
+                            {responsesCount}
+                          </span>
+                        </Link>
                       ) : (
-                        <button className="icon-action-button" onClick={() => void handleDuplicate(form)} disabled={isCurrentFormPending} aria-label="Дублировать" title="Дублировать">
-                          <img src={copyIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-                        </button>
+                        <span className="dashboard-table-responses-value">{responsesCount}</span>
                       )}
-                    </>
-                  )}
-                </div>
+                    </td>
+                    <td>
+                      <div className="dashboard-table-actions">
+                        {!isTemplate && (
+                          <>
+                            <button
+                              className="dashboard-table-action-button"
+                              onClick={() => void handleCopyLink(link)}
+                              disabled={!isFormOpenForResponses}
+                              aria-label="Скопировать ссылку"
+                              title="Скопировать ссылку"
+                            >
+                              <img src={copyLinkIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
+                            </button>
+                            {!isOwnForm && (
+                            <button
+                              className="dashboard-table-action-button"
+                              onClick={() => void handleDuplicate(form)}
+                              disabled={isCurrentFormPending}
+                              aria-label="Дублировать"
+                                title="Дублировать"
+                              >
+                                <img src={copyIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
+                              </button>
+                            )}
+                            {!isOwnForm && (
+                              <button
+                                className="dashboard-table-action-button"
+                                onClick={() => void handleExportResponses(form)}
+                                disabled={isCurrentFormPending}
+                                aria-label="Выгрузить в XLSX"
+                                title="Выгрузить в XLSX"
+                              >
+                                <img src={xlsIcon} alt="" aria-hidden="true" className="dashboard-table-action-icon" />
+                              </button>
+                            )}
+                          </>
+                        )}
 
-                {!isTemplate && <FormResponsesSection form={form} formId={form.id} isOpen={Boolean(isResponsesOpen)} />}
-              </div>
-            );
-          })}
+                        {(isTemplate || isOwnForm) && (
+                          <div className="form-menu">
+                            <button
+                              className="form-menu-trigger dashboard-table-action-button dashboard-table-text-action-button"
+                              onClick={(event) => {
+                                const nextOpen = openedMenuFormId !== form.id;
+                                setOpenedMenuFormId((prev) => (prev === form.id ? null : form.id));
+                                if (nextOpen) {
+                                  setOpenedMenuPlacement(getMenuPlacement(event.currentTarget, menuItemCount));
+                                }
+                              }}
+                              disabled={isCurrentFormPending}
+                              aria-label={isTemplate ? "Действия с шаблоном" : "Действия с формой"}
+                              aria-expanded={openedMenuFormId === form.id}
+                            >
+                              ...
+                            </button>
+                            {openedMenuFormId === form.id && (
+                              <div
+                                className={`form-menu-dropdown ${openedMenuPlacement === "up" ? "form-menu-dropdown-up" : ""}`.trim()}
+                                role="menu"
+                              >
+                                <button
+                                  className="form-menu-item"
+                                  onClick={() => {
+                                    setOpenedMenuFormId(null);
+                                    void handleRename(form);
+                                  }}
+                                  disabled={isCurrentFormPending}
+                                >
+                                  Переименовать
+                                </button>
+                                {!isTemplate && (
+                                  <button
+                                    className="form-menu-item"
+                                    onClick={() => {
+                                      setOpenedMenuFormId(null);
+                                      navigate(routes.builderEdit(form.id));
+                                    }}
+                                    disabled={isCurrentFormPending}
+                                  >
+                                    Редактировать
+                                  </button>
+                                )}
+                                {!isTemplate && (
+                                  <button
+                                    className="form-menu-item"
+                                    onClick={() => {
+                                      setOpenedMenuFormId(null);
+                                      void handleExportResponses(form);
+                                    }}
+                                    disabled={isCurrentFormPending}
+                                  >
+                                    Выгрузить в XLSX
+                                  </button>
+                                )}
+                                {!isTemplate && (
+                                  <button
+                                    className="form-menu-item"
+                                    onClick={() => {
+                                      setOpenedMenuFormId(null);
+                                      void handleDuplicate(form);
+                                    }}
+                                    disabled={isCurrentFormPending}
+                                  >
+                                    Дублировать
+                                  </button>
+                                )}
+                                <button
+                                  className="form-menu-item form-menu-item-danger"
+                                  onClick={() => {
+                                    setOpenedMenuFormId(null);
+                                    setFormToDelete(form);
+                                  }}
+                                  disabled={isCurrentFormPending}
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </section>
 
       {deadlineEditor && (
         <div className="modal-backdrop">

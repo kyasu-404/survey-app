@@ -24,23 +24,29 @@ export function Sidebar({ onToggle }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img src={blackLogo} alt="Логотип ИМЦ" className="logo-image" />
-        <h3 className="brand-title">Формы</h3>
+        <div className="brand-mark">
+          <img src={blackLogo} alt="Логотип ИМЦ" className="logo-image" />
+        </div>
+        <div className="brand-copy">
+          <p className="brand-eyebrow">Рабочее пространство</p>
+          <h3 className="brand-title">Формы</h3>
+        </div>
         <button type="button" className="sidebar-toggle-button" onClick={onToggle} aria-label="Скрыть меню">
           ←
         </button>
       </div>
 
       <nav className="sidebar-nav">
+        <span className="sidebar-section-label">Навигация</span>
         {loading && <span>Загрузка...</span>}
 
         {!loading && user && (
           <>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
-              Мои формы
-            </NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardAll}>
               Все формы
+            </NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
+              Мои формы
             </NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.builder}>
               Конструктор
@@ -51,7 +57,11 @@ export function Sidebar({ onToggle }: SidebarProps) {
               </NavLink>
             )}
             <div className="sidebar-spacer" />
-            <button className="logout-button" onClick={onLogout}>Выйти</button>
+            <div className="sidebar-account">
+              <p className="sidebar-account-name">{profile?.name || user.email || "Аккаунт"}</p>
+              <p className="sidebar-account-role">{profile?.role === "admin" ? "Администратор" : "Пользователь"}</p>
+              <button className="logout-button" onClick={onLogout}>Выйти</button>
+            </div>
           </>
         )}
 

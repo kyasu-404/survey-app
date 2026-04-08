@@ -1,11 +1,16 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { getPublicFormById } from "../../entities/survey/api/surveysApi";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
 export default function SurveyPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const isPreviewMode = searchParams.get("mode") === "preview";
+  const subtitle = isPreviewMode
+    ? "Режим предварительного просмотра. Отправка ответа отключена."
+    : "Заполните форму и отправьте ответ, когда будете готовы.";
 
   const {
     data: form,
@@ -39,9 +44,14 @@ export default function SurveyPage() {
   if (!form) return <p>Форма не найдена или недоступна.</p>;
 
   return (
-    <div className="survey-page">
-      <div className="survey-page-card card">
-        <SurveyRenderer schema={form.schema} formId={form.id} />
+    <div className="survey-page survey-page-shell">
+      <section className="survey-page-hero card" aria-label="Публичная форма">
+        <p className="survey-page-kicker">Публичная форма</p>
+        <h1 className="survey-page-title">{form.title}</h1>
+        <p className="survey-page-subtitle">{subtitle}</p>
+      </section>
+      <div className={`survey-page-card card ${isPreviewMode ? "survey-page-card-preview" : ""}`.trim()}>
+        <SurveyRenderer schema={form.schema} formId={form.id} isPreviewMode={isPreviewMode} />
       </div>
     </div>
   );

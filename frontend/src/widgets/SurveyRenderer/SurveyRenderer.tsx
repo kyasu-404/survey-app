@@ -4,8 +4,9 @@ import { SurveyFormRenderer } from "../../features/render-form/SurveyFormRendere
 type SurveyRendererProps = {
   schema: SurveySchema;
   formId: string;
+  isPreviewMode?: boolean;
 };
 
-export function SurveyRenderer({ schema, formId }: SurveyRendererProps) {
-  return <SurveyFormRenderer schema={schema} formId={formId} />;
+export function SurveyRenderer({ schema, formId, isPreviewMode = false }: SurveyRendererProps) {
+  return <SurveyFormRenderer schema={schema} formId={formId} isPreviewMode={isPreviewMode} />;
 }
