@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { getPublicFormById } from "../../entities/survey/api/surveysApi";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
 export default function SurveyPage() {
   const { id } = useParams();
+  const { user, loading: isAuthLoading } = useAuth();
 
   const {
     data: form,
@@ -18,9 +20,13 @@ export default function SurveyPage() {
         return null;
       }
 
+      if (user?.id) {
+        return getFormById(id);
+      }
+
       return getPublicFormById(id);
     },
-    enabled: Boolean(id),
+    enabled: Boolean(id) && !isAuthLoading,
   });
 
   const errorMessage = useMemo(() => {
@@ -34,7 +40,7 @@ export default function SurveyPage() {
   }, [error]);
 
   if (!id) return <p>Форма не найдена.</p>;
-  if (isLoading) return <p>Загрузка...</p>;
+  if (isLoading || isAuthLoading) return <p>Загрузка...</p>;
   if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
   if (!form) return <p>Форма не найдена или недоступна.</p>;
 

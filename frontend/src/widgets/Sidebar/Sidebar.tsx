@@ -36,11 +36,11 @@ export function Sidebar({ onToggle }: SidebarProps) {
 
         {!loading && user && (
           <>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
-              Мои формы
-            </NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardAll}>
               Все формы
+            </NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
+              Мои формы
             </NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.builder}>
               Конструктор
