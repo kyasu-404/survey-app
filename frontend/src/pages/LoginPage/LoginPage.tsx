@@ -5,10 +5,13 @@ import { routes } from "../../app/routes";
 import { login } from "../../features/auth/api";
 import { getAuthErrorMessage } from "../../shared/lib/error";
 
+type MessageType = "success" | "error";
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<MessageType>("success");
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,23 +31,14 @@ export default function LoginPage() {
         state: { toast: `Добро пожаловать, ${email}` },
       });
     } catch (error) {
+      setMessageType("error");
       setMessage(getAuthErrorMessage(error));
     }
   }
 
   return (
-    <div className="login-shell">
-      <section className="login-showcase">
-        <p className="login-kicker">Editorial Warm</p>
-        <h1 className="login-showcase-title">Формы для команды</h1>
-        <p>Единое пространство для рабочих форм, заметок и согласований в привычном теплым редакционном стиле.</p>
-        <div className="login-showcase-points" aria-label="Преимущества входа">
-          <span>Быстрый доступ</span>
-          <span>Командные сценарии</span>
-          <span>Удобная авторизация</span>
-        </div>
-      </section>
-      <section className="login-card">
+    <div className="login-page">
+      <div className="card" style={{ padding: 20, width: "min(420px, 100%)" }}>
         <h2 className="login-title">Авторизация</h2>
         <form
           onSubmit={(event) => {
@@ -60,8 +54,20 @@ export default function LoginPage() {
             <button type="submit">Войти</button>
           </div>
         </form>
-        {message && <p className="inline-feedback inline-feedback-error">{message}</p>}
-      </section>
+        {message && (
+          <p
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 8,
+              background: messageType === "error" ? "#fee2e2" : "#dbeafe",
+              color: messageType === "error" ? "#991b1b" : "#1d4ed8",
+            }}
+          >
+            {message}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

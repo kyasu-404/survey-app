@@ -1,6 +1,5 @@
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import DashboardPage from "../pages/DashboardPage/DashboardPage";
-import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
@@ -40,14 +39,6 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <DashboardPage viewMode="all" />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: routes.formResponsesById,
-        element: (
-          <ProtectedRoute>
-            <FormResponsesPage />
           </ProtectedRoute>
         ),
       },

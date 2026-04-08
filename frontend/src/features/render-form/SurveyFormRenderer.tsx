@@ -11,7 +11,6 @@ import { removeFileFromStorage, uploadFileToStorage } from "../../shared/api/sto
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
-  isPreviewMode?: boolean;
 };
 
 function getStoragePathByUrl(url: string) {
@@ -31,7 +30,7 @@ function getStoragePathByUrl(url: string) {
   return decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
 }
 
-export function SurveyFormRenderer({ schema, formId, isPreviewMode = false }: SurveyFormRendererProps) {
+export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -39,11 +38,10 @@ export function SurveyFormRenderer({ schema, formId, isPreviewMode = false }: Su
   const model = useMemo(() => {
     const nextModel = new Model(schema);
     nextModel.locale = schema.locale ?? "ru";
-    nextModel.completeText = isPreviewMode ? "" : "Завершить";
-    nextModel.showCompleteButton = !isPreviewMode;
+    nextModel.completeText = "Завершить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
     return nextModel;
-  }, [isPreviewMode, schema]);
+  }, [schema]);
 
   useEffect(() => {
     const handleUploadFiles = async (
@@ -120,10 +118,8 @@ export function SurveyFormRenderer({ schema, formId, isPreviewMode = false }: Su
 
   return (
     <>
-      {isSubmitting && <p className="survey-inline-feedback survey-inline-feedback-muted">Отправка ответа...</p>}
-      {submitError && (
-        <p className="survey-inline-feedback survey-inline-feedback-error">Ошибка отправки: {submitError}</p>
-      )}
+      {isSubmitting && <p>Отправка ответа...</p>}
+      {submitError && <p style={{ color: "#991b1b", marginBottom: 10 }}>Ошибка отправки: {submitError}</p>}
       <Survey model={model} />
     </>
   );

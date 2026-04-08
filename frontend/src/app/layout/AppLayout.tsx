@@ -35,9 +35,7 @@ export function AppLayout() {
       )}
       {!shouldHideSidebar && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
       <main className={shouldHideSidebar ? "app-main app-main-login" : "app-main"}>
-        <div className={shouldHideSidebar ? "page-shell page-shell-public" : "page-shell"}>
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
     </div>
   );
