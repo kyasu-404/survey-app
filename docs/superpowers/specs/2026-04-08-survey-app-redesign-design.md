@@ -1,218 +1,241 @@
-# Survey App Redesign Design
+# Survey App Premium Monochrome Refresh Design
 
 Date: 2026-04-08
-Status: Approved for planning
+Status: Ready for user review
+Supersedes: earlier 2026-04-08 warm/editorial redesign direction
 
 ## Summary
 
-This design refreshes the entire Survey App visual system so the product feels modern, layered, and intentional instead of flat and washed out.
+This design refresh updates the Survey App into a premium, minimalist monochrome product.
 
 The approved direction is:
 
-- Visual style: `Editorial Warm`
-- Dashboard structure: `Command Center`
-- Theme switching: not included in this iteration
-- Scope: authenticated app shell, dashboard views, builder shell, users page, responses page, login page, and public survey page
-- Constraint: preserve SurveyJS and Survey Creator behavior
+- visual style: `Soft Luxury Monochrome`
+- palette: black, white, graphite, and layered grayscale only
+- structure: keep the current site structure intact
+- motion: add only subtle, purposeful animations where they improve polish
+- scope: login page, authenticated shell, dashboard, builder shell, users page, responses page, and public survey page
+- safety constraint: preserve SurveyJS and Survey Creator behavior
 
-The redesign must also remove zebra striping from the forms list and replace it with a cleaner high-contrast workspace presentation.
+This is a presentation-first redesign. It should materially improve polish, hierarchy, and cohesion without changing routes, screen structure, data flow, or feature behavior.
 
 ## Goals
 
-- Make the application feel like a cohesive modern product rather than a set of loosely styled screens.
-- Add visual depth through layered surfaces, strong hierarchy, warm color relationships, and motion.
-- Turn the dashboard into a product overview screen instead of a single table-first page.
-- Improve perceived polish on login, public survey, admin, and analytics-adjacent screens.
-- Keep all existing business behavior, navigation, queries, filters, and actions intact.
-- Protect SurveyJS builder and public form rendering from styling regressions.
+- Replace the current blue-heavy visual language with a cohesive monochrome system.
+- Make the product feel premium, modern, and minimalist rather than flat or generic.
+- Increase perceived depth through layered surfaces, contrast, spacing, and shadows instead of color.
+- Unify all screens under one visual system, including login and public survey experiences.
+- Add restrained animation to key interactions so the UI feels responsive and intentional.
+- Keep all existing screen structure, controls, interactions, and business behavior intact.
 
 ## Non-Goals
 
-- No dark mode or theme switch in this iteration.
-- No API changes, schema changes, or query logic rewrites.
-- No redesign of SurveyJS internals beyond scoped theming and safe visual integration.
-- No new dashboard data sources beyond data already available in the frontend.
-- No unrelated refactor of business logic just to satisfy the redesign.
+- No layout or information architecture redesign.
+- No new dashboard modules, hero blocks, KPI sections, or reordered content.
+- No API, schema, routing, or business logic changes.
+- No theme switcher or dark mode in this iteration.
+- No aggressive SurveyJS restyling that risks interaction regressions.
 
 ## Current Problems
 
-- The app uses light blue styling with limited contrast and weak depth, so cards and screens blend together.
-- The forms list relies on zebra striping for readability, which makes it feel dated.
-- Layouts are inconsistent: some screens use polished shared classes, while others still rely on inline styles or minimal structure.
-- The dashboard is functional but does not feel like a central workspace.
-- Login and public survey pages do not match the visual ambition of the authenticated experience.
-- SurveyJS styling is partially customized already, but the surrounding shell does not feel integrated with it.
+- The app relies on a light blue palette that makes the product feel dated and less premium than intended.
+- Many surfaces blend together because contrast is weak and elevation is inconsistent.
+- Some screens still depend on inline styles, so the system does not feel fully unified.
+- The builder shell and public survey shell do not feel visually integrated with the rest of the app.
+- Interactive states are functional but visually static, so the UI lacks refinement.
+- Several states communicate mostly through color; the redesign should work even in a nearly monochrome palette.
 
 ## Design Principles
 
-### 1. Warm Editorial Product UI
+### 1. Soft Luxury Monochrome
 
-The app should use a warm neutral base with premium-looking surfaces, restrained accent colors, and deeper shadows. The visual tone should feel calm and confident rather than loud or neon.
+The interface should feel expensive through restraint. Use a white-to-graphite range with rich grayscale transitions, soft highlights, satin-like surfaces, and deep but controlled shadows.
 
-### 2. Command Center Hierarchy
+### 2. Structure Preservation First
 
-The dashboard should prioritize overview and decision-making first, then operational detail. Forms remain easy to manage, but the page should lead with summary, urgency, and actions before the full list.
+The user explicitly wants the current structure preserved. The redesign may refine wrappers, class names, spacing, and styling, but should not change screen composition, control order, route structure, or content hierarchy.
 
-### 3. Safe Layering
+### 3. Contrast Over Color
 
-The redesign should distinguish between:
-
-- app shell styling controlled by the app
-- SurveyJS builder styling controlled through scoped variables/selectors
-- public form presentation controlled by a page container plus limited SurveyJS theming
-
-This separation prevents broad CSS changes from breaking builder or survey interactions.
+Emphasis should come from typography, inversion, borders, fill density, and elevation rather than accent hues. Important controls may use black or near-black fills with white text. Secondary controls should stay light and quiet.
 
 ### 4. Motion With Restraint
 
-Animations should be limited to micro-interactions that improve polish without adding distraction or layout instability.
+Animations should be minimal, fast, and supportive. Movement exists to improve polish and perceived responsiveness, not to draw attention to itself.
+
+### 5. Safe Integration
+
+SurveyJS builder and renderer must remain fully functional. Styling should stay scoped and avoid broad selectors that could alter component behavior unexpectedly.
 
 ## Information Architecture
 
-## App Shell
+## Global Rule
 
-The application shell becomes a consistent system used by all authenticated pages:
+The current structure stays as-is across the site.
 
-- a deeper background with warm gradients and subtle light blooms
-- a more product-like sidebar with clearer grouping and stronger active states
-- consistent page headers and content containers
-- reusable card, section, toolbar, and modal patterns
+Allowed changes:
 
-## Dashboard: Command Center
+- replacing inline styles with reusable classes
+- introducing shared wrappers when they preserve the exact existing content order
+- refining spacing, sizing, visual grouping, and alignment
+- improving empty, loading, modal, and popover presentation
 
-The dashboard becomes a modular overview page with the following structure:
+Disallowed changes:
 
-1. Hero / context block
-   Shows the page title, current mode (`My Forms` or `All Forms`), a short description, and quick actions.
-
-2. KPI row
-   Shows summary metrics such as total forms, active forms, and forms with active deadlines.
-
-3. Priority modules
-   Includes two compact modules derived from already loaded forms data:
-   - nearest active deadlines
-   - recent forms ordered from the currently available frontend dataset
-
-4. Primary workspace module
-   Contains the full searchable/filterable forms list.
-
-This keeps the forms list central but no longer makes it the only visual purpose of the page. No new endpoints are introduced for these modules.
-
-## Forms List Module
-
-The forms list remains a table/list hybrid because the page is operational and action-heavy.
-
-Approved changes:
-
-- remove zebra striping completely
-- keep high readability through whitespace, section framing, and hover/focus states
-- visually separate header, controls, and rows using surface layers instead of alternating row colors
-- use status chips and stronger typography instead of relying on background coloration
-- keep row actions dense and discoverable
-- preserve existing behavior for copy link, duplicate, rename, edit, export, deadline, delete, and open
-
-Rows authored by the current user may still have a subtle distinction, but not through zebra logic.
+- adding new dashboard sections that change page structure
+- moving controls into different content regions
+- changing page purpose or navigation hierarchy
+- replacing tables/lists with different interaction models
 
 ## Screen-Level Design
 
-## Authenticated Screens
+## Authenticated App Shell
 
-### Sidebar
+The app shell becomes darker in tone only through depth, not through dark mode.
 
-- strengthen branding area
-- use better active navigation states
-- improve spacing and lower action grouping
-- keep collapse/expand behavior unchanged
+- background uses soft grayscale gradients and low-contrast light blooms
+- sidebar becomes more product-like and composed, with cleaner grouping and calmer contrast
+- content area keeps its current layout but gains stronger separation from the background
+- shared cards, tables, popovers, chips, and modal surfaces use one monochrome material system
 
-### Dashboard
+## Sidebar
 
-- implement the Command Center layout
-- promote filters into a cleaner control panel
-- improve empty state presentation
-- redesign action clusters and popovers to match the new system
+- keep the current logo, title, nav order, and collapse behavior
+- strengthen the brand block through spacing, cleaner typography, and a premium surface treatment
+- active nav state should use monochrome inversion or a dense graphite pill rather than blue emphasis
+- inactive nav items remain quiet but still clearly interactive
+- collapse/open buttons should feel compact and intentional, with refined hover/focus states
 
-### Builder
+## Dashboard
 
-- keep builder behavior unchanged
-- improve outer shell, spacing, and integration with the app theme
-- preserve scoped Survey Creator custom properties and selectors
-- avoid global rules that target Survey Creator classes outside `.builder-creator-shell`
+- keep the current toolbar, filters, forms list, menus, and pagination behavior
+- remove the remaining blue-tinted backgrounds and convert forms cards to layered monochrome surfaces
+- improve row/card readability through border contrast, spacing, and type hierarchy rather than colored fills
+- status and metadata pills should become monochrome chips that rely on label, density, and border treatment
+- menus and popovers should match the rest of the premium material language
+- preserve the current operational feel; this remains a working surface, not a marketing page
 
-### Form Responses
+## Login
 
-- restyle page header, actions, and table wrapper
-- align table visuals with the forms list system
-- preserve export and refresh flows
+- keep the current single-card auth structure and form fields
+- present the page as a polished standalone scene with more atmosphere and stronger vertical rhythm
+- use a more refined auth card surface and larger title hierarchy
+- restyle validation and status messages to match the monochrome system
 
-### Users
+## Users
 
-- replace the current minimal admin layout with structured modules
-- separate creation/password controls from the user list visually
-- restyle status indicators and action buttons
-- preserve existing admin permissions and actions
+- preserve the current create-user controls, password actions, table, and modal flows
+- replace ad hoc inline styling with shared admin surface patterns
+- visually separate creation controls from the table without changing their order
+- convert status labels and action areas into the same monochrome language used on the dashboard
 
-## Unauthenticated Screens
+## Form Responses
 
-### Login
+- preserve page structure, toolbar actions, and table rendering
+- align the table shell, header, and empty states with the dashboard system
+- make the data surface feel clean and high-contrast without adding visual noise
 
-- create a polished standalone auth experience in the same visual language
-- improve form presentation, messaging, spacing, and hierarchy
-- keep authentication behavior unchanged
+## Builder
 
-### Public Survey Page
+- preserve current builder page structure and all Survey Creator functionality
+- redesign only the outer shell and scoped Survey Creator theming
+- replace blue-tinted variables with graphite, white, and neutral gray equivalents
+- keep toolbar actions, focus states, and component affordances readable and usable
 
-- wrap the survey in a richer page shell with stronger first impression
-- add better title/context framing around the survey card
-- keep preview mode behavior intact
-- allow SurveyJS completion, file upload, and submission behavior to work exactly as before
+## Public Survey Page
+
+- keep the current survey page structure and SurveyJS rendering logic
+- wrap the form in a more premium monochrome shell so the page feels intentional even for unauthenticated users
+- preserve completion, upload, and submission behavior exactly as today
 
 ## Visual System
 
 ## Tokens
 
-Introduce a clearer token system in global CSS for:
+Introduce a monochrome token set in global CSS for:
 
-- warm background ramps
-- surface colors for shell, cards, raised cards, muted modules, and overlays
-- border colors for low, medium, and high emphasis
-- text hierarchy colors
-- accent and accent-soft states
-- success, warning, and danger surfaces
-- shadow levels
-- radii scale
-- motion timings
+- app background layers
+- shell and surface backgrounds
+- raised, muted, and overlay surfaces
+- low, medium, and strong border contrast
+- primary and secondary text
+- inverted surfaces and text
+- focus rings
+- semantic surfaces expressed in grayscale
+- shadow depths
+- radii
+- motion timing and easing
+
+The palette should be built from warm-white, soft-white, pearl-gray, silver-gray, graphite, charcoal, and black. Avoid saturated color accents.
+
+## Typography
+
+- keep the UI typography clean and modern
+- increase title hierarchy through size, weight, and tracking rather than decoration
+- supporting text should feel calm and editorial, but still highly readable in admin contexts
+- controls should use slightly tighter, more premium typography than the current default feel
+
+## Surfaces
+
+Surfaces should feel layered rather than flat.
+
+- page background: soft grayscale atmosphere
+- standard card: bright surface with subtle edge contrast
+- raised card: deeper shadow and stronger border separation
+- muted module: off-white/pearl background for secondary regions
+- overlay: translucent white with blur only where it meaningfully improves depth
 
 ## Components
 
-The redesign should define reusable visual patterns for:
+The redesign should define reusable styling for:
 
-- page hero blocks
-- section cards
-- KPI cards
-- filter panels
-- data tables
+- cards
+- buttons and button-links
+- inputs, selects, and textareas
+- nav items
+- toolbars
+- tables
 - status chips
 - empty states
-- modals
-- inline toolbars
-- icon/action buttons
+- popovers and dropdown menus
+- modal backdrops and modal cards
+- icon buttons and compact controls
 
-These patterns should replace one-off inline styling where practical.
+## Status Treatment
+
+Status semantics should remain understandable without using color as the main differentiator.
+
+Use combinations of:
+
+- copy labels
+- fill density
+- border emphasis
+- iconography if already present or easy to add safely
+- contrast inversion for important active states
+
+Pure green/red/blue status styling should be removed in favor of grayscale treatments unless a functional library surface forces otherwise.
 
 ## Motion
 
-Motion is limited to:
+Motion should be subtle and consistent.
 
-- soft hover lift for cards and key controls
-- shadow and border transitions
-- subtle popover/modal entry
+Allowed motion:
+
+- card and button hover lift of roughly 1-2px
+- border and shadow transitions
+- popover fade/scale entry
+- modal fade/slide entry
+- soft appearance of major surfaces on first render
 - focus ring transitions
 
 Avoid:
 
-- page-wide animated transitions
-- motion that changes measured table layout
-- animation that interferes with SurveyJS interaction
+- page transition animations
+- anything that shifts table measurements during interaction
+- decorative looping motion
+- heavy builder or survey animation that could interfere with usability
+
+`prefers-reduced-motion` should reduce or remove non-essential animation.
 
 ## Technical Design
 
@@ -220,13 +243,19 @@ Avoid:
 
 Primary styling remains in `frontend/src/app.css`, which becomes the source of:
 
-- global tokens
-- shared shell layout
-- dashboard and module styling
-- login/public screen styling
-- scoped builder styling
+- monochrome design tokens
+- shared shell layout styling
+- dashboard, users, responses, login, and public survey styling
+- modal and popover styling
+- scoped builder theming
 
-Where page structure needs significant change, update page components to introduce semantic wrappers and reusable class names rather than relying on inline styles.
+Where pages currently rely on inline styles, replace them with reusable class names as long as the rendered structure stays materially the same.
+
+The first files most likely to need small markup cleanups are:
+
+- `frontend/src/pages/LoginPage/LoginPage.tsx`
+- `frontend/src/pages/UsersPage/UsersPage.tsx`
+- `frontend/src/pages/FormResponsesPage/FormResponsesPage.tsx`
 
 ## SurveyJS Safety Rules
 
@@ -234,9 +263,9 @@ These rules are mandatory:
 
 - do not add broad global selectors for `.sd-*`, `.svc-*`, or `.sv-*`
 - builder changes must stay under `.builder-creator-shell`
-- public survey styling should be applied through a dedicated page/container scope
+- public survey styling should be applied through dedicated survey-page scopes
 - prefer SurveyJS custom properties over deep selector overrides when possible
-- if a cosmetic change threatens builder or renderer behavior, keep functionality and reduce the styling scope
+- if a cosmetic change threatens builder or renderer behavior, reduce styling scope before changing behavior
 
 ## Data Flow And Behavior
 
@@ -244,127 +273,141 @@ No product behavior changes are planned.
 
 Existing data flow stays the same:
 
-- dashboard and related modules continue using existing queries and derived counts
-- filters remain based on current local state and query parameters
-- form actions continue using current mutations and invalidation behavior
-- responses export and users management keep their current flows
-- survey submission, upload, and completion logic stays unchanged
+- dashboard queries, filters, mutations, and menu behavior stay as implemented
+- users creation and password management flows stay as implemented
+- responses export and refresh stay as implemented
+- survey rendering, submission, completion, and upload flows stay as implemented
 
-The redesign is presentation-focused.
+This redesign changes presentation only.
 
 ## Error Handling
 
-All current error states remain supported. The redesign should only improve how they are displayed:
+All current loading, empty, and error states remain supported.
 
-- more readable inline error surfaces
-- consistent empty, loading, and error blocks
-- no hidden errors behind decorative UI
-- maintain existing toast usage
+The redesign should improve them by:
+
+- making states more visually consistent
+- keeping messages readable against the monochrome system
+- avoiding hidden or low-contrast errors
+- preserving current toast usage and page-level messaging behavior
 
 ## Accessibility
 
 The redesign should maintain or improve:
 
-- keyboard access to menus, filters, buttons, and row actions
-- visible focus indicators
-- readable text contrast
-- non-color-dependent status interpretation where practical
-- preserved semantics for tables and controls
+- keyboard access to menus, filters, buttons, and form controls
+- visible focus states with strong contrast
+- readable contrast between text and surfaces
+- status readability without depending on hue alone
+- safe reduced-motion behavior
+- preserved semantics for tables, buttons, and existing controls
 
 ## Testing Strategy
 
 Verification should cover:
 
-1. Dashboard (`my` and `all`)
+1. Login
+   - sign-in flow still works
+   - error and success messaging remain readable
+
+2. Dashboard (`my` and `all`)
    - search
-   - status filters
    - date filters
+   - page size selector
    - refresh
-   - row open
+   - card open
+   - status menu
+   - actions menu
    - copy link
    - duplicate
    - rename
-   - export
-   - deadline modal
-   - delete modal
-   - action menu placement and visibility
+   - deadline flow
+   - delete flow
 
-2. Builder
-   - page opens correctly
-   - toolbox remains usable
-   - preview remains visible
-   - custom toolbar actions remain accessible
-
-3. Public survey page
-   - form loads
-   - preview mode works
-   - submit works
-   - upload/clear file flow still works
-   - completion message remains visible
-
-4. Login
-   - sign-in flow
-   - error state presentation
-
-5. Users
+3. Users
    - create user
-   - change password
-   - enable/disable
+   - change my password
+   - change another user's password
+   - enable/disable user
    - delete user
 
-6. Form responses
-   - table renders correctly
-   - refresh works
-   - export works
+4. Form responses
+   - table rendering
+   - refresh
+   - export
+
+5. Builder
+   - page opens correctly
+   - toolbox remains usable
+   - preview remains usable
+   - custom toolbar actions remain visible
+
+6. Public survey
+   - survey loads
+   - form fields remain interactive
+   - submit works
+   - upload/clear file flow still works
+   - completion state still appears
 
 7. Visual checks
-   - forms list no longer uses zebra striping
-   - app feels consistent across authenticated and public surfaces
-   - SurveyJS builder remains intact visually and functionally
+   - app is fully monochrome
+   - no important UI state still depends on the old blue accent system
+   - motion feels subtle and consistent
+   - no structural screen changes were introduced
+   - SurveyJS still feels integrated but not broken
 
 ## Implementation Sequence
 
 Recommended execution order:
 
-1. Establish tokens and app shell foundation in CSS.
-2. Redesign dashboard into the Command Center structure and remove zebra striping from the forms list.
-3. Redesign login and public survey shell.
-4. Redesign users and form responses screens.
-5. Apply final builder shell polish and SurveyJS-safe refinements.
-6. Run regression checks and visual cleanup.
+1. Replace global tokens and base controls with the monochrome system in CSS.
+2. Refresh shell, sidebar, cards, and shared surfaces.
+3. Redesign dashboard visuals without changing its structure.
+4. Redesign login, users, and responses screens and remove inline-style dependencies where needed.
+5. Apply scoped monochrome theming to builder and public survey surfaces.
+6. Add restrained animation and reduced-motion handling.
+7. Run regression and visual verification across all key flows.
 
 ## Risks And Mitigations
 
-### Risk: Existing local changes in the worktree
+### Risk: The UI becomes flat or "gray soup"
 
 Mitigation:
 
-- avoid reverting unrelated files
-- scope edits carefully
-- integrate with current component structure instead of resetting files
+- rely on layered surface values rather than one flat gray
+- use contrast, borders, and elevation intentionally
+- reserve inversion for key emphasis points
 
-### Risk: Dashboard file is already dense
+### Risk: Preserving structure could still drift during cleanup
 
 Mitigation:
 
-- change structure incrementally
-- introduce clear wrappers/classes
-- keep business logic intact while reorganizing markup
+- treat JSX changes as styling support only
+- avoid reordering content
+- verify before/after structure during review
+
+### Risk: Existing inline styles conflict with the new system
+
+Mitigation:
+
+- replace only the inline styles that block consistency
+- move those styles into shared classes rather than ad hoc local overrides
 
 ### Risk: SurveyJS regressions
 
 Mitigation:
 
-- keep all SurveyJS targeting scoped
-- verify builder and public renderer after visual changes
+- keep all library styling scoped
+- prefer custom properties over deep overrides
+- verify builder and public survey behavior after every styling pass
 
 ## Final Decision Record
 
 Approved decisions captured by this spec:
 
-- full-site redesign is in scope
-- `Editorial Warm` is the approved visual direction
-- `Command Center` is the approved dashboard structure
-- theme switching is excluded from this iteration
-- SurveyJS safety takes precedence over aggressive styling
-- zebra striping must be removed from the forms list
+- the redesign direction is `Soft Luxury Monochrome`
+- the entire site stays in scope, but structure must remain unchanged
+- the palette is strictly black/white/graphite/grayscale
+- subtle animation is required where it improves polish
+- blue-accent styling should be removed from the app-owned design system
+- SurveyJS safety takes precedence over aggressive visual changes
