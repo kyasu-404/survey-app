@@ -106,6 +106,7 @@ vi.mock("survey-creator-react", () => {
       pages: [{ name: "page1", title: "Страница 1", elements: [] }],
     };
     onElementAllowOperations = new FakeEvent();
+    onSurveyInstanceCreated = new FakeEvent();
     onModified = new FakeEvent();
     onQuestionAdded = new FakeEvent();
     saveSurveyFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
@@ -284,7 +285,7 @@ describe("SurveyBuilder", () => {
     expect(
       creator.toolbox.items.map((item: { name: string }) => item.name),
     ).toEqual([
-      "text_plain",
+      "text",
       "comment",
       "radiogroup",
       "checkbox",
@@ -313,7 +314,17 @@ describe("SurveyBuilder", () => {
       "expression",
       "html",
     ]);
-    expect(creator.toolbox.items[5].showInToolboxOnly).not.toBe(true);
+    expect(creator.toolbox.items[0].items.map((item: { name: string }) => item.name)).toEqual([
+      "text_plain",
+      "text_number",
+      "text_integer",
+      "text_date",
+      "text_time",
+      "text_datetime-local",
+      "text_phone",
+      "text_email",
+    ]);
+    expect(creator.toolbox.items[5].showInToolboxOnly).toBe(true);
 
     const textOptions = {
       obj: {
@@ -326,7 +337,7 @@ describe("SurveyBuilder", () => {
     creator.onElementAllowOperations.fire(creator, textOptions);
 
     expect(textOptions.allowChangeType).toBe(true);
-    expect(textOptions.allowChangeInputType).toBe(false);
+    expect(textOptions.allowChangeInputType).toBe(true);
 
     const ratingOptions = {
       obj: {
@@ -337,6 +348,27 @@ describe("SurveyBuilder", () => {
 
     creator.onElementAllowOperations.fire(creator, ratingOptions);
 
-    expect(ratingOptions.allowChangeInputType).toBe(true);
+    expect(ratingOptions.allowChangeInputType).toBe(false);
+
+    const previewSurvey = {
+      applyTheme: vi.fn(),
+    };
+
+    act(() => {
+      creator.onSurveyInstanceCreated.fire(creator, {
+        area: "preview-tab",
+        survey: previewSurvey,
+      });
+    });
+
+    expect(previewSurvey.applyTheme).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeName: "defaultV2",
+        cssVariables: expect.objectContaining({
+          "--sjs-primary-backcolor": "#121212",
+          "--sjs-primary-backcolor-dark": "#000000",
+        }),
+      }),
+    );
   });
 });
