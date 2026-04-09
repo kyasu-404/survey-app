@@ -8,20 +8,28 @@ import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
 
 const {
+  componentCollectionAdd,
+  componentCollectionGetByName,
   createSurveyMutateAsync,
   creatorInstances,
   getFormById,
   getForms,
   navigate,
   saveSurveySchema,
+  serializerGetProperty,
+  serializerInputTypeProp,
   showToast,
 } = vi.hoisted(() => ({
+  componentCollectionAdd: vi.fn(),
+  componentCollectionGetByName: vi.fn(),
   createSurveyMutateAsync: vi.fn(),
   creatorInstances: [] as any[],
   getFormById: vi.fn(),
   getForms: vi.fn(),
   navigate: vi.fn(),
   saveSurveySchema: vi.fn(),
+  serializerGetProperty: vi.fn(),
+  serializerInputTypeProp: { visible: true },
   showToast: vi.fn(),
 }));
 
@@ -86,6 +94,15 @@ vi.mock("survey-creator-core", () => ({
 }));
 
 vi.mock("survey-core", () => ({
+  ComponentCollection: {
+    Instance: {
+      add: componentCollectionAdd,
+      getCustomQuestionByName: componentCollectionGetByName,
+    },
+  },
+  Serializer: {
+    getProperty: serializerGetProperty,
+  },
   SvgRegistry: {
     registerIconFromSvg: vi.fn(),
   },
@@ -105,6 +122,7 @@ vi.mock("survey-creator-react", () => {
       questionDescriptionLocation: "underTitle",
       pages: [{ name: "page1", title: "Страница 1", elements: [] }],
     };
+    options: Record<string, unknown>;
     onElementAllowOperations = new FakeEvent();
     onSurveyInstanceCreated = new FakeEvent();
     onModified = new FakeEvent();
@@ -118,6 +136,7 @@ vi.mock("survey-creator-react", () => {
       ],
       showCategoryTitles: false,
       clearItems: vi.fn(),
+      getItemByName: vi.fn((name: string) => this.toolbox.items.find((item) => item.name === name) ?? null),
       addItem: vi.fn((item: Record<string, unknown>, index?: number) => {
         if (index === undefined || index < 0 || index >= this.toolbox.items.length) {
           this.toolbox.items.push(item);
@@ -135,7 +154,8 @@ vi.mock("survey-creator-react", () => {
       getActionById: (id: string) => this.toolbar.actions.find((action) => action.id === id),
     };
 
-    constructor() {
+    constructor(options: Record<string, unknown>) {
+      this.options = options;
       creatorInstances.push(this);
     }
 
@@ -174,6 +194,9 @@ describe("SurveyBuilder", () => {
     localStorage.clear();
     vi.clearAllMocks();
     creatorInstances.length = 0;
+    componentCollectionGetByName.mockReturnValue(undefined);
+    serializerGetProperty.mockReturnValue(serializerInputTypeProp);
+    serializerInputTypeProp.visible = true;
     getFormById.mockResolvedValue(null);
     getForms.mockResolvedValue([]);
     saveSurveySchema.mockResolvedValue(undefined);
@@ -264,7 +287,7 @@ describe("SurveyBuilder", () => {
     });
   });
 
-  it("configures creator with collapsed sidebar, toolbar reset action, and flat text type list", async () => {
+  it("configures creator with one question type whitelist for toolbox and type conversion", async () => {
     renderBuilder();
 
     await waitFor(() => {
@@ -282,21 +305,19 @@ describe("SurveyBuilder", () => {
       "builder-create-template",
     ]);
 
-    expect(
-      creator.toolbox.items.map((item: { name: string }) => item.name),
-    ).toEqual([
+    const questionTypes = [
       "text",
       "comment",
       "radiogroup",
       "checkbox",
       "dropdown",
-      "text_number",
-      "text_integer",
-      "text_date",
-      "text_time",
-      "text_datetime-local",
-      "text_phone",
-      "text_email",
+      "number",
+      "integer",
+      "date",
+      "time",
+      "datetime",
+      "phone",
+      "email",
       "boolean",
       "rating",
       "ranking",
@@ -313,18 +334,34 @@ describe("SurveyBuilder", () => {
       "paneldynamic",
       "expression",
       "html",
-    ]);
-    expect(creator.toolbox.items[0].items.map((item: { name: string }) => item.name)).toEqual([
-      "text_plain",
-      "text_number",
-      "text_integer",
-      "text_date",
-      "text_time",
-      "text_datetime-local",
-      "text_phone",
-      "text_email",
-    ]);
-    expect(creator.toolbox.items[5].showInToolboxOnly).toBe(true);
+    ];
+
+    expect(creator.options.questionTypes).toEqual(questionTypes);
+    expect(creator.toolbox.items.map((item: { name: string }) => item.name)).toEqual(questionTypes);
+    expect(creator.toolbox.getItemByName("text")?.items).toEqual([]);
+    expect(serializerGetProperty).toHaveBeenCalledWith("text", "inputType");
+    expect(serializerInputTypeProp.visible).toBe(false);
+    expect(componentCollectionAdd).toHaveBeenCalledTimes(7);
+    expect(componentCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "email",
+        questionJSON: expect.objectContaining({
+          type: "text",
+          inputType: "email",
+        }),
+        inheritBaseProps: true,
+      }),
+    );
+    expect(componentCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "integer",
+        questionJSON: expect.objectContaining({
+          type: "text",
+          inputType: "number",
+        }),
+        inheritBaseProps: true,
+      }),
+    );
 
     const textOptions = {
       obj: {
@@ -337,18 +374,20 @@ describe("SurveyBuilder", () => {
     creator.onElementAllowOperations.fire(creator, textOptions);
 
     expect(textOptions.allowChangeType).toBe(true);
-    expect(textOptions.allowChangeInputType).toBe(true);
+    expect(textOptions.allowChangeInputType).toBe(false);
 
-    const ratingOptions = {
+    const unsupportedOptions = {
       obj: {
-        getType: () => "rating",
+        getType: () => "unsupported-custom-type",
       },
+      allowChangeType: true,
       allowChangeInputType: false,
     };
 
-    creator.onElementAllowOperations.fire(creator, ratingOptions);
+    creator.onElementAllowOperations.fire(creator, unsupportedOptions);
 
-    expect(ratingOptions.allowChangeInputType).toBe(false);
+    expect(unsupportedOptions.allowChangeType).toBe(false);
+    expect(unsupportedOptions.allowChangeInputType).toBe(false);
 
     const previewSurvey = {
       applyTheme: vi.fn(),

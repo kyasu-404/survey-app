@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
+import { ComponentCollection, Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
 import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
@@ -41,16 +41,22 @@ type CreatorToolboxItem = {
   title: string;
   category: string;
   json: Record<string, unknown>;
-  showInToolboxOnly?: boolean;
   items?: CreatorToolboxItem[];
 };
 
-const SUPPORTED_CREATOR_QUESTION_TYPES = [
+const QUESTION_TYPES = [
   "text",
   "comment",
   "radiogroup",
   "checkbox",
   "dropdown",
+  "number",
+  "integer",
+  "date",
+  "time",
+  "datetime",
+  "phone",
+  "email",
   "boolean",
   "rating",
   "ranking",
@@ -68,6 +74,244 @@ const SUPPORTED_CREATOR_QUESTION_TYPES = [
   "expression",
   "html",
 ] as const;
+
+type CreatorQuestionType = (typeof QUESTION_TYPES)[number];
+
+type QuestionTypeDefinition = {
+  name: CreatorQuestionType;
+  iconName: string;
+  title: string;
+  category: "basic" | "advanced";
+  questionJSON?: Record<string, unknown>;
+};
+
+const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
+  {
+    name: "text",
+    iconName: "icon-text",
+    title: "Текст",
+    category: "basic",
+  },
+  {
+    name: "comment",
+    iconName: "icon-comment",
+    title: "Абзац",
+    category: "basic",
+  },
+  {
+    name: "radiogroup",
+    iconName: "icon-radiogroup",
+    title: "Единичный выбор",
+    category: "basic",
+  },
+  {
+    name: "checkbox",
+    iconName: "icon-checkbox",
+    title: "Множественный выбор",
+    category: "basic",
+  },
+  {
+    name: "dropdown",
+    iconName: "icon-dropdown",
+    title: "Выпадающий список",
+    category: "basic",
+  },
+  {
+    name: "number",
+    iconName: "icon-toolbox-float-custom",
+    title: "Число",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "number",
+      step: "any",
+      titleLocation: "top",
+    },
+  },
+  {
+    name: "integer",
+    iconName: "icon-toolbox-integer-custom",
+    title: "Целое число",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "number",
+      step: 1,
+      titleLocation: "top",
+      validators: [
+        {
+          type: "regex",
+          regex: "^-?\\d+$",
+          text: "Введите целое число без точки и запятой",
+        },
+      ],
+    },
+  },
+  {
+    name: "date",
+    iconName: "icon-toolbox-date-custom",
+    title: "Дата",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "date",
+      titleLocation: "top",
+    },
+  },
+  {
+    name: "time",
+    iconName: "icon-toolbox-time-custom",
+    title: "Время",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "time",
+      titleLocation: "top",
+    },
+  },
+  {
+    name: "datetime",
+    iconName: "icon-toolbox-datetime-custom",
+    title: "Дата и время",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "datetime-local",
+      titleLocation: "top",
+    },
+  },
+  {
+    name: "phone",
+    iconName: "icon-toolbox-phone-custom",
+    title: "Телефон",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "tel",
+      maskType: "pattern",
+      maskSettings: {
+        pattern: "+7(999)-999-99-99",
+        saveMaskedValue: true,
+      },
+      placeholder: "+7(999)-999-99-99",
+      titleLocation: "top",
+      validators: [
+        {
+          type: "regex",
+          regex: "^\\+7\\(\\d{3}\\)-\\d{3}-\\d{2}-\\d{2}$",
+          text: "Введите телефон в формате +7(999)-999-99-99",
+        },
+      ],
+    },
+  },
+  {
+    name: "email",
+    iconName: "icon-toolbox-email-custom",
+    title: "Email",
+    category: "basic",
+    questionJSON: {
+      type: "text",
+      inputType: "email",
+      titleLocation: "top",
+    },
+  },
+  {
+    name: "boolean",
+    iconName: "icon-boolean",
+    title: "Да/Нет",
+    category: "advanced",
+  },
+  {
+    name: "rating",
+    iconName: "icon-rating",
+    title: "Рейтинг",
+    category: "advanced",
+  },
+  {
+    name: "ranking",
+    iconName: "icon-ranking",
+    title: "Ранжирование",
+    category: "advanced",
+  },
+  {
+    name: "tagbox",
+    iconName: "icon-tagbox",
+    title: "Теги",
+    category: "advanced",
+  },
+  {
+    name: "matrix",
+    iconName: "icon-matrix",
+    title: "Матрица",
+    category: "advanced",
+  },
+  {
+    name: "matrixdropdown",
+    iconName: "icon-matrixdropdown",
+    title: "Матрица с выбором",
+    category: "advanced",
+  },
+  {
+    name: "matrixdynamic",
+    iconName: "icon-matrixdynamic",
+    title: "Динамическая матрица",
+    category: "advanced",
+  },
+  {
+    name: "multipletext",
+    iconName: "icon-multipletext",
+    title: "Несколько полей",
+    category: "advanced",
+  },
+  {
+    name: "image",
+    iconName: "icon-image",
+    title: "Изображение",
+    category: "advanced",
+  },
+  {
+    name: "imagepicker",
+    iconName: "icon-imagepicker",
+    title: "Выбор изображения",
+    category: "advanced",
+  },
+  {
+    name: "file",
+    iconName: "icon-file",
+    title: "Файл",
+    category: "advanced",
+  },
+  {
+    name: "signaturepad",
+    iconName: "icon-signaturepad",
+    title: "Подпись",
+    category: "advanced",
+  },
+  {
+    name: "panel",
+    iconName: "icon-panel",
+    title: "Панель",
+    category: "advanced",
+  },
+  {
+    name: "paneldynamic",
+    iconName: "icon-paneldynamic",
+    title: "Динамическая панель",
+    category: "advanced",
+  },
+  {
+    name: "expression",
+    iconName: "icon-expression",
+    title: "Выражение",
+    category: "advanced",
+  },
+  {
+    name: "html",
+    iconName: "icon-html",
+    title: "HTML",
+    category: "advanced",
+  },
+];
 
 const CREATOR_SURVEY_THEME: ITheme = {
   themeName: "defaultV2",
@@ -93,105 +337,6 @@ const CREATOR_SURVEY_THEME: ITheme = {
   },
 };
 
-function createTextInputToolboxItems(): CreatorToolboxItem[] {
-  return [
-    {
-      name: "text_plain",
-      iconName: "icon-text",
-      title: "Текст",
-      category: "basic",
-      json: { type: "text", inputType: "text", titleLocation: "top" },
-    },
-    {
-      name: "text_number",
-      iconName: "icon-toolbox-float-custom",
-      title: "Число",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "number",
-        step: "any",
-        titleLocation: "top",
-      },
-    },
-    {
-      name: "text_integer",
-      iconName: "icon-toolbox-integer-custom",
-      title: "Целое число",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "number",
-        step: 1,
-        titleLocation: "top",
-        validators: [
-          {
-            type: "regex",
-            regex: "^-?\\d+$",
-            text: "Введите целое число без точки и запятой",
-          },
-        ],
-      },
-    },
-    {
-      name: "text_date",
-      iconName: "icon-toolbox-date-custom",
-      title: "Дата",
-      category: "basic",
-      json: { type: "text", inputType: "date", titleLocation: "top" },
-    },
-    {
-      name: "text_time",
-      iconName: "icon-toolbox-time-custom",
-      title: "Время",
-      category: "basic",
-      json: { type: "text", inputType: "time", titleLocation: "top" },
-    },
-    {
-      name: "text_datetime-local",
-      iconName: "icon-toolbox-datetime-custom",
-      title: "Дата и время",
-      category: "basic",
-      json: { type: "text", inputType: "datetime-local", titleLocation: "top" },
-    },
-    {
-      name: "text_phone",
-      iconName: "icon-toolbox-phone-custom",
-      title: "Телефон",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "tel",
-        maskType: "pattern",
-        maskSettings: {
-          pattern: "+7(999)-999-99-99",
-          saveMaskedValue: true,
-        },
-        placeholder: "+7(999)-999-99-99",
-        titleLocation: "top",
-        validators: [
-          {
-            type: "regex",
-            regex: "^\\+7\\(\\d{3}\\)-\\d{3}-\\d{2}-\\d{2}$",
-            text: "Введите телефон в формате +7(999)-999-99-99",
-          },
-        ],
-      },
-    },
-    {
-      name: "text_email",
-      iconName: "icon-toolbox-email-custom",
-      title: "email",
-      category: "basic",
-      json: {
-        type: "text",
-        inputType: "email",
-        titleLocation: "top",
-      },
-    },
-  ];
-}
-
 function configureCreatorLocalization() {
   surveyLocalization.defaultLocale = "ru";
   editorLocalization.currentLocale = "ru";
@@ -211,82 +356,29 @@ function configureCreatorLocalization() {
 
 function configureCreatorToolbox(creator: SurveyCreator) {
   const toolbox = creator.toolbox;
-  const textInputItems = createTextInputToolboxItems();
-  const textToolboxItem: CreatorToolboxItem = {
-    name: "text",
-    iconName: "icon-text",
-    title: "Текст",
-    category: "basic",
-    json: { type: "text", inputType: "text", titleLocation: "top" },
-    items: textInputItems,
-  };
-  // SurveyJS builds the native "change input type" dropdown from a base item with subitems.
-  // These shortcuts keep the left toolbox flat without polluting conversion menus.
-  const textToolboxShortcuts = textInputItems
-    .filter((item) => item.name !== "text_plain")
-    .map((item) => ({
-      ...item,
-      showInToolboxOnly: true,
-    }));
-
   toolbox.showCategoryTitles = true;
   toolbox.clearItems();
 
-  const basicItems = [
-    textToolboxItem,
-    {
-      name: "comment",
-      iconName: "icon-comment",
-      title: "Абзац",
-      category: "basic",
-      json: { type: "comment", titleLocation: "top" },
-    },
-    {
-      name: "radiogroup",
-      iconName: "icon-radiogroup",
-      title: "Единичный выбор",
-      category: "basic",
-      json: { type: "radiogroup" },
-    },
-    {
-      name: "checkbox",
-      iconName: "icon-checkbox",
-      title: "Множественный выбор",
-      category: "basic",
-      json: { type: "checkbox" },
-    },
-    {
-      name: "dropdown",
-      iconName: "icon-dropdown",
-      title: "Выпадающий список",
-      category: "basic",
-      json: { type: "dropdown" },
-    },
-    ...textToolboxShortcuts,
-  ];
+  QUESTION_TYPE_DEFINITIONS.forEach((definition, index) => {
+    const item: CreatorToolboxItem = {
+      name: definition.name,
+      iconName: definition.iconName,
+      title: definition.title,
+      category: definition.category,
+      json: { type: definition.name },
+    };
 
-  const advancedItems = [
-    { name: "boolean", iconName: "icon-boolean", title: "Да/Нет", category: "advanced", json: { type: "boolean" } },
-    { name: "rating", iconName: "icon-rating", title: "Рейтинг", category: "advanced", json: { type: "rating" } },
-    { name: "ranking", iconName: "icon-ranking", title: "Ранжирование", category: "advanced", json: { type: "ranking" } },
-    { name: "tagbox", iconName: "icon-tagbox", title: "Теги", category: "advanced", json: { type: "tagbox" } },
-    { name: "matrix", iconName: "icon-matrix", title: "Матрица", category: "advanced", json: { type: "matrix" } },
-    { name: "matrixdropdown", iconName: "icon-matrixdropdown", title: "Матрица с выбором", category: "advanced", json: { type: "matrixdropdown" } },
-    { name: "matrixdynamic", iconName: "icon-matrixdynamic", title: "Динамическая матрица", category: "advanced", json: { type: "matrixdynamic" } },
-    { name: "multipletext", iconName: "icon-multipletext", title: "Несколько полей", category: "advanced", json: { type: "multipletext" } },
-    { name: "image", iconName: "icon-image", title: "Изображение", category: "advanced", json: { type: "image" } },
-    { name: "imagepicker", iconName: "icon-imagepicker", title: "Выбор изображения", category: "advanced", json: { type: "imagepicker" } },
-    { name: "file", iconName: "icon-file", title: "Файл", category: "advanced", json: { type: "file" } },
-    { name: "signaturepad", iconName: "icon-signaturepad", title: "Подпись", category: "advanced", json: { type: "signaturepad" } },
-    { name: "panel", iconName: "icon-panel", title: "Панель", category: "advanced", json: { type: "panel" } },
-    { name: "paneldynamic", iconName: "icon-paneldynamic", title: "Динамическая панель", category: "advanced", json: { type: "paneldynamic" } },
-    { name: "expression", iconName: "icon-expression", title: "Выражение", category: "advanced", json: { type: "expression" } },
-    { name: "html", iconName: "icon-html", title: "HTML", category: "advanced", json: { type: "html" } },
-  ];
-
-  [...basicItems, ...advancedItems].forEach((item, index) => {
     toolbox.addItem(item, index);
   });
+
+  const textItem = toolbox.getItemByName("text") as
+    | (ReturnType<typeof toolbox.getItemByName> & { items?: CreatorToolboxItem[]; clearSubitems?: () => void })
+    | null;
+
+  textItem?.clearSubitems?.();
+  if (textItem) {
+    textItem.items = [];
+  }
 
   toolbox.categories.forEach((category) => {
     if (category.name === "basic") {
@@ -317,12 +409,34 @@ function registerCustomIcons() {
   registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
 }
 
+function registerCustomQuestionTypes() {
+  QUESTION_TYPE_DEFINITIONS.filter((definition) => definition.questionJSON).forEach((definition) => {
+    if (ComponentCollection.Instance.getCustomQuestionByName(definition.name)) {
+      return;
+    }
+
+    ComponentCollection.Instance.add({
+      name: definition.name,
+      title: definition.title,
+      iconName: definition.iconName,
+      questionJSON: definition.questionJSON,
+      inheritBaseProps: true,
+    });
+  });
+
+  const inputTypeProperty = Serializer.getProperty("text", "inputType");
+  if (inputTypeProperty) {
+    inputTypeProperty.visible = false;
+  }
+}
+
 function createCreatorInstance() {
   configureCreatorLocalization();
   registerCustomIcons();
+  registerCustomQuestionTypes();
 
   const creator = new SurveyCreator({
-    questionTypes: [...SUPPORTED_CREATOR_QUESTION_TYPES],
+    questionTypes: [...QUESTION_TYPES],
     showLogicTab: true,
     showPreviewTab: true,
     showJSONEditorTab: false,
@@ -351,8 +465,14 @@ function createCreatorInstance() {
   });
 
   creator.onElementAllowOperations.add((_sender, options) => {
-    options.allowChangeType = true;
-    options.allowChangeInputType = options.obj?.getType?.() === "text";
+    const currentType = options.obj?.getType?.();
+
+    options.allowChangeInputType = false;
+    if (!currentType) {
+      return;
+    }
+
+    options.allowChangeType = QUESTION_TYPES.includes(currentType as CreatorQuestionType);
   });
 
   return creator;
