@@ -22,7 +22,13 @@ export function AppLayout() {
   }, [location.pathname, location.state, navigate, showToast]);
 
   return (
-    <div className={shouldHideSidebar ? "app-shell app-shell-login" : `app-shell ${isSidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()}>
+    <div
+      className={
+        shouldHideSidebar
+          ? "app-shell app-shell-login app-shell-monochrome"
+          : `app-shell app-shell-monochrome ${isSidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()
+      }
+    >
       {!shouldHideSidebar && isSidebarHidden && (
         <button
           type="button"
@@ -34,7 +40,7 @@ export function AppLayout() {
         </button>
       )}
       {!shouldHideSidebar && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
-      <main className={shouldHideSidebar ? "app-main app-main-login" : "app-main"}>
+      <main className={shouldHideSidebar ? "app-main app-main-login app-main-public" : "app-main"}>
         <Outlet />
       </main>
     </div>

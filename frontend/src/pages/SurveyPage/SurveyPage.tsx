@@ -5,6 +5,18 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
+function SurveyNotFound() {
+  return (
+    <div className="survey-not-found-page">
+      <div className="survey-not-found-card card">
+        <p className="survey-not-found-code">404</p>
+        <h1 className="survey-not-found-title">404</h1>
+        <p className="survey-not-found-copy">Форма не найдена или недоступна.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function SurveyPage() {
   const { id } = useParams();
   const { user, loading: isAuthLoading } = useAuth();
@@ -39,13 +51,13 @@ export default function SurveyPage() {
       : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
   }, [error]);
 
-  if (!id) return <p>Форма не найдена.</p>;
+  if (!id) return <SurveyNotFound />;
   if (isLoading || isAuthLoading) return <p>Загрузка...</p>;
   if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
-  if (!form) return <p>Форма не найдена или недоступна.</p>;
+  if (!form || !form.is_public) return <SurveyNotFound />;
 
   return (
-    <div className="survey-page">
+    <div className="survey-page survey-page-shell">
       <div className="survey-page-card card">
         <SurveyRenderer schema={form.schema} formId={form.id} />
       </div>

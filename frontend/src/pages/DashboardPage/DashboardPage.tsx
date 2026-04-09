@@ -20,6 +20,7 @@ import {
   renameForm,
   setFormDeadline,
 } from "../../entities/survey/api/surveysApi";
+import { getNextDeadlineRefreshDelayMs } from "../../entities/survey/model/deadlineState";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
@@ -52,6 +53,7 @@ type OpenMenuState =
   | null;
 
 const PAGE_SIZE_OPTIONS = [20, 50, 200] as const;
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 function formatDateTimeLocalValue(dateTime: string | null) {
   if (!dateTime) {
@@ -153,6 +155,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const displayedForms = useMemo(() => filteredForms.slice(0, visibleCount), [filteredForms, visibleCount]);
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
+  const nextDeadlineRefreshDelayMs = useMemo(() => getNextDeadlineRefreshDelayMs(visibleForms), [visibleForms]);
   const isInitialFormsLoading = isFormsLoading && forms.length === 0;
   const activeFormsCount = useMemo(
     () => filteredForms.filter((form) => !isTemplateForm(form) && form.is_public).length,
@@ -173,6 +176,20 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       showToast(getErrorMessage(formsError, "Не удалось загрузить формы"), "error");
     }
   }, [formsError, showToast]);
+
+  useEffect(() => {
+    if (nextDeadlineRefreshDelayMs === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void reloadForms();
+    }, Math.min(nextDeadlineRefreshDelayMs + 250, MAX_TIMEOUT_MS));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [nextDeadlineRefreshDelayMs, reloadForms]);
 
   useEffect(() => {
     if (!openedMenu) {
@@ -275,7 +292,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     try {
       const copied = await copyTextToClipboard(`${appOrigin}${routes.survey(formId)}`);
       if (!copied) {
-        showToast("Автокопирование недоступно. Скопируйте ссылку вручную.", "info");
+        showToast("Автокопирование недоступно. Скопируйте ссылку вручную.", "warning");
         return;
       }
       showToast("Ссылка скопирована", "success");
@@ -331,7 +348,24 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const handleToggleFormStatus = async (form: SurveyForm) => {
     const nextStatus = !form.is_public;
-    await runAction(() => statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus }), {
+
+    if (!nextStatus && form.deadline_at) {
+      const shouldContinue = window.confirm(
+        "Закрытие публичной формы приведёт к удалению текущего дедлайна. Вы хотите продолжить?",
+      );
+
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
+    await runAction(async () => {
+      if (!nextStatus && form.deadline_at) {
+        await deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null });
+      }
+
+      await statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus });
+    }, {
       actionKey: getFormActionKey(form.id),
       successMessage: nextStatus ? "Форма открыта" : "Форма закрыта",
       errorMessage: "Не удалось изменить статус формы",
@@ -488,6 +522,116 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               ) : null,
             ].filter(Boolean);
 
+            const actionMenu = (
+              <div className="form-menu dashboard-floating-root dashboard-actions-menu-shell">
+                <button
+                  type="button"
+                  className="form-menu-trigger"
+                  aria-label={`${isTemplate ? "Действия шаблона" : "Действия формы"} ${title}`}
+                  aria-expanded={actionMenuOpen}
+                  onClick={(event) => {
+                    stopCardEvent(event);
+                    setOpenedMenu((current) =>
+                      current?.kind === "actions" && current.formId === form.id
+                        ? null
+                        : { kind: "actions", formId: form.id },
+                    );
+                  }}
+                  disabled={isCurrentFormPending}
+                >
+                  ...
+                </button>
+
+                {actionMenuOpen && (
+                  <div
+                    className="form-menu-dropdown"
+                    role="menu"
+                    aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
+                  >
+                    {!isTemplate && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="form-menu-item"
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenu(null);
+                          void handleCopyLink(form.id);
+                        }}
+                        disabled={isCurrentFormPending}
+                      >
+                        Копировать ссылку
+                      </button>
+                    )}
+
+                    {(isTemplate || isOwnForm) && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="form-menu-item"
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenu(null);
+                          void handleRename(form);
+                        }}
+                        disabled={isCurrentFormPending}
+                      >
+                        Переименовать
+                      </button>
+                    )}
+
+                    {isOwnForm && !isTemplate && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="form-menu-item"
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenu(null);
+                          navigate(routes.builderEdit(form.id));
+                        }}
+                        disabled={isCurrentFormPending}
+                      >
+                        Редактировать
+                      </button>
+                    )}
+
+                    {!isTemplate && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="form-menu-item"
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenu(null);
+                          void handleDuplicate(form);
+                        }}
+                        disabled={isCurrentFormPending}
+                      >
+                        Дублировать
+                      </button>
+                    )}
+
+                    {(isTemplate || isOwnForm) && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="form-menu-item form-menu-item-danger"
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenu(null);
+                          setFormToDelete(form);
+                        }}
+                        disabled={isCurrentFormPending}
+                      >
+                        Удалить
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+
             return (
               <div
                 key={form.id}
@@ -574,127 +718,23 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       <strong className="dashboard-form-title">{title}</strong>
                     </div>
                   </div>
-
-                  <div className="form-menu dashboard-floating-root dashboard-actions-menu-shell">
-                    <button
-                      type="button"
-                      className="form-menu-trigger"
-                      aria-label={`${isTemplate ? "Действия шаблона" : "Действия формы"} ${title}`}
-                      aria-expanded={actionMenuOpen}
-                      onClick={(event) => {
-                        stopCardEvent(event);
-                        setOpenedMenu((current) =>
-                          current?.kind === "actions" && current.formId === form.id
-                            ? null
-                            : { kind: "actions", formId: form.id },
-                        );
-                      }}
-                      disabled={isCurrentFormPending}
-                    >
-                      ...
-                    </button>
-
-                    {actionMenuOpen && (
-                      <div
-                        className="form-menu-dropdown"
-                        role="menu"
-                        aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
-                      >
-                        {!isTemplate && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu(null);
-                              void handleCopyLink(form.id);
-                            }}
-                            disabled={isCurrentFormPending}
-                          >
-                            Копировать ссылку
-                          </button>
-                        )}
-
-                        {(isTemplate || isOwnForm) && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu(null);
-                              void handleRename(form);
-                            }}
-                            disabled={isCurrentFormPending}
-                          >
-                            Переименовать
-                          </button>
-                        )}
-
-                        {isOwnForm && !isTemplate && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu(null);
-                              navigate(routes.builderEdit(form.id));
-                            }}
-                            disabled={isCurrentFormPending}
-                          >
-                            Редактировать
-                          </button>
-                        )}
-
-                        {!isTemplate && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu(null);
-                              void handleDuplicate(form);
-                            }}
-                            disabled={isCurrentFormPending}
-                          >
-                            Дублировать
-                          </button>
-                        )}
-
-                        {(isTemplate || isOwnForm) && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item form-menu-item-danger"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu(null);
-                              setFormToDelete(form);
-                            }}
-                            disabled={isCurrentFormPending}
-                          >
-                            Удалить
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
 
-                <div className="dashboard-form-meta-line">
-                  {metaItems.map((item, index) => (
-                    <div key={`${form.id}-meta-${index}`} className="dashboard-meta-inline-item">
-                      {index > 0 && (
-                        <span className="dashboard-meta-separator" aria-hidden="true">
-                          •
-                        </span>
-                      )}
-                      {item}
-                    </div>
-                  ))}
+                <div className="dashboard-form-footer">
+                  <div className="dashboard-form-meta-line">
+                    {metaItems.map((item, index) => (
+                      <div key={`${form.id}-meta-${index}`} className="dashboard-meta-inline-item">
+                        {index > 0 && (
+                          <span className="dashboard-meta-separator" aria-hidden="true">
+                            •
+                          </span>
+                        )}
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+
+                  {actionMenu}
                 </div>
               </div>
             );
@@ -728,7 +768,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               />
             </label>
             <p className="deadline-modal-hint">
-              После наступления дедлайна форма останется видимой, но новые ответы отправить не получится.
+              При наступлении дедлайна форма автоматически закроется, а дедлайн снимется.
             </p>
             <div className="deadline-modal-actions">
               <button type="button" onClick={() => setDeadlineEditor(null)} disabled={isFormActionPending(deadlineEditor.form.id)}>
@@ -790,10 +830,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
       {formToDelete && (
         <div className="modal-backdrop">
-          <div className="modal-card card">
-            <h3 style={{ marginTop: 0 }}>Удаление формы</h3>
-            <p>Удалить форму «{formToDelete.title}»? Это действие нельзя отменить.</p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div className="modal-card card dashboard-delete-modal">
+            <h3 className="dashboard-delete-modal-title">Удаление формы</h3>
+            <p className="dashboard-delete-modal-copy">Удалить форму «{formToDelete.title}»? Это действие нельзя отменить.</p>
+            <div className="dashboard-delete-modal-actions">
               <button type="button" onClick={() => setFormToDelete(null)} disabled={isFormActionPending(formToDelete.id)}>
                 Отмена
               </button>

@@ -1,0 +1,118 @@
+<h2>Какое визуальное направление ближе?</h2>
+<p class="subtitle">Я буду держать SurveyJS в безопасной обёртке и обновлю в основном shell, карточки, таблицы, состояния и анимации. Выберите общий вайб интерфейса.</p>
+
+<div class="cards">
+  <div class="card" data-choice="aurora" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:linear-gradient(160deg,#07111f 0%,#101d39 48%,#1f1147 100%);border-radius:20px;padding:18px;min-height:220px;color:#f8fafc;position:relative;overflow:hidden;box-shadow:0 22px 54px rgba(8,15,35,.45)">
+        <div style="position:absolute;inset:auto -30px -40px auto;width:150px;height:150px;border-radius:999px;background:radial-gradient(circle,#7c3aed 0%,rgba(124,58,237,0) 70%);"></div>
+        <div style="position:absolute;inset:-25px auto auto -20px;width:180px;height:180px;border-radius:999px;background:radial-gradient(circle,#22d3ee 0%,rgba(34,211,238,0) 72%);"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+          <div style="width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.12);backdrop-filter:blur(10px)"></div>
+          <div>
+            <div style="font-weight:700">Aurora Glass</div>
+            <div style="font-size:12px;color:rgba(248,250,252,.72)">Глубина, glow, glass</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:12px;position:relative;z-index:1">
+          <div style="border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);backdrop-filter:blur(18px);border-radius:18px;padding:14px">
+            <div style="height:12px;width:58%;border-radius:999px;background:rgba(255,255,255,.82);margin-bottom:10px"></div>
+            <div style="display:grid;gap:8px">
+              <div style="height:42px;border-radius:14px;background:rgba(255,255,255,.1)"></div>
+              <div style="height:42px;border-radius:14px;background:rgba(255,255,255,.08)"></div>
+              <div style="height:42px;border-radius:14px;background:linear-gradient(135deg,rgba(34,211,238,.28),rgba(124,58,237,.28))"></div>
+            </div>
+          </div>
+          <div style="display:grid;gap:12px">
+            <div style="height:72px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12)"></div>
+            <div style="height:120px;border-radius:18px;background:rgba(7,16,32,.32);border:1px solid rgba(255,255,255,.1)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Aurora Glass</h3>
+      <p>Тёмная насыщенная база, стеклянные панели, мягкое свечение и заметная глубина.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="editorial" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:linear-gradient(180deg,#f8f3ea 0%,#f3ede3 100%);border-radius:20px;padding:18px;min-height:220px;color:#1f2937;position:relative;overflow:hidden;box-shadow:0 18px 40px rgba(120,98,71,.18)">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+          <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#fb7185,#f59e0b)"></div>
+          <div>
+            <div style="font-weight:700">Editorial Warm</div>
+            <div style="font-size:12px;color:#6b7280">Премиально и спокойно</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:.82fr 1.18fr;gap:12px">
+          <div style="border-radius:18px;background:rgba(255,255,255,.74);padding:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9)">
+            <div style="height:10px;width:70%;border-radius:999px;background:#111827;margin-bottom:10px"></div>
+            <div style="display:grid;gap:8px">
+              <div style="height:34px;border-radius:12px;background:#ede7db"></div>
+              <div style="height:34px;border-radius:12px;background:#e5ddce"></div>
+              <div style="height:34px;border-radius:12px;background:#ddd2bf"></div>
+            </div>
+          </div>
+          <div style="display:grid;gap:12px">
+            <div style="height:78px;border-radius:20px;background:#fffaf2;box-shadow:0 14px 24px rgba(120,98,71,.12)"></div>
+            <div style="height:114px;border-radius:20px;background:#ffffff;box-shadow:0 16px 28px rgba(120,98,71,.12)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Editorial Warm</h3>
+      <p>Светлая тёплая палитра, аккуратные тени, ощущение дорогого админ-интерфейса.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="contrast" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:linear-gradient(160deg,#0b1020 0%,#151233 52%,#220f1f 100%);border-radius:20px;padding:18px;min-height:220px;color:#f9fafb;position:relative;overflow:hidden;box-shadow:0 22px 54px rgba(10,10,20,.46)">
+        <div style="position:absolute;inset:18px 18px auto auto;width:86px;height:86px;border-radius:22px;background:linear-gradient(135deg,#fb7185,#f59e0b);filter:blur(.2px);opacity:.86"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;position:relative;z-index:1">
+          <div style="width:36px;height:36px;border-radius:12px;background:#111827;border:1px solid rgba(255,255,255,.08)"></div>
+          <div>
+            <div style="font-weight:700">Neon Contrast</div>
+            <div style="font-size:12px;color:rgba(249,250,251,.72)">Тёмный интерфейс с акцентами</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;position:relative;z-index:1">
+          <div style="border-radius:18px;background:#101728;border:1px solid rgba(255,255,255,.08);padding:14px">
+            <div style="height:12px;width:62%;border-radius:999px;background:#f9fafb;margin-bottom:10px"></div>
+            <div style="height:44px;border-radius:14px;background:linear-gradient(135deg,rgba(251,113,133,.22),rgba(245,158,11,.22));margin-bottom:8px"></div>
+            <div style="height:44px;border-radius:14px;background:#161f35;margin-bottom:8px"></div>
+            <div style="height:44px;border-radius:14px;background:#161f35"></div>
+          </div>
+          <div style="display:grid;gap:12px">
+            <div style="height:72px;border-radius:18px;background:#111827;border:1px solid rgba(255,255,255,.08)"></div>
+            <div style="height:120px;border-radius:18px;background:#0f172a;border:1px solid rgba(255,255,255,.08)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Neon Contrast</h3>
+      <p>Чёткая контрастность, яркие акценты и более технологичное настроение без glass-эффекта.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:24px">
+  <div class="pros">
+    <h4>Моя рекомендация</h4>
+    <ul>
+      <li><strong>Aurora Glass</strong>: даст максимум глубины и современности без тяжёлой переделки структуры.</li>
+      <li>Его проще адаптировать в светлую/тёмную тему и при этом не ломать SurveyJS: мы оставим ему отдельный набор переменных.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Важно</h4>
+    <ul>
+      <li>Если хочется более строгий и деловой интерфейс, лучше подойдёт <strong>Editorial Warm</strong>.</li>
+      <li>Если нужен максимально контрастный dark-mode-first стиль, тогда <strong>Neon Contrast</strong>.</li>
+    </ul>
+  </div>
+</div>

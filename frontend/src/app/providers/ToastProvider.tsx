@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "warning";
 
 type Toast = {
   id: number;
@@ -19,7 +19,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const lastToastShownAtRef = useRef<Map<string, number>>(new Map());
   const timeoutIdsRef = useRef<number[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = "info") => {
+  const showToast = useCallback((message: string, type: ToastType = "warning") => {
     const key = `${type}:${message}`;
     const now = Date.now();
     const previousShownAt = lastToastShownAtRef.current.get(key);

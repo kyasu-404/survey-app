@@ -1,0 +1,144 @@
+<h2>Какую структуру дашборда берём?</h2>
+<p class="subtitle">Оба варианта остаются в стиле Editorial Warm. Разница в том, что считать главным объектом страницы: сам список форм или обзорную продуктовую панель.</p>
+
+<div class="cards">
+  <div class="card" data-choice="workspace" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:linear-gradient(180deg,#f8f2e8 0%,#f2eadf 100%);border-radius:22px;padding:18px;min-height:280px;box-shadow:0 22px 40px rgba(124,95,61,.16);color:#1f2937">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a16207;font-weight:800">Editorial Workspace</div>
+            <div style="font-size:22px;font-weight:800;letter-spacing:-.04em">Формы как центр страницы</div>
+          </div>
+          <div style="width:72px;height:40px;border-radius:14px;background:linear-gradient(135deg,#fb7185,#f59e0b);opacity:.9"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+          <div style="background:rgba(255,255,255,.72);border-radius:16px;padding:12px;box-shadow:0 10px 18px rgba(124,95,61,.08)">
+            <div style="font-size:11px;color:#6b7280;margin-bottom:6px">Всего форм</div>
+            <div style="font-size:22px;font-weight:800">124</div>
+          </div>
+          <div style="background:rgba(255,255,255,.72);border-radius:16px;padding:12px;box-shadow:0 10px 18px rgba(124,95,61,.08)">
+            <div style="font-size:11px;color:#6b7280;margin-bottom:6px">Активные</div>
+            <div style="font-size:22px;font-weight:800">38</div>
+          </div>
+          <div style="background:rgba(255,255,255,.72);border-radius:16px;padding:12px;box-shadow:0 10px 18px rgba(124,95,61,.08)">
+            <div style="font-size:11px;color:#6b7280;margin-bottom:6px">С дедлайном</div>
+            <div style="font-size:22px;font-weight:800">17</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,.8);border-radius:20px;padding:12px;margin-bottom:12px;box-shadow:0 12px 22px rgba(124,95,61,.08)">
+          <div style="display:grid;grid-template-columns:1.2fr repeat(3,.7fr) auto;gap:8px;margin-bottom:8px">
+            <div style="height:36px;border-radius:12px;background:#fff"></div>
+            <div style="height:36px;border-radius:12px;background:#f5ede2"></div>
+            <div style="height:36px;border-radius:12px;background:#f5ede2"></div>
+            <div style="height:36px;border-radius:12px;background:#f5ede2"></div>
+            <div style="height:36px;border-radius:12px;background:#111827"></div>
+          </div>
+          <div style="display:grid;gap:8px">
+            <div style="display:grid;grid-template-columns:.4fr .8fr 1.4fr .9fr .5fr .5fr;gap:8px;background:#fffaf4;border-radius:16px;padding:10px">
+              <div style="height:18px;border-radius:999px;background:#f59e0b"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+              <div style="height:18px;border-radius:999px;background:#1f2937"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+              <div style="height:18px;border-radius:999px;background:#fb7185"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:.4fr .8fr 1.4fr .9fr .5fr .5fr;gap:8px;background:#fff;border-radius:16px;padding:10px">
+              <div style="height:18px;border-radius:999px;background:#10b981"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+              <div style="height:18px;border-radius:999px;background:#1f2937"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+              <div style="height:18px;border-radius:999px;background:#fb7185"></div>
+              <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Editorial Workspace</h3>
+      <p>Главный акцент на списке форм. Сверху небольшая аналитика, ниже мощная таблица или list-view как основная рабочая область.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="command-center" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:linear-gradient(180deg,#f8f2e8 0%,#f2eadf 100%);border-radius:22px;padding:18px;min-height:280px;box-shadow:0 22px 40px rgba(124,95,61,.16);color:#1f2937">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a16207;font-weight:800">Command Center</div>
+            <div style="font-size:22px;font-weight:800;letter-spacing:-.04em">Продуктовый обзор с модулями</div>
+          </div>
+          <div style="width:72px;height:40px;border-radius:14px;background:linear-gradient(135deg,#fb7185,#f59e0b);opacity:.9"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.25fr .75fr;gap:12px;margin-bottom:12px">
+          <div style="background:rgba(255,255,255,.78);border-radius:20px;padding:14px;box-shadow:0 12px 20px rgba(124,95,61,.08)">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+              <div style="height:86px;border-radius:18px;background:#fff7ed"></div>
+              <div style="height:86px;border-radius:18px;background:#ffffff"></div>
+              <div style="height:86px;border-radius:18px;background:#fff1f2"></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.78);border-radius:20px;padding:14px;box-shadow:0 12px 20px rgba(124,95,61,.08)">
+            <div style="height:14px;width:52%;border-radius:999px;background:#1f2937;margin-bottom:10px"></div>
+            <div style="display:grid;gap:8px">
+              <div style="height:36px;border-radius:12px;background:#f5ede2"></div>
+              <div style="height:36px;border-radius:12px;background:#f5ede2"></div>
+              <div style="height:36px;border-radius:12px;background:#111827"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:.95fr 1.05fr;gap:12px">
+          <div style="background:rgba(255,255,255,.78);border-radius:20px;padding:14px;box-shadow:0 12px 20px rgba(124,95,61,.08)">
+            <div style="height:14px;width:48%;border-radius:999px;background:#1f2937;margin-bottom:10px"></div>
+            <div style="display:grid;gap:8px">
+              <div style="height:44px;border-radius:14px;background:#fffaf4"></div>
+              <div style="height:44px;border-radius:14px;background:#fff"></div>
+              <div style="height:44px;border-radius:14px;background:#fffaf4"></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.78);border-radius:20px;padding:14px;box-shadow:0 12px 20px rgba(124,95,61,.08)">
+            <div style="height:14px;width:38%;border-radius:999px;background:#1f2937;margin-bottom:10px"></div>
+            <div style="display:grid;gap:8px">
+              <div style="display:grid;grid-template-columns:1.5fr .9fr .6fr;gap:8px;background:#fffaf4;border-radius:14px;padding:10px">
+                <div style="height:18px;border-radius:999px;background:#1f2937"></div>
+                <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+                <div style="height:18px;border-radius:999px;background:#f59e0b"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1.5fr .9fr .6fr;gap:8px;background:#fff;border-radius:14px;padding:10px">
+                <div style="height:18px;border-radius:999px;background:#1f2937"></div>
+                <div style="height:18px;border-radius:999px;background:#e5d7c5"></div>
+                <div style="height:18px;border-radius:999px;background:#10b981"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Command Center</h3>
+      <p>Сначала пользователь видит обзор, быстрые действия, KPI, дедлайны и последние формы. Список форм становится одним из модулей, а не единственным ядром страницы.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:24px">
+  <div class="pros">
+    <h4>Когда брать Workspace</h4>
+    <ul>
+      <li>Если основная работа пользователей: искать, фильтровать и открывать формы.</li>
+      <li>Если нужен сильный redesign без ломки привычного сценария.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Когда брать Command Center</h4>
+    <ul>
+      <li>Если хочется ощущение нового продукта, а не просто нового списка.</li>
+      <li>Если важны обзорность, быстрые действия и приоритетные блоки над таблицей.</li>
+    </ul>
+  </div>
+</div>

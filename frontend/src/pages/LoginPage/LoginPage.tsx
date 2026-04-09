@@ -38,32 +38,25 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="card" style={{ padding: 20, width: "min(420px, 100%)" }}>
+      <div className="card login-card">
         <h2 className="login-title">Авторизация</h2>
         <form
+          className="login-form"
           onSubmit={(event) => {
             event.preventDefault();
             void onLogin();
           }}
         >
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="login-fields">
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" type="password" />
           </div>
           <div className="login-actions">
-            <button type="submit">Войти</button>
+            <button type="submit" className="button-primary">Войти</button>
           </div>
         </form>
         {message && (
-          <p
-            style={{
-              marginTop: 12,
-              padding: 10,
-              borderRadius: 8,
-              background: messageType === "error" ? "#fee2e2" : "#dbeafe",
-              color: messageType === "error" ? "#991b1b" : "#1d4ed8",
-            }}
-          >
+          <p className={`login-message login-message-${messageType}`}>
             {message}
           </p>
         )}

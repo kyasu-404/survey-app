@@ -13,6 +13,7 @@ import integerIcon from "../../img/constructor/integer.svg?raw";
 import dateIcon from "../../img/constructor/Date.svg?raw";
 import timeIcon from "../../img/constructor/Time.svg?raw";
 import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
+import refreshIcon from "../../img/refresh.png";
 
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -25,9 +26,14 @@ import { useCreateSurveyMutation } from "../../features/create-survey/useCreateS
 import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 
 type SurveyBuilderProps = {
   formId?: string;
+};
+
+type BuilderSchema = SurveySchema & {
+  questionDescriptionLocation?: string;
 };
 
 const SUPPORTED_CREATOR_QUESTION_TYPES = [
@@ -276,11 +282,7 @@ function createCreatorInstance() {
   });
 
   creator.locale = "ru";
-  creator.JSON = {
-    ...createEmptySurveySchema(),
-    locale: "ru",
-    questionDescriptionLocation: "underTitle",
-  };
+  creator.JSON = createEmptyBuilderSchema();
   creator.allowCollapseSidebar = true;
 
   configureCreatorToolbox(creator);
@@ -309,11 +311,27 @@ function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
   return normalizedTitle || fallbackTitle;
 }
 
+function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSchema {
+  const builderSchema = cloneSchema(schema) as BuilderSchema;
+
+  return {
+    ...builderSchema,
+    title: getSchemaTitle(builderSchema, fallbackTitle),
+    locale: builderSchema.locale ?? "ru",
+    questionDescriptionLocation: builderSchema.questionDescriptionLocation ?? "underTitle",
+  };
+}
+
+function createEmptyBuilderSchema(title = "Новая форма") {
+  return toBuilderSchema(createEmptySurveySchema(title), title);
+}
+
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
   const [isTemplateActionLoading, setIsTemplateActionLoading] = useState<"save" | "create" | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const { user } = useAuth();
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
@@ -328,6 +346,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const isTemplateBusy = isTemplateActionLoading !== null;
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const createFromTemplateHandlerRef = useRef<() => void>(() => undefined);
+  const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
 
   const {
     data: editableForm,
@@ -355,11 +374,16 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   useEffect(() => {
     const nextCreator = createCreatorInstance();
     setCreator(nextCreator);
+    draftHydrationStateRef.current = "idle";
 
     return () => {
       nextCreator.dispose();
     };
   }, []);
+
+  useEffect(() => {
+    draftHydrationStateRef.current = "idle";
+  }, [formId]);
 
   useEffect(() => {
     if (!editableFormError) {
@@ -378,18 +402,52 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   }, [showToast, templateFormsError]);
 
   useEffect(() => {
-    if (!creator || !editableForm) {
+    if (!creator) {
+      return;
+    }
+
+    const restoredDraft = loadSurveyBuilderDraft(formId);
+
+    if (restoredDraft) {
+      draftHydrationStateRef.current = "loaded";
+      creator.locale = restoredDraft.locale ?? "ru";
+      creator.JSON = toBuilderSchema(restoredDraft, "Новая форма");
+      return;
+    }
+
+    draftHydrationStateRef.current = "empty";
+  }, [creator, formId]);
+
+  useEffect(() => {
+    if (!creator || !editableForm || draftHydrationStateRef.current === "loaded") {
       return;
     }
 
     creator.locale = editableForm.schema.locale ?? "ru";
-    creator.JSON = {
-      ...editableForm.schema,
-      title: editableForm.title,
-      locale: editableForm.schema.locale ?? "ru",
-      questionDescriptionLocation: editableForm.schema.questionDescriptionLocation ?? "underTitle",
-    };
+    creator.JSON = toBuilderSchema(
+      {
+        ...editableForm.schema,
+        title: editableForm.title,
+      },
+      editableForm.title,
+    );
   }, [creator, editableForm]);
+
+  useEffect(() => {
+    if (!creator) {
+      return;
+    }
+
+    const handleModified = () => {
+      saveSurveyBuilderDraft(formId, cloneSchema(creator.JSON as SurveySchema));
+    };
+
+    creator.onModified.add(handleModified);
+
+    return () => {
+      creator.onModified.remove(handleModified);
+    };
+  }, [creator, formId]);
 
   const scheduleBuilderQueryRefresh = (affectedFormId?: string) => {
     const targets = [
@@ -474,6 +532,20 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
   createFromTemplateHandlerRef.current = () => {
     setIsTemplatePickerOpen(true);
+  };
+
+  const handleResetBuilder = () => {
+    if (!creator) {
+      return;
+    }
+
+    const emptySchema = createEmptyBuilderSchema();
+    creator.locale = emptySchema.locale ?? "ru";
+    creator.JSON = emptySchema;
+    saveSurveyBuilderDraft(formId, emptySchema);
+    draftHydrationStateRef.current = "loaded";
+    setIsResetConfirmOpen(false);
+    showToast("Конструктор очищен", "success");
   };
 
   useEffect(() => {
@@ -582,6 +654,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
           formId ? (editableForm && isTemplateForm(editableForm) ? "Шаблон обновлён" : "Форма обновлена") : "Форма сохранена",
           "success",
         );
+        clearSurveyBuilderDraft(formId);
         navigate(routes.dashboardMy, { replace: true });
         callback(saveNo, true);
       } catch (error) {
@@ -614,9 +687,46 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         {isTemplateActionLoading === "create" && <p className="builder-status-text">Создание формы из шаблона...</p>}
       </div>
 
+      <div className="builder-controls">
+        <button
+          type="button"
+          className="builder-reset-button"
+          aria-label="Сбросить конструктор"
+          onClick={() => setIsResetConfirmOpen(true)}
+          disabled={!creator || isSurveyMutationBusy || isTemplateBusy}
+        >
+          <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+          <span>Сбросить</span>
+        </button>
+      </div>
+
       <div className="builder-creator-shell">
         {creator && <SurveyCreatorComponent creator={creator} />}
       </div>
+
+      {isResetConfirmOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card card builder-reset-modal">
+            <h3 className="builder-reset-title">Сбросить конструктор?</h3>
+            <p className="builder-template-subtitle">
+              Все несохранённые вопросы и поля будут очищены. Это действие нельзя отменить.
+            </p>
+            <div className="deadline-modal-actions">
+              <button type="button" onClick={() => setIsResetConfirmOpen(false)} disabled={isSurveyMutationBusy || isTemplateBusy}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="deadline-clear-button"
+                onClick={handleResetBuilder}
+                disabled={isSurveyMutationBusy || isTemplateBusy}
+              >
+                Сбросить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isTemplatePickerOpen && (
         <div className="modal-backdrop">

@@ -151,7 +151,7 @@ export default function FormResponsesPage() {
 
   const handleExport = () => {
     if (!rows.length) {
-      showToast("Нет данных для выгрузки", "info");
+      showToast("Нет данных для выгрузки", "warning");
       return;
     }
 
@@ -168,7 +168,7 @@ export default function FormResponsesPage() {
     <div className="dashboard-page">
       <div className="card responses-page-card">
         <div className="responses-page-header">
-          <div>
+          <div className="responses-page-header-copy">
             <h1 className="responses-page-title">{formQuery.data?.title ?? "Ответы формы"}</h1>
           </div>
           <div className="responses-page-toolbar">
@@ -192,7 +192,7 @@ export default function FormResponsesPage() {
 
         {isLoading && <p className="dashboard-loading-text">Загрузка...</p>}
         {!isLoading && combinedError && (
-          <p style={{ color: "#b91c1c" }}>{getErrorMessage(combinedError, "Не удалось загрузить ответы")}</p>
+          <p className="responses-page-error">{getErrorMessage(combinedError, "Не удалось загрузить ответы")}</p>
         )}
 
         {!isLoading && !combinedError && !rows.length && (

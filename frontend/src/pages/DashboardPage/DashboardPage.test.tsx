@@ -94,7 +94,7 @@ function createQueryClient() {
 }
 
 function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryClient()) {
-  render(
+  const renderResult = render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
         <DashboardPage viewMode={viewMode} />
@@ -102,12 +102,13 @@ function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryC
     </MemoryRouter>,
   );
 
-  return { queryClient };
+  return { queryClient, ...renderResult };
 }
 
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, "confirm").mockImplementation(() => true);
     cloneForm.mockResolvedValue({ id: "form-copy" });
     changeFormStatus.mockResolvedValue(undefined);
     setFormDeadline.mockResolvedValue(undefined);
@@ -243,5 +244,70 @@ describe("DashboardPage", () => {
     const statusMenu = await screen.findByRole("menu", { name: "Статус формы Закрытая форма" });
     expect(within(statusMenu).getByRole("menuitem", { name: "Открыть" })).toBeInTheDocument();
     expect(within(statusMenu).getByRole("menuitem", { name: "Установить дедлайн" })).toBeInTheDocument();
+  });
+
+  it("renders the delete modal action wrapper for dashboard styling", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Моя форма",
+        author_id: "user-1",
+      }),
+    ]);
+
+    const { container } = renderPage("all");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Удалить" }));
+
+    expect(container.querySelector(".dashboard-delete-modal-actions")).toBeInTheDocument();
+  });
+
+  it("asks for confirmation and clears deadline before closing a public form with deadline", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Публичная форма",
+        author_id: "user-1",
+        is_public: true,
+        deadline_at: "2026-05-10T12:00:00.000Z",
+      }),
+    ]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Публичная форма: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Закрыть" }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Закрытие публичной формы приведёт к удалению текущего дедлайна. Вы хотите продолжить?",
+    );
+
+    await waitFor(() => {
+      expect(setFormDeadline).toHaveBeenCalledWith("form-1", null);
+    });
+
+    await waitFor(() => {
+      expect(changeFormStatus).toHaveBeenCalledWith("form-1", false);
+    });
+  });
+
+  it("does not close a public form with deadline when user rejects the warning", async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Публичная форма",
+        author_id: "user-1",
+        is_public: true,
+        deadline_at: "2026-05-10T12:00:00.000Z",
+      }),
+    ]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Публичная форма: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Закрыть" }));
+
+    expect(changeFormStatus).not.toHaveBeenCalled();
+    expect(setFormDeadline).not.toHaveBeenCalled();
   });
 });

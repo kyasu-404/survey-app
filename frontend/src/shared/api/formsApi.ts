@@ -1,4 +1,5 @@
 import { apiClient, publicApiClient } from "./client";
+import { applyDeadlineStatePatch, buildDeadlineUpdatePayload, getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
 import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 import { runRequest } from "./request";
 
@@ -13,6 +14,38 @@ type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_nam
   profiles?: { email?: string | null; name?: string | null } | null;
   responses?: Array<{ count?: number | null }> | null;
 };
+
+async function syncFetchedFormDeadlineState(form: SurveyForm, persistChanges = true): Promise<SurveyForm> {
+  const deadlineStatePatch = getDeadlineStatePatch(form);
+
+  if (!deadlineStatePatch) {
+    return form;
+  }
+
+  if (persistChanges) {
+    try {
+      const { error } = await runRequest(
+        "forms.syncDeadlineState",
+        () => apiClient.from("forms").update(deadlineStatePatch).eq("id", form.id),
+        {
+          context: {
+            formId: form.id,
+            isPublic: deadlineStatePatch.is_public,
+            hasDeadline: Boolean(deadlineStatePatch.deadline_at),
+          },
+        },
+      );
+
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error("Не удалось синхронизировать статус формы по дедлайну", error);
+    }
+  }
+
+  return applyDeadlineStatePatch(form, deadlineStatePatch);
+}
 
 async function getAuthenticatedUserId(): Promise<string> {
   const {
@@ -49,12 +82,14 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   );
   if (error) throw error;
 
-  return ((data ?? []) as RawForm[]).map((form) => ({
+  const forms = ((data ?? []) as RawForm[]).map((form) => ({
     ...form,
     author_email: form.profiles?.email ?? null,
     author_name: form.profiles?.name ?? null,
     responses_count: form.responses?.[0]?.count ?? 0,
   }));
+
+  return Promise.all(forms.map((form) => syncFetchedFormDeadlineState(form)));
 }
 
 export async function fetchFormById(id: string): Promise<SurveyForm> {
@@ -64,7 +99,7 @@ export async function fetchFormById(id: string): Promise<SurveyForm> {
     { context: { formId: id } },
   );
   if (error) throw error;
-  return data as SurveyForm;
+  return syncFetchedFormDeadlineState(data as SurveyForm);
 }
 
 export async function fetchPublicFormById(id: string): Promise<SurveyForm | null> {
@@ -74,7 +109,12 @@ export async function fetchPublicFormById(id: string): Promise<SurveyForm | null
     { context: { formId: id } },
   );
   if (error) throw error;
-  return (data as SurveyForm | null) ?? null;
+
+  if (!data) {
+    return null;
+  }
+
+  return syncFetchedFormDeadlineState(data as SurveyForm, false);
 }
 
 export async function insertForm(payload: {
@@ -139,10 +179,17 @@ export async function updateFormStatus(id: string, isPublic: boolean) {
 }
 
 export async function updateFormDeadline(id: string, deadlineAt: string | null) {
+  const payload = buildDeadlineUpdatePayload(deadlineAt);
   const { error } = await runRequest(
     "forms.updateDeadline",
-    () => apiClient.from("forms").update({ deadline_at: deadlineAt }).eq("id", id),
-    { context: { formId: id, hasDeadline: Boolean(deadlineAt) } },
+    () => apiClient.from("forms").update(payload).eq("id", id),
+    {
+      context: {
+        formId: id,
+        hasDeadline: Boolean(payload.deadline_at),
+        isPublic: payload.is_public ?? null,
+      },
+    },
   );
   if (error) throw error;
 }

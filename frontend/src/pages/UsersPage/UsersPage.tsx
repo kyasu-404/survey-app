@@ -161,10 +161,10 @@ export default function UsersPage() {
 
   return (
     <div className="dashboard-page">
-      <div className="card" style={{ padding: 20 }}>
-        <h2 style={{ marginTop: 4 }}>Пользователи</h2>
+      <div className="card users-page-card">
+        <h2 className="users-page-title">Пользователи</h2>
 
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 14 }}>
+        <div className="users-create-grid">
           <input value={newUser.name} onChange={(e) => setNewUser((prev) => ({ ...prev, name: e.target.value }))} placeholder="Имя" />
           <input value={newUser.email} onChange={(e) => setNewUser((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
           <input
@@ -179,7 +179,7 @@ export default function UsersPage() {
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="users-page-toolbar">
           <button onClick={() => void onCreateUser()} disabled={createUserMutation.isPending || !isPasswordValid}>
             Создать пользователя
           </button>
@@ -187,97 +187,99 @@ export default function UsersPage() {
             Сменить мой пароль
           </button>
           {!isPasswordValid && newUser.password.length > 0 && (
-            <span style={{ color: "#b45309", fontSize: 14 }}>Пароль должен быть не короче 8 символов</span>
+            <span className="users-inline-warning">Пароль должен быть не короче 8 символов</span>
           )}
         </div>
 
         {isAuthLoading || usersQuery.isLoading ? (
-          <p style={{ margin: "8px 0 0", color: "#334155" }}>Загрузка пользователей...</p>
+          <p className="users-page-status">Загрузка пользователей...</p>
         ) : !user ? (
-          <p style={{ margin: "8px 0 0", color: "#b45309" }}>Требуется авторизация для просмотра пользователей.</p>
+          <p className="users-page-status users-page-status-warning">Требуется авторизация для просмотра пользователей.</p>
         ) : usersQuery.isError ? (
-          <div style={{ marginTop: 8, color: "#b91c1c" }}>
-            <p style={{ margin: 0 }}>{getErrorMessage(usersQuery.error, "Не удалось загрузить пользователей")}</p>
-            <button onClick={() => void usersQuery.refetch()} style={{ marginTop: 8 }}>
+          <div className="users-page-error">
+            <p className="users-page-error-copy">{getErrorMessage(usersQuery.error, "Не удалось загрузить пользователей")}</p>
+            <button onClick={() => void usersQuery.refetch()} className="users-page-retry-button">
               Повторить
             </button>
           </div>
         ) : (
-          <table className="responses-table">
-            <thead>
-              <tr>
-                <th>Имя</th>
-                <th>Email</th>
-                <th>Роль</th>
-                <th>Статус</th>
-                <th>Создан</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(usersQuery.data ?? []).map((profile) => {
-                const isOwnUser = profile.id === user?.id;
+          <div className="users-table-shell">
+            <table className="responses-table users-table">
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Email</th>
+                  <th>Роль</th>
+                  <th>Статус</th>
+                  <th>Создан</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(usersQuery.data ?? []).map((profile) => {
+                  const isOwnUser = profile.id === user?.id;
 
-                return (
-                  <tr key={profile.id}>
-                    <td>{profile.name || "—"}</td>
-                    <td>{profile.email}</td>
-                    <td>{profile.role}</td>
-                    <td>
-                      <span className={profile.is_disabled ? "user-status-disabled" : "user-status-active"}>
-                        {profile.is_disabled ? "Отключён" : "Активен"}
-                      </span>
-                    </td>
-                    <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          onClick={() =>
-                            openPasswordModal(
-                              profile.id,
-                              isOwnUser ? "Смена моего пароля" : `Смена пароля: ${profile.name || profile.email}`,
-                              isOwnUser,
-                            )
-                          }
-                        >
-                          Сменить пароль
-                        </button>
-                        <button
-                          onClick={() =>
-                            void setUserDisabledMutation.mutateAsync({
-                              userId: profile.id,
-                              disabled: !profile.is_disabled,
-                            })
-                          }
-                          disabled={setUserDisabledMutation.isPending || isOwnUser}
-                        >
-                          {profile.is_disabled ? "Включить" : "Отключить"}
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeleteUserModal({
-                              userId: profile.id,
-                              userName: profile.name || profile.email,
-                            })
-                          }
-                          disabled={deleteUserMutation.isPending || isOwnUser}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={profile.id}>
+                      <td>{profile.name || "—"}</td>
+                      <td>{profile.email}</td>
+                      <td>{profile.role}</td>
+                      <td>
+                        <span className={profile.is_disabled ? "user-status-disabled" : "user-status-active"}>
+                          {profile.is_disabled ? "Отключён" : "Активен"}
+                        </span>
+                      </td>
+                      <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
+                      <td>
+                        <div className="users-table-actions">
+                          <button
+                            onClick={() =>
+                              openPasswordModal(
+                                profile.id,
+                                isOwnUser ? "Смена моего пароля" : `Смена пароля: ${profile.name || profile.email}`,
+                                isOwnUser,
+                              )
+                            }
+                          >
+                            Сменить пароль
+                          </button>
+                          <button
+                            onClick={() =>
+                              void setUserDisabledMutation.mutateAsync({
+                                userId: profile.id,
+                                disabled: !profile.is_disabled,
+                              })
+                            }
+                            disabled={setUserDisabledMutation.isPending || isOwnUser}
+                          >
+                            {profile.is_disabled ? "Включить" : "Отключить"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setDeleteUserModal({
+                                userId: profile.id,
+                                userName: profile.name || profile.email,
+                              })
+                            }
+                            disabled={deleteUserMutation.isPending || isOwnUser}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {passwordModal && (
         <div className="modal-backdrop">
           <div className="modal-card card">
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>{passwordModal.title}</h3>
+            <h3 className="users-modal-title">{passwordModal.title}</h3>
             <label className="deadline-field">
               <span>Новый пароль</span>
               <input
@@ -309,11 +311,11 @@ export default function UsersPage() {
       {deleteUserModal && (
         <div className="modal-backdrop">
           <div className="modal-card card">
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Удаление пользователя</h3>
-            <p style={{ marginTop: 0, marginBottom: 10 }}>
+            <h3 className="users-modal-title">Удаление пользователя</h3>
+            <p className="users-modal-copy">
               Вы уверены, что хотите удалить пользователя {deleteUserModal.userName}?
             </p>
-            <p style={{ marginTop: 0, marginBottom: 16, color: "#b91c1c", fontWeight: 700 }}>
+            <p className="users-modal-copy users-modal-copy-danger">
               Внимание: вместе с пользователем удалятся все созданные им формы. Если формы нужны - лучше просто отключить пользователя.
             </p>
             <div className="deadline-modal-actions">

@@ -79,7 +79,7 @@ describe("FormResponsesPage", () => {
 
     getResponsesByForm.mockResolvedValue(responses);
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
         <QueryClientProvider client={createQueryClient()}>
           <Routes>
@@ -93,6 +93,7 @@ describe("FormResponsesPage", () => {
     expect(screen.getByRole("button", { name: "Выгрузить в XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
+    expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Выгрузить в XLSX" }));
 
