@@ -2837,6 +2837,94 @@ button.responses-export-button:disabled {
   color: #3f3b37 !important;
 }
 
+.builder-creator-shell .svc-tabbed-menu {
+  border-bottom: 1px solid rgba(20, 20, 20, 0.12);
+}
+
+.builder-creator-shell .svc-tabbed-menu-item--selected::after,
+.builder-creator-shell .sd-header__text::after,
+.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after {
+  background: #111111 !important;
+}
+
+.builder-creator-shell .svc-toolbox {
+  border-right: 1px solid rgba(20, 20, 20, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(242, 238, 232, 0.92)) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover,
+.builder-creator-shell .svc-toolbox__item:focus,
+.builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(239, 236, 230, 0.96)) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
+.builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title,
+.builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item .svc-toolbox__item-title {
+  color: #141414 !important;
+}
+
+.builder-creator-shell .sv-action-bar-item__icon use,
+.builder-creator-shell .svc-panel__add-new-question-icon use,
+.builder-creator-shell .spg-button-group__item--selected .spg-button-group__item-icon use {
+  fill: #121212 !important;
+}
+
+.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
+.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus,
+.builder-creator-shell .svc-panel__add-new-question .svc-add-new-item-button__text,
+.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question .svc-add-new-item-button__text,
+.builder-creator-shell .svc-panel__add-new-question-icon use,
+.builder-creator-shell .svc-tabbed-menu-item--selected,
+.builder-creator-shell .svc-creator-tab__content--selected,
+.builder-creator-shell .svc-property-grid__header,
+.builder-creator-shell .svc-side-bar__content-tabs .svc-tabbed-menu-item--selected {
+  color: #111111 !important;
+}
+
+.builder-creator-shell .spg-button-group__item--selected {
+  color: #111111 !important;
+  border-color: rgba(20, 20, 20, 0.16) !important;
+  background: rgba(20, 20, 20, 0.08) !important;
+}
+
+.builder-creator-shell .svc-panel__add-new-question,
+.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 232, 226, 0.92)) !important;
+}
+
+.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
+.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
+  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
+  border-color: rgba(20, 20, 20, 0.24) !important;
+}
+
+.builder-creator-shell .sd-header__text,
+.builder-creator-shell .sd-title.sd-container-modern__title {
+  border-bottom-color: #111111 !important;
+}
+
+.builder-creator-shell .sd-question .sd-description,
+.builder-creator-shell .sd-question__description {
+  border-color: rgba(20, 20, 20, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  color: #141414 !important;
+  box-shadow: none;
+}
+
+.builder-creator-shell .sd-question--selected,
+.builder-creator-shell .svc-question__content--selected {
+  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.16), 0 18px 34px rgba(20, 20, 20, 0.08) !important;
+}
+
+.builder-creator-shell .sd-input:focus,
+.builder-creator-shell .sd-textarea:focus,
+.builder-creator-shell .sd-dropdown:focus,
+.builder-creator-shell .sd-file input:focus + .sd-file__decorator {
+  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
+  border-color: rgba(20, 20, 20, 0.24) !important;
+}
+
 .builder-creator-shell .svc-creator,
 .survey-page-shell .survey-page-card .sd-root-modern,
 .survey-page-shell .survey-page-card .sd-root-modern__wrapper {

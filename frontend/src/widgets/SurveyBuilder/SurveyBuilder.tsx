@@ -13,7 +13,6 @@ import integerIcon from "../../img/constructor/integer.svg?raw";
 import dateIcon from "../../img/constructor/Date.svg?raw";
 import timeIcon from "../../img/constructor/Time.svg?raw";
 import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
-import refreshIcon from "../../img/refresh.png";
 
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -124,7 +123,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-float-custom",
       title: "Число",
       category: "basic",
-      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "number",
@@ -137,7 +135,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-integer-custom",
       title: "Целое число",
       category: "basic",
-      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "number",
@@ -157,7 +154,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-date-custom",
       title: "Дата",
       category: "basic",
-      showInToolboxOnly: true,
       json: { type: "text", inputType: "date", titleLocation: "top" },
     },
     {
@@ -165,7 +161,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-time-custom",
       title: "Время",
       category: "basic",
-      showInToolboxOnly: true,
       json: { type: "text", inputType: "time", titleLocation: "top" },
     },
     {
@@ -173,7 +168,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-datetime-custom",
       title: "Дата и время",
       category: "basic",
-      showInToolboxOnly: true,
       json: { type: "text", inputType: "datetime-local", titleLocation: "top" },
     },
     {
@@ -181,7 +175,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-phone-custom",
       title: "Телефон",
       category: "basic",
-      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "tel",
@@ -206,7 +199,6 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: "icon-toolbox-email-custom",
       title: "email",
       category: "basic",
-      showInToolboxOnly: true,
       json: {
         type: "text",
         inputType: "email",
@@ -284,6 +276,7 @@ function createCreatorInstance() {
   creator.locale = "ru";
   creator.JSON = createEmptyBuilderSchema();
   creator.allowCollapseSidebar = true;
+  creator.showSidebar = false;
 
   configureCreatorToolbox(creator);
 
@@ -296,7 +289,7 @@ function createCreatorInstance() {
 
   creator.onElementAllowOperations.add((_sender, options) => {
     options.allowChangeType = true;
-    options.allowChangeInputType = true;
+    options.allowChangeInputType = options.obj?.getType?.() === "rating";
   });
 
   return creator;
@@ -555,6 +548,21 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     creator.toolbar.addAction(
       {
+        id: "builder-reset",
+        title: "Сбросить",
+        showTitle: true,
+        disableShrink: true,
+        css: "builder-toolbar-action-item",
+        innerCss: "builder-toolbar-action-button builder-toolbar-action-button-secondary",
+        action: () => {
+          setIsResetConfirmOpen(true);
+        },
+      },
+      true,
+    );
+
+    creator.toolbar.addAction(
+      {
         id: "builder-save-template",
         title: "Сохранить как шаблон",
         showTitle: true,
@@ -583,8 +591,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       true,
     );
 
+    const resetAction = creator.toolbar.getActionById("builder-reset");
     const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
     const createFromTemplateAction = creator.toolbar.getActionById("builder-create-template");
+
+    if (resetAction) {
+      resetAction.visibleIndex = 9;
+    }
 
     if (saveTemplateAction) {
       saveTemplateAction.visibleIndex = 10;
@@ -596,7 +609,10 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     return () => {
       creator.toolbar.actions = creator.toolbar.actions.filter(
-        (action) => action.id !== "builder-save-template" && action.id !== "builder-create-template",
+        (action) =>
+          action.id !== "builder-reset" &&
+          action.id !== "builder-save-template" &&
+          action.id !== "builder-create-template",
       );
     };
   }, [creator]);
@@ -606,8 +622,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
+    const resetAction = creator.toolbar.actions.find((action) => action.id === "builder-reset");
     const saveTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-save-template");
     const createFromTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-create-template");
+
+    if (resetAction) {
+      resetAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
+    }
 
     if (saveTemplateAction) {
       saveTemplateAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
@@ -685,19 +706,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         {isSaving && <p className="builder-status-text">Сохранение формы...</p>}
         {isTemplateActionLoading === "save" && <p className="builder-status-text">Сохранение шаблона...</p>}
         {isTemplateActionLoading === "create" && <p className="builder-status-text">Создание формы из шаблона...</p>}
-      </div>
-
-      <div className="builder-controls">
-        <button
-          type="button"
-          className="builder-reset-button"
-          aria-label="Сбросить конструктор"
-          onClick={() => setIsResetConfirmOpen(true)}
-          disabled={!creator || isSurveyMutationBusy || isTemplateBusy}
-        >
-          <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-          <span>Сбросить</span>
-        </button>
       </div>
 
       <div className="builder-creator-shell">

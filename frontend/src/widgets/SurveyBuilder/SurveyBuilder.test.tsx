@@ -97,6 +97,7 @@ vi.mock("survey-core", () => ({
 vi.mock("survey-creator-react", () => {
   class FakeSurveyCreator {
     allowCollapseSidebar = false;
+    showSidebar = true;
     locale = "ru";
     JSON: SurveySchema & { questionDescriptionLocation?: string } = {
       title: "Новая форма",
@@ -109,17 +110,25 @@ vi.mock("survey-creator-react", () => {
     onQuestionAdded = new FakeEvent();
     saveSurveyFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
     toolbox = {
+      items: [] as Array<Record<string, unknown>>,
       categories: [
         { name: "basic", title: "basic" },
         { name: "advanced", title: "advanced" },
       ],
       showCategoryTitles: false,
       clearItems: vi.fn(),
-      addItem: vi.fn(),
+      addItem: vi.fn((item: Record<string, unknown>, index?: number) => {
+        if (index === undefined || index < 0 || index >= this.toolbox.items.length) {
+          this.toolbox.items.push(item);
+          return;
+        }
+
+        this.toolbox.items.splice(index, 0, item);
+      }),
     };
     toolbar = {
       actions: [] as Array<Record<string, unknown>>,
-      addAction: (action: Record<string, unknown>) => {
+      addAction: (action: Record<string, unknown>, _visible?: boolean) => {
         this.toolbar.actions.push(action);
       },
       getActionById: (id: string) => this.toolbar.actions.find((action) => action.id === id),
@@ -230,7 +239,10 @@ describe("SurveyBuilder", () => {
       expect(creatorInstances).toHaveLength(1);
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Сбросить конструктор" }));
+    act(() => {
+      const resetAction = creatorInstances[0].toolbar.getActionById("builder-reset") as { action: () => void };
+      resetAction.action();
+    });
 
     expect(await screen.findByRole("heading", { name: "Сбросить конструктор?" })).toBeInTheDocument();
 
@@ -249,5 +261,82 @@ describe("SurveyBuilder", () => {
         pages: [{ name: "page1", title: "Страница 1", elements: [] }],
       }),
     });
+  });
+
+  it("configures creator with collapsed sidebar, toolbar reset action, and flat text type list", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    const creator = creatorInstances[0];
+
+    expect(creator.allowCollapseSidebar).toBe(true);
+    expect(creator.showSidebar).toBe(false);
+    expect(screen.queryByRole("button", { name: "Сбросить конструктор" })).not.toBeInTheDocument();
+    expect(creator.toolbar.actions.map((action: { id: string }) => action.id)).toEqual([
+      "builder-reset",
+      "builder-save-template",
+      "builder-create-template",
+    ]);
+
+    expect(
+      creator.toolbox.items.map((item: { name: string }) => item.name),
+    ).toEqual([
+      "text_plain",
+      "comment",
+      "radiogroup",
+      "checkbox",
+      "dropdown",
+      "text_number",
+      "text_integer",
+      "text_date",
+      "text_time",
+      "text_datetime-local",
+      "text_phone",
+      "text_email",
+      "boolean",
+      "rating",
+      "ranking",
+      "tagbox",
+      "matrix",
+      "matrixdropdown",
+      "matrixdynamic",
+      "multipletext",
+      "image",
+      "imagepicker",
+      "file",
+      "signaturepad",
+      "panel",
+      "paneldynamic",
+      "expression",
+      "html",
+    ]);
+    expect(creator.toolbox.items[5].showInToolboxOnly).not.toBe(true);
+
+    const textOptions = {
+      obj: {
+        getType: () => "text",
+      },
+      allowChangeType: false,
+      allowChangeInputType: true,
+    };
+
+    creator.onElementAllowOperations.fire(creator, textOptions);
+
+    expect(textOptions.allowChangeType).toBe(true);
+    expect(textOptions.allowChangeInputType).toBe(false);
+
+    const ratingOptions = {
+      obj: {
+        getType: () => "rating",
+      },
+      allowChangeInputType: false,
+    };
+
+    creator.onElementAllowOperations.fire(creator, ratingOptions);
+
+    expect(ratingOptions.allowChangeInputType).toBe(true);
   });
 });
