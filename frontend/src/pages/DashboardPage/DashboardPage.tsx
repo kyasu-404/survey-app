@@ -93,6 +93,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const [search, setSearch] = useState("");
+  const [templateFilter, setTemplateFilter] = useState<"all" | "templates">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
@@ -127,10 +128,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
   });
 
-  const visibleForms = useMemo(
-    () => (viewMode === "all" ? forms.filter((form) => !isTemplateForm(form)) : forms),
-    [forms, viewMode],
-  );
+  const visibleForms = useMemo(() => {
+    const formsForPage = viewMode === "all" ? forms.filter((form) => !isTemplateForm(form)) : forms;
+
+    if (viewMode === "mine" && templateFilter === "templates") {
+      return formsForPage.filter((form) => isTemplateForm(form));
+    }
+
+    return formsForPage;
+  }, [forms, templateFilter, viewMode]);
 
   const filteredForms = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -169,7 +175,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   useEffect(() => {
     setVisibleCount(pageSize);
-  }, [dateFrom, dateTo, pageSize, search, viewMode]);
+  }, [dateFrom, dateTo, pageSize, search, templateFilter, viewMode]);
 
   useEffect(() => {
     if (formsError) {
@@ -444,6 +450,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <span>Дата по</span>
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
+            {viewMode === "mine" && (
+              <label className="dashboard-filter-field">
+                <span>Тип</span>
+                <select aria-label="Тип форм" value={templateFilter} onChange={(event) => setTemplateFilter(event.target.value as "all" | "templates")}>
+                  <option value="all">Все формы</option>
+                  <option value="templates">Шаблоны</option>
+                </select>
+              </label>
+            )}
             <label className="dashboard-filter-field">
               <span>Количество</span>
               <select
@@ -511,7 +526,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <button
                   key="responses"
                   type="button"
-                  className="dashboard-responses-link"
+                  className="dashboard-responses-link dashboard-responses-link-hitbox"
                   onClick={(event) => {
                     stopCardEvent(event);
                     navigate(routes.formResponses(form.id));
@@ -653,7 +668,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         <div className="form-menu dashboard-floating-root dashboard-status-menu-shell">
                           <button
                             type="button"
-                            className={`dashboard-status-pill dashboard-status-trigger ${
+                            className={`dashboard-status-pill dashboard-status-trigger dashboard-status-trigger-glossy ${
                               isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"
                             }`.trim()}
                             aria-label={`Статус формы ${title}: ${statusLabel}`}
@@ -672,7 +687,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
                           {statusMenuOpen && (
                             <div
-                              className="form-menu-dropdown form-menu-dropdown-inline"
+                              className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
                               role="menu"
                               aria-label={`Статус формы ${title}`}
                             >
@@ -837,7 +852,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <button type="button" onClick={() => setFormToDelete(null)} disabled={isFormActionPending(formToDelete.id)}>
                 Отмена
               </button>
-              <button type="button" onClick={() => void confirmDelete()} disabled={isFormActionPending(formToDelete.id)}>
+              <button
+                type="button"
+                className="dashboard-danger-button"
+                onClick={() => void confirmDelete()}
+                disabled={isFormActionPending(formToDelete.id)}
+              >
                 Удалить
               </button>
             </div>

@@ -40,6 +40,18 @@ function createQueryClient() {
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -94,6 +106,7 @@ describe("FormResponsesPage", () => {
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
+    expect(container.querySelector(".responses-export-button .toolbar-icon")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Выгрузить в XLSX" }));
 
@@ -106,6 +119,90 @@ describe("FormResponsesPage", () => {
         ],
         "ответы-Форма обратной связи",
       );
+    });
+  });
+
+  it("disables the refresh button while responses are being updated", async () => {
+    getFormById
+      .mockResolvedValueOnce({
+        id: "form-1",
+        title: "Форма обратной связи",
+        created_at: "2026-04-08T10:00:00.000Z",
+        is_public: true,
+        author_id: "user-1",
+        form_type: "anketa",
+        form_reason: "plan",
+        deadline_at: null,
+        schema: {
+          pages: [
+            {
+              elements: [{ type: "text", name: "name", title: "Имя" }],
+            },
+          ],
+        },
+      });
+
+    getResponsesByForm.mockResolvedValueOnce([
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { name: "Анна" },
+      },
+    ]);
+
+    const formDeferred = createDeferred<unknown>();
+    const responsesDeferred = createDeferred<SurveyResponse[]>();
+
+    getFormById.mockImplementationOnce(() => formDeferred.promise);
+    getResponsesByForm.mockImplementationOnce(() => responsesDeferred.promise);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    const refreshButton = await screen.findByRole("button", { name: "Обновить" });
+
+    await userEvent.click(refreshButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Обновляется..." })).toBeDisabled();
+    });
+
+    formDeferred.resolve({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+    responsesDeferred.resolve([
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { name: "Анна" },
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Обновить" })).not.toBeDisabled();
     });
   });
 });

@@ -11,6 +11,7 @@ import type {
   SurveyQuestion,
   SurveySchema,
 } from "../../entities/survey/types";
+import downloadIcon from "../../img/Download.svg";
 import refreshIcon from "../../img/refresh.png";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
@@ -147,6 +148,7 @@ export default function FormResponsesPage() {
 
   const headers = rows[0] ? Object.keys(rows[0]) : [];
   const isLoading = formQuery.isLoading || responsesQuery.isLoading;
+  const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const combinedError = formQuery.error ?? responsesQuery.error;
 
   const handleExport = () => {
@@ -172,8 +174,9 @@ export default function FormResponsesPage() {
             <h1 className="responses-page-title">{formQuery.data?.title ?? "Ответы формы"}</h1>
           </div>
           <div className="responses-page-toolbar">
-            <button type="button" onClick={handleExport} disabled={isLoading}>
-              Выгрузить в XLSX
+            <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
+              <span>Выгрузить в XLSX</span>
+              <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <button
               type="button"
@@ -182,10 +185,10 @@ export default function FormResponsesPage() {
                 void formQuery.refetch();
                 void responsesQuery.refetch();
               }}
-              disabled={isLoading}
+              disabled={isRefreshing}
             >
               <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-              <span>Обновить</span>
+              <span>{isRefreshing ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>
         </div>

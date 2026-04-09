@@ -242,8 +242,37 @@ describe("DashboardPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" }));
 
     const statusMenu = await screen.findByRole("menu", { name: "Статус формы Закрытая форма" });
+    expect(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" })).toHaveClass("dashboard-status-trigger-glossy");
+    expect(screen.getByRole("button", { name: "2 ответа" })).toHaveClass("dashboard-responses-link-hitbox");
+    expect(statusMenu).toHaveClass("dashboard-status-dropdown");
     expect(within(statusMenu).getByRole("menuitem", { name: "Открыть" })).toBeInTheDocument();
     expect(within(statusMenu).getByRole("menuitem", { name: "Установить дедлайн" })).toBeInTheDocument();
+  });
+
+  it("shows a template filter only on the my forms page", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Обычная форма",
+        author_id: "user-1",
+        form_type: "anketa",
+      }),
+      createForm(2, {
+        title: "Шаблон отчёта",
+        author_id: "user-1",
+        form_type: "template",
+      }),
+    ]);
+
+    renderPage("mine");
+
+    const templateFilter = await screen.findByRole("combobox", { name: "Тип форм" });
+    expect(await screen.findByText("Обычная форма")).toBeInTheDocument();
+    expect(screen.getByText("Шаблон отчёта")).toBeInTheDocument();
+
+    await userEvent.selectOptions(templateFilter, "templates");
+
+    expect(screen.queryByText("Обычная форма")).not.toBeInTheDocument();
+    expect(screen.getByText("Шаблон отчёта")).toBeInTheDocument();
   });
 
   it("renders the delete modal action wrapper for dashboard styling", async () => {
@@ -260,6 +289,7 @@ describe("DashboardPage", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "Удалить" }));
 
     expect(container.querySelector(".dashboard-delete-modal-actions")).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-delete-modal-actions .dashboard-danger-button")).toBeInTheDocument();
   });
 
   it("asks for confirmation and clears deadline before closing a public form with deadline", async () => {
