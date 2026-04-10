@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -187,6 +189,10 @@ function renderBuilder(formId?: string) {
       </QueryClientProvider>
     </MemoryRouter>,
   );
+}
+
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
 
 describe("SurveyBuilder", () => {
@@ -392,14 +398,37 @@ describe("SurveyBuilder", () => {
     const previewSurvey = {
       applyTheme: vi.fn(),
     };
+    const designerSurvey = {
+      applyTheme: vi.fn(),
+    };
+    const logicSurvey = {
+      applyTheme: vi.fn(),
+    };
 
     act(() => {
+      creator.onSurveyInstanceCreated.fire(creator, {
+        area: "designer-tab",
+        survey: designerSurvey,
+      });
       creator.onSurveyInstanceCreated.fire(creator, {
         area: "preview-tab",
         survey: previewSurvey,
       });
+      creator.onSurveyInstanceCreated.fire(creator, {
+        area: "logic-tab",
+        survey: logicSurvey,
+      });
     });
 
+    expect(designerSurvey.applyTheme).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeName: "defaultV2",
+        cssVariables: expect.objectContaining({
+          "--sjs-primary-backcolor": "#121212",
+          "--sjs-primary-backcolor-dark": "#000000",
+        }),
+      }),
+    );
     expect(previewSurvey.applyTheme).toHaveBeenCalledWith(
       expect.objectContaining({
         themeName: "defaultV2",
@@ -409,5 +438,33 @@ describe("SurveyBuilder", () => {
         }),
       }),
     );
+    expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
+
+    const question = {} as { isRequired?: boolean; descriptionLocation?: string };
+
+    act(() => {
+      creator.onQuestionAdded.fire(creator, { question });
+    });
+
+    expect(question).toMatchObject({
+      isRequired: true,
+      descriptionLocation: "underTitle",
+    });
+  });
+
+  it("keeps the final surveyjs builder override block at the end of app.css", () => {
+    const appCss = readAppCss();
+    const finalOverrideIndex = appCss.lastIndexOf("FINAL SurveyJS Builder override");
+
+    expect(finalOverrideIndex).toBeGreaterThan(appCss.lastIndexOf("@media (max-width: 760px)"));
+
+    const finalOverride = appCss.slice(finalOverrideIndex);
+
+    expect(finalOverride).toContain(".builder-creator-shell .svc-creator .sd-body");
+    expect(finalOverride).toContain(".builder-creator-shell .spg-button-group__item {");
+    expect(finalOverride).toContain("transform 140ms ease");
+    expect(finalOverride).toContain(".survey-page-card .sd-question__description");
+    expect(finalOverride).toContain("background: rgba(219, 234, 254, 0.88) !important;");
+    expect(finalOverride).toContain("color: #141414 !important;");
   });
 });
