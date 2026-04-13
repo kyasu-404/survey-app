@@ -9,6 +9,7 @@ export type SurveyQuestion = {
 export type SurveyPageSchema = {
   name?: string;
   title?: string;
+  description?: string;
   elements: SurveyQuestion[];
 };
 
@@ -17,6 +18,11 @@ export type SurveySchema = {
   title?: string;
   description?: string;
   questionDescriptionLocation?: string;
+  logo?: string;
+  logoWidth?: string | number;
+  logoHeight?: string | number;
+  logoFit?: "none" | "contain" | "cover" | "fill";
+  logoPosition?: "none" | "left" | "right" | "top" | "bottom";
   pages: SurveyPageSchema[];
 };
 

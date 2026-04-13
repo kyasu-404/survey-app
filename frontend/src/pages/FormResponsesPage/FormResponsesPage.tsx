@@ -15,6 +15,7 @@ import downloadIcon from "../../img/Download.svg";
 import refreshIcon from "../../img/refresh.png";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import { Skeleton } from "../../shared/ui/Skeleton";
 
 type ResponsesTableRow = {
   [key: string]: string;
@@ -193,7 +194,22 @@ export default function FormResponsesPage() {
           </div>
         </div>
 
-        {isLoading && <p className="dashboard-loading-text">Загрузка...</p>}
+        {isLoading && (
+          <div className="responses-page-table-shell responses-page-skeleton" aria-hidden="true">
+            <div className="responses-page-skeleton-head">
+              <Skeleton className="responses-page-skeleton-cell" />
+              <Skeleton className="responses-page-skeleton-cell" />
+              <Skeleton className="responses-page-skeleton-cell" />
+            </div>
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={`responses-skeleton-${index}`} className="responses-page-skeleton-row">
+                <Skeleton className="responses-page-skeleton-cell" />
+                <Skeleton className="responses-page-skeleton-cell" />
+                <Skeleton className="responses-page-skeleton-cell" />
+              </div>
+            ))}
+          </div>
+        )}
         {!isLoading && combinedError && (
           <p className="responses-page-error">{getErrorMessage(combinedError, "Не удалось загрузить ответы")}</p>
         )}

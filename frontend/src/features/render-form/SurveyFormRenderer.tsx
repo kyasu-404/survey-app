@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
+import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
 import type { SurveySchema } from "../../entities/survey/types";
 import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
@@ -35,10 +36,12 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
+  const allowProgrammaticCompleteRef = useRef(false);
   const model = useMemo(() => {
-    const nextModel = new Model(schema);
-    nextModel.locale = schema.locale ?? "ru";
-    nextModel.completeText = "Завершить";
+    const resolvedSchema = resolveDefaultSurveyLogo(schema);
+    const nextModel = new Model(resolvedSchema);
+    nextModel.locale = resolvedSchema.locale ?? "ru";
+    nextModel.completeText = "Отправить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
     return nextModel;
   }, [schema]);
@@ -86,13 +89,25 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
       }
     };
 
-    const handleComplete = async (sender: Model) => {
+    const handleCompleting = async (
+      sender: Model,
+      options: { allowComplete?: boolean; allow?: boolean }
+    ) => {
+      if (allowProgrammaticCompleteRef.current) {
+        allowProgrammaticCompleteRef.current = false;
+        return;
+      }
+
+      options.allowComplete = false;
+      options.allow = false;
       setIsSubmitting(true);
       setSubmitError(null);
 
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
         await submitResponseMutation.mutateAsync({ formId: payload.formId, data: payload.answers });
+        allowProgrammaticCompleteRef.current = true;
+        sender.doComplete();
         showToast("Ответ успешно отправлен", "success");
       } catch (error) {
         console.error(error);
@@ -107,20 +122,19 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
 
     model.onUploadFiles.add(handleUploadFiles);
     model.onClearFiles.add(handleClearFiles);
-    model.onComplete.add(handleComplete);
+    model.onCompleting.add(handleCompleting);
 
     return () => {
       model.onUploadFiles.remove(handleUploadFiles);
       model.onClearFiles.remove(handleClearFiles);
-      model.onComplete.remove(handleComplete);
+      model.onCompleting.remove(handleCompleting);
     };
   }, [formId, model, showToast, submitResponseMutation]);
 
   return (
-    <>
-      {isSubmitting && <p>Отправка ответа...</p>}
+    <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>
       {submitError && <p style={{ color: "#991b1b", marginBottom: 10 }}>Ошибка отправки: {submitError}</p>}
       <Survey model={model} />
-    </>
+    </div>
   );
 }

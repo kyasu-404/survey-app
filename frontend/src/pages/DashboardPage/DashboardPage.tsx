@@ -12,6 +12,13 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import refreshIcon from "../../img/refresh.png";
 import infoIcon from "../../img/info.svg";
+import copyLinkIcon from "../../img/copy_link.svg";
+import renameIcon from "../../img/rename.svg";
+import editIcon from "../../img/edit.svg";
+import copyIcon from "../../img/copy.svg";
+import deleteIcon from "../../img/delete.svg";
+import deadlineIcon from "../../img/deadline.svg";
+import searchIcon from "../../img/search.svg";
 import {
   changeFormStatus,
   cloneForm,
@@ -27,6 +34,8 @@ import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { Skeleton } from "../../shared/ui/Skeleton";
 
 type DashboardPageProps = {
   viewMode: "mine" | "all";
@@ -87,6 +96,23 @@ function getResponsesLabel(count: number) {
 
 function getAuthorLabel(form: SurveyForm) {
   return form.author_name || form.author_email || form.author_id;
+}
+
+function renderDashboardSkeletonCards(count: number, className = "") {
+  return Array.from({ length: count }, (_, index) => (
+    <div key={`dashboard-skeleton-${className || "default"}-${index}`} className={`dashboard-form-skeleton ${className}`.trim()}>
+      <div className="dashboard-form-skeleton-header">
+        <Skeleton className="dashboard-form-skeleton-pill" />
+        <Skeleton className="dashboard-form-skeleton-menu" />
+      </div>
+      <Skeleton className="dashboard-form-skeleton-title" />
+      <div className="dashboard-form-skeleton-meta">
+        <Skeleton className="dashboard-form-skeleton-meta-pill" />
+        <Skeleton className="dashboard-form-skeleton-meta-pill" />
+        <Skeleton className="dashboard-form-skeleton-meta-pill dashboard-form-skeleton-meta-pill-wide" />
+      </div>
+    </div>
+  ));
 }
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
@@ -172,6 +198,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     [filteredForms],
   );
   const hasMoreForms = displayedForms.length < filteredForms.length;
+  const isRefreshingForms = isFormsFetching && !isInitialFormsLoading;
 
   useEffect(() => {
     setVisibleCount(pageSize);
@@ -406,12 +433,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       <div className="card dashboard-main-card">
         <div className="dashboard-toolbar">
           <div className="dashboard-search-group">
-            <input
-              className="dashboard-search-input"
-              placeholder="Поиск по названию и автору"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+            <div className="dashboard-search-input-shell">
+              <img src={searchIcon} alt="" aria-hidden="true" className="dashboard-search-icon" />
+              <input
+                className="dashboard-search-input"
+                placeholder="Поиск по названию и автору"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
             <div className="dashboard-floating-root dashboard-info-box">
               <button
                 type="button"
@@ -485,7 +515,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         </div>
 
-        {isInitialFormsLoading && <p className="dashboard-loading-text">Загрузка...</p>}
+        {isInitialFormsLoading && (
+          <div className="dashboard-forms-grid dashboard-forms-grid-loading">
+            {renderDashboardSkeletonCards(6)}
+          </div>
+        )}
 
         {!isInitialFormsLoading && filteredForms.length === 0 && (
           <div className="dashboard-empty-state">
@@ -494,7 +528,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         )}
 
-        <div className="dashboard-forms-grid">
+        <div className={`dashboard-forms-grid ${isRefreshingForms ? "dashboard-forms-grid-refreshing" : ""}`.trim()}>
           {displayedForms.map((form) => {
             const title = getSurveyDisplayTitle(form);
             const isOwnForm = form.author_id === user?.id;
@@ -519,7 +553,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </span>,
               deadlineLabel ? (
                 <span key="deadline" className="dashboard-meta-item dashboard-meta-item-deadline">
-                  открыта до {deadlineLabel}
+                  <img src={deadlineIcon} alt="" aria-hidden="true" className="dashboard-meta-icon" />
+                  <span>открыта до {deadlineLabel}</span>
                 </span>
               ) : null,
               !isTemplate ? (
@@ -562,6 +597,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                     className="form-menu-dropdown"
                     role="menu"
                     aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
+                    onClick={stopCardEvent}
                   >
                     {!isTemplate && (
                       <button
@@ -575,7 +611,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         }}
                         disabled={isCurrentFormPending}
                       >
-                        Копировать ссылку
+                        <img src={copyLinkIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                        <span className="form-menu-item-label">Копировать ссылку</span>
                       </button>
                     )}
 
@@ -591,7 +628,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         }}
                         disabled={isCurrentFormPending}
                       >
-                        Переименовать
+                        <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                        <span className="form-menu-item-label">Переименовать</span>
                       </button>
                     )}
 
@@ -607,7 +645,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         }}
                         disabled={isCurrentFormPending}
                       >
-                        Редактировать
+                        <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                        <span className="form-menu-item-label">Редактировать</span>
                       </button>
                     )}
 
@@ -623,7 +662,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         }}
                         disabled={isCurrentFormPending}
                       >
-                        Дублировать
+                        <img src={copyIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                        <span className="form-menu-item-label">Дублировать</span>
                       </button>
                     )}
 
@@ -639,7 +679,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                         }}
                         disabled={isCurrentFormPending}
                       >
-                        Удалить
+                        <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                        <span className="form-menu-item-label">Удалить</span>
                       </button>
                     )}
                   </div>
@@ -690,6 +731,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                               className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
                               role="menu"
                               aria-label={`Статус формы ${title}`}
+                              onClick={stopCardEvent}
                             >
                               <button
                                 type="button"
@@ -754,6 +796,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </div>
             );
           })}
+          {isRefreshingForms && (
+            <div className="dashboard-refresh-overlay">
+              {renderDashboardSkeletonCards(Math.min(Math.max(displayedForms.length, 1), 4), "dashboard-form-skeleton-overlay")}
+            </div>
+          )}
         </div>
 
         {!isInitialFormsLoading && hasMoreForms && (
@@ -806,6 +853,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 }
                 disabled={isFormActionPending(deadlineEditor.form.id)}
               >
+                {isFormActionPending(deadlineEditor.form.id) && <InlineSpinner />}
                 Снять дедлайн
               </button>
               <button
@@ -836,6 +884,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 }}
                 disabled={isFormActionPending(deadlineEditor.form.id)}
               >
+                {isFormActionPending(deadlineEditor.form.id) && <InlineSpinner />}
                 Сохранить
               </button>
             </div>
@@ -858,6 +907,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 onClick={() => void confirmDelete()}
                 disabled={isFormActionPending(formToDelete.id)}
               >
+                {isFormActionPending(formToDelete.id) && <InlineSpinner />}
                 Удалить
               </button>
             </div>

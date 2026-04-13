@@ -18,6 +18,10 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import { getFormById, getForms, saveSurveySchema } from "../../entities/survey/api/surveysApi";
+import {
+  resolveDefaultSurveyLogo,
+  serializeDefaultSurveyLogo,
+} from "../../entities/survey/model/defaultSurveyLogo";
 import { TEMPLATE_FORM_TYPE, createEmptySurveySchema, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
@@ -25,6 +29,7 @@ import { useCreateSurveyMutation } from "../../features/create-survey/useCreateS
 import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { Skeleton } from "../../shared/ui/Skeleton";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 
 type SurveyBuilderProps = {
@@ -434,6 +439,7 @@ function createCreatorInstance() {
   configureCreatorLocalization();
   registerCustomIcons();
   registerCustomQuestionTypes();
+  const patchedDesignerSurveys = new WeakSet<object>();
 
   const creator = new SurveyCreator({
     questionTypes: [...QUESTION_TYPES],
@@ -450,8 +456,16 @@ function createCreatorInstance() {
     if (options.area === "preview-tab" || options.area === "designer-tab") {
       options.survey.applyTheme(CREATOR_SURVEY_THEME);
     }
+
+    if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
+      patchedDesignerSurveys.add(options.survey);
+
+      options.survey.onPageAdded.add((_survey, pageOptions) => {
+        clearAutoPageTitle(pageOptions.page);
+      });
+    }
   });
-  creator.JSON = createEmptyBuilderSchema();
+  creator.JSON = resolveDefaultSurveyLogo(createEmptyBuilderSchema());
   creator.allowCollapseSidebar = true;
   creator.showSidebar = false;
 
@@ -500,6 +514,24 @@ function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSc
 
 function createEmptyBuilderSchema(title = "Новая форма") {
   return toBuilderSchema(createEmptySurveySchema(title), title);
+}
+
+function clearAutoPageTitle(page?: { title?: string; name?: string }) {
+  if (!page) {
+    return;
+  }
+
+  const normalizedTitle = (page.title ?? "").trim();
+  const pageName = (page.name ?? "").trim();
+
+  if (
+    normalizedTitle === "" ||
+    normalizedTitle === pageName ||
+    /^Страница\s+\d+$/u.test(normalizedTitle) ||
+    /^Page\s+\d+$/u.test(normalizedTitle)
+  ) {
+    page.title = "";
+  }
 }
 
 export function SurveyBuilder({ formId }: SurveyBuilderProps) {
@@ -587,7 +619,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     if (restoredDraft) {
       draftHydrationStateRef.current = "loaded";
       creator.locale = restoredDraft.locale ?? "ru";
-      creator.JSON = toBuilderSchema(restoredDraft, "Новая форма");
+      creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft, "Новая форма"));
       return;
     }
 
@@ -600,12 +632,14 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     creator.locale = editableForm.schema.locale ?? "ru";
-    creator.JSON = toBuilderSchema(
-      {
-        ...editableForm.schema,
-        title: editableForm.title,
-      },
-      editableForm.title,
+    creator.JSON = resolveDefaultSurveyLogo(
+      toBuilderSchema(
+        {
+          ...editableForm.schema,
+          title: editableForm.title,
+        },
+        editableForm.title,
+      ),
     );
   }, [creator, editableForm]);
 
@@ -615,7 +649,10 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     const handleModified = () => {
-      saveSurveyBuilderDraft(formId, cloneSchema(creator.JSON as SurveySchema));
+      saveSurveyBuilderDraft(
+        formId,
+        serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema)),
+      );
     };
 
     creator.onModified.add(handleModified);
@@ -650,7 +687,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder save template");
 
     try {
-      const schema = cloneSchema(creator.JSON as SurveySchema);
+      const schema = serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema));
       if (!validateSurveySchema(schema)) {
         throw new Error("Некорректная JSON-схема формы");
       }
@@ -679,10 +716,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     const stopPendingLogger = createPendingStateLogger(queryClient, `builder create from template ${templateForm.id}`);
 
     try {
-      const schema = cloneSchema({
-        ...templateForm.schema,
-        title: templateForm.title,
-      });
+      const schema = serializeDefaultSurveyLogo(
+        cloneSchema({
+          ...templateForm.schema,
+          title: templateForm.title,
+        }),
+      );
 
       const createdForm = await createSurveyMutation.mutateAsync({
         schema,
@@ -717,7 +756,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     const emptySchema = createEmptyBuilderSchema();
     creator.locale = emptySchema.locale ?? "ru";
-    creator.JSON = emptySchema;
+    creator.JSON = resolveDefaultSurveyLogo(emptySchema);
     saveSurveyBuilderDraft(formId, emptySchema);
     draftHydrationStateRef.current = "loaded";
     setIsResetConfirmOpen(false);
@@ -736,7 +775,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         showTitle: true,
         disableShrink: true,
         css: "builder-toolbar-action-item",
-        innerCss: "builder-toolbar-action-button builder-toolbar-action-button-secondary",
+        innerCss: "builder-toolbar-action-button",
         action: () => {
           setIsResetConfirmOpen(true);
         },
@@ -766,7 +805,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         showTitle: true,
         disableShrink: true,
         css: "builder-toolbar-action-item",
-        innerCss: "builder-toolbar-action-button builder-toolbar-action-button-secondary",
+        innerCss: "builder-toolbar-action-button",
         action: () => {
           createFromTemplateHandlerRef.current();
         },
@@ -806,21 +845,34 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     const resetAction = creator.toolbar.actions.find((action) => action.id === "builder-reset");
+    const saveAction = creator.toolbar.actions.find((action) => action.id === "svd-save");
     const saveTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-save-template");
     const createFromTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-create-template");
 
     if (resetAction) {
       resetAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
+      resetAction.innerCss = "builder-toolbar-action-button";
+    }
+
+    if (saveAction) {
+      saveAction.css = "builder-toolbar-action-item";
+      saveAction.innerCss = `builder-toolbar-action-button ${isSaving ? "builder-toolbar-action-button-pending" : ""}`.trim();
     }
 
     if (saveTemplateAction) {
       saveTemplateAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
+      saveTemplateAction.innerCss = `builder-toolbar-action-button ${
+        isTemplateActionLoading === "save" ? "builder-toolbar-action-button-pending" : ""
+      }`.trim();
     }
 
     if (createFromTemplateAction) {
       createFromTemplateAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
+      createFromTemplateAction.innerCss = `builder-toolbar-action-button ${
+        isTemplateActionLoading === "create" ? "builder-toolbar-action-button-pending" : ""
+      }`.trim();
     }
-  }, [creator, isSurveyMutationBusy, isTemplateBusy]);
+  }, [creator, isSaving, isSurveyMutationBusy, isTemplateActionLoading, isTemplateBusy]);
 
   useEffect(() => {
     if (!creator) {
@@ -832,7 +884,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 
       try {
-        const schema = creator.JSON as SurveySchema;
+        const schema = serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema));
         if (!validateSurveySchema(schema)) {
           throw new Error("Некорректная JSON-схема формы");
         }
@@ -885,10 +937,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   return (
     <div className="builder-host">
       <div className="builder-status-stack">
-        {isEditableFormLoading && <p className="builder-status-text">Загрузка формы...</p>}
-        {isSaving && <p className="builder-status-text">Сохранение формы...</p>}
-        {isTemplateActionLoading === "save" && <p className="builder-status-text">Сохранение шаблона...</p>}
-        {isTemplateActionLoading === "create" && <p className="builder-status-text">Создание формы из шаблона...</p>}
+        {isEditableFormLoading && (
+          <div className="builder-loading-skeleton" aria-hidden="true">
+            <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-title" />
+            <Skeleton className="builder-loading-skeleton-line" />
+            <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-short" />
+          </div>
+        )}
       </div>
 
       <div className="builder-creator-shell">
@@ -925,7 +980,16 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
             <h3 className="builder-template-title">Выберите шаблон</h3>
             <p className="builder-template-subtitle">Для создания новой формы доступны только сохранённые шаблоны.</p>
 
-            {isTemplateFormsLoading && <p className="builder-status-text">Загрузка шаблонов...</p>}
+            {isTemplateFormsLoading && (
+              <div className="builder-template-skeleton-list" aria-hidden="true">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <div key={`template-skeleton-${index}`} className="builder-template-skeleton-card">
+                    <Skeleton className="builder-template-skeleton-title" />
+                    <Skeleton className="builder-template-skeleton-meta" />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {!isTemplateFormsLoading && templateForms.length === 0 && (
               <div className="builder-template-empty-state">

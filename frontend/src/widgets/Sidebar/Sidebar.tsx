@@ -3,6 +3,7 @@ import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
 import blackLogo from "../../img/black_logo.png";
+import { Skeleton } from "../../shared/ui/Skeleton";
 
 type SidebarProps = {
   onToggle: () => void;
@@ -32,7 +33,14 @@ export function Sidebar({ onToggle }: SidebarProps) {
       </div>
 
       <nav className="sidebar-nav">
-        {loading && <span>Загрузка...</span>}
+        {loading && (
+          <div className="sidebar-skeleton" aria-hidden="true">
+            <Skeleton className="sidebar-skeleton-item" />
+            <Skeleton className="sidebar-skeleton-item" />
+            <Skeleton className="sidebar-skeleton-item" />
+            <Skeleton className="sidebar-skeleton-item sidebar-skeleton-item-short" />
+          </div>
+        )}
 
         {!loading && user && (
           <>

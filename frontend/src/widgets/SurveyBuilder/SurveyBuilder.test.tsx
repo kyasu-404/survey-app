@@ -9,6 +9,8 @@ import { SurveyBuilder } from "./SurveyBuilder";
 import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
 
+const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
+
 const {
   componentCollectionAdd,
   componentCollectionGetByName,
@@ -122,7 +124,11 @@ vi.mock("survey-creator-react", () => {
       title: "Новая форма",
       locale: "ru",
       questionDescriptionLocation: "underTitle",
-      pages: [{ name: "page1", title: "Страница 1", elements: [] }],
+      pages: [{ name: "page1", title: "", elements: [] }],
+      logo: DEFAULT_SURVEY_LOGO_TOKEN,
+      logoWidth: "120px",
+      logoHeight: "90px",
+      logoFit: "contain",
     };
     options: Record<string, unknown>;
     onElementAllowOperations = new FakeEvent();
@@ -281,14 +287,22 @@ describe("SurveyBuilder", () => {
     await waitFor(() => {
       expect(creatorInstances[0].JSON).toMatchObject({
         title: "Новая форма",
-        pages: [{ name: "page1", title: "Страница 1", elements: [] }],
+        logoWidth: "120px",
+        logoHeight: "90px",
+        logoFit: "contain",
+        pages: [{ name: "page1", title: "", elements: [] }],
       });
+      expect(creatorInstances[0].JSON.logo).not.toBe(DEFAULT_SURVEY_LOGO_TOKEN);
     });
 
     expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
         title: "Новая форма",
-        pages: [{ name: "page1", title: "Страница 1", elements: [] }],
+        logo: DEFAULT_SURVEY_LOGO_TOKEN,
+        logoWidth: "120px",
+        logoHeight: "90px",
+        logoFit: "contain",
+        pages: [{ name: "page1", title: "", elements: [] }],
       }),
     });
   });
@@ -304,6 +318,16 @@ describe("SurveyBuilder", () => {
 
     expect(creator.allowCollapseSidebar).toBe(true);
     expect(creator.showSidebar).toBe(false);
+    expect(creator.JSON).toMatchObject({
+      title: "Новая форма",
+      locale: "ru",
+      questionDescriptionLocation: "underTitle",
+      logoWidth: "120px",
+      logoHeight: "90px",
+      logoFit: "contain",
+      pages: [{ name: "page1", title: "", elements: [] }],
+    });
+    expect(creator.JSON.logo).not.toBe(DEFAULT_SURVEY_LOGO_TOKEN);
     expect(screen.queryByRole("button", { name: "Сбросить конструктор" })).not.toBeInTheDocument();
     expect(creator.toolbar.actions.map((action: { id: string }) => action.id)).toEqual([
       "builder-reset",
@@ -400,6 +424,7 @@ describe("SurveyBuilder", () => {
     };
     const designerSurvey = {
       applyTheme: vi.fn(),
+      onPageAdded: new FakeEvent(),
     };
     const logicSurvey = {
       applyTheme: vi.fn(),
@@ -440,6 +465,19 @@ describe("SurveyBuilder", () => {
     );
     expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
 
+    const autoNamedPage = {
+      page: {
+        name: "page2",
+        title: "Страница 2",
+      },
+    };
+
+    act(() => {
+      designerSurvey.onPageAdded.fire(designerSurvey, autoNamedPage);
+    });
+
+    expect(autoNamedPage.page.title).toBe("");
+
     const question = {} as { isRequired?: boolean; descriptionLocation?: string };
 
     act(() => {
@@ -466,5 +504,11 @@ describe("SurveyBuilder", () => {
     expect(finalOverride).toContain(".survey-page-card .sd-question__description");
     expect(finalOverride).toContain("background: rgba(219, 234, 254, 0.88) !important;");
     expect(finalOverride).toContain("color: #141414 !important;");
+    expect(finalOverride).toContain(".builder-creator-shell .sd-description,");
+    expect(finalOverride).toContain("white-space: normal !important;");
+    expect(finalOverride).toContain("font-size: 1.06rem !important;");
+    expect(finalOverride).toContain("font-size: 0.88rem !important;");
+    expect(finalOverride).toContain(".dashboard-status-dropdown");
+    expect(finalOverride).toContain("background: #ffffff !important;");
   });
 });

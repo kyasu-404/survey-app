@@ -142,6 +142,28 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Форма 21")).not.toBeInTheDocument();
   });
 
+  it("renders skeleton cards while the forms list is loading", async () => {
+    const deferred = (() => {
+      let resolve!: (value: SurveyForm[]) => void;
+      const promise = new Promise<SurveyForm[]>((res) => {
+        resolve = res;
+      });
+      return { promise, resolve };
+    })();
+
+    getForms.mockImplementation(() => deferred.promise);
+
+    const { container } = renderPage();
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".dashboard-form-skeleton")).not.toHaveLength(0);
+    });
+
+    deferred.resolve([]);
+
+    expect(await screen.findByText("Форм пока нет")).toBeInTheDocument();
+  });
+
   it("opens preview from the card and responses from the counter button", async () => {
     getForms.mockResolvedValue([
       createForm(1, {
@@ -215,6 +237,45 @@ describe("DashboardPage", () => {
     });
   });
 
+  it("renders action icons in the dropdown menu and a deadline icon in form metadata", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Моя форма",
+        author_id: "user-1",
+        deadline_at: "2026-05-10T12:00:00.000Z",
+      }),
+    ]);
+
+    const { container } = renderPage();
+
+    const searchInput = await screen.findByPlaceholderText("Поиск по названию и автору");
+    const searchGroup = searchInput.closest(".dashboard-search-group");
+    expect(searchGroup).not.toBeNull();
+    expect(searchGroup?.querySelector(".dashboard-search-icon")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
+
+    const menu = await screen.findByRole("menu", { name: "Меню действий формы Моя форма" });
+    const copyLinkButton = within(menu).getByRole("menuitem", { name: "Копировать ссылку" });
+    const renameButton = within(menu).getByRole("menuitem", { name: "Переименовать" });
+    const editButton = within(menu).getByRole("menuitem", { name: "Редактировать" });
+    const duplicateButton = within(menu).getByRole("menuitem", { name: "Дублировать" });
+    const deleteButton = within(menu).getByRole("menuitem", { name: "Удалить" });
+
+    expect(copyLinkButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
+    expect(copyLinkButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
+    expect(renameButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
+    expect(renameButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
+    expect(editButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
+    expect(editButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
+    expect(duplicateButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
+    expect(duplicateButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
+    expect(deleteButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
+    expect(deleteButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
+
+    expect(container.querySelector(".dashboard-meta-item-deadline .dashboard-meta-icon")).toBeInTheDocument();
+  });
+
   it("shows the compact action set for non-owners and the status dropdown for owners", async () => {
     getForms.mockResolvedValue([
       createForm(1, {
@@ -239,6 +300,10 @@ describe("DashboardPage", () => {
     expect(within(guestMenu).queryByRole("menuitem", { name: "Переименовать" })).not.toBeInTheDocument();
     expect(within(guestMenu).queryByRole("menuitem", { name: "Удалить" })).not.toBeInTheDocument();
 
+    navigate.mockClear();
+    await userEvent.click(guestMenu);
+    expect(navigate).not.toHaveBeenCalled();
+
     await userEvent.click(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" }));
 
     const statusMenu = await screen.findByRole("menu", { name: "Статус формы Закрытая форма" });
@@ -247,6 +312,10 @@ describe("DashboardPage", () => {
     expect(statusMenu).toHaveClass("dashboard-status-dropdown");
     expect(within(statusMenu).getByRole("menuitem", { name: "Открыть" })).toBeInTheDocument();
     expect(within(statusMenu).getByRole("menuitem", { name: "Установить дедлайн" })).toBeInTheDocument();
+
+    navigate.mockClear();
+    await userEvent.click(statusMenu);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("shows a template filter only on the my forms page", async () => {

@@ -1,14 +1,19 @@
 import type { SurveyForm, SurveySchema } from "../types";
+import { DEFAULT_SURVEY_LOGO_TOKEN } from "./defaultSurveyLogo";
 
 export const TEMPLATE_FORM_TYPE = "template";
 
 export function createEmptySurveySchema(title = "Новая форма"): SurveySchema {
   return {
     title,
+    logo: DEFAULT_SURVEY_LOGO_TOKEN,
+    logoWidth: "120px",
+    logoHeight: "90px",
+    logoFit: "contain",
     pages: [
       {
         name: "page1",
-        title: "Страница 1",
+        title: "",
         elements: [],
       },
     ],

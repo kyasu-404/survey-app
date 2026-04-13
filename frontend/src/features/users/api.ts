@@ -27,6 +27,11 @@ type UserAdminAction =
       action: "setDisabled";
       userId: string;
       disabled: boolean;
+    }
+  | {
+      action: "updateRole";
+      userId: string;
+      role: UserRole;
     };
 
 async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
@@ -88,6 +93,14 @@ export async function setUserDisabled(userId: string, disabled: boolean) {
     action: "setDisabled",
     userId,
     disabled,
+  });
+}
+
+export async function updateUserRole(userId: string, role: UserRole) {
+  await callUserAdminAction({
+    action: "updateRole",
+    userId,
+    role,
   });
 }
 

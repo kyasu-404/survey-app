@@ -26,6 +26,11 @@ type UserAdminAction =
       action: "setDisabled";
       userId: string;
       disabled: boolean;
+    }
+  | {
+      action: "updateRole";
+      userId: string;
+      role: UserRole;
     };
 
 const corsHeaders = {
@@ -218,6 +223,27 @@ Deno.serve(async (req) => {
 
       if (profileError) {
         return jsonResponse(400, { error: profileError.message });
+      }
+
+      return jsonResponse(200, { success: true });
+    }
+
+    case "updateRole": {
+      if (!payload.userId) {
+        return jsonResponse(400, { error: "userId is required" });
+      }
+
+      if (payload.userId === requester.id) {
+        return jsonResponse(400, { error: "You cannot change your own role" });
+      }
+
+      const { error } = await adminClient
+        .from("profiles")
+        .update({ role: payload.role })
+        .eq("id", payload.userId);
+
+      if (error) {
+        return jsonResponse(400, { error: error.message });
       }
 
       return jsonResponse(200, { success: true });
