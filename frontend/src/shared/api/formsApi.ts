@@ -25,33 +25,11 @@ function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
   return formType === "template" ? false : true;
 }
 
-async function syncFetchedFormDeadlineState(form: SurveyForm, persistChanges = true): Promise<SurveyForm> {
+function syncFetchedFormDeadlineState(form: SurveyForm): SurveyForm {
   const deadlineStatePatch = getDeadlineStatePatch(form);
 
   if (!deadlineStatePatch) {
     return form;
-  }
-
-  if (persistChanges) {
-    try {
-      const { error } = await runRequest(
-        "forms.syncDeadlineState",
-        () => apiClient.from("forms").update(deadlineStatePatch).eq("id", form.id),
-        {
-          context: {
-            formId: form.id,
-            isPublic: deadlineStatePatch.is_public,
-            hasDeadline: Boolean(deadlineStatePatch.deadline_at),
-          },
-        },
-      );
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      console.error("Не удалось синхронизировать статус формы по дедлайну", error);
-    }
   }
 
   return applyDeadlineStatePatch(form, deadlineStatePatch);
@@ -101,7 +79,7 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
     responses_count: form.responses?.[0]?.count ?? 0,
   }));
 
-  return Promise.all(forms.map((form) => syncFetchedFormDeadlineState(form)));
+  return forms.map((form) => syncFetchedFormDeadlineState(form));
 }
 
 export async function fetchFormById(id: string): Promise<SurveyForm> {
@@ -126,7 +104,7 @@ export async function fetchPublicFormById(id: string): Promise<SurveyForm | null
     return null;
   }
 
-  return syncFetchedFormDeadlineState(data as SurveyForm, false);
+  return syncFetchedFormDeadlineState(data as SurveyForm);
 }
 
 export async function insertForm(payload: {

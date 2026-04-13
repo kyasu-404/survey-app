@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 type UserRole = "admin" | "user";
 
@@ -33,21 +33,47 @@ type UserAdminAction =
       role: UserRole;
     };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function getAllowedOrigins() {
+  const configuredOrigins = Deno.env.get("USER_ADMIN_ALLOWED_ORIGINS")
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return new Set(configuredOrigins?.length ? configuredOrigins : defaultAllowedOrigins);
+}
+
+function isOriginAllowed(origin: string | null) {
+  return !origin || getAllowedOrigins().has(origin);
+}
+
+function buildCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin");
+  const headers: Record<string, string> = { ...baseCorsHeaders };
+
+  if (origin && isOriginAllowed(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
+}
+
+function jsonResponse(req: Request, status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...buildCorsHeaders(req),
       "Content-Type": "application/json",
     },
   });
@@ -57,36 +83,35 @@ function isUserRole(value: unknown): value is UserRole {
   return value === "admin" || value === "user";
 }
 
-function getUserMetadataWithRole(metadata: unknown, role: UserRole) {
-  return {
-    ...(metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? (metadata as Record<string, unknown>)
-      : {}),
-    role,
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    if (!isOriginAllowed(req.headers.get("Origin"))) {
+      return new Response("Origin not allowed", { status: 403, headers: buildCorsHeaders(req) });
+    }
+
+    return new Response("ok", { headers: buildCorsHeaders(req) });
+  }
+
+  if (!isOriginAllowed(req.headers.get("Origin"))) {
+    return jsonResponse(req, 403, { error: "Origin not allowed" });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse(405, { error: "Method not allowed" });
+    return jsonResponse(req, 405, { error: "Method not allowed" });
   }
 
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-    return jsonResponse(500, { error: "Supabase env vars are not configured" });
+    return jsonResponse(req, 500, { error: "Supabase env vars are not configured" });
   }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return jsonResponse(401, { error: "Missing Authorization header" });
+    return jsonResponse(req, 401, { error: "Missing Authorization header" });
   }
 
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) {
-    return jsonResponse(401, { error: "Invalid Authorization header" });
+    return jsonResponse(req, 401, { error: "Invalid Authorization header" });
   }
 
   const authClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -104,7 +129,7 @@ Deno.serve(async (req) => {
   } = await authClient.auth.getUser(jwt);
 
   if (requesterError || !requester) {
-    return jsonResponse(401, { error: "Unauthorized" });
+    return jsonResponse(req, 401, { error: "Unauthorized" });
   }
 
   const { data: requesterProfile, error: requesterProfileError } = await adminClient
@@ -114,14 +139,14 @@ Deno.serve(async (req) => {
     .single();
 
   if (requesterProfileError || requesterProfile?.role !== "admin") {
-    return jsonResponse(403, { error: "Forbidden" });
+    return jsonResponse(req, 403, { error: "Forbidden" });
   }
 
   let payload: UserAdminAction;
   try {
     payload = (await req.json()) as UserAdminAction;
   } catch {
-    return jsonResponse(400, { error: "Invalid JSON payload" });
+    return jsonResponse(req, 400, { error: "Invalid JSON payload" });
   }
 
   switch (payload.action) {
@@ -134,15 +159,15 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false });
 
       if (profilesError) {
-        return jsonResponse(400, { error: profilesError.message });
+        return jsonResponse(req, 400, { error: profilesError.message });
       }
 
-      return jsonResponse(200, { users: profileUsers ?? [] });
+      return jsonResponse(req, 200, { users: profileUsers ?? [] });
     }
 
     case "create": {
       if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8 || !isUserRole(payload.role)) {
-        return jsonResponse(400, { error: "Invalid create payload" });
+        return jsonResponse(req, 400, { error: "Invalid create payload" });
       }
 
       const { data, error } = await adminClient.auth.admin.createUser({
@@ -150,13 +175,12 @@ Deno.serve(async (req) => {
         password: payload.password,
         user_metadata: {
           name: payload.name.trim(),
-          role: payload.role,
         },
         email_confirm: true,
       });
 
       if (error) {
-        return jsonResponse(400, { error: error.message });
+        return jsonResponse(req, 400, { error: error.message });
       }
 
       if (data.user?.id) {
@@ -172,33 +196,33 @@ Deno.serve(async (req) => {
         );
 
         if (profileError) {
-          return jsonResponse(400, { error: profileError.message });
+          return jsonResponse(req, 400, { error: profileError.message });
         }
       }
 
-      return jsonResponse(200, { userId: data.user?.id ?? null });
+      return jsonResponse(req, 200, { userId: data.user?.id ?? null });
     }
 
     case "delete": {
       if (!payload.userId) {
-        return jsonResponse(400, { error: "userId is required" });
+        return jsonResponse(req, 400, { error: "userId is required" });
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(400, { error: "You cannot delete yourself" });
+        return jsonResponse(req, 400, { error: "You cannot delete yourself" });
       }
 
       const { error } = await adminClient.auth.admin.deleteUser(payload.userId);
       if (error) {
-        return jsonResponse(400, { error: error.message });
+        return jsonResponse(req, 400, { error: error.message });
       }
 
-      return jsonResponse(200, { success: true });
+      return jsonResponse(req, 200, { success: true });
     }
 
     case "updatePassword": {
       if (!payload.userId || payload.password.length < 8) {
-        return jsonResponse(400, { error: "Invalid password update payload" });
+        return jsonResponse(req, 400, { error: "Invalid password update payload" });
       }
 
       const { error } = await adminClient.auth.admin.updateUserById(payload.userId, {
@@ -206,19 +230,19 @@ Deno.serve(async (req) => {
       });
 
       if (error) {
-        return jsonResponse(400, { error: error.message });
+        return jsonResponse(req, 400, { error: error.message });
       }
 
-      return jsonResponse(200, { success: true });
+      return jsonResponse(req, 200, { success: true });
     }
 
     case "setDisabled": {
       if (!payload.userId) {
-        return jsonResponse(400, { error: "userId is required" });
+        return jsonResponse(req, 400, { error: "userId is required" });
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(400, { error: "You cannot disable yourself" });
+        return jsonResponse(req, 400, { error: "You cannot disable yourself" });
       }
 
       const { error: authError } = await adminClient.auth.admin.updateUserById(payload.userId, {
@@ -226,7 +250,7 @@ Deno.serve(async (req) => {
       });
 
       if (authError) {
-        return jsonResponse(400, { error: authError.message });
+        return jsonResponse(req, 400, { error: authError.message });
       }
 
       const { error: profileError } = await adminClient
@@ -235,19 +259,19 @@ Deno.serve(async (req) => {
         .eq("id", payload.userId);
 
       if (profileError) {
-        return jsonResponse(400, { error: profileError.message });
+        return jsonResponse(req, 400, { error: profileError.message });
       }
 
-      return jsonResponse(200, { success: true });
+      return jsonResponse(req, 200, { success: true });
     }
 
     case "updateRole": {
       if (!payload.userId || !isUserRole(payload.role)) {
-        return jsonResponse(400, { error: "Invalid role update payload" });
+        return jsonResponse(req, 400, { error: "Invalid role update payload" });
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(400, { error: "You cannot change your own role" });
+        return jsonResponse(req, 400, { error: "You cannot change your own role" });
       }
 
       const { data: updatedProfile, error } = await adminClient
@@ -258,31 +282,17 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (error) {
-        return jsonResponse(400, { error: error.message });
+        return jsonResponse(req, 400, { error: error.message });
       }
 
       if (!updatedProfile) {
-        return jsonResponse(404, { error: "User profile not found" });
+        return jsonResponse(req, 404, { error: "User profile not found" });
       }
 
-      const { data: targetAuthUser, error: targetAuthUserError } = await adminClient.auth.admin.getUserById(payload.userId);
-
-      if (targetAuthUser?.user) {
-        const { error: metadataError } = await adminClient.auth.admin.updateUserById(payload.userId, {
-          user_metadata: getUserMetadataWithRole(targetAuthUser.user.user_metadata, payload.role),
-        });
-
-        if (metadataError) {
-          console.warn("Failed to sync user role metadata", metadataError.message);
-        }
-      } else if (targetAuthUserError) {
-        console.warn("Failed to load auth user for role metadata sync", targetAuthUserError.message);
-      }
-
-      return jsonResponse(200, { success: true });
+      return jsonResponse(req, 200, { success: true });
     }
 
     default:
-      return jsonResponse(400, { error: "Unsupported action" });
+      return jsonResponse(req, 400, { error: "Unsupported action" });
   }
 });

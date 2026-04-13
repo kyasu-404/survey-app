@@ -323,7 +323,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       setFormResponseLimit(id, maxResponses),
   });
 
-  const runAction = async (action: () => Promise<void>, options: DashboardActionOptions) => {
+  const runAction = async (action: () => Promise<unknown>, options: DashboardActionOptions) => {
     setActionPending(options.actionKey, true);
     const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
 

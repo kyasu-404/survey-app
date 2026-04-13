@@ -71,6 +71,48 @@ describe("fetchForms", () => {
 
     await expect(fetchStatePromise).resolves.toBe("rejected");
   });
+
+  it("applies expired deadline state locally without updating forms during reads", async () => {
+    const listQuery = {
+      select: vi.fn(() => listQuery),
+      order: vi.fn(() => listQuery),
+      ilike: vi.fn(() => listQuery),
+      gte: vi.fn(() => listQuery),
+      lte: vi.fn(() => listQuery),
+      eq: vi.fn(() => listQuery),
+      then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+        Promise.resolve({
+          data: [
+            {
+              id: "form-1",
+              title: "Expired",
+              form_type: "anketa",
+              form_reason: "plan",
+              is_public: true,
+              deadline_at: "2020-01-01T00:00:00.000Z",
+              author_id: "user-1",
+              schema: { pages: [] },
+              created_at: "2020-01-01T00:00:00.000Z",
+              profiles: null,
+              responses: [{ count: 0 }],
+            },
+          ],
+          error: null,
+        }).then(resolve, reject),
+    };
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await expect(fetchForms()).resolves.toEqual([
+      expect.objectContaining({
+        id: "form-1",
+        is_public: false,
+        deadline_at: null,
+      }),
+    ]);
+
+    expect(apiClient.from).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("insertForm", () => {

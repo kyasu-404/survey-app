@@ -1,7 +1,9 @@
 supabase
-nginx.conf
-README.md
-.README
-
+*.Zone.Identifier
+*:Zone.Identifier
+.env
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 frontend/node_modules
 frontend/dist

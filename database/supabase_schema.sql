@@ -65,6 +65,7 @@ create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
+set search_path = ''
 as $$
 begin
   insert into public.profiles (id, name, email, role)
@@ -72,12 +73,11 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
     new.email,
-    coalesce(new.raw_user_meta_data ->> 'role', 'user')
+    'user'
   )
   on conflict (id) do update
     set name = excluded.name,
-        email = excluded.email,
-        role = coalesce(new.raw_user_meta_data ->> 'role', public.profiles.role, 'user');
+        email = excluded.email;
 
   return new;
 end;
@@ -88,7 +88,7 @@ returns text
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   profile_role text;
@@ -98,12 +98,7 @@ begin
   from public.profiles p
   where p.id = auth.uid();
 
-  return coalesce(
-    profile_role,
-    auth.jwt() ->> 'role',
-    auth.jwt() -> 'user_metadata' ->> 'role',
-    'user'
-  );
+  return coalesce(profile_role, 'user');
 end;
 $$;
 
@@ -117,7 +112,7 @@ create or replace function public.ensure_form_response_limit()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   current_limit integer;
@@ -152,6 +147,24 @@ create trigger responses_form_limit
 before insert on public.responses
 for each row execute procedure public.ensure_form_response_limit();
 
+create or replace function public.set_response_user_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.user_id := auth.uid();
+  return new;
+end;
+$$;
+
+drop trigger if exists responses_set_user_id on public.responses;
+
+create trigger responses_set_user_id
+before insert on public.responses
+for each row execute procedure public.set_response_user_id();
+
 -- =========================
 -- ENABLE RLS
 -- =========================
@@ -173,18 +186,30 @@ using (
   OR (select public.request_role()) = 'admin'
 );
 
-create policy "profiles_update"
+create policy "profiles_update_self"
 on public.profiles
 for update
 to authenticated
 using (
   id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
 )
 with check (
   id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
 );
+
+create policy "profiles_update_admin"
+on public.profiles
+for update
+to authenticated
+using (
+  (select public.request_role()) = 'admin'
+)
+with check (
+  (select public.request_role()) = 'admin'
+);
+
+revoke update on table public.profiles from authenticated;
+grant update (name) on table public.profiles to authenticated;
 
 -- =========================
 -- FORMS
@@ -244,12 +269,18 @@ using (
 -- RESPONSES
 -- =========================
 
-create policy "responses_select"
+create policy "responses_select_author_or_admin"
 on public.responses
 for select
 to authenticated
 using (
   (select public.request_role()) = 'admin'
+  OR exists (
+    select 1
+    from public.forms f
+    where f.id = form_id
+      and f.author_id = (select auth.uid())
+  )
 );
 
 create policy "responses_insert"
@@ -257,7 +288,11 @@ on public.responses
 for insert
 to authenticated, anon
 with check (
-  exists (
+  (
+    user_id is null
+    or user_id = (select auth.uid())
+  )
+  and exists (
     select 1
     from public.forms f
     where f.id = form_id

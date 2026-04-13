@@ -79,8 +79,13 @@ export default function FormResponsesPage() {
     }
 
     const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
-    exportToExcel(rows, `ответы-${formTitle}`);
-    showToast("Ответы выгружены в XLSX", "success");
+    void Promise.resolve(exportToExcel(rows, `ответы-${formTitle}`))
+      .then(() => {
+        showToast("Ответы выгружены в XLSX", "success");
+      })
+      .catch((error) => {
+        showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
+      });
   };
 
   const handleOpenHtml = () => {

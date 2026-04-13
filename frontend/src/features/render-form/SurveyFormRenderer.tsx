@@ -8,7 +8,7 @@ import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse"
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getSubmitResponseErrorMessage } from "../../shared/lib/error";
-import { removeFileFromStorage, uploadFileToStorage } from "../../shared/api/storage";
+import { getStoragePathFromSurveyFileValue, removeFileFromStorage, uploadFileToStorage } from "../../shared/api/storage";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
@@ -16,23 +16,6 @@ type SurveyFormRendererProps = {
   initialData?: Record<string, unknown>;
   isPreview?: boolean;
 };
-
-function getStoragePathByUrl(url: string) {
-  const marker = "/object/public/";
-  const markerIndex = url.indexOf(marker);
-  if (markerIndex === -1) {
-    return null;
-  }
-
-  const pathWithBucket = url.slice(markerIndex + marker.length);
-  const firstSlash = pathWithBucket.indexOf("/");
-
-  if (firstSlash === -1) {
-    return null;
-  }
-
-  return decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
-}
 
 export function SurveyFormRenderer({ schema, formId, initialData, isPreview = false }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,6 +58,7 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
           uploaded.map((item) => ({
             file: item.file,
             content: item.url,
+            storagePath: item.path,
           }))
         );
       } catch (error) {
@@ -86,12 +70,12 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
 
     const handleClearFiles = async (
       _sender: Model,
-      options: { value: string | string[]; callback: (status: "success" | "error") => void }
+      options: { value: unknown; callback: (status: "success" | "error") => void }
     ) => {
       try {
         const values = Array.isArray(options.value) ? options.value : [options.value];
         const paths = values
-          .map((url) => getStoragePathByUrl(url))
+          .map((value) => getStoragePathFromSurveyFileValue(value))
           .filter((path): path is string => Boolean(path));
 
         if (paths.length > 0) {

@@ -18,7 +18,7 @@ function getDurationMs(startedAt: number) {
 
 export async function runRequest<T>(
   operation: string,
-  request: () => Promise<T>,
+  request: () => PromiseLike<T> | T,
   options: RequestOptions = {},
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -32,7 +32,7 @@ export async function runRequest<T>(
 
   try {
     const result = await Promise.race([
-      request(),
+      Promise.resolve(request()),
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
           reject(new RequestTimeoutError(operation, timeoutMs));

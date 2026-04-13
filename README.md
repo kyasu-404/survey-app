@@ -9,7 +9,7 @@
 
 ## Переменные окружения (frontend/.env)
 
-Фронтенд читает только эти переменные:
+Скопируйте `frontend/.env.example` в локальный `frontend/.env`. Фронтенд читает только эти переменные:
 
 ```env
 VITE_SUPABASE_URL=http://localhost:8000
@@ -18,6 +18,14 @@ VITE_SUPABASE_STORAGE_BUCKET=survey-files
 ```
 
 Они используются в `frontend/src/shared/config/env.ts`.
+
+Для Edge Function `user-admin` дополнительно задайте allowlist origin-ов:
+
+```env
+USER_ADMIN_ALLOWED_ORIGINS=https://app.example.com,https://staging.example.com
+```
+
+Локально функция по умолчанию разрешает `http://localhost:5173` и `http://127.0.0.1:5173`.
 
 ## Supabase клиент
 
@@ -34,29 +42,47 @@ VITE_SUPABASE_STORAGE_BUCKET=survey-files
 
 1. Откройте **Storage** → **Create bucket**.
 2. Создайте бакет с именем `survey-files` (или своим, но тогда обновите `VITE_SUPABASE_STORAGE_BUCKET`).
-3. Включите доступ на чтение файлов (Public bucket), если хотите сразу открывать файлы по public URL.
-4. Добавьте RLS политики на bucket/object для `authenticated`, чтобы разрешить upload/remove.
+3. Оставьте бакет приватным.
+4. Добавьте RLS политики на `storage.objects`. Фронтенд кладёт файлы в путь `user_id/form_id/file_id.ext`, создаёт short-lived signed URL и удаляет только файлы из собственного `user_id`-префикса.
 
 Пример SQL-политик для бакета `survey-files`:
 
 ```sql
-create policy "authenticated can upload files"
+create policy "users can upload own survey files"
 on storage.objects
 for insert
 to authenticated
-with check (bucket_id = 'survey-files');
+with check (
+  bucket_id = 'survey-files'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
 
-create policy "authenticated can read files"
+create policy "owners authors and admins can read survey files"
 on storage.objects
 for select
 to authenticated
-using (bucket_id = 'survey-files');
+using (
+  bucket_id = 'survey-files'
+  and (
+    (storage.foldername(name))[1] = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.forms f
+      where f.id::text = (storage.foldername(name))[2]
+        and f.author_id = (select auth.uid())
+    )
+    or (select public.request_role()) = 'admin'
+  )
+);
 
-create policy "authenticated can delete files"
+create policy "users can delete own survey files"
 on storage.objects
 for delete
 to authenticated
-using (bucket_id = 'survey-files');
+using (
+  bucket_id = 'survey-files'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
 ```
 
 ### S3-совместимое подключение (опционально)
@@ -142,4 +168,3 @@ npm run test
 cd frontend
 npm run test:watch
 ```
-
