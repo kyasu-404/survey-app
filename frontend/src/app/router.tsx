@@ -4,6 +4,7 @@ import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
+import TemplatesPage from "../pages/TemplatesPage/TemplatesPage";
 import UsersPage from "../pages/UsersPage/UsersPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
@@ -40,6 +41,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <DashboardPage viewMode="all" />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: routes.templates,
+        element: (
+          <ProtectedRoute>
+            <TemplatesPage />
           </ProtectedRoute>
         ),
       },

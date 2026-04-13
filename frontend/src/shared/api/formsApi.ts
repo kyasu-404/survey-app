@@ -8,6 +8,8 @@ export type FormsFilters = {
   dateFrom?: string;
   dateTo?: string;
   authorId?: string;
+  formType?: string;
+  isPublic?: boolean;
 };
 
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_name"> & {
@@ -74,6 +76,8 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom);
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo);
   if (filters?.authorId) query = query.eq("author_id", filters.authorId);
+  if (filters?.formType) query = query.eq("form_type", filters.formType);
+  if (typeof filters?.isPublic === "boolean") query = query.eq("is_public", filters.isPublic);
 
   const { data, error } = await runRequest(
     "forms.fetchList",
@@ -123,6 +127,7 @@ export async function insertForm(payload: {
   formReason: string;
   schema: SurveySchema;
   authorId: string;
+  isPublic?: boolean;
 }) {
   const currentUserId = await getAuthenticatedUserId();
 
@@ -141,10 +146,45 @@ export async function insertForm(payload: {
           form_reason: payload.formReason,
           schema: payload.schema,
           author_id: currentUserId,
+          is_public: payload.isPublic ?? true,
         })
         .select("id")
         .single(),
     { context: { authorId: currentUserId, formType: payload.formType } },
+  );
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createFormFromTemplate(templateForm: SurveyForm, authorId: string) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
+  const schema: SurveySchema = {
+    ...templateForm.schema,
+    title: templateForm.title,
+  };
+
+  const { data, error } = await runRequest(
+    "forms.createFromTemplate",
+    () =>
+      apiClient
+        .from("forms")
+        .insert({
+          title: templateForm.title,
+          form_type: "anketa",
+          form_reason: "plan",
+          schema,
+          author_id: currentUserId,
+          is_public: true,
+        })
+        .select("id")
+        .single(),
+    { context: { sourceTemplateId: templateForm.id, authorId: currentUserId } },
   );
 
   if (error) throw error;

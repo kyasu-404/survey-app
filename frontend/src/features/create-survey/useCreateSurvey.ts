@@ -9,6 +9,7 @@ type CreateSurveyForCurrentUserParams = {
   title: string;
   formType?: string;
   formReason?: string;
+  isPublic?: boolean;
 };
 
 export async function createSurveyForCurrentUser({
@@ -16,6 +17,7 @@ export async function createSurveyForCurrentUser({
   title,
   formType = "anketa",
   formReason = "plan",
+  isPublic,
 }: CreateSurveyForCurrentUserParams) {
   const { data } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
   const userId = data.user?.id;
@@ -24,13 +26,22 @@ export async function createSurveyForCurrentUser({
     throw new Error("Пользователь не авторизован");
   }
 
-  return createSurvey({
+  const createSurveyPayload = {
     title,
     formType,
     formReason,
     schema,
     authorId: userId,
-  });
+  };
+
+  return createSurvey(
+    typeof isPublic === "boolean"
+      ? {
+          ...createSurveyPayload,
+          isPublic,
+        }
+      : createSurveyPayload,
+  );
 }
 
 export function useCreateSurveyMutation() {

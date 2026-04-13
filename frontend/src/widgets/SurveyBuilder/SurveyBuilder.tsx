@@ -698,6 +698,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         schema,
         title,
         formType: TEMPLATE_FORM_TYPE,
+        isPublic: false,
       });
 
       scheduleBuilderQueryRefresh();

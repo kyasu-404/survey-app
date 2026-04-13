@@ -4,6 +4,7 @@ export {
   fetchFormById,
   fetchPublicFormById,
   insertForm,
+  createFormFromTemplate,
   updateFormSchema,
   updateFormTitle,
   updateFormStatus,

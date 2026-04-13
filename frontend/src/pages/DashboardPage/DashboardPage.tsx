@@ -13,6 +13,7 @@ import { routes } from "../../app/routes";
 import refreshIcon from "../../img/refresh.png";
 import infoIcon from "../../img/info.svg";
 import copyLinkIcon from "../../img/copy_link.svg";
+import qrIcon from "../../img/qr.svg";
 import renameIcon from "../../img/rename.svg";
 import editIcon from "../../img/edit.svg";
 import copyIcon from "../../img/copy.svg";
@@ -32,6 +33,7 @@ import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/mod
 import type { SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
+import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "../../shared/lib/qrCode";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
@@ -44,6 +46,13 @@ type DashboardPageProps = {
 type DeadlineEditorState = {
   form: SurveyForm;
   value: string;
+};
+
+type QrDialogState = {
+  fileName: string;
+  link: string;
+  previewDataUrl: string;
+  title: string;
 };
 
 type DashboardActionOptions = {
@@ -119,7 +128,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const [search, setSearch] = useState("");
-  const [templateFilter, setTemplateFilter] = useState<"all" | "templates">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
@@ -128,6 +136,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
   const [deadlineEditor, setDeadlineEditor] = useState<DeadlineEditorState | null>(null);
+  const [qrDialog, setQrDialog] = useState<QrDialogState | null>(null);
+  const [qrGeneratingFormId, setQrGeneratingFormId] = useState<string | null>(null);
+  const [qrDownloadFormat, setQrDownloadFormat] = useState<"png" | "svg" | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -155,14 +166,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   });
 
   const visibleForms = useMemo(() => {
-    const formsForPage = viewMode === "all" ? forms.filter((form) => !isTemplateForm(form)) : forms;
-
-    if (viewMode === "mine" && templateFilter === "templates") {
-      return formsForPage.filter((form) => isTemplateForm(form));
-    }
-
-    return formsForPage;
-  }, [forms, templateFilter, viewMode]);
+    return forms.filter((form) => !isTemplateForm(form));
+  }, [forms]);
 
   const filteredForms = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -202,7 +207,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   useEffect(() => {
     setVisibleCount(pageSize);
-  }, [dateFrom, dateTo, pageSize, search, templateFilter, viewMode]);
+  }, [dateFrom, dateTo, pageSize, search, viewMode]);
 
   useEffect(() => {
     if (formsError) {
@@ -270,6 +275,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const getFormActionKey = (formId: string) => `form:${formId}`;
   const isFormActionPending = (formId: string) => Boolean(pendingActionKeys[getFormActionKey(formId)]);
+  const getFormLink = (formId: string) => `${appOrigin}${routes.survey(formId)}`;
 
   const scheduleFormsRefresh = () => {
     scheduleQueryInvalidation(queryClient, "dashboard forms refresh", [{ queryKey: ["forms"] }]);
@@ -323,7 +329,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const handleCopyLink = async (formId: string) => {
     try {
-      const copied = await copyTextToClipboard(`${appOrigin}${routes.survey(formId)}`);
+      const copied = await copyTextToClipboard(getFormLink(formId));
       if (!copied) {
         showToast("Автокопирование недоступно. Скопируйте ссылку вручную.", "warning");
         return;
@@ -331,6 +337,49 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       showToast("Ссылка скопирована", "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось скопировать ссылку"), "error");
+    }
+  };
+
+  const handleOpenQrCode = async (form: SurveyForm) => {
+    const link = getFormLink(form.id);
+    const title = getSurveyDisplayTitle(form);
+
+    setQrGeneratingFormId(form.id);
+
+    try {
+      const svg = await createQrSvg(link);
+      setQrDialog({
+        fileName: `form-${form.id}-qr`,
+        link,
+        previewDataUrl: svgToDataUrl(svg),
+        title,
+      });
+    } catch (error) {
+      showToast(getErrorMessage(error, "Не удалось сгенерировать QR-код"), "error");
+    } finally {
+      setQrGeneratingFormId(null);
+    }
+  };
+
+  const handleDownloadQr = async (format: "png" | "svg") => {
+    if (!qrDialog) {
+      return;
+    }
+
+    setQrDownloadFormat(format);
+
+    try {
+      if (format === "png") {
+        const pngDataUrl = await createQrPngDataUrl(qrDialog.link);
+        downloadDataUrl(pngDataUrl, `${qrDialog.fileName}.png`);
+      } else {
+        const svg = await createQrSvg(qrDialog.link);
+        downloadDataUrl(svgToDataUrl(svg), `${qrDialog.fileName}.svg`);
+      }
+    } catch (error) {
+      showToast(getErrorMessage(error, "Не удалось скачать QR-код"), "error");
+    } finally {
+      setQrDownloadFormat(null);
     }
   };
 
@@ -480,15 +529,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <span>Дата по</span>
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
-            {viewMode === "mine" && (
-              <label className="dashboard-filter-field">
-                <span>Тип</span>
-                <select aria-label="Тип форм" value={templateFilter} onChange={(event) => setTemplateFilter(event.target.value as "all" | "templates")}>
-                  <option value="all">Все формы</option>
-                  <option value="templates">Шаблоны</option>
-                </select>
-              </label>
-            )}
             <label className="dashboard-filter-field">
               <span>Количество</span>
               <select
@@ -600,20 +640,36 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                     onClick={stopCardEvent}
                   >
                     {!isTemplate && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="form-menu-item"
-                        onClick={(event) => {
-                          stopCardEvent(event);
-                          setOpenedMenu(null);
-                          void handleCopyLink(form.id);
-                        }}
-                        disabled={isCurrentFormPending}
-                      >
-                        <img src={copyLinkIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                        <span className="form-menu-item-label">Копировать ссылку</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="form-menu-item"
+                          onClick={(event) => {
+                            stopCardEvent(event);
+                            setOpenedMenu(null);
+                            void handleCopyLink(form.id);
+                          }}
+                          disabled={isCurrentFormPending}
+                        >
+                          <img src={copyLinkIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                          <span className="form-menu-item-label">Копировать ссылку</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="form-menu-item"
+                          onClick={(event) => {
+                            stopCardEvent(event);
+                            setOpenedMenu(null);
+                            void handleOpenQrCode(form);
+                          }}
+                          disabled={isCurrentFormPending || qrGeneratingFormId === form.id}
+                        >
+                          <img src={qrIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                          <span className="form-menu-item-label">Генерировать QR</span>
+                        </button>
+                      </>
                     )}
 
                     {(isTemplate || isOwnForm) && (
@@ -911,6 +967,34 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 Удалить
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {qrDialog && (
+        <div className="modal-backdrop">
+          <div className="modal-card card dashboard-qr-modal" role="dialog" aria-modal="true" aria-label={`QR-код формы ${qrDialog.title}`}>
+            <div className="dashboard-qr-modal-header">
+              <div>
+                <h3 className="dashboard-qr-modal-title">QR-код формы</h3>
+                <p className="dashboard-qr-modal-copy">{qrDialog.title}</p>
+              </div>
+              <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть QR-код" onClick={() => setQrDialog(null)}>
+                x
+              </button>
+            </div>
+            <div className="dashboard-qr-download-actions">
+              <button type="button" onClick={() => void handleDownloadQr("png")} disabled={qrDownloadFormat !== null}>
+                PNG
+              </button>
+              <button type="button" onClick={() => void handleDownloadQr("svg")} disabled={qrDownloadFormat !== null}>
+                SVG
+              </button>
+            </div>
+            <div className="dashboard-qr-preview">
+              <img src={qrDialog.previewDataUrl} alt={`QR-код формы ${qrDialog.title}`} />
+            </div>
+            <p className="dashboard-qr-link">{qrDialog.link}</p>
           </div>
         </div>
       )}

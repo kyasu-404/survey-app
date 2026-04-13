@@ -1,0 +1,572 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { useToast } from "../../app/providers/ToastProvider";
+import { routes } from "../../app/routes";
+import deleteIcon from "../../img/delete.svg";
+import editIcon from "../../img/edit.svg";
+import renameIcon from "../../img/rename.svg";
+import refreshIcon from "../../img/refresh.png";
+import {
+  changeFormStatus,
+  createFormFromTemplate,
+  getForms,
+  removeForm,
+  renameForm,
+} from "../../entities/survey/api/surveysApi";
+import { TEMPLATE_FORM_TYPE, getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
+import type { SurveyForm } from "../../entities/survey/types";
+import { getErrorMessage } from "../../shared/lib/error";
+import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
+import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { Skeleton } from "../../shared/ui/Skeleton";
+import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
+
+type TemplatesSection = "mine" | "public";
+
+type TemplateActionOptions = {
+  actionKey: string;
+  successMessage: string;
+  errorMessage: string;
+  affectedTemplateId?: string;
+  shouldReloadTemplates?: boolean;
+  logLabel: string;
+};
+
+function formatCreatedAt(dateTime: string) {
+  return new Date(dateTime).toLocaleString("ru-RU");
+}
+
+function getAuthorLabel(form: SurveyForm) {
+  return form.author_name || form.author_email || form.author_id;
+}
+
+function renderTemplateSkeletonCards(count: number) {
+  return Array.from({ length: count }, (_, index) => (
+    <div key={`template-skeleton-${index}`} className="dashboard-form-skeleton templates-card-skeleton">
+      <div className="dashboard-form-skeleton-header">
+        <Skeleton className="dashboard-form-skeleton-pill" />
+        <Skeleton className="dashboard-form-skeleton-menu" />
+      </div>
+      <Skeleton className="dashboard-form-skeleton-title" />
+      <div className="dashboard-form-skeleton-meta">
+        <Skeleton className="dashboard-form-skeleton-meta-pill dashboard-form-skeleton-meta-pill-wide" />
+      </div>
+    </div>
+  ));
+}
+
+export default function TemplatesPage() {
+  const { user, loading: isAuthLoading } = useAuth();
+  const { showToast } = useToast();
+  const [section, setSection] = useState<TemplatesSection>("mine");
+  const [openedMenuTemplateId, setOpenedMenuTemplateId] = useState<string | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<SurveyForm | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<SurveyForm | null>(null);
+  const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const templatesQueryKey = useMemo(
+    () => ["templates", { section, userId: user?.id ?? null }],
+    [section, user?.id],
+  );
+
+  const {
+    data: forms = [],
+    isLoading: isTemplatesLoading,
+    isFetching: isTemplatesFetching,
+    error: templatesError,
+    refetch: reloadTemplates,
+  } = useQuery({
+    queryKey: templatesQueryKey,
+    queryFn: () =>
+      getForms(
+        section === "mine"
+          ? {
+              authorId: user?.id,
+              formType: TEMPLATE_FORM_TYPE,
+            }
+          : {
+              formType: TEMPLATE_FORM_TYPE,
+              isPublic: true,
+            },
+      ),
+    enabled: !isAuthLoading && (section === "public" || Boolean(user?.id)),
+    retry: 1,
+  });
+
+  const templates = useMemo(() => {
+    const templateForms = forms.filter((form) => isTemplateForm(form));
+    return section === "public" ? templateForms.filter((form) => form.is_public) : templateForms;
+  }, [forms, section]);
+
+  const isInitialTemplatesLoading = isTemplatesLoading && forms.length === 0;
+  const isRefreshingTemplates = isTemplatesFetching && !isInitialTemplatesLoading;
+
+  useEffect(() => {
+    if (!templatesError) {
+      return;
+    }
+
+    showToast(getErrorMessage(templatesError, "Не удалось загрузить шаблоны"), "error");
+  }, [showToast, templatesError]);
+
+  useEffect(() => {
+    if (!openedMenuTemplateId) {
+      return;
+    }
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".templates-floating-root")) {
+        return;
+      }
+
+      setOpenedMenuTemplateId(null);
+    };
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenedMenuTemplateId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [openedMenuTemplateId]);
+
+  const setActionPending = (actionKey: string, isPending: boolean) => {
+    setPendingActionKeys((current) => {
+      if (isPending) {
+        return {
+          ...current,
+          [actionKey]: true,
+        };
+      }
+
+      const nextState = { ...current };
+      delete nextState[actionKey];
+      return nextState;
+    });
+  };
+
+  const getTemplateActionKey = (templateId: string) => `template:${templateId}`;
+  const isTemplateActionPending = (templateId: string) => Boolean(pendingActionKeys[getTemplateActionKey(templateId)]);
+
+  const scheduleTemplatesRefresh = () => {
+    scheduleQueryInvalidation(queryClient, "templates refresh", [
+      { queryKey: ["templates"] },
+      { queryKey: ["builder-templates"] },
+      { queryKey: ["forms"] },
+    ]);
+  };
+
+  const scheduleTemplateDetailsRefresh = (templateId: string) => {
+    scheduleQueryInvalidation(queryClient, `template ${templateId} refresh`, [
+      { queryKey: ["form", templateId] },
+      { queryKey: ["survey-form", templateId] },
+    ]);
+  };
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => renameForm(id, title),
+  });
+  const removeMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) => removeForm(id),
+  });
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) => changeFormStatus(id, isPublic),
+  });
+  const createFromTemplateMutation = useMutation({
+    mutationFn: ({ template, authorId }: { template: SurveyForm; authorId: string }) =>
+      createFormFromTemplate(template, authorId),
+  });
+
+  const runAction = async (action: () => Promise<void>, options: TemplateActionOptions) => {
+    setActionPending(options.actionKey, true);
+    const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
+
+    try {
+      await action();
+      if (options.affectedTemplateId) {
+        scheduleTemplateDetailsRefresh(options.affectedTemplateId);
+      }
+      if (options.shouldReloadTemplates ?? true) {
+        scheduleTemplatesRefresh();
+      }
+      showToast(options.successMessage, "success");
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, options.errorMessage), "error");
+    } finally {
+      stopPendingLogger();
+      setActionPending(options.actionKey, false);
+    }
+  };
+
+  const stopCardEvent = (event: ReactMouseEvent | ReactKeyboardEvent) => {
+    event.stopPropagation();
+  };
+
+  const handleCardOpen = (template: SurveyForm) => {
+    setPreviewTemplate(template);
+  };
+
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, template: SurveyForm) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    handleCardOpen(template);
+  };
+
+  const handleRename = async (template: SurveyForm) => {
+    const newTitle = window.prompt("Введите новое название шаблона", template.title);
+    if (!newTitle || !newTitle.trim() || newTitle === template.title) {
+      return;
+    }
+
+    await runAction(() => renameMutation.mutateAsync({ id: template.id, title: newTitle.trim() }), {
+      actionKey: getTemplateActionKey(template.id),
+      successMessage: "Шаблон переименован",
+      errorMessage: "Не удалось переименовать шаблон",
+      affectedTemplateId: template.id,
+      logLabel: `template rename ${template.id}`,
+    });
+  };
+
+  const handleUseTemplate = async (template: SurveyForm) => {
+    if (!user?.id) {
+      showToast("Для создания формы из шаблона нужно войти в систему", "error");
+      return;
+    }
+
+    const actionKey = getTemplateActionKey(template.id);
+    setActionPending(actionKey, true);
+    const stopPendingLogger = createPendingStateLogger(queryClient, `template use ${template.id}`);
+
+    try {
+      const createdForm = await createFromTemplateMutation.mutateAsync({ template, authorId: user.id });
+      scheduleTemplatesRefresh();
+      showToast("Форма создана из шаблона", "success");
+      navigate(routes.builderEdit(createdForm.id));
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, "Не удалось создать форму из шаблона"), "error");
+    } finally {
+      stopPendingLogger();
+      setActionPending(actionKey, false);
+    }
+  };
+
+  const handleToggleSharing = async (template: SurveyForm) => {
+    const nextStatus = !template.is_public;
+
+    await runAction(() => statusMutation.mutateAsync({ id: template.id, isPublic: nextStatus }), {
+      actionKey: getTemplateActionKey(template.id),
+      successMessage: nextStatus ? "Шаблон опубликован" : "Шаблон скрыт",
+      errorMessage: "Не удалось изменить доступность шаблона",
+      affectedTemplateId: template.id,
+      logLabel: `template share ${template.id}`,
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!templateToDelete) {
+      return;
+    }
+
+    const deletingTemplate = templateToDelete;
+    setTemplateToDelete(null);
+
+    await runAction(() => removeMutation.mutateAsync({ id: deletingTemplate.id }), {
+      actionKey: getTemplateActionKey(deletingTemplate.id),
+      successMessage: "Шаблон удалён",
+      errorMessage: "Не удалось удалить шаблон",
+      affectedTemplateId: deletingTemplate.id,
+      logLabel: `template delete ${deletingTemplate.id}`,
+    });
+  };
+
+  return (
+    <div className="templates-page dashboard-shell">
+      <div className="card dashboard-main-card templates-main-card">
+        <div className="templates-page-header">
+          <div>
+            <p className="templates-page-kicker">Галерея</p>
+            <h1 className="templates-page-title">Шаблоны</h1>
+          </div>
+
+          <div className="templates-page-actions">
+            <div className="templates-segmented-control" role="tablist" aria-label="Раздел шаблонов">
+              <button
+                type="button"
+                role="tab"
+                className={section === "mine" ? "templates-segment templates-segment-active" : "templates-segment"}
+                aria-selected={section === "mine"}
+                onClick={() => setSection("mine")}
+              >
+                Мои
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={section === "public" ? "templates-segment templates-segment-active" : "templates-segment"}
+                aria-selected={section === "public"}
+                onClick={() => setSection("public")}
+              >
+                Публичные
+              </button>
+            </div>
+            <button
+              type="button"
+              className="dashboard-refresh-button"
+              onClick={() => void reloadTemplates()}
+              disabled={isTemplatesLoading || isTemplatesFetching}
+            >
+              <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <span>{isTemplatesFetching ? "Обновляется..." : "Обновить"}</span>
+            </button>
+          </div>
+        </div>
+
+        {isInitialTemplatesLoading && (
+          <div className="templates-gallery-grid templates-gallery-grid-two-columns templates-gallery-grid-loading">
+            {renderTemplateSkeletonCards(4)}
+          </div>
+        )}
+
+        {!isInitialTemplatesLoading && templates.length === 0 && (
+          <div className="dashboard-empty-state templates-empty-state">
+            <h4>{section === "mine" ? "Шаблонов пока нет" : "Публичных шаблонов пока нет"}</h4>
+            <p>
+              {section === "mine"
+                ? "Сохраните форму как шаблон в конструкторе, чтобы она появилась здесь."
+                : "Когда пользователи поделятся шаблонами, они появятся в этой галерее."}
+            </p>
+          </div>
+        )}
+
+        <div
+          className={`templates-gallery-grid templates-gallery-grid-two-columns ${
+            isRefreshingTemplates ? "dashboard-forms-grid-refreshing" : ""
+          }`.trim()}
+        >
+          {templates.map((template) => {
+            const title = getSurveyDisplayTitle(template);
+            const isOwnTemplate = template.author_id === user?.id;
+            const isCurrentTemplatePending = isTemplateActionPending(template.id);
+            const actionMenuOpen = openedMenuTemplateId === template.id;
+            const createdAtLabel = formatCreatedAt(template.created_at);
+            const shareLabel = template.is_public ? "Не показывать другим" : "Поделиться";
+
+            return (
+              <div
+                key={template.id}
+                className={`dashboard-form-card dashboard-form-card-static templates-card ${
+                  actionMenuOpen ? "dashboard-form-card-menu-open" : ""
+                }`.trim()}
+                role="button"
+                tabIndex={0}
+                aria-label={`Открыть превью шаблона ${title}`}
+                onClick={() => handleCardOpen(template)}
+                onKeyDown={(event) => handleCardKeyDown(event, template)}
+              >
+                <div className="templates-card-header">
+                  <div className="dashboard-form-heading-row templates-card-title-row">
+                    <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
+                    <strong className="dashboard-form-title templates-card-title">{title}</strong>
+                  </div>
+
+                  {isOwnTemplate && (
+                    <div className="form-menu templates-floating-root templates-actions-menu-shell">
+                      <button
+                        type="button"
+                        className="form-menu-trigger"
+                        aria-label={`Действия шаблона ${title}`}
+                        aria-expanded={actionMenuOpen}
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          setOpenedMenuTemplateId((current) => (current === template.id ? null : template.id));
+                        }}
+                        disabled={isCurrentTemplatePending}
+                      >
+                        ...
+                      </button>
+
+                      {actionMenuOpen && (
+                        <div
+                          className="form-menu-dropdown"
+                          role="menu"
+                          aria-label={`Меню действий шаблона ${title}`}
+                          onClick={stopCardEvent}
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="form-menu-item"
+                            onClick={(event) => {
+                              stopCardEvent(event);
+                              setOpenedMenuTemplateId(null);
+                              void handleRename(template);
+                            }}
+                            disabled={isCurrentTemplatePending}
+                          >
+                            <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                            <span className="form-menu-item-label">Переименовать</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="form-menu-item"
+                            onClick={(event) => {
+                              stopCardEvent(event);
+                              setOpenedMenuTemplateId(null);
+                              navigate(routes.builderEdit(template.id));
+                            }}
+                            disabled={isCurrentTemplatePending}
+                          >
+                            <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                            <span className="form-menu-item-label">Редактировать</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="form-menu-item form-menu-item-danger"
+                            onClick={(event) => {
+                              stopCardEvent(event);
+                              setOpenedMenuTemplateId(null);
+                              setTemplateToDelete(template);
+                            }}
+                            disabled={isCurrentTemplatePending}
+                          >
+                            <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                            <span className="form-menu-item-label">Удалить</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="templates-card-meta-line">
+                  <span className="dashboard-meta-item">Создан {createdAtLabel}</span>
+                  {section === "public" && (
+                    <>
+                      <span className="dashboard-meta-separator" aria-hidden="true">
+                        •
+                      </span>
+                      <span className="templates-card-author">{getAuthorLabel(template)}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="templates-card-button-row">
+                  <button
+                    type="button"
+                    className="templates-use-button"
+                    aria-label={`Использовать шаблон ${title}`}
+                    onClick={(event) => {
+                      stopCardEvent(event);
+                      void handleUseTemplate(template);
+                    }}
+                    disabled={isCurrentTemplatePending}
+                  >
+                    {isCurrentTemplatePending && createFromTemplateMutation.isPending && <InlineSpinner />}
+                    Использовать
+                  </button>
+
+                  {isOwnTemplate && (
+                    <button
+                      type="button"
+                      className="templates-share-button"
+                      aria-label={`${shareLabel} шаблоном ${title}`}
+                      onClick={(event) => {
+                        stopCardEvent(event);
+                        void handleToggleSharing(template);
+                      }}
+                      disabled={isCurrentTemplatePending}
+                    >
+                      {shareLabel}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {previewTemplate && (
+        <div className="template-preview-layer" onMouseDown={(event) => event.target === event.currentTarget && setPreviewTemplate(null)}>
+          <aside
+            className="template-preview-drawer"
+            role="dialog"
+            aria-label={`Превью шаблона ${previewTemplate.title}`}
+            aria-modal="true"
+          >
+            <div className="template-preview-header">
+              <div>
+                <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
+                <h2 className="template-preview-title">{previewTemplate.title}</h2>
+              </div>
+              <button type="button" className="template-preview-close" onClick={() => setPreviewTemplate(null)}>
+                Закрыть
+              </button>
+            </div>
+            <div className="template-preview-body">
+              <SurveyRenderer
+                schema={{
+                  ...previewTemplate.schema,
+                  title: previewTemplate.title,
+                }}
+                formId={previewTemplate.id}
+                isPreview
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {templateToDelete && (
+        <div className="modal-backdrop">
+          <div className="modal-card card dashboard-delete-modal">
+            <h3 className="dashboard-delete-modal-title">Удаление шаблона</h3>
+            <p className="dashboard-delete-modal-copy">
+              Удалить шаблон «{templateToDelete.title}»? Это действие нельзя отменить.
+            </p>
+            <div className="dashboard-delete-modal-actions">
+              <button type="button" onClick={() => setTemplateToDelete(null)} disabled={isTemplateActionPending(templateToDelete.id)}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="dashboard-danger-button"
+                onClick={() => void confirmDelete()}
+                disabled={isTemplateActionPending(templateToDelete.id)}
+              >
+                {isTemplateActionPending(templateToDelete.id) && <InlineSpinner />}
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

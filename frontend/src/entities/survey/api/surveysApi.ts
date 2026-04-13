@@ -1,5 +1,6 @@
 import {
   deleteForm,
+  createFormFromTemplate as createRegularFormFromTemplate,
   duplicateForm,
   fetchFormById,
   fetchForms,
@@ -33,6 +34,7 @@ export async function createSurvey(params: {
   formReason: string;
   schema: SurveySchema;
   authorId: string;
+  isPublic?: boolean;
 }) {
   return insertForm(params);
 }
@@ -60,4 +62,8 @@ export async function removeForm(id: string) {
 
 export async function cloneForm(form: SurveyForm, authorId: string) {
   return duplicateForm(form, authorId);
+}
+
+export async function createFormFromTemplate(form: SurveyForm, authorId: string) {
+  return createRegularFormFromTemplate(form, authorId);
 }

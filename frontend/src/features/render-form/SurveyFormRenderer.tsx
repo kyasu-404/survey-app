@@ -12,6 +12,7 @@ import { removeFileFromStorage, uploadFileToStorage } from "../../shared/api/sto
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
+  isPreview?: boolean;
 };
 
 function getStoragePathByUrl(url: string) {
@@ -31,7 +32,7 @@ function getStoragePathByUrl(url: string) {
   return decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
 }
 
-export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) {
+export function SurveyFormRenderer({ schema, formId, isPreview = false }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -43,10 +44,19 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = "Отправить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
+    if (isPreview) {
+      nextModel.readOnly = true;
+      nextModel.showCompleteButton = false;
+      nextModel.showNavigationButtons = false;
+    }
     return nextModel;
-  }, [schema]);
+  }, [isPreview, schema]);
 
   useEffect(() => {
+    if (isPreview) {
+      return;
+    }
+
     const handleUploadFiles = async (
       _sender: Model,
       options: { files: File[]; callback: (status: "success" | "error", data: unknown) => void }
@@ -129,7 +139,7 @@ export function SurveyFormRenderer({ schema, formId }: SurveyFormRendererProps) 
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
-  }, [formId, model, showToast, submitResponseMutation]);
+  }, [formId, isPreview, model, showToast, submitResponseMutation]);
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>

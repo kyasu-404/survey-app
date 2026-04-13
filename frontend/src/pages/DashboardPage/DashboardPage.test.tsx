@@ -14,6 +14,8 @@ const {
   cloneForm,
   changeFormStatus,
   setFormDeadline,
+  qrToDataURL,
+  qrToString,
 } = vi.hoisted(() => ({
   showToast: vi.fn(),
   navigate: vi.fn(),
@@ -21,6 +23,8 @@ const {
   cloneForm: vi.fn(),
   changeFormStatus: vi.fn(),
   setFormDeadline: vi.fn(),
+  qrToDataURL: vi.fn(),
+  qrToString: vi.fn(),
 }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
@@ -64,6 +68,15 @@ vi.mock("../../shared/lib/browser", () => ({
 
 vi.mock("../../shared/lib/export", () => ({
   exportToExcel: vi.fn(),
+}));
+
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: qrToDataURL,
+    toString: qrToString,
+  },
+  toDataURL: qrToDataURL,
+  toString: qrToString,
 }));
 
 function createForm(index: number, overrides: Partial<SurveyForm> = {}): SurveyForm {
@@ -112,6 +125,8 @@ describe("DashboardPage", () => {
     cloneForm.mockResolvedValue({ id: "form-copy" });
     changeFormStatus.mockResolvedValue(undefined);
     setFormDeadline.mockResolvedValue(undefined);
+    qrToString.mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>');
+    qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
   });
 
   it("shows form stats inside the info popover and paginates the list", async () => {
@@ -276,6 +291,66 @@ describe("DashboardPage", () => {
     expect(container.querySelector(".dashboard-meta-item-deadline .dashboard-meta-icon")).toBeInTheDocument();
   });
 
+  it("opens a generated QR dialog and downloads the QR on request", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "QR форма",
+        author_id: "user-1",
+      }),
+    ]);
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Действия формы QR форма" }));
+
+    const menu = await screen.findByRole("menu", { name: "Меню действий формы QR форма" });
+    const copyLinkButton = within(menu).getByRole("menuitem", { name: "Копировать ссылку" });
+    const generateQrButton = within(menu).getByRole("menuitem", { name: "Генерировать QR" });
+
+    expect(copyLinkButton.compareDocumentPosition(generateQrButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(qrToString).not.toHaveBeenCalled();
+
+    await userEvent.click(generateQrButton);
+
+    const formLink = `${window.location.origin}${routes.survey("form-1")}`;
+    await waitFor(() => {
+      expect(qrToString).toHaveBeenCalledWith(
+        formLink,
+        expect.objectContaining({
+          color: expect.objectContaining({ light: "#00000000" }),
+          type: "svg",
+        }),
+      );
+    });
+
+    const dialog = await screen.findByRole("dialog", { name: "QR-код формы QR форма" });
+    expect(within(dialog).getByRole("button", { name: "PNG" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "SVG" })).toBeInTheDocument();
+    expect(within(dialog).getByAltText("QR-код формы QR форма")).toHaveAttribute("src", expect.stringMatching(/^data:image\/svg\+xml/));
+    expect(within(dialog).getByText(formLink)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "PNG" }));
+
+    await waitFor(() => {
+      expect(qrToDataURL).toHaveBeenCalledWith(
+        formLink,
+        expect.objectContaining({
+          color: expect.objectContaining({ light: "#00000000" }),
+          type: "image/png",
+        }),
+      );
+    });
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "SVG" }));
+
+    await waitFor(() => {
+      expect(qrToString).toHaveBeenCalledTimes(2);
+    });
+    expect(anchorClick).toHaveBeenCalledTimes(2);
+  });
+
   it("shows the compact action set for non-owners and the status dropdown for owners", async () => {
     getForms.mockResolvedValue([
       createForm(1, {
@@ -318,7 +393,7 @@ describe("DashboardPage", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("shows a template filter only on the my forms page", async () => {
+  it("keeps templates out of the my forms dashboard", async () => {
     getForms.mockResolvedValue([
       createForm(1, {
         title: "Обычная форма",
@@ -334,14 +409,9 @@ describe("DashboardPage", () => {
 
     renderPage("mine");
 
-    const templateFilter = await screen.findByRole("combobox", { name: "Тип форм" });
     expect(await screen.findByText("Обычная форма")).toBeInTheDocument();
-    expect(screen.getByText("Шаблон отчёта")).toBeInTheDocument();
-
-    await userEvent.selectOptions(templateFilter, "templates");
-
-    expect(screen.queryByText("Обычная форма")).not.toBeInTheDocument();
-    expect(screen.getByText("Шаблон отчёта")).toBeInTheDocument();
+    expect(screen.queryByText("Шаблон отчёта")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Тип форм" })).not.toBeInTheDocument();
   });
 
   it("renders the delete modal action wrapper for dashboard styling", async () => {
