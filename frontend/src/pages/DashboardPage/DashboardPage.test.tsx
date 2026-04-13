@@ -173,6 +173,7 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(container.querySelectorAll(".dashboard-form-skeleton")).not.toHaveLength(0);
     });
+    expect(container.querySelector(".dashboard-form-skeleton")).toHaveClass("dashboard-form-card");
 
     deferred.resolve([]);
 

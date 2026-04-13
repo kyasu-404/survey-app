@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import DashboardPage from "../pages/DashboardPage/DashboardPage";
+import FormResponsesHtmlPage from "../pages/FormResponsesHtmlPage/FormResponsesHtmlPage";
 import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import BuilderPage from "../pages/BuilderPage/BuilderPage";
@@ -57,6 +58,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <FormResponsesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: routes.formResponsesHtmlById,
+        element: (
+          <ProtectedRoute>
+            <FormResponsesHtmlPage />
           </ProtectedRoute>
         ),
       },

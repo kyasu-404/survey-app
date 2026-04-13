@@ -109,16 +109,31 @@ function getAuthorLabel(form: SurveyForm) {
 
 function renderDashboardSkeletonCards(count: number, className = "") {
   return Array.from({ length: count }, (_, index) => (
-    <div key={`dashboard-skeleton-${className || "default"}-${index}`} className={`dashboard-form-skeleton ${className}`.trim()}>
-      <div className="dashboard-form-skeleton-header">
-        <Skeleton className="dashboard-form-skeleton-pill" />
+    <div
+      key={`dashboard-skeleton-${className || "default"}-${index}`}
+      className={`dashboard-form-card dashboard-form-skeleton ${className}`.trim()}
+    >
+      <div className="dashboard-form-header dashboard-form-skeleton-header">
+        <div className="dashboard-form-heading">
+          <div className="dashboard-form-heading-row">
+            <Skeleton className="dashboard-form-skeleton-pill" />
+            <Skeleton className="dashboard-form-skeleton-title" />
+          </div>
+        </div>
         <Skeleton className="dashboard-form-skeleton-menu" />
       </div>
-      <Skeleton className="dashboard-form-skeleton-title" />
-      <div className="dashboard-form-skeleton-meta">
-        <Skeleton className="dashboard-form-skeleton-meta-pill" />
-        <Skeleton className="dashboard-form-skeleton-meta-pill" />
-        <Skeleton className="dashboard-form-skeleton-meta-pill dashboard-form-skeleton-meta-pill-wide" />
+      <div className="dashboard-form-footer dashboard-form-skeleton-footer">
+        <div className="dashboard-form-meta-line dashboard-form-skeleton-meta">
+          <Skeleton className="dashboard-form-skeleton-meta-pill" />
+          <span className="dashboard-meta-separator" aria-hidden="true">
+            •
+          </span>
+          <Skeleton className="dashboard-form-skeleton-meta-pill dashboard-form-skeleton-meta-pill-wide" />
+          <span className="dashboard-meta-separator" aria-hidden="true">
+            •
+          </span>
+          <Skeleton className="dashboard-form-skeleton-meta-pill" />
+        </div>
       </div>
     </div>
   ));

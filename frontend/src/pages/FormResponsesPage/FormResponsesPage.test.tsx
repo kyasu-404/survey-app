@@ -103,6 +103,7 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Выгрузить в XLSX" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
@@ -120,6 +121,50 @@ describe("FormResponsesPage", () => {
         "ответы-Форма обратной связи",
       );
     });
+  });
+
+  it("opens the generated HTML responses page", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm.mockResolvedValue([
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { name: "Анна" },
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+            <Route path="/dashboard/forms/:id/responses/html" element={<h1>HTML ответы</h1>} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "HTML" }));
+
+    expect(await screen.findByRole("heading", { name: "HTML ответы" })).toBeInTheDocument();
   });
 
   it("disables the refresh button while responses are being updated", async () => {

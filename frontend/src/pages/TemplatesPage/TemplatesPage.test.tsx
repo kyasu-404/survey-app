@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -105,6 +107,10 @@ function renderPage(queryClient = createQueryClient()) {
   return { queryClient, ...renderResult };
 }
 
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+}
+
 describe("TemplatesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,6 +138,7 @@ describe("TemplatesPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Открыть превью шаблона Заявка на конкурс" }));
 
     expect(await screen.findByRole("dialog", { name: "Превью шаблона Заявка на конкурс" })).toBeInTheDocument();
+    expect(container.querySelector(".template-preview-body")).toHaveClass("survey-page-card");
     expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
   });
 
@@ -151,11 +158,14 @@ describe("TemplatesPage", () => {
   it("offers template actions without creating a new form when editing", async () => {
     getForms.mockResolvedValue([createTemplate(1, { title: "Мой шаблон" })]);
 
-    renderPage();
+    const { container } = renderPage();
 
     await userEvent.click(await screen.findByRole("button", { name: "Действия шаблона Мой шаблон" }));
 
+    expect(container.querySelector(".templates-gallery-grid")).toHaveClass("templates-gallery-grid-menu-open");
+
     const menu = await screen.findByRole("menu", { name: "Меню действий шаблона Мой шаблон" });
+    expect(menu).toHaveClass("templates-menu-dropdown");
     expect(within(menu).getByRole("menuitem", { name: "Переименовать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Удалить" })).toBeInTheDocument();
@@ -191,6 +201,10 @@ describe("TemplatesPage", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" }));
 
+    expect(screen.getByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" })).not.toHaveClass(
+      "templates-share-button-muted",
+    );
+
     await waitFor(() => {
       expect(changeFormStatus).toHaveBeenCalledWith("template-1", true);
     });
@@ -200,5 +214,24 @@ describe("TemplatesPage", () => {
     expect(await screen.findByText("Публичный шаблон")).toBeInTheDocument();
     expect(screen.getByText("Мария Иванова")).toHaveClass("templates-card-author");
     expect(container.querySelector(".templates-card-meta-line")?.textContent).toContain("Создан");
+  });
+
+  it("uses a muted share button style when hiding an already public own template", async () => {
+    getForms.mockResolvedValue([
+      createTemplate(1, {
+        title: "Опубликованный шаблон",
+        is_public: true,
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Не показывать другим шаблоном Опубликованный шаблон" })).toHaveClass(
+      "templates-share-button-muted",
+    );
+  });
+
+  it("keeps the template preview drawer wide enough for the survey page layout", () => {
+    expect(readAppCss()).toContain("width: min(820px, calc(100vw - 32px));");
   });
 });

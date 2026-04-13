@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchForms } from "./formsApi";
+import { fetchForms, insertForm } from "./formsApi";
 import { apiClient } from "./client";
 
 vi.mock("./client", () => ({
@@ -28,6 +28,16 @@ function createHangingQuery() {
   return query;
 }
 
+function createInsertQuery() {
+  const query = {
+    insert: vi.fn(() => query),
+    select: vi.fn(() => query),
+    single: vi.fn(() => Promise.resolve({ data: { id: "created-form" }, error: null })),
+  };
+
+  return query;
+}
+
 describe("fetchForms", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -51,5 +61,53 @@ describe("fetchForms", () => {
     await vi.advanceTimersByTimeAsync(20_000);
 
     await expect(fetchStatePromise).resolves.toBe("rejected");
+  });
+});
+
+describe("insertForm", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates templates unpublished by default", async () => {
+    const query = createInsertQuery();
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } } } as never);
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await insertForm({
+      title: "Template",
+      formType: "template",
+      formReason: "plan",
+      schema: { pages: [] },
+      authorId: "user-1",
+    });
+
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        form_type: "template",
+        is_public: false,
+      }),
+    );
+  });
+
+  it("keeps regular forms public by default", async () => {
+    const query = createInsertQuery();
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } } } as never);
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await insertForm({
+      title: "Form",
+      formType: "anketa",
+      formReason: "plan",
+      schema: { pages: [] },
+      authorId: "user-1",
+    });
+
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        form_type: "anketa",
+        is_public: true,
+      }),
+    );
   });
 });

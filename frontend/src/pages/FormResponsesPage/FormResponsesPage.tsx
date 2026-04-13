@@ -1,119 +1,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getResponsesByForm } from "../../entities/response/api";
-import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
-import type {
-  SurveyForm,
-  SurveyPageSchema,
-  SurveyQuestion,
-  SurveySchema,
-} from "../../entities/survey/types";
+import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
+import previewIcon from "../../img/preview.svg";
 import refreshIcon from "../../img/refresh.png";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
-
-type ResponsesTableRow = {
-  [key: string]: string;
-};
-
-function getQuestionMeta(schema: SurveySchema) {
-  const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
-  const choiceMap = new Map<string, Map<string, string>>();
-  const titleMap = new Map<string, string>();
-
-  questions.forEach((question: SurveyQuestion) => {
-    if (question.name) {
-      titleMap.set(question.name, question.title ?? question.name);
-    }
-
-    if (!Array.isArray(question.choices) || !question.name) {
-      return;
-    }
-
-    const questionChoiceMap = new Map<string, string>();
-    question.choices.forEach((choice) => {
-      if (typeof choice === "string") {
-        questionChoiceMap.set(choice, choice);
-        return;
-      }
-
-      const value = String(choice.value ?? choice.text ?? "");
-      const text = String(choice.text ?? choice.value ?? "");
-      if (value) {
-        questionChoiceMap.set(value, text);
-      }
-    });
-
-    if (questionChoiceMap.size > 0) {
-      choiceMap.set(question.name, questionChoiceMap);
-    }
-  });
-
-  return { choiceMap, titleMap };
-}
-
-function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>) {
-  const questionChoices = choiceMap.get(questionName);
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string" && questionChoices?.has(item)) {
-          return questionChoices.get(item) ?? item;
-        }
-
-        if (item && typeof item === "object" && "name" in item && typeof item.name === "string") {
-          return item.name;
-        }
-
-        return String(item ?? "");
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  if (typeof value === "string" && questionChoices?.has(value)) {
-    return questionChoices.get(value) ?? value;
-  }
-
-  if (value === null || typeof value === "undefined") {
-    return "";
-  }
-
-  if (typeof value === "object") {
-    if ("name" in value && typeof value.name === "string") {
-      return value.name;
-    }
-
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-}
-
-function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
-  const { choiceMap, titleMap } = getQuestionMeta(schema);
-
-  return responses.map((response) => {
-    const base: ResponsesTableRow = {
-      "Дата ответа": new Date(response.created_at).toLocaleString("ru-RU"),
-    };
-
-    Object.entries(response.data).forEach(([key, value]) => {
-      base[titleMap.get(key) ?? key] = formatAnswerValue(key, value, choiceMap);
-    });
-
-    return base;
-  });
-}
 
 export default function FormResponsesPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const formQuery = useQuery({
@@ -147,7 +50,7 @@ export default function FormResponsesPage() {
     [formQuery.data, responsesQuery.data],
   );
 
-  const headers = rows[0] ? Object.keys(rows[0]) : [];
+  const headers = getResponseTableHeaders(rows);
   const isLoading = formQuery.isLoading || responsesQuery.isLoading;
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const combinedError = formQuery.error ?? responsesQuery.error;
@@ -161,6 +64,14 @@ export default function FormResponsesPage() {
     const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
     exportToExcel(rows, `ответы-${formTitle}`);
     showToast("Ответы выгружены в XLSX", "success");
+  };
+
+  const handleOpenHtml = () => {
+    if (!id) {
+      return;
+    }
+
+    navigate(routes.formResponsesHtml(id));
   };
 
   if (!id) {
@@ -178,6 +89,15 @@ export default function FormResponsesPage() {
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
               <span>Выгрузить в XLSX</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+            </button>
+            <button
+              type="button"
+              className="responses-export-button responses-html-button"
+              onClick={handleOpenHtml}
+              disabled={isLoading}
+            >
+              <span>HTML</span>
+              <img src={previewIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <button
               type="button"

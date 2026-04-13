@@ -33,12 +33,14 @@ export async function createSurveyForCurrentUser({
     schema,
     authorId: userId,
   };
+  const resolvedIsPublic =
+    typeof isPublic === "boolean" ? isPublic : formType === "template" ? false : undefined;
 
   return createSurvey(
-    typeof isPublic === "boolean"
+    typeof resolvedIsPublic === "boolean"
       ? {
           ...createSurveyPayload,
-          isPublic,
+          isPublic: resolvedIsPublic,
         }
       : createSurveyPayload,
   );
@@ -46,7 +48,7 @@ export async function createSurveyForCurrentUser({
 
 export function useCreateSurveyMutation() {
   return useMutation({
-    mutationFn: ({ schema, title, formType, formReason }: CreateSurveyForCurrentUserParams) =>
-      createSurveyForCurrentUser({ schema, title, formType, formReason }),
+    mutationFn: ({ schema, title, formType, formReason, isPublic }: CreateSurveyForCurrentUserParams) =>
+      createSurveyForCurrentUser({ schema, title, formType, formReason, isPublic }),
   });
 }

@@ -5,6 +5,8 @@ export const routes = {
   templates: "/templates",
   formResponsesById: "/dashboard/forms/:id/responses",
   formResponses: (id: string) => `/dashboard/forms/${id}/responses`,
+  formResponsesHtmlById: "/dashboard/forms/:id/responses/html",
+  formResponsesHtml: (id: string) => `/dashboard/forms/${id}/responses/html`,
   surveyById: "/form/:id",
   survey: (id: string) => `/form/${id}`,
   legacySurveyById: "/survey/:id",

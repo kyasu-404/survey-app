@@ -365,7 +365,7 @@ export default function TemplatesPage() {
         <div
           className={`templates-gallery-grid templates-gallery-grid-two-columns ${
             isRefreshingTemplates ? "dashboard-forms-grid-refreshing" : ""
-          }`.trim()}
+          } ${openedMenuTemplateId ? "templates-gallery-grid-menu-open" : ""}`.trim()}
         >
           {templates.map((template) => {
             const title = getSurveyDisplayTitle(template);
@@ -411,7 +411,7 @@ export default function TemplatesPage() {
 
                       {actionMenuOpen && (
                         <div
-                          className="form-menu-dropdown"
+                          className="form-menu-dropdown templates-menu-dropdown"
                           role="menu"
                           aria-label={`Меню действий шаблона ${title}`}
                           onClick={stopCardEvent}
@@ -494,7 +494,7 @@ export default function TemplatesPage() {
                   {isOwnTemplate && (
                     <button
                       type="button"
-                      className="templates-share-button"
+                      className={`templates-share-button ${template.is_public ? "templates-share-button-muted" : ""}`.trim()}
                       aria-label={`${shareLabel} шаблоном ${title}`}
                       onClick={(event) => {
                         stopCardEvent(event);
@@ -529,7 +529,7 @@ export default function TemplatesPage() {
                 Закрыть
               </button>
             </div>
-            <div className="template-preview-body">
+            <div className="template-preview-body survey-page-card">
               <SurveyRenderer
                 schema={{
                   ...previewTemplate.schema,

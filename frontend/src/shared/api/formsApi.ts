@@ -17,6 +17,14 @@ type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_nam
   responses?: Array<{ count?: number | null }> | null;
 };
 
+function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
+  if (typeof isPublic === "boolean") {
+    return isPublic;
+  }
+
+  return formType === "template" ? false : true;
+}
+
 async function syncFetchedFormDeadlineState(form: SurveyForm, persistChanges = true): Promise<SurveyForm> {
   const deadlineStatePatch = getDeadlineStatePatch(form);
 
@@ -146,7 +154,7 @@ export async function insertForm(payload: {
           form_reason: payload.formReason,
           schema: payload.schema,
           author_id: currentUserId,
-          is_public: payload.isPublic ?? true,
+          is_public: resolveInitialPublicationState(payload.formType, payload.isPublic),
         })
         .select("id")
         .single(),
