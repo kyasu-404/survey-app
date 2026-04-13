@@ -31,6 +31,7 @@ create table public.forms (
   schema jsonb not null,
   is_public boolean not null default true,
   deadline_at timestamptz,
+  max_responses integer,
   author_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now()
 );
@@ -49,6 +50,9 @@ create table public.responses (
 
 alter table public.forms
 add constraint forms_schema_is_object check (jsonb_typeof(schema) = 'object');
+
+alter table public.forms
+add constraint forms_max_responses_positive check (max_responses is null or max_responses > 0);
 
 alter table public.responses
 add constraint responses_data_is_object check (jsonb_typeof(data) = 'object');
@@ -108,6 +112,45 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
+
+create or replace function public.ensure_form_response_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_limit integer;
+  current_count integer;
+begin
+  select f.max_responses
+  into current_limit
+  from public.forms f
+  where f.id = new.form_id
+  for update;
+
+  if current_limit is null then
+    return new;
+  end if;
+
+  select count(*)
+  into current_count
+  from public.responses r
+  where r.form_id = new.form_id;
+
+  if current_count >= current_limit then
+    raise exception 'Достигнут лимит ответов для формы' using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists responses_form_limit on public.responses;
+
+create trigger responses_form_limit
+before insert on public.responses
+for each row execute procedure public.ensure_form_response_limit();
 
 -- =========================
 -- ENABLE RLS

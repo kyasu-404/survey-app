@@ -53,6 +53,19 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   });
 }
 
+function isUserRole(value: unknown): value is UserRole {
+  return value === "admin" || value === "user";
+}
+
+function getUserMetadataWithRole(metadata: unknown, role: UserRole) {
+  return {
+    ...(metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {}),
+    role,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -128,7 +141,7 @@ Deno.serve(async (req) => {
     }
 
     case "create": {
-      if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8) {
+      if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8 || !isUserRole(payload.role)) {
         return jsonResponse(400, { error: "Invalid create payload" });
       }
 
@@ -229,21 +242,41 @@ Deno.serve(async (req) => {
     }
 
     case "updateRole": {
-      if (!payload.userId) {
-        return jsonResponse(400, { error: "userId is required" });
+      if (!payload.userId || !isUserRole(payload.role)) {
+        return jsonResponse(400, { error: "Invalid role update payload" });
       }
 
       if (payload.userId === requester.id) {
         return jsonResponse(400, { error: "You cannot change your own role" });
       }
 
-      const { error } = await adminClient
+      const { data: updatedProfile, error } = await adminClient
         .from("profiles")
         .update({ role: payload.role })
-        .eq("id", payload.userId);
+        .eq("id", payload.userId)
+        .select("id")
+        .maybeSingle();
 
       if (error) {
         return jsonResponse(400, { error: error.message });
+      }
+
+      if (!updatedProfile) {
+        return jsonResponse(404, { error: "User profile not found" });
+      }
+
+      const { data: targetAuthUser, error: targetAuthUserError } = await adminClient.auth.admin.getUserById(payload.userId);
+
+      if (targetAuthUser?.user) {
+        const { error: metadataError } = await adminClient.auth.admin.updateUserById(payload.userId, {
+          user_metadata: getUserMetadataWithRole(targetAuthUser.user.user_metadata, payload.role),
+        });
+
+        if (metadataError) {
+          console.warn("Failed to sync user role metadata", metadataError.message);
+        }
+      } else if (targetAuthUserError) {
+        console.warn("Failed to load auth user for role metadata sync", targetAuthUserError.message);
       }
 
       return jsonResponse(200, { success: true });

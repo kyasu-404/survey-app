@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { getResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import downloadIcon from "../../img/Download.svg";
+import printerIcon from "../../img/printer.svg";
 import { getErrorMessage } from "../../shared/lib/error";
 import {
   createResponsesHtmlDocument,
@@ -81,11 +82,12 @@ export default function FormResponsesHtmlPage() {
         </button>
         <button
           type="button"
-          className="dashboard-refresh-button responses-print-button"
+          className="responses-export-button responses-print-button responses-print-button-orange"
           onClick={handlePrint}
           disabled={!canUseHtml}
         >
           <span>Печать</span>
+          <img src={printerIcon} alt="" aria-hidden="true" className="toolbar-icon" />
         </button>
       </div>
 

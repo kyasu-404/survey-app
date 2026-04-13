@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,29 @@ vi.mock("../../app/providers/ToastProvider", () => ({
   useToast: () => ({
     showToast,
   }),
+}));
+
+vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
+  SurveyRenderer: ({
+    formId,
+    initialData,
+    isPreview,
+    schema,
+  }: {
+    formId: string;
+    initialData?: Record<string, unknown>;
+    isPreview?: boolean;
+    schema: { title?: string };
+  }) => (
+    <div
+      data-testid="response-preview-renderer"
+      data-form-id={formId}
+      data-initial-data={JSON.stringify(initialData ?? {})}
+      data-preview={String(Boolean(isPreview))}
+    >
+      {schema.title}
+    </div>
+  ),
 }));
 
 function createQueryClient() {
@@ -165,6 +188,61 @@ describe("FormResponsesPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "HTML" }));
 
     expect(await screen.findByRole("heading", { name: "HTML ответы" })).toBeInTheDocument();
+  });
+
+  it("opens a filled readonly form preview from a response row", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [
+              { type: "text", name: "name", title: "Имя" },
+              { type: "comment", name: "comment", title: "Комментарий" },
+            ],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm.mockResolvedValue([
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: {
+          name: "Анна",
+          comment: "Готово",
+        },
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(await screen.findByText("Анна"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Ответ Анна" });
+    expect(dialog.querySelector(".response-preview-body")).toHaveClass("response-preview-builder-palette");
+    const renderer = within(dialog).getByTestId("response-preview-renderer");
+    expect(renderer).toHaveAttribute("data-form-id", "form-1");
+    expect(renderer).toHaveAttribute("data-preview", "true");
+    expect(renderer).toHaveAttribute("data-initial-data", JSON.stringify({ name: "Анна", comment: "Готово" }));
+    expect(within(dialog).queryByRole("button", { name: /Завершить|Отправить/i })).not.toBeInTheDocument();
   });
 
   it("disables the refresh button while responses are being updated", async () => {

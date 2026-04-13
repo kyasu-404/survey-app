@@ -9,6 +9,7 @@ export {
   updateFormTitle,
   updateFormStatus,
   updateFormDeadline,
+  updateFormResponseLimit,
   deleteForm,
   duplicateForm,
 } from "./formsApi";

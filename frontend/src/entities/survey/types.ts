@@ -33,6 +33,7 @@ export type SurveyForm = {
   form_reason: string;
   is_public: boolean;
   deadline_at: string | null;
+  max_responses?: number | null;
   author_id: string;
   schema: SurveySchema;
   created_at: string;

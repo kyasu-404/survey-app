@@ -22,7 +22,9 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
-  SurveyRenderer: () => <div data-testid="survey-renderer" />,
+  SurveyRenderer: ({ isPreview }: { isPreview?: boolean }) => (
+    <div data-testid="survey-renderer" data-preview={String(Boolean(isPreview))} />
+  ),
 }));
 
 function createQueryClient() {
@@ -60,6 +62,27 @@ describe("SurveyPage", () => {
     expect(container.querySelector(".survey-page")).toBeInTheDocument();
     expect(container.querySelector(".survey-page-card")).toBeInTheDocument();
     expect(container.querySelector(".survey-page-shell")).toBeInTheDocument();
+  });
+
+  it("opens dashboard card navigation as readonly preview", async () => {
+    getPublicFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Анкета",
+      is_public: true,
+      schema: { pages: [] },
+    });
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/form/form-1", state: { isPreview: true } }]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/form/:id" element={<SurveyPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-preview", "true");
   });
 
   it("renders a loading skeleton while the survey is loading", async () => {

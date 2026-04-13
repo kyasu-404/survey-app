@@ -95,11 +95,12 @@ describe("FormResponsesHtmlPage", () => {
 
     getResponsesByForm.mockResolvedValue(responses);
 
-    renderHtmlPage();
+    const { container } = renderHtmlPage();
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Печать" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-orange");
+    expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
     expect(screen.getByText("Анна")).toBeInTheDocument();
     expect(screen.getByText("Хорошее")).toBeInTheDocument();
   });

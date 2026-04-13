@@ -8,6 +8,7 @@ import {
   insertForm,
   updateFormSchema,
   updateFormDeadline,
+  updateFormResponseLimit,
   updateFormStatus,
   updateFormTitle,
   type FormsFilters,
@@ -54,6 +55,10 @@ export async function changeFormStatus(id: string, isPublic: boolean) {
 
 export async function setFormDeadline(id: string, deadlineAt: string | null) {
   return updateFormDeadline(id, deadlineAt);
+}
+
+export async function setFormResponseLimit(id: string, maxResponses: number | null) {
+  return updateFormResponseLimit(id, maxResponses);
 }
 
 export async function removeForm(id: string) {

@@ -14,6 +14,7 @@ const {
   cloneForm,
   changeFormStatus,
   setFormDeadline,
+  setFormResponseLimit,
   qrToDataURL,
   qrToString,
 } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const {
   cloneForm: vi.fn(),
   changeFormStatus: vi.fn(),
   setFormDeadline: vi.fn(),
+  setFormResponseLimit: vi.fn(),
   qrToDataURL: vi.fn(),
   qrToString: vi.fn(),
 }));
@@ -56,6 +58,7 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   removeForm: vi.fn(),
   changeFormStatus,
   setFormDeadline,
+  setFormResponseLimit,
 }));
 
 vi.mock("../../entities/response/api", () => ({
@@ -91,6 +94,7 @@ function createForm(index: number, overrides: Partial<SurveyForm> = {}): SurveyF
     form_type: "anketa",
     form_reason: "plan",
     deadline_at: index % 2 === 0 ? `2026-05-${String((index % 28) + 1).padStart(2, "0")}T12:00:00.000Z` : null,
+    max_responses: null,
     responses_count: index,
     schema: { pages: [] },
     ...overrides,
@@ -118,13 +122,24 @@ function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryC
   return { queryClient, ...renderResult };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     cloneForm.mockResolvedValue({ id: "form-copy" });
     changeFormStatus.mockResolvedValue(undefined);
     setFormDeadline.mockResolvedValue(undefined);
+    setFormResponseLimit.mockResolvedValue(undefined);
     qrToString.mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>');
     qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
   });
@@ -157,27 +172,58 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Форма 21")).not.toBeInTheDocument();
   });
 
-  it("renders skeleton cards while the forms list is loading", async () => {
-    const deferred = (() => {
-      let resolve!: (value: SurveyForm[]) => void;
-      const promise = new Promise<SurveyForm[]>((res) => {
-        resolve = res;
-      });
-      return { promise, resolve };
-    })();
+  it("renders a loading label with a spinner while the forms list is loading", async () => {
+    const deferred = createDeferred<SurveyForm[]>();
 
     getForms.mockImplementation(() => deferred.promise);
 
     const { container } = renderPage();
 
-    await waitFor(() => {
-      expect(container.querySelectorAll(".dashboard-form-skeleton")).not.toHaveLength(0);
-    });
-    expect(container.querySelector(".dashboard-form-skeleton")).toHaveClass("dashboard-form-card");
+    expect(await screen.findByText("Загрузка форм")).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-forms-loading .inline-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-form-skeleton")).not.toBeInTheDocument();
 
     deferred.resolve([]);
 
     expect(await screen.findByText("Форм пока нет")).toBeInTheDocument();
+  });
+
+  it("keeps the forms list refresh state as a loading label without skeleton cards", async () => {
+    const deferred = createDeferred<SurveyForm[]>();
+    getForms
+      .mockResolvedValueOnce([createForm(1, { title: "Обновляемая форма" })])
+      .mockImplementationOnce(() => deferred.promise);
+
+    const { container } = renderPage();
+
+    expect(await screen.findByText("Обновляемая форма")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
+
+    expect(await screen.findByText("Загрузка форм")).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-forms-loading .inline-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-refresh-overlay")).not.toBeInTheDocument();
+    expect(container.querySelector(".dashboard-form-skeleton")).not.toBeInTheDocument();
+
+    deferred.resolve([createForm(1, { title: "Обновляемая форма" })]);
+  });
+
+  it("keeps the current scroll position when showing more forms", async () => {
+    getForms.mockResolvedValue(Array.from({ length: 25 }, (_, index) => createForm(index + 1)));
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 360 });
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+
+    renderPage();
+
+    expect(await screen.findByText("Форма 20")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    expect(await screen.findByText("Форма 25")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(scrollTo).toHaveBeenCalledWith({ left: 12, top: 360, behavior: "auto" });
+    });
   });
 
   it("opens preview from the card and responses from the counter button", async () => {
@@ -201,7 +247,7 @@ describe("DashboardPage", () => {
     navigate.mockClear();
 
     await userEvent.click(previewCard);
-    expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"));
+    expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"), { state: { isPreview: true } });
   });
 
   it("shows owner-only actions in the menu and re-enables the trigger after duplication", async () => {
@@ -479,5 +525,55 @@ describe("DashboardPage", () => {
 
     expect(changeFormStatus).not.toHaveBeenCalled();
     expect(setFormDeadline).not.toHaveBeenCalled();
+  });
+
+  it("shows response limits in counters and lets owners edit or clear the limit from the status menu", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Лимитируемая форма",
+        author_id: "user-1",
+        responses_count: 3,
+        max_responses: 10,
+      }),
+      createForm(2, {
+        title: "Заполненная форма",
+        author_id: "user-1",
+        responses_count: 5,
+        max_responses: 5,
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "3/10 ответов" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "5 ответов" })).toHaveClass("dashboard-responses-link-limit-reached");
+
+    await userEvent.click(screen.getByRole("button", { name: "Статус формы Лимитируемая форма: Активна" }));
+
+    const statusMenu = await screen.findByRole("menu", { name: "Статус формы Лимитируемая форма" });
+    expect(within(statusMenu).getByRole("menuitem", { name: "Ограничить ответы" })).toBeInTheDocument();
+
+    await userEvent.click(within(statusMenu).getByRole("menuitem", { name: "Ограничить ответы" }));
+
+    const limitDialog = await screen.findByRole("dialog", { name: "Ограничение ответов" });
+    const limitInput = within(limitDialog).getByLabelText("Максимум ответов");
+
+    expect(limitInput).toHaveValue(10);
+
+    await userEvent.clear(limitInput);
+    await userEvent.type(limitInput, "12");
+    await userEvent.click(within(limitDialog).getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => {
+      expect(setFormResponseLimit).toHaveBeenCalledWith("form-1", 12);
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Статус формы Лимитируемая форма: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ограничить ответы" }));
+    await userEvent.click((await screen.findByRole("dialog", { name: "Ограничение ответов" })).querySelector(".deadline-clear-button")!);
+
+    await waitFor(() => {
+      expect(setFormResponseLimit).toHaveBeenCalledWith("form-1", null);
+    });
   });
 });

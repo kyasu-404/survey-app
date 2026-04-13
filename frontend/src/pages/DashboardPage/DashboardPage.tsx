@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -27,6 +29,7 @@ import {
   removeForm,
   renameForm,
   setFormDeadline,
+  setFormResponseLimit,
 } from "../../entities/survey/api/surveysApi";
 import { getNextDeadlineRefreshDelayMs } from "../../entities/survey/model/deadlineState";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
@@ -37,13 +40,17 @@ import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
-import { Skeleton } from "../../shared/ui/Skeleton";
 
 type DashboardPageProps = {
   viewMode: "mine" | "all";
 };
 
 type DeadlineEditorState = {
+  form: SurveyForm;
+  value: string;
+};
+
+type ResponseLimitEditorState = {
   form: SurveyForm;
   value: string;
 };
@@ -103,40 +110,20 @@ function getResponsesLabel(count: number) {
   return `${count} ответов`;
 }
 
-function getAuthorLabel(form: SurveyForm) {
-  return form.author_name || form.author_email || form.author_id;
+function getResponsesCounterLabel(count: number, maxResponses?: number | null) {
+  if (typeof maxResponses === "number" && maxResponses > 0 && count < maxResponses) {
+    return `${count}/${maxResponses} ответов`;
+  }
+
+  return getResponsesLabel(count);
 }
 
-function renderDashboardSkeletonCards(count: number, className = "") {
-  return Array.from({ length: count }, (_, index) => (
-    <div
-      key={`dashboard-skeleton-${className || "default"}-${index}`}
-      className={`dashboard-form-card dashboard-form-skeleton ${className}`.trim()}
-    >
-      <div className="dashboard-form-header dashboard-form-skeleton-header">
-        <div className="dashboard-form-heading">
-          <div className="dashboard-form-heading-row">
-            <Skeleton className="dashboard-form-skeleton-pill" />
-            <Skeleton className="dashboard-form-skeleton-title" />
-          </div>
-        </div>
-        <Skeleton className="dashboard-form-skeleton-menu" />
-      </div>
-      <div className="dashboard-form-footer dashboard-form-skeleton-footer">
-        <div className="dashboard-form-meta-line dashboard-form-skeleton-meta">
-          <Skeleton className="dashboard-form-skeleton-meta-pill" />
-          <span className="dashboard-meta-separator" aria-hidden="true">
-            •
-          </span>
-          <Skeleton className="dashboard-form-skeleton-meta-pill dashboard-form-skeleton-meta-pill-wide" />
-          <span className="dashboard-meta-separator" aria-hidden="true">
-            •
-          </span>
-          <Skeleton className="dashboard-form-skeleton-meta-pill" />
-        </div>
-      </div>
-    </div>
-  ));
+function isResponseLimitReached(count: number, maxResponses?: number | null) {
+  return typeof maxResponses === "number" && maxResponses > 0 && count >= maxResponses;
+}
+
+function getAuthorLabel(form: SurveyForm) {
+  return form.author_name || form.author_email || form.author_id;
 }
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
@@ -151,9 +138,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
   const [deadlineEditor, setDeadlineEditor] = useState<DeadlineEditorState | null>(null);
+  const [responseLimitEditor, setResponseLimitEditor] = useState<ResponseLimitEditorState | null>(null);
   const [qrDialog, setQrDialog] = useState<QrDialogState | null>(null);
   const [qrGeneratingFormId, setQrGeneratingFormId] = useState<string | null>(null);
   const [qrDownloadFormat, setQrDownloadFormat] = useState<"png" | "svg" | null>(null);
+  const pendingLoadMoreScrollPositionRef = useRef<{ left: number; top: number } | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -219,6 +208,16 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   );
   const hasMoreForms = displayedForms.length < filteredForms.length;
   const isRefreshingForms = isFormsFetching && !isInitialFormsLoading;
+
+  useLayoutEffect(() => {
+    const scrollPosition = pendingLoadMoreScrollPositionRef.current;
+    if (!scrollPosition || typeof window === "undefined") {
+      return;
+    }
+
+    pendingLoadMoreScrollPositionRef.current = null;
+    window.scrollTo({ ...scrollPosition, behavior: "auto" });
+  }, [visibleCount]);
 
   useEffect(() => {
     setVisibleCount(pageSize);
@@ -318,6 +317,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   });
   const deadlineMutation = useMutation({
     mutationFn: ({ id, deadlineAt }: { id: string; deadlineAt: string | null }) => setFormDeadline(id, deadlineAt),
+  });
+  const responseLimitMutation = useMutation({
+    mutationFn: ({ id, maxResponses }: { id: string; maxResponses: number | null }) =>
+      setFormResponseLimit(id, maxResponses),
   });
 
   const runAction = async (action: () => Promise<void>, options: DashboardActionOptions) => {
@@ -476,7 +479,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       return;
     }
 
-    navigate(routes.survey(form.id));
+    navigate(routes.survey(form.id), { state: { isPreview: true } });
   };
 
   const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, form: SurveyForm) => {
@@ -490,6 +493,17 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const stopCardEvent = (event: ReactMouseEvent | ReactKeyboardEvent) => {
     event.stopPropagation();
+  };
+
+  const handleLoadMoreForms = () => {
+    if (typeof window !== "undefined") {
+      pendingLoadMoreScrollPositionRef.current = {
+        left: window.scrollX,
+        top: window.scrollY,
+      };
+    }
+
+    setVisibleCount((current) => current + 20);
   };
 
   return (
@@ -570,9 +584,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         </div>
 
-        {isInitialFormsLoading && (
-          <div className="dashboard-forms-grid dashboard-forms-grid-loading">
-            {renderDashboardSkeletonCards(6)}
+        {(isInitialFormsLoading || isRefreshingForms) && (
+          <div className="dashboard-forms-loading" role="status" aria-live="polite">
+            <span>Загрузка форм</span>
+            <InlineSpinner />
           </div>
         )}
 
@@ -596,6 +611,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const statusMenuOpen = openedMenu?.kind === "status" && openedMenu.formId === form.id;
             const createdAtLabel = new Date(form.created_at).toLocaleString("ru-RU");
             const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : null;
+            const hasReachedResponseLimit = isResponseLimitReached(responsesCount, form.max_responses);
 
             const metaItems = [
               !isTemplate && viewMode === "all" ? (
@@ -616,13 +632,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <button
                   key="responses"
                   type="button"
-                  className="dashboard-responses-link dashboard-responses-link-hitbox"
+                  className={`dashboard-responses-link dashboard-responses-link-hitbox ${
+                    hasReachedResponseLimit ? "dashboard-responses-link-limit-reached" : ""
+                  }`.trim()}
                   onClick={(event) => {
                     stopCardEvent(event);
                     navigate(routes.formResponses(form.id));
                   }}
                 >
-                  {getResponsesLabel(responsesCount)}
+                  {getResponsesCounterLabel(responsesCount, form.max_responses)}
                 </button>
               ) : null,
             ].filter(Boolean);
@@ -830,6 +848,22 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                               >
                                 Установить дедлайн
                               </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="form-menu-item"
+                                onClick={(event) => {
+                                  stopCardEvent(event);
+                                  setOpenedMenu(null);
+                                  setResponseLimitEditor({
+                                    form,
+                                    value: form.max_responses ? String(form.max_responses) : "",
+                                  });
+                                }}
+                                disabled={isCurrentFormPending}
+                              >
+                                Ограничить ответы
+                              </button>
                             </div>
                           )}
                         </div>
@@ -867,16 +901,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </div>
             );
           })}
-          {isRefreshingForms && (
-            <div className="dashboard-refresh-overlay">
-              {renderDashboardSkeletonCards(Math.min(Math.max(displayedForms.length, 1), 4), "dashboard-form-skeleton-overlay")}
-            </div>
-          )}
         </div>
 
         {!isInitialFormsLoading && hasMoreForms && (
           <div className="dashboard-load-more">
-            <button type="button" className="dashboard-load-more-button" onClick={() => setVisibleCount((current) => current + 20)}>
+            <button type="button" className="dashboard-load-more-button" onClick={handleLoadMoreForms}>
               Показать ещё
             </button>
           </div>
@@ -956,6 +985,91 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 disabled={isFormActionPending(deadlineEditor.form.id)}
               >
                 {isFormActionPending(deadlineEditor.form.id) && <InlineSpinner />}
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {responseLimitEditor && (
+        <div className="modal-backdrop">
+          <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Ограничение ответов">
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Ограничение ответов</h3>
+            <p className="deadline-modal-subtitle">{responseLimitEditor.form.title}</p>
+            <label className="deadline-field">
+              <span>Максимум ответов</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={responseLimitEditor.value}
+                onChange={(event) =>
+                  setResponseLimitEditor((current) =>
+                    current ? { ...current, value: event.target.value } : current,
+                  )
+                }
+              />
+            </label>
+            <p className="deadline-modal-hint">
+              Когда лимит будет достигнут, новые ответы не будут приниматься.
+            </p>
+            <div className="deadline-modal-actions">
+              <button
+                type="button"
+                onClick={() => setResponseLimitEditor(null)}
+                disabled={isFormActionPending(responseLimitEditor.form.id)}
+              >
+                Отмена
+              </button>
+              {responseLimitEditor.form.max_responses ? (
+                <button
+                  type="button"
+                  className="deadline-clear-button"
+                  onClick={() =>
+                    runAction(
+                      () => responseLimitMutation.mutateAsync({ id: responseLimitEditor.form.id, maxResponses: null }),
+                      {
+                        actionKey: getFormActionKey(responseLimitEditor.form.id),
+                        successMessage: "Ограничение снято",
+                        errorMessage: "Не удалось обновить ограничение",
+                        affectedFormId: responseLimitEditor.form.id,
+                        logLabel: `dashboard response limit clear ${responseLimitEditor.form.id}`,
+                      },
+                    ).finally(() => setResponseLimitEditor(null))
+                  }
+                  disabled={isFormActionPending(responseLimitEditor.form.id)}
+                >
+                  {isFormActionPending(responseLimitEditor.form.id) && <InlineSpinner />}
+                  Снять ограничение
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  const normalizedInput = responseLimitEditor.value.trim();
+                  const parsedLimit = Number(normalizedInput);
+
+                  if (!normalizedInput || !Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+                    showToast("Укажите положительное целое число ответов", "error");
+                    return;
+                  }
+
+                  void runAction(
+                    () => responseLimitMutation.mutateAsync({ id: responseLimitEditor.form.id, maxResponses: parsedLimit }),
+                    {
+                      actionKey: getFormActionKey(responseLimitEditor.form.id),
+                      successMessage: "Ограничение сохранено",
+                      errorMessage: "Не удалось обновить ограничение",
+                      affectedFormId: responseLimitEditor.form.id,
+                      logLabel: `dashboard response limit save ${responseLimitEditor.form.id}`,
+                    },
+                  ).finally(() => setResponseLimitEditor(null));
+                }}
+                disabled={isFormActionPending(responseLimitEditor.form.id)}
+              >
+                {isFormActionPending(responseLimitEditor.form.id) && <InlineSpinner />}
                 Сохранить
               </button>
             </div>

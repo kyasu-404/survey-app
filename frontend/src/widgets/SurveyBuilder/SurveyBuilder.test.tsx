@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { routes } from "../../app/routes";
 import { SurveyBuilder } from "./SurveyBuilder";
 import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
@@ -22,6 +23,8 @@ const {
   saveSurveySchema,
   serializerGetProperty,
   serializerInputTypeProp,
+  setFormDeadline,
+  setFormResponseLimit,
   showToast,
 } = vi.hoisted(() => ({
   componentCollectionAdd: vi.fn(),
@@ -34,6 +37,8 @@ const {
   saveSurveySchema: vi.fn(),
   serializerGetProperty: vi.fn(),
   serializerInputTypeProp: { visible: true },
+  setFormDeadline: vi.fn(),
+  setFormResponseLimit: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -76,6 +81,8 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   getFormById,
   getForms,
   saveSurveySchema,
+  setFormDeadline,
+  setFormResponseLimit,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -212,6 +219,8 @@ describe("SurveyBuilder", () => {
     getFormById.mockResolvedValue(null);
     getForms.mockResolvedValue([]);
     saveSurveySchema.mockResolvedValue(undefined);
+    setFormDeadline.mockResolvedValue(undefined);
+    setFormResponseLimit.mockResolvedValue(undefined);
     createSurveyMutateAsync.mockResolvedValue({ id: "created-form-id" });
   });
 
@@ -332,7 +341,6 @@ describe("SurveyBuilder", () => {
     expect(creator.toolbar.actions.map((action: { id: string }) => action.id)).toEqual([
       "builder-reset",
       "builder-save-template",
-      "builder-create-template",
     ]);
 
     const questionTypes = [
@@ -510,5 +518,34 @@ describe("SurveyBuilder", () => {
     expect(finalOverride).toContain("font-size: 0.88rem !important;");
     expect(finalOverride).toContain(".dashboard-status-dropdown");
     expect(finalOverride).toContain("background: #ffffff !important;");
+  });
+
+  it("opens response settings after saving a form and applies them before returning to the dashboard", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    expect(callback).toHaveBeenCalledWith(1, true);
+    expect(navigate).not.toHaveBeenCalledWith(routes.dashboardMy, { replace: true });
+
+    const settingsDialog = await screen.findByRole("dialog", { name: "Настройки формы" });
+    await userEvent.type(within(settingsDialog).getByLabelText("Дедлайн"), "2026-05-01T12:30");
+    await userEvent.clear(within(settingsDialog).getByLabelText("Лимит ответов"));
+    await userEvent.type(within(settingsDialog).getByLabelText("Лимит ответов"), "25");
+    await userEvent.click(within(settingsDialog).getByRole("button", { name: "Сохранить настройки" }));
+
+    await waitFor(() => {
+      expect(setFormDeadline).toHaveBeenCalledWith("created-form-id", new Date("2026-05-01T12:30").toISOString());
+    });
+    expect(setFormResponseLimit).toHaveBeenCalledWith("created-form-id", 25);
+    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true });
   });
 });

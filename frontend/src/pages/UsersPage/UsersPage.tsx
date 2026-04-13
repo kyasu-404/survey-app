@@ -15,7 +15,6 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import type { UserProfile, UserRole } from "../../entities/user/types";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
-import { Skeleton } from "../../shared/ui/Skeleton";
 import searchIcon from "../../img/search.svg";
 
 type NewUserForm = {
@@ -221,41 +220,23 @@ export default function UsersPage() {
     });
   };
 
-  const onChangeRole = async (profile: UserProfile, role: UserRole) => {
+  const onChangeRole = (profile: UserProfile, role: UserRole) => {
     if (profile.id === user?.id || profile.role === role) {
       setEditingRoleUserId(null);
       return;
     }
 
-    await updateUserRoleMutation.mutateAsync({
+    updateUserRoleMutation.mutate({
       userId: profile.id,
       role,
     });
   };
 
   const renderUsersLoadingState = () => (
-    <div className="users-table-shell">
-      <div className="users-table-skeleton" aria-hidden="true">
-        <div className="users-table-skeleton-row users-table-skeleton-row-header">
-          <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-          <Skeleton className="users-table-skeleton-cell" />
-          <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-          <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-          <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-          <Skeleton className="users-table-skeleton-cell" />
-        </div>
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={`users-loading-${index}`} className="users-table-skeleton-row">
-            <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-            <Skeleton className="users-table-skeleton-cell" />
-            <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-            <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-            <Skeleton className="users-table-skeleton-cell users-table-skeleton-cell-short" />
-            <Skeleton className="users-table-skeleton-cell" />
-          </div>
-        ))}
-      </div>
-    </div>
+    <p className="users-page-status" role="status" aria-live="polite">
+      <span>Загрузка пользователей</span>
+      <InlineSpinner />
+    </p>
   );
 
   return (
@@ -376,7 +357,7 @@ export default function UsersPage() {
                             aria-label={`Изменить роль пользователя ${displayName}`}
                             className="users-role-select"
                             value={profile.role}
-                            onChange={(event) => void onChangeRole(profile, event.target.value as UserRole)}
+                            onChange={(event) => onChangeRole(profile, event.target.value as UserRole)}
                             onBlur={() => {
                               if (!isRolePending) {
                                 setEditingRoleUserId(null);

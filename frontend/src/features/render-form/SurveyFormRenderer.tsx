@@ -12,6 +12,7 @@ import { removeFileFromStorage, uploadFileToStorage } from "../../shared/api/sto
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
+  initialData?: Record<string, unknown>;
   isPreview?: boolean;
 };
 
@@ -32,7 +33,7 @@ function getStoragePathByUrl(url: string) {
   return decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
 }
 
-export function SurveyFormRenderer({ schema, formId, isPreview = false }: SurveyFormRendererProps) {
+export function SurveyFormRenderer({ schema, formId, initialData, isPreview = false }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -44,13 +45,16 @@ export function SurveyFormRenderer({ schema, formId, isPreview = false }: Survey
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = "Отправить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
+    if (initialData) {
+      nextModel.data = initialData;
+    }
     if (isPreview) {
       nextModel.readOnly = true;
       nextModel.showCompleteButton = false;
       nextModel.showNavigationButtons = false;
     }
     return nextModel;
-  }, [isPreview, schema]);
+  }, [initialData, isPreview, schema]);
 
   useEffect(() => {
     if (isPreview) {

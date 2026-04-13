@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
 import type { SurveyForm } from "../../entities/survey/types";
+import { getSurveyBuilderDraftStorageKey } from "../../widgets/SurveyBuilder/builderDraft";
 import TemplatesPage from "./TemplatesPage";
 
 const {
@@ -113,6 +114,7 @@ function readAppCss() {
 
 describe("TemplatesPage", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     changeFormStatus.mockResolvedValue(undefined);
     createFormFromTemplate.mockResolvedValue({ id: "created-from-template" });
@@ -142,7 +144,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
   });
 
-  it("uses a selected template to create a regular form and open it in the builder", async () => {
+  it("uses a selected template as a new builder draft without creating a form", async () => {
     getForms.mockResolvedValue([createTemplate(1, { title: "Шаблон заявки" })]);
 
     renderPage();
@@ -150,9 +152,17 @@ describe("TemplatesPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Использовать шаблон Шаблон заявки" }));
 
     await waitFor(() => {
-      expect(createFormFromTemplate).toHaveBeenCalledWith(expect.objectContaining({ id: "template-1" }), "user-1");
+      expect(navigate).toHaveBeenCalledWith(routes.builder);
     });
-    expect(navigate).toHaveBeenCalledWith(routes.builderEdit("created-from-template"));
+
+    expect(createFormFromTemplate).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+      schema: expect.objectContaining({
+        title: "Шаблон заявки",
+        pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      }),
+    });
+    expect(showToast).toHaveBeenCalledWith("Шаблон загружен в конструктор", "success");
   });
 
   it("offers template actions without creating a new form when editing", async () => {
@@ -166,6 +176,7 @@ describe("TemplatesPage", () => {
 
     const menu = await screen.findByRole("menu", { name: "Меню действий шаблона Мой шаблон" });
     expect(menu).toHaveClass("templates-menu-dropdown");
+    expect(menu.closest(".templates-card-actions")).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Переименовать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Удалить" })).toBeInTheDocument();

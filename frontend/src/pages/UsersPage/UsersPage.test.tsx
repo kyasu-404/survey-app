@@ -63,6 +63,28 @@ describe("UsersPage", () => {
     setUserDisabled.mockResolvedValue(undefined);
   });
 
+  it("renders a loading label with a spinner while users are loading", async () => {
+    let resolveUsers!: (value: []) => void;
+    getAllUsers.mockImplementation(
+      () =>
+        new Promise<[]>((resolve) => {
+          resolveUsers = resolve;
+        }),
+    );
+
+    const { container } = render(
+      <QueryClientProvider client={createQueryClient()}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Загрузка пользователей")).toBeInTheDocument();
+    expect(container.querySelector(".users-page-status .inline-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".users-table-skeleton")).not.toBeInTheDocument();
+
+    resolveUsers([]);
+  });
+
   it("renders the merged users controls block and search field above the table", async () => {
     getAllUsers.mockResolvedValue([
       {

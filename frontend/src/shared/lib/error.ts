@@ -55,5 +55,9 @@ export function getSubmitResponseErrorMessage(error: unknown) {
     return "Недостаточно прав для отправки ответа. Обновите страницу или войдите заново.";
   }
 
+  if (message.includes("лимит ответов") || message.includes("23514")) {
+    return "Лимит ответов для этой формы уже достигнут.";
+  }
+
   return fallbackMessage;
 }

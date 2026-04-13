@@ -773,6 +773,16 @@ textarea:focus {
   color: #334155;
 }
 
+.dashboard-forms-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  margin-top: 10px;
+  color: #302d2a;
+  font-weight: 800;
+}
+
 .dashboard-empty-state {
   margin-top: 18px;
   padding: 28px 18px;
@@ -2550,6 +2560,15 @@ textarea {
   color: #000000;
 }
 
+.dashboard-responses-link-limit-reached {
+  color: #b91c1c;
+}
+
+.dashboard-responses-link-limit-reached:hover,
+.dashboard-responses-link-limit-reached:focus-visible {
+  color: #991b1b;
+}
+
 button.dashboard-status-trigger-glossy.dashboard-status-pill-active {
   background: linear-gradient(180deg, rgba(48, 48, 48, 0.98), rgba(14, 14, 14, 1) 55%, rgba(0, 0, 0, 1));
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2732,6 +2751,11 @@ button.dashboard-status-trigger-glossy:focus-visible {
   z-index: 380;
 }
 
+.templates-actions-menu-shell .templates-menu-dropdown {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
 .templates-menu-dropdown {
   z-index: 400;
   pointer-events: auto;
@@ -2757,8 +2781,18 @@ button.dashboard-status-trigger-glossy:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 0;
   padding-top: 0;
+}
+
+.templates-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
 }
 
 .templates-use-button,
@@ -3102,6 +3136,12 @@ button.responses-export-button:disabled {
   padding: 2px 0;
 }
 
+.users-page-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .users-table-shell,
 .responses-page-table-shell {
   overflow-x: auto;
@@ -3136,6 +3176,63 @@ button.responses-export-button:disabled {
 
 .responses-table tbody tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.34);
+}
+
+.responses-table-row-clickable {
+  cursor: pointer;
+}
+
+.responses-table-row-clickable:hover td,
+.responses-table-row-clickable:focus-visible td {
+  background: rgba(251, 146, 60, 0.14);
+}
+
+.response-preview-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 420;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(17, 17, 17, 0.22);
+  backdrop-filter: blur(8px);
+}
+
+.response-preview-drawer {
+  width: min(820px, calc(100vw - 32px));
+  height: 100%;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.96);
+  border-left: 1px solid rgba(20, 20, 20, 0.1);
+  box-shadow: -26px 0 60px rgba(20, 20, 20, 0.18);
+  overflow: auto;
+  animation: template-preview-drawer-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.response-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.response-preview-title {
+  margin: 10px 0 0;
+  font-size: 1.35rem;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+}
+
+.response-preview-close {
+  border-radius: 8px;
+}
+
+.response-preview-body.survey-page-card {
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 20px;
 }
 
 .toast {
@@ -3655,6 +3752,36 @@ button.responses-export-button:disabled {
   line-height: 1.45 !important;
 }
 
+.response-preview-builder-palette.survey-page-card .sd-root-modern,
+.response-preview-builder-palette.survey-page-card .sd-root-modern__wrapper {
+  --sjs-primary-backcolor: #121212;
+  --sjs-primary-backcolor-dark: #000000;
+  --sjs-primary-backcolor-light: rgba(18, 18, 18, 0.12);
+  --sjs-primary-forecolor: #ffffff;
+  --sjs-primary-background-500: #121212;
+  --sjs-primary-background-400: #232323;
+  --sjs-primary-background-10: rgba(18, 18, 18, 0.08);
+  --sjs-general-backcolor: #fffdf9;
+  --sjs-general-backcolor-dim: #f2eee8;
+  --sjs-general-backcolor-dim-light: #f8f5f0;
+  --sjs-general-backcolor-dark: #dfd9d1;
+  --sjs-general-forecolor: #181818;
+  --sjs-general-forecolor-light: #5f5a54;
+}
+
+.response-preview-builder-palette.survey-page-card .sd-header__text::after,
+.response-preview-builder-palette.survey-page-card .sd-element--complex > .sd-element__header--location-top::after {
+  background: #111111 !important;
+}
+
+.response-preview-builder-palette.survey-page-card .sd-question .sd-description,
+.response-preview-builder-palette.survey-page-card .sd-question__description {
+  border-color: rgba(20, 20, 20, 0.12) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #141414 !important;
+  box-shadow: none;
+}
+
 /* 6) Dropdown-меню в dashboard: без прозрачности, пункты во всю ширину */
 .form-menu-dropdown,
 .form-menu-dropdown-inline {
@@ -3748,15 +3875,20 @@ button.responses-export-button:disabled {
 
 .users-search-field {
   gap: 0;
+  min-width: 0;
 }
 
 .users-search-input-shell {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .users-search-input-shell input {
+  width: 100%;
+  min-width: 0;
   padding-left: 48px;
 }
 
@@ -4141,6 +4273,26 @@ button.responses-export-button:disabled {
 
 .responses-print-button {
   min-height: 42px;
+}
+
+.responses-print-button-orange {
+  border-color: rgba(234, 88, 12, 0.34);
+  background: linear-gradient(180deg, #fb923c, #ea580c);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 14px 28px rgba(234, 88, 12, 0.18);
+}
+
+.responses-print-button-orange:hover,
+.responses-print-button-orange:focus-visible {
+  border-color: rgba(194, 65, 12, 0.4);
+  background: linear-gradient(180deg, #f97316, #c2410c);
+  color: #ffffff;
+}
+
+.responses-print-button-orange .toolbar-icon {
+  filter: brightness(0) invert(1);
 }
 
 .responses-html-preview {

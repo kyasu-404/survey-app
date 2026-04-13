@@ -242,6 +242,25 @@ export async function updateFormDeadline(id: string, deadlineAt: string | null) 
   if (error) throw error;
 }
 
+export async function updateFormResponseLimit(id: string, maxResponses: number | null) {
+  const normalizedLimit =
+    typeof maxResponses === "number" && Number.isFinite(maxResponses)
+      ? Math.max(1, Math.trunc(maxResponses))
+      : null;
+
+  const { error } = await runRequest(
+    "forms.updateResponseLimit",
+    () => apiClient.from("forms").update({ max_responses: normalizedLimit }).eq("id", id),
+    {
+      context: {
+        formId: id,
+        maxResponses: normalizedLimit,
+      },
+    },
+  );
+  if (error) throw error;
+}
+
 export async function deleteForm(id: string) {
   const { error } = await runRequest(
     "forms.delete",
@@ -270,6 +289,7 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
           form_type: form.form_type,
           form_reason: form.form_reason,
           schema: form.schema,
+          max_responses: form.max_responses ?? null,
           author_id: currentUserId,
         })
         .select("id")

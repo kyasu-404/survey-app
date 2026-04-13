@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getResponsesByForm } from "../../entities/response/api";
+import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
@@ -11,13 +12,29 @@ import previewIcon from "../../img/preview.svg";
 import refreshIcon from "../../img/refresh.png";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
+
+type SelectedResponsePreview = {
+  label: string;
+  response: SurveyResponse;
+};
+
+function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
+  const primaryValue = Object.entries(row).find(
+    ([header, value]) => header !== "Дата ответа" && value.trim().length > 0,
+  )?.[1];
+
+  return primaryValue ? `Ответ ${primaryValue}` : `Ответ ${index + 1}`;
+}
 
 export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const [selectedResponsePreview, setSelectedResponsePreview] = useState<SelectedResponsePreview | null>(null);
 
   const formQuery = useQuery({
     queryKey: ["form", id],
@@ -72,6 +89,27 @@ export default function FormResponsesPage() {
     }
 
     navigate(routes.formResponsesHtml(id));
+  };
+
+  const handleOpenResponsePreview = (response: SurveyResponse, row: ResponsesTableRow, index: number) => {
+    setSelectedResponsePreview({
+      label: getResponsePreviewLabel(row, index),
+      response,
+    });
+  };
+
+  const handleResponseRowKeyDown = (
+    event: ReactKeyboardEvent<HTMLTableRowElement>,
+    response: SurveyResponse,
+    row: ResponsesTableRow,
+    index: number,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    handleOpenResponsePreview(response, row, index);
   };
 
   if (!id) {
@@ -153,9 +191,27 @@ export default function FormResponsesPage() {
               </thead>
               <tbody>
                 {rows.map((row, index) => {
-                  const rowId = responsesQuery.data?.[index]?.id ?? `${id}-${index}`;
+                  const response = responsesQuery.data?.[index];
+                  const rowId = response?.id ?? `${id}-${index}`;
+                  const previewLabel = getResponsePreviewLabel(row, index);
                   return (
-                    <tr key={rowId}>
+                    <tr
+                      key={rowId}
+                      className="responses-table-row-clickable"
+                      role={response ? "button" : undefined}
+                      tabIndex={response ? 0 : undefined}
+                      aria-label={response ? `Открыть ${previewLabel}` : undefined}
+                      onClick={() => {
+                        if (response) {
+                          handleOpenResponsePreview(response, row, index);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (response) {
+                          handleResponseRowKeyDown(event, response, row, index);
+                        }
+                      }}
+                    >
                       {headers.map((header, columnIndex) => (
                         <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
                       ))}
@@ -167,6 +223,41 @@ export default function FormResponsesPage() {
           </div>
         )}
       </div>
+
+      {selectedResponsePreview && formQuery.data && (
+        <div
+          className="response-preview-layer"
+          onMouseDown={(event) => event.target === event.currentTarget && setSelectedResponsePreview(null)}
+        >
+          <aside
+            className="response-preview-drawer"
+            role="dialog"
+            aria-label={selectedResponsePreview.label}
+            aria-modal="true"
+          >
+            <div className="response-preview-header">
+              <div>
+                <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
+                <h2 className="response-preview-title">{selectedResponsePreview.label}</h2>
+              </div>
+              <button type="button" className="response-preview-close" onClick={() => setSelectedResponsePreview(null)}>
+                Закрыть
+              </button>
+            </div>
+            <div className="response-preview-body response-preview-builder-palette survey-page-card">
+              <SurveyRenderer
+                schema={{
+                  ...formQuery.data.schema,
+                  title: formQuery.data.title,
+                }}
+                formId={formQuery.data.id}
+                initialData={selectedResponsePreview.response.data}
+                isPreview
+              />
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

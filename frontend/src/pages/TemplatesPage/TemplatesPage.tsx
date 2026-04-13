@@ -16,7 +16,6 @@ import renameIcon from "../../img/rename.svg";
 import refreshIcon from "../../img/refresh.png";
 import {
   changeFormStatus,
-  createFormFromTemplate,
   getForms,
   removeForm,
   renameForm,
@@ -28,6 +27,7 @@ import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { saveSurveyBuilderDraft } from "../../widgets/SurveyBuilder/builderDraft";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
 type TemplatesSection = "mine" | "public";
@@ -191,11 +191,6 @@ export default function TemplatesPage() {
   const statusMutation = useMutation({
     mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) => changeFormStatus(id, isPublic),
   });
-  const createFromTemplateMutation = useMutation({
-    mutationFn: ({ template, authorId }: { template: SurveyForm; authorId: string }) =>
-      createFormFromTemplate(template, authorId),
-  });
-
   const runAction = async (action: () => Promise<void>, options: TemplateActionOptions) => {
     setActionPending(options.actionKey, true);
     const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
@@ -252,25 +247,20 @@ export default function TemplatesPage() {
 
   const handleUseTemplate = async (template: SurveyForm) => {
     if (!user?.id) {
-      showToast("Для создания формы из шаблона нужно войти в систему", "error");
+      showToast("Для использования шаблона нужно войти в систему", "error");
       return;
     }
 
-    const actionKey = getTemplateActionKey(template.id);
-    setActionPending(actionKey, true);
-    const stopPendingLogger = createPendingStateLogger(queryClient, `template use ${template.id}`);
-
     try {
-      const createdForm = await createFromTemplateMutation.mutateAsync({ template, authorId: user.id });
-      scheduleTemplatesRefresh();
-      showToast("Форма создана из шаблона", "success");
-      navigate(routes.builderEdit(createdForm.id));
+      saveSurveyBuilderDraft(undefined, {
+        ...template.schema,
+        title: template.title,
+      });
+      showToast("Шаблон загружен в конструктор", "success");
+      navigate(routes.builder);
     } catch (error) {
       console.error(error);
-      showToast(getErrorMessage(error, "Не удалось создать форму из шаблона"), "error");
-    } finally {
-      stopPendingLogger();
-      setActionPending(actionKey, false);
+      showToast(getErrorMessage(error, "Не удалось загрузить шаблон в конструктор"), "error");
     }
   };
 
@@ -374,6 +364,75 @@ export default function TemplatesPage() {
             const actionMenuOpen = openedMenuTemplateId === template.id;
             const createdAtLabel = formatCreatedAt(template.created_at);
             const shareLabel = template.is_public ? "Не показывать другим" : "Поделиться";
+            const templateActionMenu = isOwnTemplate ? (
+              <div className="form-menu templates-floating-root templates-actions-menu-shell">
+                <button
+                  type="button"
+                  className="form-menu-trigger"
+                  aria-label={`Действия шаблона ${title}`}
+                  aria-expanded={actionMenuOpen}
+                  onClick={(event) => {
+                    stopCardEvent(event);
+                    setOpenedMenuTemplateId((current) => (current === template.id ? null : template.id));
+                  }}
+                  disabled={isCurrentTemplatePending}
+                >
+                  ...
+                </button>
+
+                {actionMenuOpen && (
+                  <div
+                    className="form-menu-dropdown templates-menu-dropdown"
+                    role="menu"
+                    aria-label={`Меню действий шаблона ${title}`}
+                    onClick={stopCardEvent}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="form-menu-item"
+                      onClick={(event) => {
+                        stopCardEvent(event);
+                        setOpenedMenuTemplateId(null);
+                        void handleRename(template);
+                      }}
+                      disabled={isCurrentTemplatePending}
+                    >
+                      <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                      <span className="form-menu-item-label">Переименовать</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="form-menu-item"
+                      onClick={(event) => {
+                        stopCardEvent(event);
+                        setOpenedMenuTemplateId(null);
+                        navigate(routes.builderEdit(template.id));
+                      }}
+                      disabled={isCurrentTemplatePending}
+                    >
+                      <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                      <span className="form-menu-item-label">Редактировать</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="form-menu-item form-menu-item-danger"
+                      onClick={(event) => {
+                        stopCardEvent(event);
+                        setOpenedMenuTemplateId(null);
+                        setTemplateToDelete(template);
+                      }}
+                      disabled={isCurrentTemplatePending}
+                    >
+                      <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+                      <span className="form-menu-item-label">Удалить</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null;
 
             return (
               <div
@@ -392,76 +451,6 @@ export default function TemplatesPage() {
                     <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
                     <strong className="dashboard-form-title templates-card-title">{title}</strong>
                   </div>
-
-                  {isOwnTemplate && (
-                    <div className="form-menu templates-floating-root templates-actions-menu-shell">
-                      <button
-                        type="button"
-                        className="form-menu-trigger"
-                        aria-label={`Действия шаблона ${title}`}
-                        aria-expanded={actionMenuOpen}
-                        onClick={(event) => {
-                          stopCardEvent(event);
-                          setOpenedMenuTemplateId((current) => (current === template.id ? null : template.id));
-                        }}
-                        disabled={isCurrentTemplatePending}
-                      >
-                        ...
-                      </button>
-
-                      {actionMenuOpen && (
-                        <div
-                          className="form-menu-dropdown templates-menu-dropdown"
-                          role="menu"
-                          aria-label={`Меню действий шаблона ${title}`}
-                          onClick={stopCardEvent}
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenuTemplateId(null);
-                              void handleRename(template);
-                            }}
-                            disabled={isCurrentTemplatePending}
-                          >
-                            <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                            <span className="form-menu-item-label">Переименовать</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenuTemplateId(null);
-                              navigate(routes.builderEdit(template.id));
-                            }}
-                            disabled={isCurrentTemplatePending}
-                          >
-                            <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                            <span className="form-menu-item-label">Редактировать</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="form-menu-item form-menu-item-danger"
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenuTemplateId(null);
-                              setTemplateToDelete(template);
-                            }}
-                            disabled={isCurrentTemplatePending}
-                          >
-                            <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                            <span className="form-menu-item-label">Удалить</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div className="templates-card-meta-line">
@@ -476,35 +465,38 @@ export default function TemplatesPage() {
                   )}
                 </div>
 
-                <div className="templates-card-button-row">
-                  <button
-                    type="button"
-                    className="templates-use-button"
-                    aria-label={`Использовать шаблон ${title}`}
-                    onClick={(event) => {
-                      stopCardEvent(event);
-                      void handleUseTemplate(template);
-                    }}
-                    disabled={isCurrentTemplatePending}
-                  >
-                    {isCurrentTemplatePending && createFromTemplateMutation.isPending && <InlineSpinner />}
-                    Использовать
-                  </button>
-
-                  {isOwnTemplate && (
+                <div className="templates-card-actions">
+                  <div className="templates-card-button-row">
                     <button
                       type="button"
-                      className={`templates-share-button ${template.is_public ? "templates-share-button-muted" : ""}`.trim()}
-                      aria-label={`${shareLabel} шаблоном ${title}`}
+                      className="templates-use-button"
+                      aria-label={`Использовать шаблон ${title}`}
                       onClick={(event) => {
                         stopCardEvent(event);
-                        void handleToggleSharing(template);
+                        void handleUseTemplate(template);
                       }}
                       disabled={isCurrentTemplatePending}
                     >
-                      {shareLabel}
+                      Использовать
                     </button>
-                  )}
+
+                    {isOwnTemplate && (
+                      <button
+                        type="button"
+                        className={`templates-share-button ${template.is_public ? "templates-share-button-muted" : ""}`.trim()}
+                        aria-label={`${shareLabel} шаблоном ${title}`}
+                        onClick={(event) => {
+                          stopCardEvent(event);
+                          void handleToggleSharing(template);
+                        }}
+                        disabled={isCurrentTemplatePending}
+                      >
+                        {shareLabel}
+                      </button>
+                    )}
+                  </div>
+
+                  {templateActionMenu}
                 </div>
               </div>
             );

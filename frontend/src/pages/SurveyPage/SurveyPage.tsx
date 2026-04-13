@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -20,7 +20,14 @@ function SurveyNotFound() {
 
 export default function SurveyPage() {
   const { id } = useParams();
+  const location = useLocation();
   const { user, loading: isAuthLoading } = useAuth();
+  const isPreview = Boolean(
+    location.state &&
+      typeof location.state === "object" &&
+      "isPreview" in location.state &&
+      location.state.isPreview === true,
+  );
 
   const {
     data: form,
@@ -74,12 +81,12 @@ export default function SurveyPage() {
     );
   }
   if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
-  if (!form || !form.is_public) return <SurveyNotFound />;
+  if (!form || (!form.is_public && !isPreview)) return <SurveyNotFound />;
 
   return (
     <div className="survey-page survey-page-shell">
       <div className="survey-page-card card">
-        <SurveyRenderer schema={form.schema} formId={form.id} />
+        <SurveyRenderer schema={form.schema} formId={form.id} isPreview={isPreview} />
       </div>
     </div>
   );

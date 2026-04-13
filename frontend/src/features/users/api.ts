@@ -34,6 +34,25 @@ type UserAdminAction =
       role: UserRole;
     };
 
+async function getFunctionErrorMessage(error: unknown, response?: Response) {
+  const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
+
+  if (errorResponse instanceof Response) {
+    const contentType = errorResponse.headers.get("Content-Type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      const payload = await errorResponse.clone().json().catch(() => null);
+      const message = typeof payload?.error === "string" ? payload.error.trim() : "";
+
+      if (message) {
+        return message;
+      }
+    }
+  }
+
+  return error instanceof Error && error.message.trim() ? error.message : "Не удалось выполнить действие пользователя";
+}
+
 async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
   const {
     data: { session },
@@ -44,7 +63,7 @@ async function callUserAdminAction<TData = null>(payload: UserAdminAction): Prom
     throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
   }
 
-  const { data, error } = await runRequest(
+  const { data, error, response } = await runRequest(
     "functions.user-admin",
     () =>
       supabase.functions.invoke<TData>("user-admin", {
@@ -57,7 +76,7 @@ async function callUserAdminAction<TData = null>(payload: UserAdminAction): Prom
   );
 
   if (error) {
-    throw error;
+    throw new Error(await getFunctionErrorMessage(error, response));
   }
 
   return data;
