@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
+import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
 import type { SurveySchema } from "../../entities/survey/types";
 import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
@@ -40,6 +41,7 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
   const submitResponseMutation = useSubmitResponseMutation();
   const allowProgrammaticCompleteRef = useRef(false);
   const model = useMemo(() => {
+    registerCustomSurveyQuestionTypes();
     const resolvedSchema = resolveDefaultSurveyLogo(schema);
     const nextModel = new Model(resolvedSchema);
     nextModel.locale = resolvedSchema.locale ?? "ru";

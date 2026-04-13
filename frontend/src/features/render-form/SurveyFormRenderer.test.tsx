@@ -3,9 +3,31 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SurveyFormRenderer } from "./SurveyFormRenderer";
 
-const showToast = vi.fn();
-const mutateAsync = vi.fn().mockRejectedValue(new Error("api failed"));
-const createdModelSchemas: Array<Record<string, unknown>> = [];
+const {
+  componentCollectionAdd,
+  componentCollectionGetByName,
+  createdModelSchemas,
+  mutateAsync,
+  registeredCustomQuestionTypes,
+  showToast,
+} = vi.hoisted(() => {
+  const registeredCustomQuestionTypes = new Set<string>();
+  const componentCollectionAdd = vi.fn((definition: { name: string }) => {
+    registeredCustomQuestionTypes.add(definition.name);
+  });
+  const componentCollectionGetByName = vi.fn((name: string) =>
+    registeredCustomQuestionTypes.has(name) ? { name } : undefined,
+  );
+
+  return {
+    componentCollectionAdd,
+    componentCollectionGetByName,
+    createdModelSchemas: [] as Array<Record<string, unknown>>,
+    mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
+    registeredCustomQuestionTypes,
+    showToast: vi.fn(),
+  };
+});
 
 class FakeSurveyEvent<T = unknown> {
   private handlers: Array<(sender: T, options: unknown) => void | Promise<void>> = [];
@@ -24,18 +46,32 @@ class FakeSurveyEvent<T = unknown> {
 }
 
 vi.mock("survey-core", () => ({
+  ComponentCollection: {
+    Instance: {
+      add: componentCollectionAdd,
+      getCustomQuestionByName: componentCollectionGetByName,
+    },
+  },
   Model: class {
     locale = "ru";
     completeText = "";
     completedHtml = "";
     data: Record<string, unknown> = {};
+    questionNames: string[] = [];
     onCompleting = new FakeSurveyEvent();
     onUploadFiles = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
     doComplete = vi.fn();
 
-    constructor(schema: Record<string, unknown>) {
+    constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
       createdModelSchemas.push(schema);
+      const builtInQuestionTypes = new Set(["text", "comment", "radiogroup", "checkbox", "dropdown"]);
+      this.questionNames =
+        schema.pages?.flatMap((page) =>
+          (page.elements ?? [])
+            .filter((question) => builtInQuestionTypes.has(question.type) || registeredCustomQuestionTypes.has(question.type))
+            .map((question) => question.name),
+        ) ?? [];
     }
   },
 }));
@@ -44,18 +80,26 @@ vi.mock("survey-react-ui", () => ({
   Survey: ({
     model,
   }: {
-    model: { completeText: string; data: Record<string, unknown>; onCompleting: { fire: (arg: unknown, options: unknown) => Promise<void> } };
+    model: {
+      completeText: string;
+      data: Record<string, unknown>;
+      questionNames: string[];
+      onCompleting: { fire: (arg: unknown, options: unknown) => Promise<void> };
+    };
   }) => (
-    <div className="sd-body__navigation">
-      <button
-        className="sd-btn sd-btn--action"
-        onClick={async () => {
-          model.data = { email: "a@b.com" };
-          await model.onCompleting.fire(model, { allowComplete: true, allow: true });
-        }}
-      >
-        {model.completeText || "Отправить"}
-      </button>
+    <div>
+      <div data-testid="survey-question-names">{model.questionNames.join(",")}</div>
+      <div className="sd-body__navigation">
+        <button
+          className="sd-btn sd-btn--action"
+          onClick={async () => {
+            model.data = { email: "a@b.com" };
+            await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+          }}
+        >
+          {model.completeText || "Отправить"}
+        </button>
+      </div>
     </div>
   ),
 }));
@@ -75,8 +119,11 @@ vi.mock("../../app/providers/ToastProvider", () => ({
 describe("SurveyFormRenderer", () => {
   beforeEach(() => {
     createdModelSchemas.length = 0;
+    registeredCustomQuestionTypes.clear();
     showToast.mockClear();
     mutateAsync.mockClear();
+    componentCollectionAdd.mockClear();
+    componentCollectionGetByName.mockClear();
     mutateAsync.mockRejectedValue(new Error("api failed"));
   });
 
@@ -129,5 +176,45 @@ describe("SurveyFormRenderer", () => {
     );
 
     expect(createdModelSchemas[0]?.logo).not.toBe("__APP_DEFAULT_CARD_LOGO__");
+  });
+
+  it("registers custom SurveyJS question types before creating the public model", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [
+            {
+              name: "page1",
+              elements: [
+                { type: "text", name: "school", title: "Школа" },
+                { type: "phone", name: "phone", title: "Телефон" },
+                { type: "email", name: "email", title: "Email" },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(componentCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "phone",
+        questionJSON: expect.objectContaining({
+          type: "text",
+          inputType: "tel",
+        }),
+      }),
+    );
+    expect(componentCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "email",
+        questionJSON: expect.objectContaining({
+          type: "text",
+          inputType: "email",
+        }),
+      }),
+    );
+    expect(screen.getByTestId("survey-question-names")).toHaveTextContent("school,phone,email");
   });
 });
