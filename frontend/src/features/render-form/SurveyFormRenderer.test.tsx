@@ -6,9 +6,11 @@ import { SurveyFormRenderer } from "./SurveyFormRenderer";
 const {
   componentCollectionAdd,
   componentCollectionGetByName,
+  createdModels,
   createdModelSchemas,
   mutateAsync,
   registeredCustomQuestionTypes,
+  uploadFileToStorage,
   showToast,
 } = vi.hoisted(() => {
   const registeredCustomQuestionTypes = new Set<string>();
@@ -22,9 +24,11 @@ const {
   return {
     componentCollectionAdd,
     componentCollectionGetByName,
+    createdModels: [] as Array<Record<string, unknown>>,
     createdModelSchemas: [] as Array<Record<string, unknown>>,
     mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
+    uploadFileToStorage: vi.fn(),
     showToast: vi.fn(),
   };
 });
@@ -65,6 +69,7 @@ vi.mock("survey-core", () => ({
     doComplete = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
+      createdModels.push(this as unknown as Record<string, unknown>);
       createdModelSchemas.push(schema);
       const builtInQuestionTypes = new Set(["text", "comment", "radiogroup", "checkbox", "dropdown"]);
       this.questionNames =
@@ -117,14 +122,23 @@ vi.mock("../../app/providers/ToastProvider", () => ({
   }),
 }));
 
+vi.mock("../../shared/api/storage", () => ({
+  getStoragePathFromSurveyFileValue: vi.fn(),
+  removeFileFromStorage: vi.fn(),
+  resolveSurveyFileValueContent: vi.fn(),
+  uploadFileToStorage,
+}));
+
 describe("SurveyFormRenderer", () => {
   beforeEach(() => {
+    createdModels.length = 0;
     createdModelSchemas.length = 0;
     registeredCustomQuestionTypes.clear();
     showToast.mockClear();
     mutateAsync.mockClear();
     componentCollectionAdd.mockClear();
     componentCollectionGetByName.mockClear();
+    uploadFileToStorage.mockReset();
     mutateAsync.mockRejectedValue(new Error("api failed"));
   });
 
@@ -217,6 +231,43 @@ describe("SurveyFormRenderer", () => {
       }),
     );
     expect(screen.getByTestId("survey-question-names")).toHaveTextContent("school,phone,email");
+  });
+
+  it("passes uploaded files to SurveyJS using the upload callback contract", async () => {
+    const file = new File(["hello"], "attachment.txt", { type: "text/plain" });
+    const callback = vi.fn();
+
+    uploadFileToStorage.mockResolvedValue({
+      file,
+      path: "public/form-1/file-id.txt",
+    });
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [
+            {
+              name: "page1",
+              elements: [{ type: "file", name: "attachment", title: "Файл" }],
+            },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      onUploadFiles: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+
+    await model.onUploadFiles.fire(model, { files: [file], callback });
+
+    expect(callback).toHaveBeenCalledWith([
+      {
+        file,
+        content: "public/form-1/file-id.txt",
+      },
+    ]);
   });
 
   it("forces file questions to use server-side uploads instead of inline base64 storage", () => {

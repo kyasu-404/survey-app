@@ -101,7 +101,7 @@ export function SurveyFormRenderer({
 
     const handleUploadFiles = async (
       _sender: Model,
-      options: { files: File[]; callback: (status: "success" | "error", data: unknown) => void }
+      options: { files: File[]; callback: (data: unknown, errors?: unknown) => void }
     ) => {
       try {
         const uploaded = await Promise.all(
@@ -109,16 +109,15 @@ export function SurveyFormRenderer({
         );
 
         options.callback(
-          "success",
           uploaded.map((item) => ({
             file: item.file,
             content: item.path,
-          }))
+          })),
         );
       } catch (error) {
         console.error(error);
         showToast(getSubmitResponseErrorMessage(error), "error");
-        options.callback("error", "Не удалось загрузить файл");
+        options.callback([], ["Не удалось загрузить файл"]);
       }
     };
 
