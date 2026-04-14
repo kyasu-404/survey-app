@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AuthSessionMissingError } from "@supabase/supabase-js";
 import {
   getStoragePathFromSurveyFileValue,
   removeFileFromStorage,
@@ -47,7 +48,10 @@ describe("storage api", () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: null }, error: null } as never);
+    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
+      data: { user: null },
+      error: new AuthSessionMissingError(),
+    } as never);
     vi.mocked(supabaseClient.storage.from).mockReturnValue({ upload } as never);
 
     const result = await uploadFileToStorage(

@@ -1,3 +1,4 @@
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabaseClient } from "./client";
 import { SUPABASE_STORAGE_BUCKET } from "../config/env";
 
@@ -39,6 +40,10 @@ async function getCurrentUserId() {
   } = await supabaseClient.auth.getUser();
 
   if (error) {
+    if (isAuthSessionMissingError(error)) {
+      return null;
+    }
+
     throw new Error(`Не удалось проверить пользователя: ${error.message}`);
   }
 
