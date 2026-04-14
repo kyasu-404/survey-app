@@ -93,3 +93,17 @@ test("form authors and admins can read responses", () => {
   assert.match(selectPolicy, /f\.id = form_id/i);
   assert.match(selectPolicy, /f\.author_id = \(select auth\.uid\(\)\)/i);
 });
+
+test("response limits use an atomic form counter instead of counting response rows", () => {
+  assert.match(schema, /responses_count integer not null default 0/i);
+
+  const ensureLimit = getFunctionDefinition("ensure_form_response_limit");
+
+  assert.doesNotMatch(ensureLimit, /count\s*\(\s*\*\s*\)/i);
+  assert.match(ensureLimit, /update public\.forms f\s+set responses_count = f\.responses_count \+ 1/i);
+  assert.match(ensureLimit, /f\.max_responses is null\s+or f\.responses_count < f\.max_responses/i);
+  assert.match(
+    schema,
+    /create trigger responses_form_count_decrement\s+after delete on public\.responses\s+for each row execute procedure public\.decrement_form_response_count\(\);/i,
+  );
+});

@@ -5,6 +5,7 @@ import { getResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
+import { RESPONSES_PAGE_SIZE } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import {
   createResponsesHtmlDocument,
@@ -31,23 +32,32 @@ export default function FormResponsesHtmlPage() {
   });
 
   const responsesQuery = useQuery({
-    queryKey: ["form-responses", id],
+    queryKey: ["form-responses", id, "html", RESPONSES_PAGE_SIZE],
     queryFn: async () => {
       if (!id) {
-        return [];
+        return {
+          data: [],
+          count: 0,
+          page: 1,
+          pageSize: RESPONSES_PAGE_SIZE,
+          totalPages: 1,
+        };
       }
 
-      return getResponsesByForm(id);
+      return getResponsesByForm(id, { page: 1, pageSize: RESPONSES_PAGE_SIZE });
     },
     enabled: Boolean(id),
     retry: 1,
   });
 
+  const responses = responsesQuery.data?.data ?? [];
   const rows = useMemo(
-    () => (formQuery.data ? formatResponsesForTable(responsesQuery.data ?? [], formQuery.data.schema) : []),
-    [formQuery.data, responsesQuery.data],
+    () => (formQuery.data ? formatResponsesForTable(responses, formQuery.data.schema) : []),
+    [formQuery.data, responses],
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
+  const totalResponses = responsesQuery.data?.count ?? 0;
+  const shownResponses = rows.length;
   const generatedAt = useMemo(() => new Date(), [formTitle, rows]);
   const htmlDocument = useMemo(
     () => createResponsesHtmlDocument({ title: formTitle, rows, generatedAt }),
@@ -77,7 +87,7 @@ export default function FormResponsesHtmlPage() {
     <main className="responses-html-page">
       <div className="responses-html-actions" aria-label="Действия HTML">
         <button type="button" className="responses-export-button" onClick={handleDownload} disabled={!canUseHtml}>
-          <span>Скачать HTML</span>
+          <span>Скачать HTML страницы</span>
           <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
         </button>
         <button
@@ -104,12 +114,17 @@ export default function FormResponsesHtmlPage() {
       )}
 
       {!isLoading && !combinedError && (
-        <div
-          className="responses-html-preview"
-          dangerouslySetInnerHTML={{
-            __html: htmlPreview,
-          }}
-        />
+        <>
+          {totalResponses > shownResponses && (
+            <p className="responses-page-limit-note">Показаны первые {shownResponses} из {totalResponses}.</p>
+          )}
+          <div
+            className="responses-html-preview"
+            dangerouslySetInnerHTML={{
+              __html: htmlPreview,
+            }}
+          />
+        </>
       )}
     </main>
   );

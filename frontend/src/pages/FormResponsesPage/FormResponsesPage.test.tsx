@@ -75,6 +75,22 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+function createResponsesPage(data: SurveyResponse[], overrides: Partial<{
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> = {}) {
+  return {
+    data,
+    count: data.length,
+    page: 1,
+    pageSize: 50,
+    totalPages: 1,
+    ...overrides,
+  };
+}
+
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -112,7 +128,7 @@ describe("FormResponsesPage", () => {
       },
     ];
 
-    getResponsesByForm.mockResolvedValue(responses);
+    getResponsesByForm.mockResolvedValue(createResponsesPage(responses));
 
     const { container } = render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -125,14 +141,14 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Выгрузить в XLSX" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Выгрузить страницу XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
     expect(container.querySelector(".responses-export-button .toolbar-icon")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Выгрузить в XLSX" }));
+    await userEvent.click(screen.getByRole("button", { name: "Выгрузить страницу XLSX" }));
 
     await waitFor(() => {
       expect(exportToExcel).toHaveBeenCalledWith(
@@ -165,14 +181,14 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getResponsesByForm.mockResolvedValue([
+    getResponsesByForm.mockResolvedValue(createResponsesPage([
       {
         id: "response-1",
         form_id: "form-1",
         created_at: "2026-04-08T11:30:00.000Z",
         data: { name: "Анна" },
       },
-    ]);
+    ]));
 
     render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -212,7 +228,7 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getResponsesByForm.mockResolvedValue([
+    getResponsesByForm.mockResolvedValue(createResponsesPage([
       {
         id: "response-1",
         form_id: "form-1",
@@ -222,7 +238,7 @@ describe("FormResponsesPage", () => {
           comment: "Готово",
         },
       },
-    ]);
+    ]));
 
     render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -265,17 +281,17 @@ describe("FormResponsesPage", () => {
         },
       });
 
-    getResponsesByForm.mockResolvedValueOnce([
+    getResponsesByForm.mockResolvedValueOnce(createResponsesPage([
       {
         id: "response-1",
         form_id: "form-1",
         created_at: "2026-04-08T11:30:00.000Z",
         data: { name: "Анна" },
       },
-    ]);
+    ]));
 
     const formDeferred = createDeferred<unknown>();
-    const responsesDeferred = createDeferred<SurveyResponse[]>();
+    const responsesDeferred = createDeferred<ReturnType<typeof createResponsesPage>>();
 
     getFormById.mockImplementationOnce(() => formDeferred.promise);
     getResponsesByForm.mockImplementationOnce(() => responsesDeferred.promise);
@@ -315,17 +331,74 @@ describe("FormResponsesPage", () => {
         ],
       },
     });
-    responsesDeferred.resolve([
+    responsesDeferred.resolve(createResponsesPage([
       {
         id: "response-1",
         form_id: "form-1",
         created_at: "2026-04-08T11:30:00.000Z",
         data: { name: "Анна" },
       },
-    ]);
+    ]));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Обновить" })).not.toBeDisabled();
     });
+  });
+
+  it("loads responses by page and moves through server-side pagination", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm.mockImplementation((_formId: string, options?: { page?: number }) =>
+      Promise.resolve({
+        data: [
+          {
+            id: `response-page-${options?.page ?? 1}`,
+            form_id: "form-1",
+            created_at: "2026-04-08T11:30:00.000Z",
+            data: { name: options?.page === 2 ? "Борис" : "Анна" },
+          },
+        ],
+        count: 75,
+        page: options?.page ?? 1,
+        pageSize: 50,
+        totalPages: 2,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 1, pageSize: 50 });
+    expect(screen.getByText("Показаны 1-50 из 75")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Следующая" }));
+
+    expect(await screen.findByText("Борис")).toBeInTheDocument();
+    expect(getResponsesByForm).toHaveBeenLastCalledWith("form-1", { page: 2, pageSize: 50 });
+    expect(screen.getByText("Показаны 51-75 из 75")).toBeInTheDocument();
   });
 });

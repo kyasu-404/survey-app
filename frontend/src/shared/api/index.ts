@@ -13,5 +13,6 @@ export {
   deleteForm,
   duplicateForm,
 } from "./formsApi";
-export { fetchResponsesByForm, insertResponse } from "./responsesApi";
+export { RESPONSES_PAGE_SIZE, fetchResponsesByForm, insertResponse } from "./responsesApi";
 export type { FormsFilters } from "./formsApi";
+export type { FetchResponsesByFormOptions, PaginatedResponses } from "./responsesApi";

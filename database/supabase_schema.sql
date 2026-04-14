@@ -32,6 +32,7 @@ create table public.forms (
   is_public boolean not null default true,
   deadline_at timestamptz,
   max_responses integer,
+  responses_count integer not null default 0,
   author_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now()
 );
@@ -53,6 +54,9 @@ add constraint forms_schema_is_object check (jsonb_typeof(schema) = 'object');
 
 alter table public.forms
 add constraint forms_max_responses_positive check (max_responses is null or max_responses > 0);
+
+alter table public.forms
+add constraint forms_responses_count_nonnegative check (responses_count >= 0);
 
 alter table public.responses
 add constraint responses_data_is_object check (jsonb_typeof(data) = 'object');
@@ -115,27 +119,32 @@ security definer
 set search_path = ''
 as $$
 declare
-  current_limit integer;
-  current_count integer;
+  form_exists boolean;
 begin
-  select f.max_responses
-  into current_limit
-  from public.forms f
+  update public.forms f
+  set responses_count = f.responses_count + 1
   where f.id = new.form_id
-  for update;
+    and (
+      f.max_responses is null
+      or f.responses_count < f.max_responses
+    );
 
-  if current_limit is null then
+  if found then
     return new;
   end if;
 
-  select count(*)
-  into current_count
-  from public.responses r
-  where r.form_id = new.form_id;
+  select exists (
+    select 1
+    from public.forms f
+    where f.id = new.form_id
+  )
+  into form_exists;
 
-  if current_count >= current_limit then
-    raise exception 'Достигнут лимит ответов для формы' using errcode = '23514';
+  if not form_exists then
+    return new;
   end if;
+
+  raise exception 'Достигнут лимит ответов для формы' using errcode = '23514';
 
   return new;
 end;
@@ -146,6 +155,27 @@ drop trigger if exists responses_form_limit on public.responses;
 create trigger responses_form_limit
 before insert on public.responses
 for each row execute procedure public.ensure_form_response_limit();
+
+create or replace function public.decrement_form_response_count()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.forms f
+  set responses_count = greatest(f.responses_count - 1, 0)
+  where f.id = old.form_id;
+
+  return old;
+end;
+$$;
+
+drop trigger if exists responses_form_count_decrement on public.responses;
+
+create trigger responses_form_count_decrement
+after delete on public.responses
+for each row execute procedure public.decrement_form_response_count();
 
 create or replace function public.set_response_user_id()
 returns trigger

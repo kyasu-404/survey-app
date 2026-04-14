@@ -3187,6 +3187,68 @@ button.responses-export-button:disabled {
   background: rgba(251, 146, 60, 0.14);
 }
 
+.responses-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  color: #3f3f3f;
+}
+
+.responses-pagination p,
+.responses-page-limit-note {
+  margin: 0;
+}
+
+.responses-pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.responses-pagination-button {
+  min-width: 118px;
+  min-height: 42px;
+  border: 1px solid rgba(20, 20, 20, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #171717;
+  font-weight: 700;
+}
+
+.responses-pagination-button:not(:disabled):hover,
+.responses-pagination-button:not(:disabled):focus-visible {
+  background: rgba(251, 146, 60, 0.16);
+  border-color: rgba(251, 146, 60, 0.42);
+}
+
+.responses-pagination-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.responses-page-limit-note {
+  margin-bottom: 12px;
+  color: #5a5148;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .responses-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .responses-pagination-actions {
+    width: 100%;
+  }
+
+  .responses-pagination-button {
+    flex: 1 1 140px;
+  }
+}
+
 .response-preview-layer {
   position: fixed;
   inset: 0;

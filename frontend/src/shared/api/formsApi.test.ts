@@ -113,6 +113,23 @@ describe("fetchForms", () => {
 
     expect(apiClient.from).toHaveBeenCalledTimes(1);
   });
+
+  it("reads the cached responses counter from forms instead of aggregate embedding responses", async () => {
+    const listQuery = {
+      select: vi.fn(() => listQuery),
+      order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      ilike: vi.fn(() => listQuery),
+      gte: vi.fn(() => listQuery),
+      lte: vi.fn(() => listQuery),
+      eq: vi.fn(() => listQuery),
+    };
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await fetchForms();
+
+    expect(listQuery.select).toHaveBeenCalledWith("*, profiles:author_id(email, name)");
+  });
 });
 
 describe("insertForm", () => {

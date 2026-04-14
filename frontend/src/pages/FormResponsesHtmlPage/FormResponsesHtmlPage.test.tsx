@@ -49,6 +49,22 @@ function renderHtmlPage() {
   );
 }
 
+function createResponsesPage(data: SurveyResponse[], overrides: Partial<{
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> = {}) {
+  return {
+    data,
+    count: data.length,
+    page: 1,
+    pageSize: 50,
+    totalPages: 1,
+    ...overrides,
+  };
+}
+
 describe("FormResponsesHtmlPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,12 +109,12 @@ describe("FormResponsesHtmlPage", () => {
       },
     ];
 
-    getResponsesByForm.mockResolvedValue(responses);
+    getResponsesByForm.mockResolvedValue(createResponsesPage(responses));
 
     const { container } = renderHtmlPage();
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скачать HTML страницы" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-orange");
     expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
     expect(screen.getByText("Анна")).toBeInTheDocument();
@@ -126,18 +142,18 @@ describe("FormResponsesHtmlPage", () => {
       },
     });
 
-    getResponsesByForm.mockResolvedValue([
+    getResponsesByForm.mockResolvedValue(createResponsesPage([
       {
         id: "response-1",
         form_id: "form-1",
         created_at: "2026-04-08T11:30:00.000Z",
         data: { name: "Анна" },
       },
-    ]);
+    ]));
 
     renderHtmlPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Скачать HTML" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Скачать HTML страницы" }));
 
     await waitFor(() => {
       expect(downloadHtmlDocument).toHaveBeenCalledWith(

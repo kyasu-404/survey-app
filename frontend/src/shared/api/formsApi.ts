@@ -14,7 +14,7 @@ export type FormsFilters = {
 
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_name"> & {
   profiles?: { email?: string | null; name?: string | null } | null;
-  responses?: Array<{ count?: number | null }> | null;
+  responses_count?: number | null;
 };
 
 function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
@@ -55,7 +55,7 @@ async function getAuthenticatedUserId(): Promise<string> {
 export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> {
   let query = apiClient
     .from("forms")
-    .select("*, profiles:author_id(email, name), responses(count)")
+    .select("*, profiles:author_id(email, name)")
     .order("created_at", { ascending: false });
 
   if (filters?.search) query = query.ilike("title", `%${filters.search}%`);
@@ -76,7 +76,7 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
     ...form,
     author_email: form.profiles?.email ?? null,
     author_name: form.profiles?.name ?? null,
-    responses_count: form.responses?.[0]?.count ?? 0,
+    responses_count: form.responses_count ?? 0,
   }));
 
   return forms.map((form) => syncFetchedFormDeadlineState(form));

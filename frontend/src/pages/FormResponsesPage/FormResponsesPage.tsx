@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -10,6 +10,7 @@ import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
 import refreshIcon from "../../img/refresh.png";
+import { RESPONSES_PAGE_SIZE } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
@@ -34,7 +35,13 @@ export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedResponsePreview, setSelectedResponsePreview] = useState<SelectedResponsePreview | null>(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedResponsePreview(null);
+  }, [id]);
 
   const formQuery = useQuery({
     queryKey: ["form", id],
@@ -50,27 +57,41 @@ export default function FormResponsesPage() {
   });
 
   const responsesQuery = useQuery({
-    queryKey: ["form-responses", id],
+    queryKey: ["form-responses", id, currentPage, RESPONSES_PAGE_SIZE],
     queryFn: async () => {
       if (!id) {
-        return [];
+        return {
+          data: [],
+          count: 0,
+          page: 1,
+          pageSize: RESPONSES_PAGE_SIZE,
+          totalPages: 1,
+        };
       }
 
-      return getResponsesByForm(id);
+      return getResponsesByForm(id, { page: currentPage, pageSize: RESPONSES_PAGE_SIZE });
     },
     enabled: Boolean(id),
     retry: 1,
   });
 
+  const responses = responsesQuery.data?.data ?? [];
   const rows = useMemo(
-    () => (formQuery.data ? formatResponsesForTable(responsesQuery.data ?? [], formQuery.data.schema) : []),
-    [formQuery.data, responsesQuery.data],
+    () => (formQuery.data ? formatResponsesForTable(responses, formQuery.data.schema) : []),
+    [formQuery.data, responses],
   );
 
   const headers = getResponseTableHeaders(rows);
   const isLoading = formQuery.isLoading || responsesQuery.isLoading;
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const combinedError = formQuery.error ?? responsesQuery.error;
+  const totalResponses = responsesQuery.data?.count ?? 0;
+  const responsePage = responsesQuery.data?.page ?? currentPage;
+  const totalPages = responsesQuery.data?.totalPages ?? 1;
+  const pageStart = totalResponses ? (responsePage - 1) * RESPONSES_PAGE_SIZE + 1 : 0;
+  const pageEnd = totalResponses ? Math.min(responsePage * RESPONSES_PAGE_SIZE, totalResponses) : 0;
+  const canGoPrevious = responsePage > 1;
+  const canGoNext = responsePage < totalPages;
 
   const handleExport = () => {
     if (!rows.length) {
@@ -130,7 +151,7 @@ export default function FormResponsesPage() {
           </div>
           <div className="responses-page-toolbar">
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
-              <span>Выгрузить в XLSX</span>
+              <span>Выгрузить страницу XLSX</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <button
@@ -196,7 +217,7 @@ export default function FormResponsesPage() {
               </thead>
               <tbody>
                 {rows.map((row, index) => {
-                  const response = responsesQuery.data?.[index];
+                  const response = responses[index];
                   const rowId = response?.id ?? `${id}-${index}`;
                   const previewLabel = getResponsePreviewLabel(row, index);
                   return (
@@ -225,6 +246,38 @@ export default function FormResponsesPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!isLoading && !combinedError && totalResponses > 0 && (
+          <div className="responses-pagination" aria-label="Пагинация ответов">
+            <p aria-live="polite">
+              Показаны {pageStart}-{pageEnd} из {totalResponses}
+            </p>
+            <div className="responses-pagination-actions">
+              <button
+                type="button"
+                className="responses-pagination-button"
+                onClick={() => {
+                  setSelectedResponsePreview(null);
+                  setCurrentPage((page) => Math.max(1, page - 1));
+                }}
+                disabled={isRefreshing || !canGoPrevious}
+              >
+                Предыдущая
+              </button>
+              <button
+                type="button"
+                className="responses-pagination-button"
+                onClick={() => {
+                  setSelectedResponsePreview(null);
+                  setCurrentPage((page) => Math.min(totalPages, page + 1));
+                }}
+                disabled={isRefreshing || !canGoNext}
+              >
+                Следующая
+              </button>
+            </div>
           </div>
         )}
       </div>
