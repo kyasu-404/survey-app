@@ -194,6 +194,19 @@ alter table public.forms enable row level security;
 alter table public.responses enable row level security;
 
 -- =========================
+-- API PRIVILEGES
+-- =========================
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select on table public.profiles to authenticated;
+grant select on table public.forms to anon;
+grant select, insert, update, delete on table public.forms to authenticated;
+grant insert on table public.responses to anon;
+grant select, insert on table public.responses to authenticated;
+grant select, insert, update, delete on table public.profiles, public.forms, public.responses to service_role;
+
+-- =========================
 -- PROFILES (БЕЗ RECURSION)
 -- =========================
 

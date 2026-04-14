@@ -187,6 +187,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       border: 1px solid #d7dde8;
       border-radius: 8px;
       background: #ffffff;
+      font-size: 13px;
     }
 
     .report-header {
@@ -198,7 +199,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
     .eyebrow {
       margin: 0;
       color: #626a78;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
       text-transform: uppercase;
@@ -206,7 +207,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
 
     h1 {
       margin: 0;
-      font-size: 32px;
+      font-size: 28px;
       line-height: 1.2;
       overflow-wrap: anywhere;
     }
@@ -228,7 +229,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
     dt {
       margin: 0 0 6px;
       color: #626a78;
-      font-size: 12px;
+      font-size: 11px;
     }
 
     dd {
@@ -247,7 +248,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       width: 100%;
       min-width: 640px;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     th,
@@ -261,7 +262,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
 
     th {
       background: #f1f3f7;
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
     }
 
@@ -296,7 +297,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       }
 
       h1 {
-        font-size: 24px;
+        font-size: 22px;
       }
     }
 

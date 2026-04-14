@@ -149,7 +149,10 @@ describe("TemplatesPage", () => {
 
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Использовать шаблон Шаблон заявки" }));
+    const useTemplateButton = await screen.findByRole("button", { name: "Использовать шаблон Шаблон заявки" });
+    expect(useTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src", expect.stringContaining("use.svg"));
+
+    await userEvent.click(useTemplateButton);
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith(routes.builder);
@@ -210,7 +213,10 @@ describe("TemplatesPage", () => {
 
     const { container } = renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" }));
+    const shareTemplateButton = await screen.findByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" });
+    expect(shareTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src", expect.stringContaining("share.svg"));
+
+    await userEvent.click(shareTemplateButton);
 
     expect(screen.getByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" })).not.toHaveClass(
       "templates-share-button-muted",
@@ -244,5 +250,14 @@ describe("TemplatesPage", () => {
 
   it("keeps the template preview drawer wide enough for the survey page layout", () => {
     expect(readAppCss()).toContain("width: min(820px, calc(100vw - 32px));");
+  });
+
+  it("uses a gray border for template action menu trigger buttons", () => {
+    const css = readAppCss();
+
+    expect(css).toContain(".form-menu-trigger {");
+    expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
+    expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
+    expect(css).not.toContain("border: 2px solid rgba(20, 20, 20, 0.72);");
   });
 });

@@ -14,6 +14,8 @@ import deleteIcon from "../../img/delete.svg";
 import editIcon from "../../img/edit.svg";
 import renameIcon from "../../img/rename.svg";
 import refreshIcon from "../../img/refresh.png";
+import shareIcon from "../../img/share.svg";
+import useIcon from "../../img/use.svg";
 import {
   changeFormStatus,
   getForms,
@@ -477,7 +479,8 @@ export default function TemplatesPage() {
                       }}
                       disabled={isCurrentTemplatePending}
                     >
-                      Использовать
+                      <span>Использовать</span>
+                      <img src={useIcon} alt="" aria-hidden="true" className="templates-action-icon" />
                     </button>
 
                     {isOwnTemplate && (
@@ -491,7 +494,8 @@ export default function TemplatesPage() {
                         }}
                         disabled={isCurrentTemplatePending}
                       >
-                        {shareLabel}
+                        <span>{shareLabel}</span>
+                        <img src={shareIcon} alt="" aria-hidden="true" className="templates-action-icon" />
                       </button>
                     )}
                   </div>

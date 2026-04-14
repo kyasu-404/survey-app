@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -120,6 +122,10 @@ function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryC
   );
 
   return { queryClient, ...renderResult };
+}
+
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
 
 function createDeferred<T>() {
@@ -432,12 +438,81 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" })).toHaveClass("dashboard-status-trigger-glossy");
     expect(screen.getByRole("button", { name: "2 ответа" })).toHaveClass("dashboard-responses-link-hitbox");
     expect(statusMenu).toHaveClass("dashboard-status-dropdown");
-    expect(within(statusMenu).getByRole("menuitem", { name: "Открыть" })).toBeInTheDocument();
+    expect(statusMenu.closest(".dashboard-form-header")).toHaveClass("dashboard-form-header-status-menu-open");
+    expect(within(statusMenu).getByRole("menuitem", { name: "Открыть" })).toHaveClass("dashboard-status-menu-item-open");
     expect(within(statusMenu).getByRole("menuitem", { name: "Установить дедлайн" })).toBeInTheDocument();
 
     navigate.mockClear();
     await userEvent.click(statusMenu);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps dashboard form cards subtly cool-gray highlighted and action triggers visibly outlined", () => {
+    const css = readAppCss();
+
+    expect(css).toContain(".dashboard-forms-grid > .dashboard-form-card {");
+    expect(css).toContain("border: 2px solid rgba(20, 20, 20, 0.14);");
+    expect(css).toContain(".dashboard-forms-grid > .dashboard-form-card-interactive:hover");
+    expect(css).toContain("rgba(148, 163, 184, 0.12)");
+    expect(css).toContain("rgba(248, 250, 252, 0.96)");
+    expect(css).toContain("0 0 22px rgba(100, 116, 139, 0.1)");
+    expect(css).not.toContain("0 0 34px rgba(37, 99, 235, 0.18)");
+    expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
+    expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
+    expect(css).not.toContain("border-width: 3px;");
+  });
+
+  it("opens form action menus to the left of the trigger instead of below the card", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell\s+\.form-menu-dropdown,\s*\.templates-actions-menu-shell\s+\.form-menu-dropdown\s*\{[^}]*top:\s*auto;[^}]*right:\s*calc\(100% \+ 12px\);[^}]*bottom:\s*0;[^}]*left:\s*auto;[^}]*transform-origin:\s*bottom right;/s,
+    );
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell-open-down\s+\.form-menu-dropdown\s*\{[^}]*top:\s*0;[^}]*bottom:\s*auto;[^}]*transform-origin:\s*top right;/s,
+    );
+  });
+
+  it("marks only the first visible form action menu to open downward", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, { title: "Верхняя форма", author_id: "user-1" }),
+      createForm(2, { title: "Нижняя форма", author_id: "user-1" }),
+    ]);
+
+    renderPage();
+
+    const topMenuTrigger = await screen.findByRole("button", { name: "Действия формы Верхняя форма" });
+    const lowerMenuTrigger = await screen.findByRole("button", { name: "Действия формы Нижняя форма" });
+
+    expect(topMenuTrigger.closest(".dashboard-actions-menu-shell")).toHaveClass("dashboard-actions-menu-shell-open-down");
+    expect(lowerMenuTrigger.closest(".dashboard-actions-menu-shell")).not.toHaveClass("dashboard-actions-menu-shell-open-down");
+  });
+
+  it("uses destructive and positive colors for status menu actions", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Открытая форма",
+        author_id: "user-1",
+        is_public: true,
+      }),
+      createForm(2, {
+        title: "Закрытая форма",
+        author_id: "user-1",
+        is_public: false,
+      }),
+    ]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Открытая форма: Активна" }));
+    expect(within(await screen.findByRole("menu", { name: "Статус формы Открытая форма" })).getByRole("menuitem", { name: "Закрыть" })).toHaveClass(
+      "form-menu-item-danger",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" }));
+    expect(within(await screen.findByRole("menu", { name: "Статус формы Закрытая форма" })).getByRole("menuitem", { name: "Открыть" })).toHaveClass(
+      "dashboard-status-menu-item-open",
+    );
   });
 
   it("keeps templates out of the my forms dashboard", async () => {
@@ -525,6 +600,23 @@ describe("DashboardPage", () => {
 
     expect(changeFormStatus).not.toHaveBeenCalled();
     expect(setFormDeadline).not.toHaveBeenCalled();
+  });
+
+  it("disables deadline clearing when the form has no deadline", async () => {
+    getForms.mockResolvedValue([
+      createForm(1, {
+        title: "Форма без дедлайна",
+        author_id: "user-1",
+        deadline_at: null,
+      }),
+    ]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Форма без дедлайна: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Установить дедлайн" }));
+
+    expect(screen.getByRole("button", { name: "Снять дедлайн" })).toBeDisabled();
   });
 
   it("shows response limits in counters and lets owners edit or clear the limit from the status menu", async () => {

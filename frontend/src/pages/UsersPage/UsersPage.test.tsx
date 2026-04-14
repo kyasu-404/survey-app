@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import UsersPage from "./UsersPage";
@@ -186,7 +186,7 @@ describe("UsersPage", () => {
     expect(screen.queryByText("Мария")).not.toBeInTheDocument();
   });
 
-  it("lets admins change another user's role inline and toggle status from the status column", async () => {
+  it("renders user roles as static labels and toggles status from the status column", async () => {
     getAllUsers.mockResolvedValue([
       {
         id: "user-1",
@@ -214,22 +214,76 @@ describe("UsersPage", () => {
 
     expect(await screen.findByText("Мария")).toBeInTheDocument();
 
+    const mariaRow = screen.getByText("Мария").closest("tr");
+    expect(mariaRow).not.toBeNull();
+
+    if (!mariaRow) {
+      throw new Error("Expected Maria row to be present");
+    }
+
     expect(screen.queryByRole("button", { name: "Роль пользователя Администратор: admin" })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Роль пользователя Мария: user" }));
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Изменить роль пользователя Мария" }),
-      "admin",
-    );
-
-    await waitFor(() => {
-      expect(updateUserRole).toHaveBeenCalledWith("user-2", "admin");
-    });
+    expect(screen.queryByRole("button", { name: "Роль пользователя Мария: user" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Изменить роль пользователя Мария" })).not.toBeInTheDocument();
+    expect(within(mariaRow).getByText("user")).toHaveClass("users-role-chip");
 
     await userEvent.click(screen.getByRole("button", { name: "Статус пользователя Мария: Активен" }));
 
     await waitFor(() => {
       expect(setUserDisabled).toHaveBeenCalledWith("user-2", true);
     });
+
+    expect(updateUserRole).not.toHaveBeenCalled();
+  });
+
+  it("uses red destructive controls, yellow password controls, and black cancel controls", async () => {
+    getAllUsers.mockResolvedValue([
+      {
+        id: "user-1",
+        name: "Администратор",
+        email: "admin@example.com",
+        role: "admin",
+        is_disabled: false,
+        created_at: "2026-04-08T09:00:00.000Z",
+      },
+      {
+        id: "user-2",
+        name: "Мария",
+        email: "maria@example.com",
+        role: "user",
+        is_disabled: false,
+        created_at: "2026-04-08T09:10:00.000Z",
+      },
+    ]);
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Мария")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сменить мой пароль" })).toHaveClass("users-yellow-button");
+
+    const mariaRow = screen.getByText("Мария").closest("tr");
+    expect(mariaRow).not.toBeNull();
+
+    if (!mariaRow) {
+      throw new Error("Expected Maria row to be present");
+    }
+
+    expect(within(mariaRow).getByRole("button", { name: "Сменить пароль" })).toHaveClass("users-yellow-button");
+    expect(within(mariaRow).getByRole("button", { name: "Удалить" })).toHaveClass("users-danger-button");
+
+    await userEvent.click(within(mariaRow).getByRole("button", { name: "Удалить" }));
+
+    expect(screen.getByText(/Внимание:/)).toHaveClass("users-modal-copy-danger");
+    expect(screen.getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
+    expect(screen.getByRole("button", { name: "Удалить пользователя" })).toHaveClass("users-danger-button");
+
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    await userEvent.click(within(mariaRow).getByRole("button", { name: "Сменить пароль" }));
+
+    expect(screen.getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
+    expect(screen.getByRole("button", { name: "Сохранить" })).toHaveClass("users-yellow-button");
   });
 });

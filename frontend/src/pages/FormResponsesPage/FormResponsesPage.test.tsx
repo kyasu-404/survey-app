@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
@@ -91,9 +93,23 @@ function createResponsesPage(data: SurveyResponse[], overrides: Partial<{
   };
 }
 
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+}
+
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("keeps wide response tables scrolling inside the table content only", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.app-main\s*\{[^}]*min-width:\s*0;/);
+    expect(css).toMatch(/\.dashboard-page\s*\{[^}]*min-width:\s*0;/);
+    expect(css).toMatch(/\.responses-page-card\s*\{[^}]*min-width:\s*0;/);
+    expect(css).toMatch(/\.responses-page-table-shell\s*\{[^}]*max-width:\s*100%;/);
+    expect(css).toMatch(/\.responses-page-table-shell\s+\.responses-table\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*100%;/);
   });
 
   it("renders the form title, responses table, and export action", async () => {

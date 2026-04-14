@@ -61,8 +61,6 @@ export function Sidebar({ onToggle }: SidebarProps) {
                 Пользователи
               </NavLink>
             )}
-            <div className="sidebar-spacer" />
-            <button className="logout-button" onClick={onLogout}>Выйти</button>
           </>
         )}
 
@@ -72,6 +70,12 @@ export function Sidebar({ onToggle }: SidebarProps) {
           </Link>
         )}
       </nav>
+
+      {!loading && user && (
+        <div className="sidebar-footer">
+          <button className="logout-button" onClick={onLogout}>Выйти</button>
+        </div>
+      )}
     </aside>
   );
 }

@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
@@ -65,9 +67,21 @@ function createResponsesPage(data: SurveyResponse[], overrides: Partial<{
   };
 }
 
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+}
+
 describe("FormResponsesHtmlPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("uses a slightly smaller text scale for the HTML responses preview", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.responses-html-preview\s+\.responses-html-report\s*\{[^}]*font-size:\s*13px;/);
+    expect(css).toMatch(/\.responses-html-preview h1\s*\{[^}]*font-size:\s*1\.75rem;/);
+    expect(css).toMatch(/\.responses-html-preview table\s*\{[^}]*font-size:\s*13px;/);
   });
 
   it("renders generated static HTML preview actions and response rows", async () => {

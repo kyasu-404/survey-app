@@ -599,7 +599,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         )}
 
         <div className={`dashboard-forms-grid ${isRefreshingForms ? "dashboard-forms-grid-refreshing" : ""}`.trim()}>
-          {displayedForms.map((form) => {
+          {displayedForms.map((form, formIndex) => {
             const title = getSurveyDisplayTitle(form);
             const isOwnForm = form.author_id === user?.id;
             const isTemplate = isTemplateForm(form);
@@ -645,8 +645,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               ) : null,
             ].filter(Boolean);
 
+            const isFirstVisibleForm = formIndex === 0;
+
             const actionMenu = (
-              <div className="form-menu dashboard-floating-root dashboard-actions-menu-shell">
+              <div
+                className={`form-menu dashboard-floating-root dashboard-actions-menu-shell ${
+                  isFirstVisibleForm ? "dashboard-actions-menu-shell-open-down" : ""
+                }`.trim()}
+              >
                 <button
                   type="button"
                   className="form-menu-trigger"
@@ -789,7 +795,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 onClick={() => handleCardOpen(form)}
                 onKeyDown={(event) => handleCardKeyDown(event, form)}
               >
-                <div className="dashboard-form-header">
+                <div className={`dashboard-form-header ${statusMenuOpen ? "dashboard-form-header-status-menu-open" : ""}`.trim()}>
                   <div className="dashboard-form-heading">
                     <div className="dashboard-form-heading-row">
                       {isTemplate ? (
@@ -825,7 +831,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                               <button
                                 type="button"
                                 role="menuitem"
-                                className="form-menu-item"
+                                className={`form-menu-item ${
+                                  isFormActive ? "form-menu-item-danger" : "dashboard-status-menu-item-open"
+                                }`.trim()}
                                 onClick={(event) => {
                                   stopCardEvent(event);
                                   setOpenedMenu(null);
@@ -951,7 +959,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                     },
                   ).finally(() => setDeadlineEditor(null))
                 }
-                disabled={isFormActionPending(deadlineEditor.form.id)}
+                disabled={isFormActionPending(deadlineEditor.form.id) || !deadlineEditor.form.deadline_at}
               >
                 {isFormActionPending(deadlineEditor.form.id) && <InlineSpinner />}
                 Снять дедлайн

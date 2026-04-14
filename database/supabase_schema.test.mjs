@@ -78,6 +78,19 @@ test("authenticated users can update only safe profile columns", () => {
   assert.match(schema, /grant update \(name\) on table public\.profiles to authenticated;/i);
 });
 
+test("api roles receive the table grants required by PostgREST and RLS", () => {
+  assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
+  assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
+  assert.match(schema, /grant select on table public\.forms to anon;/i);
+  assert.match(schema, /grant select, insert, update, delete on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant insert on table public\.responses to anon;/i);
+  assert.match(schema, /grant select, insert on table public\.responses to authenticated;/i);
+  assert.match(
+    schema,
+    /grant select, insert, update, delete on table public\.profiles, public\.forms, public\.responses to service_role;/i,
+  );
+});
+
 test("response inserts are attributed to the current auth user", () => {
   const setResponseUserId = getFunctionDefinition("set_response_user_id");
 

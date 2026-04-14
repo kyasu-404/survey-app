@@ -5,7 +5,6 @@ import {
   deleteUser,
   getAllUsers,
   setUserDisabled,
-  updateUserRole,
   updateMyPassword,
   updateUserPassword,
 } from "../../features/users/api";
@@ -60,8 +59,6 @@ export default function UsersPage() {
     password: "",
     role: "user",
   });
-  const [editingRoleUserId, setEditingRoleUserId] = useState<string | null>(null);
-  const [pendingRoleUserId, setPendingRoleUserId] = useState<string | null>(null);
   const [pendingStatusUserId, setPendingStatusUserId] = useState<string | null>(null);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
@@ -109,24 +106,6 @@ export default function UsersPage() {
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось изменить статус пользователя"), "error");
-    },
-  });
-
-  const updateUserRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: UserRole }) => updateUserRole(userId, role),
-    onMutate: ({ userId }) => {
-      setPendingRoleUserId(userId);
-    },
-    onSuccess: () => {
-      setEditingRoleUserId(null);
-      showToast("Роль пользователя обновлена", "success");
-      scheduleQueryInvalidation(queryClient, "update user role", [{ queryKey: ["users"] }]);
-    },
-    onSettled: () => {
-      setPendingRoleUserId(null);
-    },
-    onError: (error) => {
-      showToast(getErrorMessage(error, "Не удалось изменить роль пользователя"), "error");
     },
   });
 
@@ -220,18 +199,6 @@ export default function UsersPage() {
     });
   };
 
-  const onChangeRole = (profile: UserProfile, role: UserRole) => {
-    if (profile.id === user?.id || profile.role === role) {
-      setEditingRoleUserId(null);
-      return;
-    }
-
-    updateUserRoleMutation.mutate({
-      userId: profile.id,
-      role,
-    });
-  };
-
   const renderUsersLoadingState = () => (
     <p className="users-page-status" role="status" aria-live="polite">
       <span>Загрузка пользователей</span>
@@ -265,7 +232,7 @@ export default function UsersPage() {
               {createUserMutation.isPending && <InlineSpinner />}
               Создать пользователя
             </button>
-            <button onClick={() => openPasswordModal(user?.id ?? "", "Смена моего пароля", true)} disabled={!user}>
+            <button className="users-yellow-button" onClick={() => openPasswordModal(user?.id ?? "", "Смена моего пароля", true)} disabled={!user}>
               Сменить мой пароль
             </button>
             {!isPasswordValid && newUser.password.length > 0 && (
@@ -342,7 +309,6 @@ export default function UsersPage() {
                 {filteredUsers.map((profile) => {
                   const isOwnUser = profile.id === user?.id;
                   const displayName = getUserDisplayName(profile);
-                  const isRolePending = pendingRoleUserId === profile.id;
                   const isStatusPending = pendingStatusUserId === profile.id;
 
                   return (
@@ -350,37 +316,7 @@ export default function UsersPage() {
                       <td>{profile.name || "—"}</td>
                       <td>{profile.email}</td>
                       <td>
-                        {isOwnUser ? (
-                          <span className="users-role-chip users-role-chip-static">{profile.role}</span>
-                        ) : editingRoleUserId === profile.id ? (
-                          <select
-                            aria-label={`Изменить роль пользователя ${displayName}`}
-                            className="users-role-select"
-                            value={profile.role}
-                            onChange={(event) => onChangeRole(profile, event.target.value as UserRole)}
-                            onBlur={() => {
-                              if (!isRolePending) {
-                                setEditingRoleUserId(null);
-                              }
-                            }}
-                            disabled={isRolePending}
-                            autoFocus
-                          >
-                            <option value="user">user</option>
-                            <option value="admin">admin</option>
-                          </select>
-                        ) : (
-                          <button
-                            type="button"
-                            className="users-role-button"
-                            aria-label={`Роль пользователя ${displayName}: ${profile.role}`}
-                            onClick={() => setEditingRoleUserId(profile.id)}
-                            disabled={isRolePending}
-                          >
-                            {isRolePending && <InlineSpinner />}
-                            {profile.role}
-                          </button>
-                        )}
+                        <span className="users-role-chip users-role-chip-static">{profile.role}</span>
                       </td>
                       <td>
                         <button
@@ -403,6 +339,7 @@ export default function UsersPage() {
                       <td>
                         <div className="users-table-actions">
                           <button
+                            className="users-yellow-button"
                             onClick={() =>
                               openPasswordModal(
                                 profile.id,
@@ -414,6 +351,7 @@ export default function UsersPage() {
                             Сменить пароль
                           </button>
                           <button
+                            className="users-danger-button"
                             onClick={() =>
                               setDeleteUserModal({
                                 userId: profile.id,
@@ -458,8 +396,8 @@ export default function UsersPage() {
               />
             </label>
             <div className="deadline-modal-actions">
-              <button onClick={() => setPasswordModal(null)}>Отмена</button>
-              <button onClick={() => void onChangePassword()} disabled={updatePasswordMutation.isPending || updateUserPasswordMutation.isPending || !isModalPasswordValid}>
+              <button className="users-neutral-button" onClick={() => setPasswordModal(null)}>Отмена</button>
+              <button className="users-yellow-button" onClick={() => void onChangePassword()} disabled={updatePasswordMutation.isPending || updateUserPasswordMutation.isPending || !isModalPasswordValid}>
                 {(updatePasswordMutation.isPending || updateUserPasswordMutation.isPending) && <InlineSpinner />}
                 Сохранить
               </button>
@@ -479,8 +417,9 @@ export default function UsersPage() {
               Внимание: вместе с пользователем удалятся все созданные им формы. Если формы нужны - лучше просто отключить пользователя.
             </p>
             <div className="deadline-modal-actions">
-              <button onClick={() => setDeleteUserModal(null)}>Отмена</button>
+              <button className="users-neutral-button" onClick={() => setDeleteUserModal(null)}>Отмена</button>
               <button
+                className="users-danger-button"
                 onClick={async () => {
                   await deleteUserMutation.mutateAsync(deleteUserModal.userId);
                   setDeleteUserModal(null);

@@ -26,4 +26,17 @@ describe("Sidebar", () => {
 
     expect(screen.getByRole("link", { name: "Шаблоны" })).toHaveAttribute("href", routes.templates);
   });
+
+  it("keeps the logout action in a separate sidebar footer", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Sidebar onToggle={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    const footerLogoutButton = container.querySelector(".sidebar-footer .logout-button");
+
+    expect(footerLogoutButton).toBe(screen.getByRole("button", { name: "Выйти" }));
+    expect(container.querySelector(".sidebar-nav .logout-button")).not.toBeInTheDocument();
+  });
 });
