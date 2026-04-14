@@ -86,7 +86,12 @@ export default function SurveyPage() {
   return (
     <div className="survey-page survey-page-shell">
       <div className="survey-page-card card">
-        <SurveyRenderer schema={form.schema} formId={form.id} isPreview={isPreview} />
+        <SurveyRenderer
+          schema={form.schema}
+          formId={form.id}
+          isPreview={isPreview}
+          allowAnonymousUploads={form.is_public}
+        />
       </div>
     </div>
   );

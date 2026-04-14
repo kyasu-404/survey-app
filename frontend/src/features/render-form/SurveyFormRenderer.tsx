@@ -8,16 +8,52 @@ import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse"
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getSubmitResponseErrorMessage } from "../../shared/lib/error";
-import { getStoragePathFromSurveyFileValue, removeFileFromStorage, uploadFileToStorage } from "../../shared/api/storage";
+import {
+  getStoragePathFromSurveyFileValue,
+  removeFileFromStorage,
+  resolveSurveyFileValueContent,
+  uploadFileToStorage,
+} from "../../shared/api/storage";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
   initialData?: Record<string, unknown>;
   isPreview?: boolean;
+  allowAnonymousUploads?: boolean;
 };
 
-export function SurveyFormRenderer({ schema, formId, initialData, isPreview = false }: SurveyFormRendererProps) {
+function normalizeSurveyFileQuestions(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeSurveyFileQuestions(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const normalizedObject = Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [key, normalizeSurveyFileQuestions(nestedValue)]),
+  );
+
+  if (normalizedObject.type === "file") {
+    return {
+      ...normalizedObject,
+      storeDataAsText: false,
+      waitForUpload: true,
+    };
+  }
+
+  return normalizedObject;
+}
+
+export function SurveyFormRenderer({
+  schema,
+  formId,
+  initialData,
+  isPreview = false,
+  allowAnonymousUploads = false,
+}: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -25,7 +61,7 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
   const allowProgrammaticCompleteRef = useRef(false);
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
-    const resolvedSchema = resolveDefaultSurveyLogo(schema);
+    const resolvedSchema = normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema;
     const nextModel = new Model(resolvedSchema);
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = "Отправить";
@@ -42,8 +78,25 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
   }, [initialData, isPreview, schema]);
 
   useEffect(() => {
+    const handleDownloadFile = async (
+      _sender: Model,
+      options: { fileValue?: unknown; callback: (status: "success" | "error", data: unknown) => void }
+    ) => {
+      try {
+        const fileContent = await resolveSurveyFileValueContent(options.fileValue);
+        options.callback("success", fileContent);
+      } catch (error) {
+        console.error(error);
+        options.callback("error", getSubmitResponseErrorMessage(error));
+      }
+    };
+
+    model.onDownloadFile.add(handleDownloadFile);
+
     if (isPreview) {
-      return;
+      return () => {
+        model.onDownloadFile.remove(handleDownloadFile);
+      };
     }
 
     const handleUploadFiles = async (
@@ -51,14 +104,15 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
       options: { files: File[]; callback: (status: "success" | "error", data: unknown) => void }
     ) => {
       try {
-        const uploaded = await Promise.all(options.files.map((file) => uploadFileToStorage(formId, file)));
+        const uploaded = await Promise.all(
+          options.files.map((file) => uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads })),
+        );
 
         options.callback(
           "success",
           uploaded.map((item) => ({
             file: item.file,
-            content: item.url,
-            storagePath: item.path,
+            content: item.path,
           }))
         );
       } catch (error) {
@@ -79,7 +133,9 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
           .filter((path): path is string => Boolean(path));
 
         if (paths.length > 0) {
-          await Promise.all(paths.map((path) => removeFileFromStorage(path)));
+          await Promise.all(
+            paths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
+          );
         }
 
         options.callback("success");
@@ -126,10 +182,11 @@ export function SurveyFormRenderer({ schema, formId, initialData, isPreview = fa
 
     return () => {
       model.onUploadFiles.remove(handleUploadFiles);
+      model.onDownloadFile.remove(handleDownloadFile);
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
-  }, [formId, isPreview, model, showToast, submitResponseMutation]);
+  }, [allowAnonymousUploads, formId, isPreview, model, showToast, submitResponseMutation]);
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>

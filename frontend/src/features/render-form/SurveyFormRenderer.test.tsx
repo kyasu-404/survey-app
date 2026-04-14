@@ -60,6 +60,7 @@ vi.mock("survey-core", () => ({
     questionNames: string[] = [];
     onCompleting = new FakeSurveyEvent();
     onUploadFiles = new FakeSurveyEvent();
+    onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
     doComplete = vi.fn();
 
@@ -216,5 +217,34 @@ describe("SurveyFormRenderer", () => {
       }),
     );
     expect(screen.getByTestId("survey-question-names")).toHaveTextContent("school,phone,email");
+  });
+
+  it("forces file questions to use server-side uploads instead of inline base64 storage", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [
+            {
+              name: "page1",
+              elements: [{ type: "file", name: "attachment", title: "Файл" }],
+            },
+          ],
+        }}
+      />,
+    );
+
+    const firstQuestion = (createdModelSchemas[0] as {
+      pages?: Array<{ elements?: Array<Record<string, unknown>> }>;
+    })?.pages?.[0]?.elements?.[0];
+
+    expect(firstQuestion).toEqual(
+      expect.objectContaining({
+        type: "file",
+        name: "attachment",
+        storeDataAsText: false,
+        waitForUpload: true,
+      }),
+    );
   });
 });

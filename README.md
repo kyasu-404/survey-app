@@ -44,21 +44,49 @@ USER_ADMIN_ALLOWED_ORIGINS=https://app.example.com,https://staging.example.com
 1. Откройте **Storage** → **Create bucket**.
 2. Создайте бакет с именем `survey-files` (или своим, но тогда обновите `VITE_SUPABASE_STORAGE_BUCKET`).
 3. Оставьте бакет приватным.
-4. Добавьте RLS политики на `storage.objects`. Фронтенд кладёт файлы в путь `user_id/form_id/file_id.ext`, создаёт short-lived signed URL и удаляет только файлы из собственного `user_id`-префикса.
+4. Добавьте RLS политики на `storage.objects`. Для авторизованных пользователей фронтенд кладёт файлы в путь `user_id/form_id/file_id.ext`. Для публичных форм без логина используются пути `public/form_id/file_id.ext`. В ответе формы хранится путь к объекту, а signed URL создаётся по запросу при превью/скачивании файла.
 
 Пример SQL-политик для бакета `survey-files`:
 
 ```sql
-create policy "users can upload own survey files"
+create policy "survey files upload authenticated"
 on storage.objects
 for insert
 to authenticated
 with check (
   bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = (select auth.uid())::text
+  and (
+    (storage.foldername(name))[1] = (select auth.uid())::text
+    or (
+      (storage.foldername(name))[1] = 'public'
+      and exists (
+        select 1
+        from public.forms f
+        where f.id::text = (storage.foldername(name))[2]
+          and f.is_public = true
+          and (f.deadline_at is null or f.deadline_at > now())
+      )
+    )
+  )
 );
 
-create policy "owners authors and admins can read survey files"
+create policy "survey files upload anon"
+on storage.objects
+for insert
+to anon
+with check (
+  bucket_id = 'survey-files'
+  and (storage.foldername(name))[1] = 'public'
+  and exists (
+    select 1
+    from public.forms f
+    where f.id::text = (storage.foldername(name))[2]
+      and f.is_public = true
+      and (f.deadline_at is null or f.deadline_at > now())
+  )
+);
+
+create policy "survey files read authenticated"
 on storage.objects
 for select
 to authenticated
@@ -66,23 +94,79 @@ using (
   bucket_id = 'survey-files'
   and (
     (storage.foldername(name))[1] = (select auth.uid())::text
+    or (
+      (storage.foldername(name))[1] = 'public'
+      and exists (
+        select 1
+        from public.forms f
+        where f.id::text = (storage.foldername(name))[2]
+          and f.is_public = true
+          and (f.deadline_at is null or f.deadline_at > now())
+      )
+    )
     or exists (
       select 1
       from public.forms f
       where f.id::text = (storage.foldername(name))[2]
-        and f.author_id = (select auth.uid())
+        and (
+          f.author_id = (select auth.uid())
+          or (select public.request_role()) = 'admin'
+        )
     )
-    or (select public.request_role()) = 'admin'
   )
 );
 
-create policy "users can delete own survey files"
+create policy "survey files read anon"
+on storage.objects
+for select
+to anon
+using (
+  bucket_id = 'survey-files'
+  and (storage.foldername(name))[1] = 'public'
+  and exists (
+    select 1
+    from public.forms f
+    where f.id::text = (storage.foldername(name))[2]
+      and f.is_public = true
+      and (f.deadline_at is null or f.deadline_at > now())
+  )
+);
+
+create policy "survey files delete authenticated"
 on storage.objects
 for delete
 to authenticated
 using (
   bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = (select auth.uid())::text
+  and (
+    (storage.foldername(name))[1] = (select auth.uid())::text
+    or (
+      (storage.foldername(name))[1] = 'public'
+      and exists (
+        select 1
+        from public.forms f
+        where f.id::text = (storage.foldername(name))[2]
+          and f.is_public = true
+          and (f.deadline_at is null or f.deadline_at > now())
+      )
+    )
+  )
+);
+
+create policy "survey files delete anon"
+on storage.objects
+for delete
+to anon
+using (
+  bucket_id = 'survey-files'
+  and (storage.foldername(name))[1] = 'public'
+  and exists (
+    select 1
+    from public.forms f
+    where f.id::text = (storage.foldername(name))[2]
+      and f.is_public = true
+      and (f.deadline_at is null or f.deadline_at > now())
+  )
 );
 ```
 
@@ -241,7 +325,7 @@ where counted.id = f.id;
 
 ### Storage-файлы из форм
 
-Ответы на file-вопросы хранят в БД путь к объекту, а сам файл лежит в Supabase Storage. Чтобы перенести такие формы полностью, скопируйте bucket `survey-files` с сохранением путей `user_id/form_id/file_id.ext`.
+Ответы на file-вопросы хранят в БД путь к объекту, а сам файл лежит в Supabase Storage. Для авторизованных респондентов используется путь `user_id/form_id/file_id.ext`, для публичных форм без логина — `public/form_id/file_id.ext`. Чтобы перенести такие формы полностью, скопируйте bucket `survey-files` с сохранением этих путей.
 
 Пример через S3-совместимый API Supabase Storage:
 
