@@ -341,4 +341,7 @@ with check (
 create index idx_forms_author_id on public.forms(author_id);
 create index idx_responses_form_id on public.responses(form_id);
 
+alter publication supabase_realtime add table public.forms;
+alter publication supabase_realtime add table public.responses;
+
 commit;

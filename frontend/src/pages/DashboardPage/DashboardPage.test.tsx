@@ -19,17 +19,48 @@ const {
   setFormResponseLimit,
   qrToDataURL,
   qrToString,
-} = vi.hoisted(() => ({
-  showToast: vi.fn(),
-  navigate: vi.fn(),
-  getForms: vi.fn(),
-  cloneForm: vi.fn(),
-  changeFormStatus: vi.fn(),
-  setFormDeadline: vi.fn(),
-  setFormResponseLimit: vi.fn(),
-  qrToDataURL: vi.fn(),
-  qrToString: vi.fn(),
-}));
+  createRealtimeChannel,
+  removeRealtimeChannel,
+  emitRealtimeChange,
+  resetRealtimeChannel,
+} = vi.hoisted(() => {
+  const changeHandlers: Array<() => void> = [];
+  const channel = {
+    on: vi.fn((_event: string, _config: unknown, callback: () => void) => {
+      changeHandlers.push(callback);
+      return channel;
+    }),
+    subscribe: vi.fn(() => channel),
+  };
+  const createRealtimeChannel = vi.fn(() => channel);
+  const removeRealtimeChannel = vi.fn(() => Promise.resolve("ok"));
+
+  return {
+    showToast: vi.fn(),
+    navigate: vi.fn(),
+    getForms: vi.fn(),
+    cloneForm: vi.fn(),
+    changeFormStatus: vi.fn(),
+    setFormDeadline: vi.fn(),
+    setFormResponseLimit: vi.fn(),
+    qrToDataURL: vi.fn(),
+    qrToString: vi.fn(),
+    createRealtimeChannel,
+    removeRealtimeChannel,
+    emitRealtimeChange: () => {
+      for (const handler of changeHandlers) {
+        handler();
+      }
+    },
+    resetRealtimeChannel: () => {
+      changeHandlers.length = 0;
+      createRealtimeChannel.mockClear();
+      channel.on.mockClear();
+      channel.subscribe.mockClear();
+      removeRealtimeChannel.mockClear();
+    },
+  };
+});
 
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
@@ -65,6 +96,13 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 
 vi.mock("../../entities/response/api", () => ({
   getResponsesByForm: vi.fn(),
+}));
+
+vi.mock("../../shared/api", () => ({
+  supabaseClient: {
+    channel: createRealtimeChannel,
+    removeChannel: removeRealtimeChannel,
+  },
 }));
 
 vi.mock("../../shared/lib/browser", () => ({
@@ -140,6 +178,7 @@ function createDeferred<T>() {
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRealtimeChannel();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     cloneForm.mockResolvedValue({ id: "form-copy" });
@@ -148,6 +187,24 @@ describe("DashboardPage", () => {
     setFormResponseLimit.mockResolvedValue(undefined);
     qrToString.mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>');
     qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
+  });
+
+  it("refreshes forms after a realtime database change", async () => {
+    getForms
+      .mockResolvedValueOnce([createForm(1, { responses_count: 1 })])
+      .mockResolvedValueOnce([createForm(1, { responses_count: 2 })]);
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "1 ответ" })).toBeInTheDocument();
+
+    emitRealtimeChange();
+
+    await waitFor(() => {
+      expect(getForms).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByRole("button", { name: "2 ответа" })).toBeInTheDocument();
   });
 
   it("shows form stats inside the info popover and paginates the list", async () => {

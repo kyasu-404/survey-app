@@ -129,3 +129,8 @@ test("response limits use an atomic form counter instead of counting response ro
     /create or replace trigger responses_form_count_decrement\s+after delete on public\.responses\s+for each row execute procedure public\.decrement_form_response_count\(\);/i,
   );
 });
+
+test("forms and responses are published to realtime", () => {
+  assert.match(schema, /alter publication supabase_realtime add table public\.forms;/i);
+  assert.match(schema, /alter publication supabase_realtime add table public\.responses;/i);
+});

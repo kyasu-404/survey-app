@@ -15,6 +15,36 @@ const { getFormById, getResponsesByForm, exportToExcel, showToast } = vi.hoisted
   showToast: vi.fn(),
 }));
 
+const { createRealtimeChannel, removeRealtimeChannel, emitRealtimeChange, resetRealtimeChannel } = vi.hoisted(() => {
+  const changeHandlers: Array<() => void> = [];
+  const channel = {
+    on: vi.fn((_event: string, _config: unknown, callback: () => void) => {
+      changeHandlers.push(callback);
+      return channel;
+    }),
+    subscribe: vi.fn(() => channel),
+  };
+  const createRealtimeChannel = vi.fn(() => channel);
+  const removeRealtimeChannel = vi.fn(() => Promise.resolve("ok"));
+
+  return {
+    createRealtimeChannel,
+    removeRealtimeChannel,
+    emitRealtimeChange: () => {
+      for (const handler of changeHandlers) {
+        handler();
+      }
+    },
+    resetRealtimeChannel: () => {
+      changeHandlers.length = 0;
+      createRealtimeChannel.mockClear();
+      channel.on.mockClear();
+      channel.subscribe.mockClear();
+      removeRealtimeChannel.mockClear();
+    },
+  };
+});
+
 vi.mock("../../entities/survey/api/surveysApi", () => ({
   getFormById,
 }));
@@ -25,6 +55,14 @@ vi.mock("../../entities/response/api", () => ({
 
 vi.mock("../../shared/lib/export", () => ({
   exportToExcel,
+}));
+
+vi.mock("../../shared/api", () => ({
+  RESPONSES_PAGE_SIZE: 50,
+  supabaseClient: {
+    channel: createRealtimeChannel,
+    removeChannel: removeRealtimeChannel,
+  },
 }));
 
 vi.mock("../../app/providers/ToastProvider", () => ({
@@ -100,6 +138,7 @@ function readAppCss() {
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRealtimeChannel();
   });
 
   it("keeps wide response tables scrolling inside the table content only", () => {
@@ -176,6 +215,70 @@ describe("FormResponsesPage", () => {
         "ответы-Форма обратной связи",
       );
     });
+  });
+
+  it("refreshes responses after a realtime database change", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ]))
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-2",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:31:00.000Z",
+          data: { name: "Борис" },
+        },
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ], { count: 2 }));
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+
+    emitRealtimeChange();
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("Борис")).toBeInTheDocument();
   });
 
   it("opens the generated HTML responses page", async () => {

@@ -1,13 +1,15 @@
-import { isAuthSessionMissingError } from "@supabase/supabase-js";
-import { supabaseClient } from "./client";
+import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
+import { publicSupabaseClient, supabaseClient } from "./client";
 import { SUPABASE_STORAGE_BUCKET } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const PUBLIC_STORAGE_PREFIX = "public";
 
-type UploadFileToStorageOptions = {
+type StorageAuthOptions = {
   allowAnonymous?: boolean;
 };
+
+type UploadFileToStorageOptions = StorageAuthOptions;
 
 type RemoveFileFromStorageOptions = {
   allowAnonymous?: boolean;
@@ -33,7 +35,7 @@ function buildPublicStoragePath(formId: string, fileName: string) {
   return `${PUBLIC_STORAGE_PREFIX}/${formId}/${crypto.randomUUID()}${getFileExtension(fileName)}`;
 }
 
-async function getCurrentUserId() {
+async function getCurrentUserId(options: StorageAuthOptions = {}) {
   const {
     data: { user },
     error,
@@ -41,6 +43,12 @@ async function getCurrentUserId() {
 
   if (error) {
     if (isAuthSessionMissingError(error)) {
+      return null;
+    }
+
+    // Public form uploads should keep working even if the browser has a stale
+    // persisted session from another part of the app.
+    if (options.allowAnonymous && isAuthError(error)) {
       return null;
     }
 
@@ -166,7 +174,7 @@ export async function resolveSurveyFileValueContent(value: unknown) {
 }
 
 export async function uploadFileToStorage(formId: string, file: File, options: UploadFileToStorageOptions = {}) {
-  const currentUserId = await getCurrentUserId();
+  const currentUserId = await getCurrentUserId(options);
 
   if (!currentUserId && !options.allowAnonymous) {
     throw new Error("Пользователь не авторизован для загрузки файлов");
@@ -175,7 +183,8 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
   const filePath = currentUserId
     ? buildUserStoragePath(currentUserId, formId, file.name)
     : buildPublicStoragePath(formId, file.name);
-  const bucket = supabaseClient.storage.from(SUPABASE_STORAGE_BUCKET);
+  const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
+  const bucket = bucketClient.storage.from(SUPABASE_STORAGE_BUCKET);
 
   const { error } = await bucket.upload(filePath, file, {
     upsert: false,
@@ -192,10 +201,11 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
 }
 
 export async function removeFileFromStorage(path: string, options: RemoveFileFromStorageOptions = {}) {
-  const currentUserId = await getCurrentUserId();
+  const currentUserId = await getCurrentUserId(options);
   assertDeletablePath(path, currentUserId, options);
 
-  const { error } = await supabaseClient.storage.from(SUPABASE_STORAGE_BUCKET).remove([path]);
+  const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
+  const { error } = await bucketClient.storage.from(SUPABASE_STORAGE_BUCKET).remove([path]);
 
   if (error) {
     throw new Error(`Не удалось удалить файл: ${error.message}`);

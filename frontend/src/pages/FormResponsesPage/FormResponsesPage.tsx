@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -10,9 +10,10 @@ import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
 import refreshIcon from "../../img/refresh.png";
-import { RESPONSES_PAGE_SIZE } from "../../shared/api";
+import { RESPONSES_PAGE_SIZE, supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -35,6 +36,7 @@ export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedResponsePreview, setSelectedResponsePreview] = useState<SelectedResponsePreview | null>(null);
 
@@ -92,6 +94,52 @@ export default function FormResponsesPage() {
   const pageEnd = totalResponses ? Math.min(responsePage * RESPONSES_PAGE_SIZE, totalResponses) : 0;
   const canGoPrevious = responsePage > 1;
   const canGoNext = responsePage < totalPages;
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    const channel = supabaseClient
+      .channel(`form-responses:${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "responses",
+          filter: `form_id=eq.${id}`,
+        },
+        () => {
+          scheduleQueryInvalidation(queryClient, `responses realtime ${id}`, [
+            { queryKey: ["form", id] },
+            { queryKey: ["form-responses", id] },
+          ]);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "forms",
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          scheduleQueryInvalidation(queryClient, `form realtime ${id}`, [{ queryKey: ["form", id] }]);
+        },
+      )
+      .subscribe((status) => {
+        console.info("[realtime] form responses channel status", {
+          formId: id,
+          status,
+        });
+      });
+
+    return () => {
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [id, queryClient]);
 
   const handleExport = () => {
     if (!rows.length) {

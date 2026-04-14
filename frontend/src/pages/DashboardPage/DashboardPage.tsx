@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
+import { supabaseClient } from "../../shared/api";
 import refreshIcon from "../../img/refresh.png";
 import infoIcon from "../../img/info.svg";
 import copyLinkIcon from "../../img/copy_link.svg";
@@ -242,6 +243,39 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       window.clearTimeout(timeoutId);
     };
   }, [nextDeadlineRefreshDelayMs, reloadForms]);
+
+  useEffect(() => {
+    if (isAuthLoading || (viewMode === "mine" && !user?.id)) {
+      return;
+    }
+
+    const formFilter = viewMode === "mine" && user?.id ? `author_id=eq.${user.id}` : undefined;
+    const channel = supabaseClient
+      .channel(`dashboard-forms:${viewMode}:${user?.id ?? "all"}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "forms",
+          ...(formFilter ? { filter: formFilter } : {}),
+        },
+        () => {
+          scheduleQueryInvalidation(queryClient, `dashboard realtime ${viewMode} forms`, [{ queryKey: ["forms"] }]);
+        },
+      )
+      .subscribe((status) => {
+        console.info("[realtime] dashboard forms channel status", {
+          status,
+          userId: user?.id ?? null,
+          viewMode,
+        });
+      });
+
+    return () => {
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [isAuthLoading, queryClient, user?.id, viewMode]);
 
   useEffect(() => {
     if (!openedMenu) {
