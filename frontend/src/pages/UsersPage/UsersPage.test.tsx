@@ -122,8 +122,13 @@ describe("UsersPage", () => {
     expect(controls).not.toBeNull();
     expect(filters).not.toBeNull();
     expect(tableShell).not.toBeNull();
-    expect(controls?.compareDocumentPosition(filters as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(filters?.compareDocumentPosition(tableShell as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    if (!controls || !filters || !tableShell) {
+      throw new Error("Expected users page layout nodes to be present");
+    }
+
+    expect(controls.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(filters.compareDocumentPosition(tableShell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("filters users by name, role, and status", async () => {

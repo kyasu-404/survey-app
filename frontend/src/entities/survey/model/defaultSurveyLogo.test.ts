@@ -4,6 +4,7 @@ import {
   resolveDefaultSurveyLogo,
   serializeDefaultSurveyLogo,
 } from "./defaultSurveyLogo";
+import type { SurveySchema } from "../types";
 
 vi.mock("../../../img/card_logo.png", () => ({
   default: "mock-card-logo-url",
@@ -18,7 +19,7 @@ describe("defaultSurveyLogo", () => {
     const schema = {
       logo: DEFAULT_SURVEY_LOGO_TOKEN,
       pages: [],
-    };
+    } satisfies SurveySchema;
 
     const resolved = resolveDefaultSurveyLogo(schema);
 
@@ -32,7 +33,7 @@ describe("defaultSurveyLogo", () => {
     const serialized = serializeDefaultSurveyLogo({
       logo: "mock-card-logo-url",
       pages: [],
-    });
+    } satisfies SurveySchema);
 
     expect(serialized).toMatchObject({
       logo: DEFAULT_SURVEY_LOGO_TOKEN,
@@ -43,7 +44,7 @@ describe("defaultSurveyLogo", () => {
     const schema = {
       logo: "https://example.com/custom-logo.png",
       pages: [],
-    };
+    } satisfies SurveySchema;
 
     expect(resolveDefaultSurveyLogo(schema)).toMatchObject({
       logo: "https://example.com/custom-logo.png",

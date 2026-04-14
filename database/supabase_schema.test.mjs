@@ -32,6 +32,15 @@ test("new profiles always start with user role and do not copy metadata roles", 
   assert.doesNotMatch(handleNewUser, /role\s*=\s*coalesce/i);
 });
 
+test("schema baseline avoids destructive reset statements", () => {
+  assert.match(schema, /^\s*(?:--[^\n]*\n\s*)*begin;/i);
+  assert.match(schema, /\bcommit;\s*$/i);
+
+  assert.doesNotMatch(schema, /^\s*drop\s+/im);
+  assert.doesNotMatch(schema, /^\s*truncate\s+/im);
+  assert.doesNotMatch(schema, /^\s*delete\s+from\s+/im);
+});
+
 test("request_role only trusts the profiles table", () => {
   const requestRole = getFunctionDefinition("request_role");
 
@@ -76,7 +85,7 @@ test("response inserts are attributed to the current auth user", () => {
   assert.match(setResponseUserId, /new\.user_id\s*:=\s*auth\.uid\(\);/i);
   assert.match(
     schema,
-    /create trigger responses_set_user_id\s+before insert on public\.responses\s+for each row execute procedure public\.set_response_user_id\(\);/i,
+    /create or replace trigger responses_set_user_id\s+before insert on public\.responses\s+for each row execute procedure public\.set_response_user_id\(\);/i,
   );
 
   const insertPolicy = getPolicyDefinition("responses_insert");
@@ -104,6 +113,6 @@ test("response limits use an atomic form counter instead of counting response ro
   assert.match(ensureLimit, /f\.max_responses is null\s+or f\.responses_count < f\.max_responses/i);
   assert.match(
     schema,
-    /create trigger responses_form_count_decrement\s+after delete on public\.responses\s+for each row execute procedure public\.decrement_form_response_count\(\);/i,
+    /create or replace trigger responses_form_count_decrement\s+after delete on public\.responses\s+for each row execute procedure public\.decrement_form_response_count\(\);/i,
   );
 });

@@ -607,7 +607,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
-    creator.saveSurveyFunc = async (saveNo, callback) => {
+    creator.saveSurveyFunc = async (saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => {
       setIsSaving(true);
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 

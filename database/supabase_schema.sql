@@ -1,14 +1,12 @@
+-- Baseline schema for a new/empty Supabase project.
+-- Production changes must be applied as reviewed migrations, not by resetting
+-- existing tables from this file.
+begin;
+
 -- =========================
 -- EXTENSIONS
 -- =========================
 create extension if not exists "pgcrypto";
-
--- =========================
--- CLEAN
--- =========================
-drop table if exists public.responses cascade;
-drop table if exists public.forms cascade;
-drop table if exists public.profiles cascade;
 
 -- =========================
 -- TABLES
@@ -106,9 +104,7 @@ begin
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-
-create trigger on_auth_user_created
+create or replace trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
@@ -150,9 +146,7 @@ begin
 end;
 $$;
 
-drop trigger if exists responses_form_limit on public.responses;
-
-create trigger responses_form_limit
+create or replace trigger responses_form_limit
 before insert on public.responses
 for each row execute procedure public.ensure_form_response_limit();
 
@@ -171,9 +165,7 @@ begin
 end;
 $$;
 
-drop trigger if exists responses_form_count_decrement on public.responses;
-
-create trigger responses_form_count_decrement
+create or replace trigger responses_form_count_decrement
 after delete on public.responses
 for each row execute procedure public.decrement_form_response_count();
 
@@ -189,9 +181,7 @@ begin
 end;
 $$;
 
-drop trigger if exists responses_set_user_id on public.responses;
-
-create trigger responses_set_user_id
+create or replace trigger responses_set_user_id
 before insert on public.responses
 for each row execute procedure public.set_response_user_id();
 
@@ -337,3 +327,5 @@ with check (
 
 create index idx_forms_author_id on public.forms(author_id);
 create index idx_responses_form_id on public.responses(form_id);
+
+commit;

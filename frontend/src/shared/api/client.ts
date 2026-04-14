@@ -37,7 +37,8 @@ export const apiClient = {
     updateCurrentUserPassword: (password: string) =>
       supabaseClient.auth.updateUser({ password }),
     logout: () => supabaseClient.auth.signOut(),
-    onAuthStateChange: supabaseClient.auth.onAuthStateChange.bind(supabaseClient.auth),
+    onAuthStateChange: (callback: Parameters<typeof supabaseClient.auth.onAuthStateChange>[0]) =>
+      supabaseClient.auth.onAuthStateChange(callback),
   },
   from: <TTable extends string>(table: TTable) => supabaseClient.from(table),
 };

@@ -34,15 +34,24 @@ type UserAdminAction =
       role: UserRole;
     };
 
-async function getFunctionErrorMessage(error: unknown, response?: Response) {
+async function getFunctionErrorMessage(error: unknown, response?: Response): Promise<string> {
   const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
 
   if (errorResponse instanceof Response) {
     const contentType = errorResponse.headers.get("Content-Type") ?? "";
 
     if (contentType.includes("application/json")) {
-      const payload = await errorResponse.clone().json().catch(() => null);
-      const message = typeof payload?.error === "string" ? payload.error.trim() : "";
+      const payload: unknown = await errorResponse
+        .clone()
+        .json()
+        .catch((): null => null);
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof payload.error === "string"
+          ? payload.error.trim()
+          : "";
 
       if (message) {
         return message;
@@ -53,7 +62,7 @@ async function getFunctionErrorMessage(error: unknown, response?: Response) {
   return error instanceof Error && error.message.trim() ? error.message : "Не удалось выполнить действие пользователя";
 }
 
-async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData> {
+async function callUserAdminAction<TData = null>(payload: UserAdminAction): Promise<TData | null> {
   const {
     data: { session },
   } = await runRequest("auth.getSession", () => supabase.auth.getSession());
