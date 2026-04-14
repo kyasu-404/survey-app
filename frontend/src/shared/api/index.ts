@@ -1,8 +1,11 @@
 export { apiClient, publicApiClient, publicSupabaseClient, supabaseClient } from "./client";
 export {
+  fetchDashboardFormsPage,
+  fetchDashboardFormsStats,
   fetchForms,
   fetchFormById,
   fetchPublicFormById,
+  fetchTemplateFormsPage,
   insertForm,
   createFormFromTemplate,
   updateFormSchema,

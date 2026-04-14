@@ -4,6 +4,8 @@ type RefreshTarget = {
   queryKey: QueryKey;
 };
 
+const pendingInvalidations = new Map<string, ReturnType<typeof setTimeout>>();
+
 export function scheduleQueryInvalidation(
   queryClient: QueryClient,
   reason: string,
@@ -27,4 +29,25 @@ export function scheduleQueryInvalidation(
       count: targets.length,
     });
   });
+}
+
+export function scheduleDebouncedQueryInvalidation(
+  queryClient: QueryClient,
+  reason: string,
+  targets: RefreshTarget[],
+  debounceMs: number,
+) {
+  const cacheKey = `${reason}:${JSON.stringify(targets.map((target) => target.queryKey))}`;
+  const existingTimeoutId = pendingInvalidations.get(cacheKey);
+
+  if (existingTimeoutId) {
+    clearTimeout(existingTimeoutId);
+  }
+
+  const timeoutId = setTimeout(() => {
+    pendingInvalidations.delete(cacheKey);
+    scheduleQueryInvalidation(queryClient, reason, targets);
+  }, debounceMs);
+
+  pendingInvalidations.set(cacheKey, timeoutId);
 }

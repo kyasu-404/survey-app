@@ -42,6 +42,19 @@ export type SurveyForm = {
   responses_count?: number;
 };
 
+export type SurveyFormSummary = Omit<SurveyForm, "schema">;
+
+export type PaginatedSurveyFormSummaries = {
+  items: SurveyFormSummary[];
+  totalCount: number;
+};
+
+export type DashboardFormsStats = {
+  totalCount: number;
+  activeCount: number;
+  formsWithDeadlineCount: number;
+};
+
 export type Question =
   | {
       id: string

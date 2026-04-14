@@ -12,7 +12,9 @@ import DashboardPage from "./DashboardPage";
 const {
   showToast,
   navigate,
-  getForms,
+  getDashboardFormsPage,
+  getDashboardFormsStats,
+  getFormById,
   cloneForm,
   changeFormStatus,
   setFormDeadline,
@@ -38,7 +40,9 @@ const {
   return {
     showToast: vi.fn(),
     navigate: vi.fn(),
-    getForms: vi.fn(),
+    getDashboardFormsPage: vi.fn(),
+    getDashboardFormsStats: vi.fn(),
+    getFormById: vi.fn(),
     cloneForm: vi.fn(),
     changeFormStatus: vi.fn(),
     setFormDeadline: vi.fn(),
@@ -85,7 +89,9 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("../../entities/survey/api/surveysApi", () => ({
-  getForms,
+  getDashboardFormsPage,
+  getDashboardFormsStats,
+  getFormById,
   cloneForm,
   renameForm: vi.fn(),
   removeForm: vi.fn(),
@@ -150,6 +156,21 @@ function createQueryClient() {
   });
 }
 
+function createDashboardPage(items: SurveyForm[], totalCount = items.length) {
+  return {
+    items,
+    totalCount,
+  };
+}
+
+function createDashboardStats(items: SurveyForm[], totalCount = items.length) {
+  return {
+    totalCount,
+    activeCount: items.filter((form) => form.is_public && form.form_type !== "template").length,
+    formsWithDeadlineCount: items.filter((form) => form.form_type !== "template" && Boolean(form.deadline_at)).length,
+  };
+}
+
 function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryClient()) {
   const renderResult = render(
     <MemoryRouter>
@@ -181,6 +202,12 @@ describe("DashboardPage", () => {
     resetRealtimeChannel();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    getDashboardFormsStats.mockResolvedValue({
+      totalCount: 0,
+      activeCount: 0,
+      formsWithDeadlineCount: 0,
+    });
+    getFormById.mockResolvedValue(createForm(1));
     cloneForm.mockResolvedValue({ id: "form-copy" });
     changeFormStatus.mockResolvedValue(undefined);
     setFormDeadline.mockResolvedValue(undefined);
@@ -190,9 +217,9 @@ describe("DashboardPage", () => {
   });
 
   it("refreshes forms after a realtime database change", async () => {
-    getForms
-      .mockResolvedValueOnce([createForm(1, { responses_count: 1 })])
-      .mockResolvedValueOnce([createForm(1, { responses_count: 2 })]);
+    getDashboardFormsPage
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { responses_count: 1 })]))
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { responses_count: 2 })]));
 
     renderPage();
 
@@ -201,16 +228,29 @@ describe("DashboardPage", () => {
     emitRealtimeChange();
 
     await waitFor(() => {
-      expect(getForms).toHaveBeenCalledTimes(2);
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
     });
 
     expect(await screen.findByRole("button", { name: "2 ответа" })).toBeInTheDocument();
   });
 
   it("shows form stats inside the info popover and paginates the list", async () => {
-    getForms.mockResolvedValue(Array.from({ length: 25 }, (_, index) => createForm(index + 1)));
+    const forms = Array.from({ length: 25 }, (_, index) => createForm(index + 1));
+    getDashboardFormsPage.mockImplementation(({ pageSize }: { pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(0, pageSize), forms.length)),
+    );
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
 
     renderPage();
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          page: 0,
+          pageSize: 20,
+        }),
+      );
+    });
 
     expect(await screen.findByText("Форма 20")).toBeInTheDocument();
     expect(screen.queryByText("Форма 21")).not.toBeInTheDocument();
@@ -226,6 +266,14 @@ describe("DashboardPage", () => {
     expect(within(statsPopover).getByText("12")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 0,
+          pageSize: 40,
+        }),
+      );
+    });
     expect(await screen.findByText("Форма 25")).toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Количество форм" }), "50");
@@ -236,9 +284,9 @@ describe("DashboardPage", () => {
   });
 
   it("renders a loading label with a spinner while the forms list is loading", async () => {
-    const deferred = createDeferred<SurveyForm[]>();
+    const deferred = createDeferred<ReturnType<typeof createDashboardPage>>();
 
-    getForms.mockImplementation(() => deferred.promise);
+    getDashboardFormsPage.mockImplementation(() => deferred.promise);
 
     const { container } = renderPage();
 
@@ -246,15 +294,15 @@ describe("DashboardPage", () => {
     expect(container.querySelector(".dashboard-forms-loading .inline-spinner")).toBeInTheDocument();
     expect(container.querySelector(".dashboard-form-skeleton")).not.toBeInTheDocument();
 
-    deferred.resolve([]);
+    deferred.resolve(createDashboardPage([]));
 
     expect(await screen.findByText("Форм пока нет")).toBeInTheDocument();
   });
 
-  it("keeps the forms list refresh state as a loading label without skeleton cards", async () => {
-    const deferred = createDeferred<SurveyForm[]>();
-    getForms
-      .mockResolvedValueOnce([createForm(1, { title: "Обновляемая форма" })])
+  it("keeps the forms list interactive during a background refresh", async () => {
+    const deferred = createDeferred<ReturnType<typeof createDashboardPage>>();
+    getDashboardFormsPage
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]))
       .mockImplementationOnce(() => deferred.promise);
 
     const { container } = renderPage();
@@ -263,16 +311,19 @@ describe("DashboardPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
 
-    expect(await screen.findByText("Загрузка форм")).toBeInTheDocument();
-    expect(container.querySelector(".dashboard-forms-loading .inline-spinner")).toBeInTheDocument();
-    expect(container.querySelector(".dashboard-refresh-overlay")).not.toBeInTheDocument();
+    expect(screen.queryByText("Загрузка форм")).not.toBeInTheDocument();
     expect(container.querySelector(".dashboard-form-skeleton")).not.toBeInTheDocument();
+    expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
+    expect(screen.getByText("Обновляемая форма")).toBeInTheDocument();
 
-    deferred.resolve([createForm(1, { title: "Обновляемая форма" })]);
+    deferred.resolve(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]));
   });
 
   it("keeps the current scroll position when showing more forms", async () => {
-    getForms.mockResolvedValue(Array.from({ length: 25 }, (_, index) => createForm(index + 1)));
+    const forms = Array.from({ length: 25 }, (_, index) => createForm(index + 1));
+    getDashboardFormsPage.mockImplementation(({ pageSize }: { pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(0, pageSize), forms.length)),
+    );
     Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 360 });
     const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
@@ -290,12 +341,14 @@ describe("DashboardPage", () => {
   });
 
   it("opens preview from the card and responses from the counter button", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Тестовая форма",
-        responses_count: 3,
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Тестовая форма",
+          responses_count: 3,
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -314,13 +367,22 @@ describe("DashboardPage", () => {
   });
 
   it("shows owner-only actions in the menu and re-enables the trigger after duplication", async () => {
-    getForms.mockResolvedValue([
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Моя форма",
+          author_id: "user-1",
+          author_name: "Я",
+        }),
+      ]),
+    );
+    getFormById.mockResolvedValue(
       createForm(1, {
         title: "Моя форма",
         author_id: "user-1",
         author_name: "Я",
       }),
-    ]);
+    );
 
     const queryClient = createQueryClient();
     vi.spyOn(queryClient, "invalidateQueries").mockImplementation(
@@ -351,6 +413,7 @@ describe("DashboardPage", () => {
     await userEvent.click(within(menu).getByRole("menuitem", { name: "Дублировать" }));
 
     await waitFor(() => {
+      expect(getFormById).toHaveBeenCalledWith("form-1");
       expect(cloneForm).toHaveBeenCalledWith(
         expect.objectContaining({ id: "form-1" }),
         "user-1",
@@ -363,13 +426,15 @@ describe("DashboardPage", () => {
   });
 
   it("renders action icons in the dropdown menu and a deadline icon in form metadata", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Моя форма",
-        author_id: "user-1",
-        deadline_at: "2026-05-10T12:00:00.000Z",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Моя форма",
+          author_id: "user-1",
+          deadline_at: "2026-05-10T12:00:00.000Z",
+        }),
+      ]),
+    );
 
     const { container } = renderPage();
 
@@ -402,12 +467,14 @@ describe("DashboardPage", () => {
   });
 
   it("opens a generated QR dialog and downloads the QR on request", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "QR форма",
-        author_id: "user-1",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "QR форма",
+          author_id: "user-1",
+        }),
+      ]),
+    );
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
     renderPage();
@@ -462,17 +529,20 @@ describe("DashboardPage", () => {
   });
 
   it("shows the compact action set for non-owners and the status dropdown for owners", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Чужая форма",
-        author_id: "user-2",
-      }),
-      createForm(2, {
-        title: "Закрытая форма",
-        author_id: "user-1",
-        is_public: false,
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Чужая форма",
+          author_id: "user-2",
+        }),
+        createForm(2, {
+          title: "Закрытая форма",
+          author_id: "user-1",
+          is_public: false,
+          deadline_at: null,
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -531,10 +601,12 @@ describe("DashboardPage", () => {
   });
 
   it("marks only the first visible form action menu to open downward", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, { title: "Верхняя форма", author_id: "user-1" }),
-      createForm(2, { title: "Нижняя форма", author_id: "user-1" }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, { title: "Верхняя форма", author_id: "user-1" }),
+        createForm(2, { title: "Нижняя форма", author_id: "user-1" }),
+      ]),
+    );
 
     renderPage();
 
@@ -546,18 +618,21 @@ describe("DashboardPage", () => {
   });
 
   it("uses destructive and positive colors for status menu actions", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Открытая форма",
-        author_id: "user-1",
-        is_public: true,
-      }),
-      createForm(2, {
-        title: "Закрытая форма",
-        author_id: "user-1",
-        is_public: false,
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Открытая форма",
+          author_id: "user-1",
+          is_public: true,
+        }),
+        createForm(2, {
+          title: "Закрытая форма",
+          author_id: "user-1",
+          is_public: false,
+          deadline_at: null,
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -573,18 +648,20 @@ describe("DashboardPage", () => {
   });
 
   it("keeps templates out of the my forms dashboard", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Обычная форма",
-        author_id: "user-1",
-        form_type: "anketa",
-      }),
-      createForm(2, {
-        title: "Шаблон отчёта",
-        author_id: "user-1",
-        form_type: "template",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Обычная форма",
+          author_id: "user-1",
+          form_type: "anketa",
+        }),
+        createForm(2, {
+          title: "Шаблон отчёта",
+          author_id: "user-1",
+          form_type: "template",
+        }),
+      ]),
+    );
 
     renderPage("mine");
 
@@ -594,12 +671,14 @@ describe("DashboardPage", () => {
   });
 
   it("renders the delete modal action wrapper for dashboard styling", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Моя форма",
-        author_id: "user-1",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Моя форма",
+          author_id: "user-1",
+        }),
+      ]),
+    );
 
     const { container } = renderPage("all");
 
@@ -611,14 +690,16 @@ describe("DashboardPage", () => {
   });
 
   it("asks for confirmation and clears deadline before closing a public form with deadline", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Публичная форма",
-        author_id: "user-1",
-        is_public: true,
-        deadline_at: "2026-05-10T12:00:00.000Z",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Публичная форма",
+          author_id: "user-1",
+          is_public: true,
+          deadline_at: "2026-05-10T12:00:00.000Z",
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -641,14 +722,16 @@ describe("DashboardPage", () => {
   it("does not close a public form with deadline when user rejects the warning", async () => {
     vi.mocked(window.confirm).mockReturnValue(false);
 
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Публичная форма",
-        author_id: "user-1",
-        is_public: true,
-        deadline_at: "2026-05-10T12:00:00.000Z",
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Публичная форма",
+          author_id: "user-1",
+          is_public: true,
+          deadline_at: "2026-05-10T12:00:00.000Z",
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -660,13 +743,15 @@ describe("DashboardPage", () => {
   });
 
   it("disables deadline clearing when the form has no deadline", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Форма без дедлайна",
-        author_id: "user-1",
-        deadline_at: null,
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Форма без дедлайна",
+          author_id: "user-1",
+          deadline_at: null,
+        }),
+      ]),
+    );
 
     renderPage();
 
@@ -677,20 +762,22 @@ describe("DashboardPage", () => {
   });
 
   it("shows response limits in counters and lets owners edit or clear the limit from the status menu", async () => {
-    getForms.mockResolvedValue([
-      createForm(1, {
-        title: "Лимитируемая форма",
-        author_id: "user-1",
-        responses_count: 3,
-        max_responses: 10,
-      }),
-      createForm(2, {
-        title: "Заполненная форма",
-        author_id: "user-1",
-        responses_count: 5,
-        max_responses: 5,
-      }),
-    ]);
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Лимитируемая форма",
+          author_id: "user-1",
+          responses_count: 3,
+          max_responses: 10,
+        }),
+        createForm(2, {
+          title: "Заполненная форма",
+          author_id: "user-1",
+          responses_count: 5,
+          max_responses: 5,
+        }),
+      ]),
+    );
 
     renderPage();
 

@@ -24,22 +24,32 @@ import deleteIcon from "../../img/delete.svg";
 import deadlineIcon from "../../img/deadline.svg";
 import searchIcon from "../../img/search.svg";
 import {
+  getDashboardFormsPage,
+  getDashboardFormsStats,
+  getFormById,
   changeFormStatus,
   cloneForm,
-  getForms,
   removeForm,
   renameForm,
   setFormDeadline,
   setFormResponseLimit,
 } from "../../entities/survey/api/surveysApi";
-import { getNextDeadlineRefreshDelayMs } from "../../entities/survey/model/deadlineState";
+import {
+  applyDeadlineStatePatch,
+  getDeadlineStatePatch,
+  getNextDeadlineRefreshDelayMs,
+} from "../../entities/survey/model/deadlineState";
+import {
+  getDashboardFormStatsQueryKey,
+  getDashboardFormsQueryKey,
+} from "../../entities/survey/model/queryKeys";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
-import type { SurveyForm } from "../../entities/survey/types";
+import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage } from "../../shared/lib/error";
 import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "../../shared/lib/qrCode";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
-import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { scheduleDebouncedQueryInvalidation, scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 
 type DashboardPageProps = {
@@ -47,12 +57,12 @@ type DashboardPageProps = {
 };
 
 type DeadlineEditorState = {
-  form: SurveyForm;
+  form: SurveyFormSummary;
   value: string;
 };
 
 type ResponseLimitEditorState = {
-  form: SurveyForm;
+  form: SurveyFormSummary;
   value: string;
 };
 
@@ -123,7 +133,7 @@ function isResponseLimitReached(count: number, maxResponses?: number | null) {
   return typeof maxResponses === "number" && maxResponses > 0 && count >= maxResponses;
 }
 
-function getAuthorLabel(form: SurveyForm) {
+function getAuthorLabel(form: SurveyFormSummary) {
   return form.author_name || form.author_email || form.author_id;
 }
 
@@ -136,79 +146,113 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
   const [visibleCount, setVisibleCount] = useState(20);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
-  const [formToDelete, setFormToDelete] = useState<SurveyForm | null>(null);
+  const [formToDelete, setFormToDelete] = useState<SurveyFormSummary | null>(null);
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
   const [deadlineEditor, setDeadlineEditor] = useState<DeadlineEditorState | null>(null);
   const [responseLimitEditor, setResponseLimitEditor] = useState<ResponseLimitEditorState | null>(null);
   const [qrDialog, setQrDialog] = useState<QrDialogState | null>(null);
   const [qrGeneratingFormId, setQrGeneratingFormId] = useState<string | null>(null);
   const [qrDownloadFormat, setQrDownloadFormat] = useState<"png" | "svg" | null>(null);
+  const [deadlineReferenceTime, setDeadlineReferenceTime] = useState(() => new Date());
   const pendingLoadMoreScrollPositionRef = useRef<{ left: number; top: number } | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const listFilters = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      authorId: viewMode === "mine" ? user?.id : undefined,
+    }),
+    [dateFrom, dateTo, search, user?.id, viewMode],
+  );
+
   const formsQueryKey = useMemo(
-    () => ["forms", { dateFrom, dateTo, viewMode, userId: user?.id ?? null }],
-    [dateFrom, dateTo, user?.id, viewMode],
+    () =>
+      getDashboardFormsQueryKey({
+        dateFrom,
+        dateTo,
+        search,
+        pageSize: visibleCount,
+        viewMode,
+        userId: user?.id ?? null,
+      }),
+    [dateFrom, dateTo, search, user?.id, viewMode, visibleCount],
+  );
+
+  const formsStatsQueryKey = useMemo(
+    () =>
+      getDashboardFormStatsQueryKey({
+        dateFrom,
+        dateTo,
+        search,
+        viewMode,
+        userId: user?.id ?? null,
+      }),
+    [dateFrom, dateTo, search, user?.id, viewMode],
   );
 
   const {
-    data: forms = [],
+    data: formsPage,
     isLoading: isFormsLoading,
     isFetching: isFormsFetching,
     error: formsError,
     refetch: reloadForms,
+    dataUpdatedAt: formsUpdatedAt,
   } = useQuery({
     queryKey: formsQueryKey,
     queryFn: () =>
-      getForms({
-        dateFrom,
-        dateTo,
-        authorId: viewMode === "mine" ? user?.id : undefined,
+      getDashboardFormsPage({
+        page: 0,
+        pageSize: visibleCount,
+        filters: listFilters,
       }),
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: true,
   });
 
+  const { data: formsStats } = useQuery({
+    queryKey: formsStatsQueryKey,
+    queryFn: () => getDashboardFormsStats(listFilters),
+    enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
+    retry: 1,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: true,
+  });
+
+  const loadedForms = formsPage?.items ?? [];
+
   const visibleForms = useMemo(() => {
-    return forms.filter((form) => !isTemplateForm(form));
-  }, [forms]);
+    return loadedForms.map((form) => {
+      const deadlineStatePatch = getDeadlineStatePatch(form, deadlineReferenceTime);
+      return deadlineStatePatch ? applyDeadlineStatePatch(form, deadlineStatePatch) : form;
+    });
+  }, [deadlineReferenceTime, loadedForms]);
 
   const filteredForms = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) {
-      return visibleForms;
-    }
+    return visibleForms.filter((form) => !isTemplateForm(form));
+  }, [visibleForms]);
 
-    return visibleForms.filter((form) => {
-      const title = form.title?.toLowerCase() ?? "";
-      const authorName = form.author_name?.toLowerCase() ?? "";
-      const authorEmail = form.author_email?.toLowerCase() ?? "";
-      const authorId = form.author_id?.toLowerCase() ?? "";
-
-      return (
-        title.includes(normalizedSearch) ||
-        authorName.includes(normalizedSearch) ||
-        authorEmail.includes(normalizedSearch) ||
-        authorId.includes(normalizedSearch)
-      );
-    });
-  }, [search, visibleForms]);
-
-  const displayedForms = useMemo(() => filteredForms.slice(0, visibleCount), [filteredForms, visibleCount]);
+  const displayedForms = filteredForms;
   const appOrigin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
-  const nextDeadlineRefreshDelayMs = useMemo(() => getNextDeadlineRefreshDelayMs(visibleForms), [visibleForms]);
-  const isInitialFormsLoading = isFormsLoading && forms.length === 0;
-  const activeFormsCount = useMemo(
-    () => filteredForms.filter((form) => !isTemplateForm(form) && form.is_public).length,
-    [filteredForms],
+  const nextDeadlineRefreshDelayMs = useMemo(
+    () => getNextDeadlineRefreshDelayMs(filteredForms, deadlineReferenceTime),
+    [deadlineReferenceTime, filteredForms],
   );
-  const formsWithDeadlineCount = useMemo(
-    () => filteredForms.filter((form) => !isTemplateForm(form) && Boolean(form.deadline_at)).length,
-    [filteredForms],
-  );
-  const hasMoreForms = displayedForms.length < filteredForms.length;
-  const isRefreshingForms = isFormsFetching && !isInitialFormsLoading;
+  const isInitialFormsLoading = isFormsLoading && loadedForms.length === 0;
+  const fallbackActiveFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && form.is_public).length;
+  const fallbackDeadlineFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && Boolean(form.deadline_at)).length;
+  const totalFormsCount = Math.max(formsStats?.totalCount ?? 0, formsPage?.totalCount ?? filteredForms.length);
+  const activeFormsCount = Math.max(formsStats?.activeCount ?? 0, fallbackActiveFormsCount);
+  const formsWithDeadlineCount = Math.max(formsStats?.formsWithDeadlineCount ?? 0, fallbackDeadlineFormsCount);
+  const hasMoreForms = filteredForms.length < totalFormsCount;
 
   useLayoutEffect(() => {
     const scrollPosition = pendingLoadMoreScrollPositionRef.current;
@@ -231,18 +275,22 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   }, [formsError, showToast]);
 
   useEffect(() => {
+    setDeadlineReferenceTime(new Date());
+  }, [formsUpdatedAt]);
+
+  useEffect(() => {
     if (nextDeadlineRefreshDelayMs === null) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      void reloadForms();
+      setDeadlineReferenceTime(new Date());
     }, Math.min(nextDeadlineRefreshDelayMs + 250, MAX_TIMEOUT_MS));
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [nextDeadlineRefreshDelayMs, reloadForms]);
+  }, [nextDeadlineRefreshDelayMs]);
 
   useEffect(() => {
     if (isAuthLoading || (viewMode === "mine" && !user?.id)) {
@@ -261,7 +309,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           ...(formFilter ? { filter: formFilter } : {}),
         },
         () => {
-          scheduleQueryInvalidation(queryClient, `dashboard realtime ${viewMode} forms`, [{ queryKey: ["forms"] }]);
+          scheduleDebouncedQueryInvalidation(
+            queryClient,
+            `dashboard realtime ${viewMode} forms`,
+            [{ queryKey: formsQueryKey }, { queryKey: formsStatsQueryKey }],
+            750,
+          );
         },
       )
       .subscribe((status) => {
@@ -275,7 +328,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     return () => {
       void supabaseClient.removeChannel(channel);
     };
-  }, [isAuthLoading, queryClient, user?.id, viewMode]);
+  }, [formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, user?.id, viewMode]);
 
   useEffect(() => {
     if (!openedMenu) {
@@ -326,7 +379,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const getFormLink = (formId: string) => `${appOrigin}${routes.survey(formId)}`;
 
   const scheduleFormsRefresh = () => {
-    scheduleQueryInvalidation(queryClient, "dashboard forms refresh", [{ queryKey: ["forms"] }]);
+    scheduleQueryInvalidation(queryClient, "dashboard forms refresh", [
+      { queryKey: formsQueryKey },
+      { queryKey: formsStatsQueryKey },
+    ]);
   };
 
   const scheduleFormDetailsRefresh = (formId: string) => {
@@ -392,7 +448,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
   };
 
-  const handleOpenQrCode = async (form: SurveyForm) => {
+  const handleOpenQrCode = async (form: SurveyFormSummary) => {
     const link = getFormLink(form.id);
     const title = getSurveyDisplayTitle(form);
 
@@ -435,7 +491,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
   };
 
-  const handleRename = async (form: SurveyForm) => {
+  const handleRename = async (form: SurveyFormSummary) => {
     const newTitle = window.prompt("Введите новое название формы", form.title);
     if (!newTitle || !newTitle.trim() || newTitle === form.title) {
       return;
@@ -466,13 +522,21 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
-  const handleDuplicate = async (form: SurveyForm) => {
+  const handleDuplicate = async (form: SurveyFormSummary) => {
     if (!user?.id) {
       showToast("Для дублирования формы нужно войти в систему", "error");
       return;
     }
 
-    await runAction(() => duplicateMutation.mutateAsync({ form, authorId: user.id }), {
+    await runAction(async () => {
+      const fullForm = await queryClient.fetchQuery({
+        queryKey: ["form", form.id],
+        queryFn: () => getFormById(form.id),
+        staleTime: 60_000,
+      });
+
+      await duplicateMutation.mutateAsync({ form: fullForm, authorId: user.id });
+    }, {
       actionKey: getFormActionKey(form.id),
       successMessage: "Форма сохранена",
       errorMessage: "Не удалось дублировать форму",
@@ -480,7 +544,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
-  const handleToggleFormStatus = async (form: SurveyForm) => {
+  const handleToggleFormStatus = async (form: SurveyFormSummary) => {
     const nextStatus = !form.is_public;
 
     if (!nextStatus && form.deadline_at) {
@@ -508,7 +572,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     });
   };
 
-  const handleCardOpen = (form: SurveyForm) => {
+  const handleCardOpen = (form: SurveyFormSummary) => {
     if (isTemplateForm(form)) {
       return;
     }
@@ -516,7 +580,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     navigate(routes.survey(form.id), { state: { isPreview: true } });
   };
 
-  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, form: SurveyForm) => {
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, form: SurveyFormSummary) => {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
@@ -537,7 +601,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       };
     }
 
-    setVisibleCount((current) => current + 20);
+    setVisibleCount((current) => current + pageSize);
   };
 
   return (
@@ -568,7 +632,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <div className="dashboard-stats-popover" role="dialog" aria-label="Сводка по формам">
                   <div className="dashboard-stats-item">
                     <span>Всего форм</span>
-                    <strong>{filteredForms.length}</strong>
+                    <strong>{totalFormsCount}</strong>
                   </div>
                   <div className="dashboard-stats-item">
                     <span>Активных</span>
@@ -618,7 +682,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         </div>
 
-        {(isInitialFormsLoading || isRefreshingForms) && (
+        {isInitialFormsLoading && (
           <div className="dashboard-forms-loading" role="status" aria-live="polite">
             <span>Загрузка форм</span>
             <InlineSpinner />
@@ -632,7 +696,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           </div>
         )}
 
-        <div className={`dashboard-forms-grid ${isRefreshingForms ? "dashboard-forms-grid-refreshing" : ""}`.trim()}>
+        <div className="dashboard-forms-grid">
           {displayedForms.map((form, formIndex) => {
             const title = getSurveyDisplayTitle(form);
             const isOwnForm = form.author_id === user?.id;

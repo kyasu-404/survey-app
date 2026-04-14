@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { submitResponse, useSubmitResponseMutation } from "./useSubmitResponse";
 import { createResponse } from "../../entities/response/api";
+import {
+  DASHBOARD_FORMS_QUERY_ROOT,
+  DASHBOARD_FORM_STATS_QUERY_ROOT,
+} from "../../entities/survey/model/queryKeys";
 
 vi.mock("../../entities/response/api", () => ({
   createResponse: vi.fn(),
@@ -46,7 +50,8 @@ describe("submitResponse", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["forms"] });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: DASHBOARD_FORMS_QUERY_ROOT });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form", "form-1"] });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["survey-form", "form-1"] });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form-responses", "form-1"] });

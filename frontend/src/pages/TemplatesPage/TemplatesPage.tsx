@@ -18,12 +18,14 @@ import shareIcon from "../../img/share.svg";
 import useIcon from "../../img/use.svg";
 import {
   changeFormStatus,
-  getForms,
+  getFormById,
+  getTemplateFormsPage,
   removeForm,
   renameForm,
 } from "../../entities/survey/api/surveysApi";
+import { TEMPLATE_FORMS_QUERY_ROOT, getTemplateFormsQueryKey } from "../../entities/survey/model/queryKeys";
 import { TEMPLATE_FORM_TYPE, getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
-import type { SurveyForm } from "../../entities/survey/types";
+import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
 import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
@@ -43,11 +45,13 @@ type TemplateActionOptions = {
   logLabel: string;
 };
 
+const TEMPLATE_PAGE_SIZE = 24;
+
 function formatCreatedAt(dateTime: string) {
   return new Date(dateTime).toLocaleString("ru-RU");
 }
 
-function getAuthorLabel(form: SurveyForm) {
+function getAuthorLabel(form: SurveyFormSummary) {
   return form.author_name || form.author_email || form.author_id;
 }
 
@@ -70,20 +74,26 @@ export default function TemplatesPage() {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const [section, setSection] = useState<TemplatesSection>("mine");
+  const [visibleCount, setVisibleCount] = useState(TEMPLATE_PAGE_SIZE);
   const [openedMenuTemplateId, setOpenedMenuTemplateId] = useState<string | null>(null);
-  const [previewTemplate, setPreviewTemplate] = useState<SurveyForm | null>(null);
-  const [templateToDelete, setTemplateToDelete] = useState<SurveyForm | null>(null);
+  const [previewTemplateCard, setPreviewTemplateCard] = useState<SurveyFormSummary | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<SurveyFormSummary | null>(null);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const templatesQueryKey = useMemo(
-    () => ["templates", { section, userId: user?.id ?? null }],
-    [section, user?.id],
+    () =>
+      getTemplateFormsQueryKey({
+        section,
+        pageSize: visibleCount,
+        userId: user?.id ?? null,
+      }),
+    [section, user?.id, visibleCount],
   );
 
   const {
-    data: forms = [],
+    data: templatesPage,
     isLoading: isTemplatesLoading,
     isFetching: isTemplatesFetching,
     error: templatesError,
@@ -91,28 +101,48 @@ export default function TemplatesPage() {
   } = useQuery({
     queryKey: templatesQueryKey,
     queryFn: () =>
-      getForms(
-        section === "mine"
-          ? {
-              authorId: user?.id,
-              formType: TEMPLATE_FORM_TYPE,
-            }
-          : {
-              formType: TEMPLATE_FORM_TYPE,
-              isPublic: true,
-            },
-      ),
+      getTemplateFormsPage({
+        page: 0,
+        pageSize: visibleCount,
+        filters:
+          section === "mine"
+            ? {
+                authorId: user?.id,
+                formType: TEMPLATE_FORM_TYPE,
+              }
+            : {
+                formType: TEMPLATE_FORM_TYPE,
+                isPublic: true,
+              },
+      }),
     enabled: !isAuthLoading && (section === "public" || Boolean(user?.id)),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: true,
   });
 
   const templates = useMemo(() => {
-    const templateForms = forms.filter((form) => isTemplateForm(form));
+    const templateForms = (templatesPage?.items ?? []).filter((form) => isTemplateForm(form));
     return section === "public" ? templateForms.filter((form) => form.is_public) : templateForms;
-  }, [forms, section]);
+  }, [section, templatesPage?.items]);
 
-  const isInitialTemplatesLoading = isTemplatesLoading && forms.length === 0;
-  const isRefreshingTemplates = isTemplatesFetching && !isInitialTemplatesLoading;
+  const {
+    data: previewTemplate,
+    isLoading: isPreviewTemplateLoading,
+    error: previewTemplateError,
+  } = useQuery({
+    queryKey: ["form", previewTemplateCard?.id],
+    queryFn: () => getFormById(previewTemplateCard!.id),
+    enabled: Boolean(previewTemplateCard?.id),
+    retry: 1,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const isInitialTemplatesLoading = isTemplatesLoading && templates.length === 0;
+  const hasMoreTemplates = templates.length < (templatesPage?.totalCount ?? templates.length);
 
   useEffect(() => {
     if (!templatesError) {
@@ -121,6 +151,19 @@ export default function TemplatesPage() {
 
     showToast(getErrorMessage(templatesError, "Не удалось загрузить шаблоны"), "error");
   }, [showToast, templatesError]);
+
+  useEffect(() => {
+    if (!previewTemplateError) {
+      return;
+    }
+
+    showToast(getErrorMessage(previewTemplateError, "Не удалось загрузить шаблон"), "error");
+  }, [previewTemplateError, showToast]);
+
+  useEffect(() => {
+    setVisibleCount(TEMPLATE_PAGE_SIZE);
+    setPreviewTemplateCard(null);
+  }, [section]);
 
   useEffect(() => {
     if (!openedMenuTemplateId) {
@@ -171,9 +214,8 @@ export default function TemplatesPage() {
 
   const scheduleTemplatesRefresh = () => {
     scheduleQueryInvalidation(queryClient, "templates refresh", [
-      { queryKey: ["templates"] },
+      { queryKey: TEMPLATE_FORMS_QUERY_ROOT },
       { queryKey: ["builder-templates"] },
-      { queryKey: ["forms"] },
     ]);
   };
 
@@ -219,11 +261,19 @@ export default function TemplatesPage() {
     event.stopPropagation();
   };
 
-  const handleCardOpen = (template: SurveyForm) => {
-    setPreviewTemplate(template);
+  const ensureTemplateDetails = async (templateId: string) => {
+    return queryClient.fetchQuery({
+      queryKey: ["form", templateId],
+      queryFn: () => getFormById(templateId),
+      staleTime: 60_000,
+    });
   };
 
-  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, template: SurveyForm) => {
+  const handleCardOpen = (template: SurveyFormSummary) => {
+    setPreviewTemplateCard(template);
+  };
+
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, template: SurveyFormSummary) => {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
@@ -232,7 +282,7 @@ export default function TemplatesPage() {
     handleCardOpen(template);
   };
 
-  const handleRename = async (template: SurveyForm) => {
+  const handleRename = async (template: SurveyFormSummary) => {
     const newTitle = window.prompt("Введите новое название шаблона", template.title);
     if (!newTitle || !newTitle.trim() || newTitle === template.title) {
       return;
@@ -247,26 +297,33 @@ export default function TemplatesPage() {
     });
   };
 
-  const handleUseTemplate = async (template: SurveyForm) => {
+  const handleUseTemplate = async (template: SurveyFormSummary) => {
     if (!user?.id) {
       showToast("Для использования шаблона нужно войти в систему", "error");
       return;
     }
 
+    const actionKey = getTemplateActionKey(template.id);
+    setActionPending(actionKey, true);
+
     try {
+      const fullTemplate = await ensureTemplateDetails(template.id);
+
       saveSurveyBuilderDraft(undefined, {
-        ...template.schema,
-        title: template.title,
+        ...fullTemplate.schema,
+        title: fullTemplate.title,
       });
       showToast("Шаблон загружен в конструктор", "success");
       navigate(routes.builder);
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, "Не удалось загрузить шаблон в конструктор"), "error");
+    } finally {
+      setActionPending(actionKey, false);
     }
   };
 
-  const handleToggleSharing = async (template: SurveyForm) => {
+  const handleToggleSharing = async (template: SurveyFormSummary) => {
     const nextStatus = !template.is_public;
 
     await runAction(() => statusMutation.mutateAsync({ id: template.id, isPublic: nextStatus }), {
@@ -293,6 +350,10 @@ export default function TemplatesPage() {
       affectedTemplateId: deletingTemplate.id,
       logLabel: `template delete ${deletingTemplate.id}`,
     });
+  };
+
+  const handleLoadMoreTemplates = () => {
+    setVisibleCount((current) => current + TEMPLATE_PAGE_SIZE);
   };
 
   return (
@@ -356,8 +417,8 @@ export default function TemplatesPage() {
 
         <div
           className={`templates-gallery-grid templates-gallery-grid-two-columns ${
-            isRefreshingTemplates ? "dashboard-forms-grid-refreshing" : ""
-          } ${openedMenuTemplateId ? "templates-gallery-grid-menu-open" : ""}`.trim()}
+            openedMenuTemplateId ? "templates-gallery-grid-menu-open" : ""
+          }`.trim()}
         >
           {templates.map((template) => {
             const title = getSurveyDisplayTitle(template);
@@ -506,34 +567,54 @@ export default function TemplatesPage() {
             );
           })}
         </div>
+
+        {!isInitialTemplatesLoading && hasMoreTemplates && (
+          <div className="dashboard-load-more">
+            <button type="button" className="dashboard-load-more-button" onClick={handleLoadMoreTemplates}>
+              Показать ещё
+            </button>
+          </div>
+        )}
       </div>
 
-      {previewTemplate && (
-        <div className="template-preview-layer" onMouseDown={(event) => event.target === event.currentTarget && setPreviewTemplate(null)}>
+      {previewTemplateCard && (
+        <div
+          className="template-preview-layer"
+          onMouseDown={(event) => event.target === event.currentTarget && setPreviewTemplateCard(null)}
+        >
           <aside
             className="template-preview-drawer"
             role="dialog"
-            aria-label={`Превью шаблона ${previewTemplate.title}`}
+            aria-label={`Превью шаблона ${previewTemplateCard.title}`}
             aria-modal="true"
           >
             <div className="template-preview-header">
               <div>
                 <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
-                <h2 className="template-preview-title">{previewTemplate.title}</h2>
+                <h2 className="template-preview-title">{previewTemplateCard.title}</h2>
               </div>
-              <button type="button" className="template-preview-close" onClick={() => setPreviewTemplate(null)}>
+              <button type="button" className="template-preview-close" onClick={() => setPreviewTemplateCard(null)}>
                 Закрыть
               </button>
             </div>
             <div className="template-preview-body survey-page-card">
-              <SurveyRenderer
-                schema={{
-                  ...previewTemplate.schema,
-                  title: previewTemplate.title,
-                }}
-                formId={previewTemplate.id}
-                isPreview
-              />
+              {isPreviewTemplateLoading && (
+                <div className="dashboard-forms-loading" role="status" aria-live="polite">
+                  <span>Загрузка шаблона</span>
+                  <InlineSpinner />
+                </div>
+              )}
+
+              {previewTemplate && (
+                <SurveyRenderer
+                  schema={{
+                    ...previewTemplate.schema,
+                    title: previewTemplate.title,
+                  }}
+                  formId={previewTemplate.id}
+                  isPreview
+                />
+              )}
             </div>
           </aside>
         </div>

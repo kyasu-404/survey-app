@@ -2,9 +2,12 @@ import {
   deleteForm,
   createFormFromTemplate as createRegularFormFromTemplate,
   duplicateForm,
+  fetchDashboardFormsPage,
+  fetchDashboardFormsStats,
   fetchFormById,
   fetchForms,
   fetchPublicFormById,
+  fetchTemplateFormsPage,
   insertForm,
   updateFormSchema,
   updateFormDeadline,
@@ -13,12 +16,37 @@ import {
   updateFormTitle,
   type FormsFilters,
 } from "../../../shared/api";
-import type { SurveyForm, SurveySchema } from "../types";
+import type {
+  DashboardFormsStats,
+  PaginatedSurveyFormSummaries,
+  SurveyForm,
+  SurveySchema,
+} from "../types";
 
 export type { FormsFilters };
 
 export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
   return fetchForms(filters);
+}
+
+export async function getDashboardFormsPage(params: {
+  page: number;
+  pageSize: number;
+  filters?: FormsFilters;
+}): Promise<PaginatedSurveyFormSummaries> {
+  return fetchDashboardFormsPage(params);
+}
+
+export async function getDashboardFormsStats(filters?: FormsFilters): Promise<DashboardFormsStats> {
+  return fetchDashboardFormsStats(filters);
+}
+
+export async function getTemplateFormsPage(params: {
+  page: number;
+  pageSize: number;
+  filters?: FormsFilters;
+}): Promise<PaginatedSurveyFormSummaries> {
+  return fetchTemplateFormsPage(params);
 }
 
 export async function getFormById(id: string): Promise<SurveyForm> {
@@ -39,7 +67,6 @@ export async function createSurvey(params: {
 }) {
   return insertForm(params);
 }
-
 
 export async function renameForm(id: string, title: string) {
   return updateFormTitle(id, title);

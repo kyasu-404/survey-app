@@ -39,6 +39,11 @@ import { useCreateSurveyMutation } from "../../features/create-survey/useCreateS
 import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import {
+  DASHBOARD_FORMS_QUERY_ROOT,
+  DASHBOARD_FORM_STATS_QUERY_ROOT,
+  TEMPLATE_FORMS_QUERY_ROOT,
+} from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
@@ -399,7 +404,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
   const scheduleBuilderQueryRefresh = (affectedFormId?: string) => {
     const targets = [
-      { queryKey: ["forms"] },
+      { queryKey: DASHBOARD_FORMS_QUERY_ROOT },
+      { queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT },
+      { queryKey: TEMPLATE_FORMS_QUERY_ROOT },
       { queryKey: ["builder-templates"] },
     ];
 

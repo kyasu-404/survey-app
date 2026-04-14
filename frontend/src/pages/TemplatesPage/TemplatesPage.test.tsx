@@ -13,7 +13,8 @@ import TemplatesPage from "./TemplatesPage";
 const {
   changeFormStatus,
   createFormFromTemplate,
-  getForms,
+  getFormById,
+  getTemplateFormsPage,
   navigate,
   removeForm,
   renameForm,
@@ -21,7 +22,8 @@ const {
 } = vi.hoisted(() => ({
   changeFormStatus: vi.fn(),
   createFormFromTemplate: vi.fn(),
-  getForms: vi.fn(),
+  getFormById: vi.fn(),
+  getTemplateFormsPage: vi.fn(),
   navigate: vi.fn(),
   removeForm: vi.fn(),
   renameForm: vi.fn(),
@@ -53,7 +55,8 @@ vi.mock("react-router-dom", async () => {
 vi.mock("../../entities/survey/api/surveysApi", () => ({
   changeFormStatus,
   createFormFromTemplate,
-  getForms,
+  getFormById,
+  getTemplateFormsPage,
   removeForm,
   renameForm,
 }));
@@ -96,6 +99,13 @@ function createQueryClient() {
   });
 }
 
+function createTemplatesPage(items: SurveyForm[], totalCount = items.length) {
+  return {
+    items,
+    totalCount,
+  };
+}
+
 function renderPage(queryClient = createQueryClient()) {
   const renderResult = render(
     <MemoryRouter>
@@ -118,16 +128,18 @@ describe("TemplatesPage", () => {
     vi.clearAllMocks();
     changeFormStatus.mockResolvedValue(undefined);
     createFormFromTemplate.mockResolvedValue({ id: "created-from-template" });
+    getFormById.mockResolvedValue(createTemplate(1));
     removeForm.mockResolvedValue(undefined);
     renameForm.mockResolvedValue(undefined);
   });
 
   it("renders my templates as a two-column gallery and opens a preview drawer from a card", async () => {
-    getForms.mockResolvedValue([
+    const templates = [
       createTemplate(1, { title: "Заявка на конкурс" }),
       createTemplate(2, { title: "Анкета участника" }),
       createTemplate(3, { title: "Обычная форма", form_type: "anketa" }),
-    ]);
+    ];
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage(templates));
 
     const { container } = renderPage();
 
@@ -136,16 +148,23 @@ describe("TemplatesPage", () => {
     expect(screen.queryByText("Обычная форма")).not.toBeInTheDocument();
     expect(container.querySelector(".templates-gallery-grid")).toBeInTheDocument();
     expect(container.querySelector(".templates-gallery-grid")).toHaveClass("templates-gallery-grid-two-columns");
+    expect(getTemplateFormsPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 0,
+      }),
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "Открыть превью шаблона Заявка на конкурс" }));
 
     expect(await screen.findByRole("dialog", { name: "Превью шаблона Заявка на конкурс" })).toBeInTheDocument();
+    expect(getFormById).toHaveBeenCalledWith("template-1");
     expect(container.querySelector(".template-preview-body")).toHaveClass("survey-page-card");
     expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
   });
 
   it("uses a selected template as a new builder draft without creating a form", async () => {
-    getForms.mockResolvedValue([createTemplate(1, { title: "Шаблон заявки" })]);
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1, { title: "Шаблон заявки" })]));
+    getFormById.mockResolvedValue(createTemplate(1, { title: "Шаблон заявки" }));
 
     renderPage();
 
@@ -158,6 +177,7 @@ describe("TemplatesPage", () => {
       expect(navigate).toHaveBeenCalledWith(routes.builder);
     });
 
+    expect(getFormById).toHaveBeenCalledWith("template-1");
     expect(createFormFromTemplate).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
@@ -169,7 +189,7 @@ describe("TemplatesPage", () => {
   });
 
   it("offers template actions without creating a new form when editing", async () => {
-    getForms.mockResolvedValue([createTemplate(1, { title: "Мой шаблон" })]);
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1, { title: "Мой шаблон" })]));
 
     const { container } = renderPage();
 
@@ -191,16 +211,17 @@ describe("TemplatesPage", () => {
   });
 
   it("toggles publishing for my templates and shows author metadata for public templates", async () => {
-    getForms.mockImplementation((filters: { authorId?: string } | undefined) =>
+    getTemplateFormsPage.mockImplementation((options: { filters?: { authorId?: string } } | undefined) =>
       Promise.resolve(
-        filters?.authorId
-          ? [
+        createTemplatesPage(
+          options?.filters?.authorId
+            ? [
               createTemplate(1, {
                 title: "Закрытый шаблон",
                 is_public: false,
               }),
             ]
-          : [
+            : [
               createTemplate(2, {
                 title: "Публичный шаблон",
                 is_public: true,
@@ -208,6 +229,7 @@ describe("TemplatesPage", () => {
                 author_name: "Мария Иванова",
               }),
             ],
+        ),
       ),
     );
 
@@ -234,18 +256,42 @@ describe("TemplatesPage", () => {
   });
 
   it("uses a muted share button style when hiding an already public own template", async () => {
-    getForms.mockResolvedValue([
-      createTemplate(1, {
-        title: "Опубликованный шаблон",
-        is_public: true,
-      }),
-    ]);
+    getTemplateFormsPage.mockResolvedValue(
+      createTemplatesPage([
+        createTemplate(1, {
+          title: "Опубликованный шаблон",
+          is_public: true,
+        }),
+      ]),
+    );
 
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Не показывать другим шаблоном Опубликованный шаблон" })).toHaveClass(
       "templates-share-button-muted",
     );
+  });
+
+  it("keeps template cards visible during a background refresh", async () => {
+    let resolveRefresh!: (value: ReturnType<typeof createTemplatesPage>) => void;
+    const refreshPromise = new Promise<ReturnType<typeof createTemplatesPage>>((resolve) => {
+      resolveRefresh = resolve;
+    });
+
+    getTemplateFormsPage
+      .mockResolvedValueOnce(createTemplatesPage([createTemplate(1, { title: "Тяжёлый шаблон" })]))
+      .mockImplementationOnce(() => refreshPromise);
+
+    const { container } = renderPage();
+
+    expect(await screen.findByText("Тяжёлый шаблон")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
+
+    expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
+    expect(screen.getByText("Тяжёлый шаблон")).toBeInTheDocument();
+
+    resolveRefresh(createTemplatesPage([createTemplate(1, { title: "Тяжёлый шаблон" })]));
   });
 
   it("keeps the template preview drawer wide enough for the survey page layout", () => {

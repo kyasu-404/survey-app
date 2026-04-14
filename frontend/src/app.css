@@ -4209,11 +4209,6 @@ button.responses-export-button:disabled {
   margin-top: 10px;
 }
 
-.dashboard-forms-grid-refreshing > .dashboard-form-card {
-  opacity: 0.42;
-  filter: saturate(0.92);
-}
-
 .dashboard-refresh-overlay {
   position: absolute;
   inset: 0;
