@@ -5,7 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -54,7 +54,7 @@ type ListRefreshNavigationState = {
   refreshList?: boolean;
 };
 
-const TEMPLATE_PAGE_SIZE = 24;
+const TEMPLATE_PAGE_SIZE = 20;
 
 function formatCreatedAt(dateTime: string) {
   return new Date(dateTime).toLocaleString("ru-RU");
@@ -84,7 +84,6 @@ export default function TemplatesPage() {
   const { showToast } = useToast();
   const location = useLocation();
   const [section, setSection] = useState<TemplatesSection>("mine");
-  const [visibleCount, setVisibleCount] = useState(TEMPLATE_PAGE_SIZE);
   const [openedMenuTemplateId, setOpenedMenuTemplateId] = useState<string | null>(null);
   const [previewTemplateCard, setPreviewTemplateCard] = useState<SurveyFormSummary | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<SurveyFormSummary | null>(null);
@@ -96,24 +95,28 @@ export default function TemplatesPage() {
     () =>
       getTemplateFormsQueryKey({
         section,
-        pageSize: visibleCount,
+        pageSize: TEMPLATE_PAGE_SIZE,
         userId: user?.id ?? null,
       }),
-    [section, user?.id, visibleCount],
+    [section, user?.id],
   );
 
   const {
-    data: templatesPage,
+    data: templatesPages,
     isLoading: isTemplatesLoading,
     isFetching: isTemplatesFetching,
+    isFetchingNextPage: isFetchingNextTemplatesPage,
+    hasNextPage: hasNextTemplatesPage,
     error: templatesError,
     refetch: reloadTemplates,
-  } = useQuery({
+    fetchNextPage: loadNextTemplatesPage,
+  } = useInfiniteQuery({
     queryKey: templatesQueryKey,
-    queryFn: () =>
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
       getTemplateFormsPage({
-        page: 0,
-        pageSize: visibleCount,
+        page: pageParam,
+        pageSize: TEMPLATE_PAGE_SIZE,
         filters:
           section === "mine"
             ? {
@@ -125,6 +128,10 @@ export default function TemplatesPage() {
                 isPublic: true,
               },
       }),
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((count, page) => count + page.items.length, 0);
+      return loadedCount < lastPage.totalCount ? allPages.length : undefined;
+    },
     enabled: !isAuthLoading && (section === "public" || Boolean(user?.id)),
     retry: 1,
     staleTime: 30_000,
@@ -134,9 +141,9 @@ export default function TemplatesPage() {
   });
 
   const templates = useMemo(() => {
-    const templateForms = (templatesPage?.items ?? []).filter((form) => isTemplateForm(form));
+    const templateForms = (templatesPages?.pages.flatMap((page) => page.items) ?? []).filter((form) => isTemplateForm(form));
     return section === "public" ? templateForms.filter((form) => form.is_public) : templateForms;
-  }, [section, templatesPage?.items]);
+  }, [section, templatesPages]);
 
   const {
     data: previewTemplate,
@@ -154,7 +161,8 @@ export default function TemplatesPage() {
   });
 
   const isInitialTemplatesLoading = isTemplatesLoading && templates.length === 0;
-  const hasMoreTemplates = templates.length < (templatesPage?.totalCount ?? templates.length);
+  const isRefreshingTemplates = isTemplatesFetching && templates.length > 0 && !isFetchingNextTemplatesPage;
+  const hasMoreTemplates = Boolean(hasNextTemplatesPage);
 
   useEffect(() => {
     if (!templatesError) {
@@ -191,7 +199,6 @@ export default function TemplatesPage() {
   }, [previewTemplateError, showToast]);
 
   useEffect(() => {
-    setVisibleCount(TEMPLATE_PAGE_SIZE);
     setPreviewTemplateCard(null);
   }, [section]);
 
@@ -383,7 +390,11 @@ export default function TemplatesPage() {
   };
 
   const handleLoadMoreTemplates = () => {
-    setVisibleCount((current) => current + TEMPLATE_PAGE_SIZE);
+    if (!hasNextTemplatesPage || isFetchingNextTemplatesPage) {
+      return;
+    }
+
+    void loadNextTemplatesPage();
   };
 
   return (
@@ -420,14 +431,14 @@ export default function TemplatesPage() {
               type="button"
               className="dashboard-refresh-button"
               onClick={() => void reloadTemplates()}
-              disabled={isTemplatesLoading || isTemplatesFetching}
+              disabled={isInitialTemplatesLoading || isRefreshingTemplates}
             >
-              {isTemplatesFetching ? (
+              {isRefreshingTemplates ? (
                 <InlineSpinner />
               ) : (
                 <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
               )}
-              <span>{isTemplatesFetching ? "Обновляется..." : "Обновить"}</span>
+              <span>{isRefreshingTemplates ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>
         </div>
@@ -604,8 +615,13 @@ export default function TemplatesPage() {
 
         {!isInitialTemplatesLoading && hasMoreTemplates && (
           <div className="dashboard-load-more">
-            <button type="button" className="dashboard-load-more-button" onClick={handleLoadMoreTemplates}>
-              Показать ещё
+            <button
+              type="button"
+              className="dashboard-load-more-button"
+              onClick={handleLoadMoreTemplates}
+              disabled={isFetchingNextTemplatesPage}
+            >
+              {isFetchingNextTemplatesPage ? "Загрузка..." : "Показать ещё"}
             </button>
           </div>
         )}

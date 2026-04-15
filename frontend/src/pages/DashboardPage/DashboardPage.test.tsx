@@ -172,6 +172,13 @@ function createDashboardStats(items: SurveyForm[], totalCount = items.length) {
   };
 }
 
+function createInfiniteDashboardData(...pages: Array<ReturnType<typeof createDashboardPage>>) {
+  return {
+    pages,
+    pageParams: pages.map((_, index) => index),
+  };
+}
+
 function renderPage(
   viewMode: "mine" | "all" = "all",
   queryClient = createQueryClient(),
@@ -263,7 +270,7 @@ describe("DashboardPage", () => {
 
     queryClient.setQueryData(
       formsQueryKey,
-      createDashboardPage([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })]),
+      createInfiniteDashboardData(createDashboardPage([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })])),
     );
     queryClient.setQueryData(
       statsQueryKey,
@@ -312,8 +319,8 @@ describe("DashboardPage", () => {
       createDashboardStats(forms, forms.length),
     );
 
-    getDashboardFormsPage.mockImplementation(({ pageSize }: { pageSize: number }) =>
-      Promise.resolve(createDashboardPage(forms.slice(0, pageSize), forms.length)),
+    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(page * pageSize, (page + 1) * pageSize), forms.length)),
     );
     getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
 
@@ -345,25 +352,13 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          page: 0,
-          pageSize: 40,
+          page: 1,
+          pageSize: 20,
         }),
       );
     });
     expect(await screen.findByText("Форма 25")).toBeInTheDocument();
-
-    const pageSizeSelect = screen.getByRole("combobox", { name: "Количество форм" });
-    expect(within(pageSizeSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "20",
-      "100",
-      "200",
-    ]);
-
-    await userEvent.selectOptions(pageSizeSelect, "100");
-    expect(screen.getByText("Форма 21")).toBeInTheDocument();
-
-    await userEvent.selectOptions(pageSizeSelect, "20");
-    expect(screen.queryByText("Форма 21")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Количество форм" })).not.toBeInTheDocument();
   });
 
   it("renders a loading label with a spinner while the forms list is loading", async () => {
@@ -492,8 +487,8 @@ describe("DashboardPage", () => {
 
   it("keeps the current scroll position when showing more forms", async () => {
     const forms = Array.from({ length: 25 }, (_, index) => createForm(index + 1));
-    getDashboardFormsPage.mockImplementation(({ pageSize }: { pageSize: number }) =>
-      Promise.resolve(createDashboardPage(forms.slice(0, pageSize), forms.length)),
+    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(page * pageSize, (page + 1) * pageSize), forms.length)),
     );
     Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 360 });

@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -101,7 +101,7 @@ type ListRefreshNavigationState = {
   refreshList?: boolean;
 };
 
-const PAGE_SIZE_OPTIONS = [20, 100, 200] as const;
+const DASHBOARD_PAGE_SIZE = 20;
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
 function formatDateTimeLocalValue(dateTime: string | null) {
@@ -159,8 +159,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [dateTo, setDateTo] = useState("");
   const [formType, setFormType] = useState("");
   const [formReason, setFormReason] = useState("");
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
-  const [visibleCount, setVisibleCount] = useState(20);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
   const [formToDelete, setFormToDelete] = useState<SurveyFormSummary | null>(null);
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
@@ -194,11 +192,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         formReason,
         formType,
         search,
-        pageSize: visibleCount,
+        pageSize: DASHBOARD_PAGE_SIZE,
         viewMode,
         userId: user?.id ?? null,
       }),
-    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode, visibleCount],
+    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
   );
 
   const formsStatsQueryKey = useMemo(
@@ -216,20 +214,28 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   );
 
   const {
-    data: formsPage,
+    data: formsPages,
     isLoading: isFormsLoading,
     isFetching: isFormsFetching,
+    isFetchingNextPage: isFetchingNextFormsPage,
+    hasNextPage: hasNextFormsPage,
     error: formsError,
     refetch: reloadForms,
+    fetchNextPage: loadNextFormsPage,
     dataUpdatedAt: formsUpdatedAt,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: formsQueryKey,
-    queryFn: () =>
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
       getDashboardFormsPage({
-        page: 0,
-        pageSize: visibleCount,
+        page: pageParam,
+        pageSize: DASHBOARD_PAGE_SIZE,
         filters: listFilters,
       }),
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((count, page) => count + page.items.length, 0);
+      return loadedCount < lastPage.totalCount ? allPages.length : undefined;
+    },
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
     retry: 1,
     staleTime: 30_000,
@@ -249,7 +255,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     refetchOnReconnect: true,
   });
 
-  const loadedForms = formsPage?.items ?? [];
+  const loadedForms = useMemo(() => formsPages?.pages.flatMap((page) => page.items) ?? [], [formsPages]);
+  const loadedFormsTotalCount =
+    formsPages && formsPages.pages.length > 0 ? formsPages.pages[formsPages.pages.length - 1].totalCount : 0;
 
   const visibleForms = useMemo(() => {
     return loadedForms.map((form) => {
@@ -269,12 +277,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     [deadlineReferenceTime, filteredForms],
   );
   const isInitialFormsLoading = isFormsLoading && loadedForms.length === 0;
+  const isRefreshingForms = isFormsFetching && loadedForms.length > 0 && !isFetchingNextFormsPage;
   const fallbackActiveFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && form.is_public).length;
   const fallbackDeadlineFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && Boolean(form.deadline_at)).length;
-  const totalFormsCount = Math.max(formsStats?.totalCount ?? 0, formsPage?.totalCount ?? filteredForms.length);
+  const totalFormsCount = Math.max(formsStats?.totalCount ?? 0, loadedFormsTotalCount, filteredForms.length);
   const activeFormsCount = Math.max(formsStats?.activeCount ?? 0, fallbackActiveFormsCount);
   const formsWithDeadlineCount = Math.max(formsStats?.formsWithDeadlineCount ?? 0, fallbackDeadlineFormsCount);
-  const hasMoreForms = filteredForms.length < totalFormsCount;
+  const hasMoreForms = Boolean(hasNextFormsPage);
 
   useLayoutEffect(() => {
     const scrollPosition = pendingLoadMoreScrollPositionRef.current;
@@ -284,11 +293,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
     pendingLoadMoreScrollPositionRef.current = null;
     window.scrollTo({ ...scrollPosition, behavior: "auto" });
-  }, [visibleCount]);
-
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [dateFrom, dateTo, formReason, formType, pageSize, search, viewMode]);
+  }, [loadedForms.length]);
 
   useEffect(() => {
     if (formsError) {
@@ -633,6 +638,10 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   };
 
   const handleLoadMoreForms = () => {
+    if (!hasNextFormsPage || isFetchingNextFormsPage) {
+      return;
+    }
+
     if (typeof window !== "undefined") {
       pendingLoadMoreScrollPositionRef.current = {
         left: window.scrollX,
@@ -640,7 +649,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       };
     }
 
-    setVisibleCount((current) => current + pageSize);
+    void loadNextFormsPage();
   };
 
   return (
@@ -717,32 +726,18 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 ))}
               </select>
             </label>
-            <label className="dashboard-filter-field">
-              <span>Количество</span>
-              <select
-                aria-label="Количество форм"
-                value={pageSize}
-                onChange={(event) => setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
-              >
-                {PAGE_SIZE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button
               type="button"
               className="dashboard-refresh-button"
               onClick={() => void reloadForms()}
-              disabled={isFormsLoading || isFormsFetching}
+              disabled={isInitialFormsLoading || isRefreshingForms}
             >
-              {isFormsFetching ? (
+              {isRefreshingForms ? (
                 <InlineSpinner />
               ) : (
                 <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
               )}
-              <span>{isFormsFetching ? "Обновляется..." : "Обновить"}</span>
+              <span>{isRefreshingForms ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>
         </div>
@@ -1087,8 +1082,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
         {!isInitialFormsLoading && hasMoreForms && (
           <div className="dashboard-load-more">
-            <button type="button" className="dashboard-load-more-button" onClick={handleLoadMoreForms}>
-              Показать ещё
+            <button
+              type="button"
+              className="dashboard-load-more-button"
+              onClick={handleLoadMoreForms}
+              disabled={isFetchingNextFormsPage}
+            >
+              {isFetchingNextFormsPage ? "Загрузка..." : "Показать ещё"}
             </button>
           </div>
         )}

@@ -107,6 +107,13 @@ function createTemplatesPage(items: SurveyForm[], totalCount = items.length) {
   };
 }
 
+function createInfiniteTemplatesData(...pages: Array<ReturnType<typeof createTemplatesPage>>) {
+  return {
+    pages,
+    pageParams: pages.map((_, index) => index),
+  };
+}
+
 function renderPage(
   queryClient = createQueryClient(),
   initialEntries: MemoryRouterProps["initialEntries"] = ["/"],
@@ -155,6 +162,7 @@ describe("TemplatesPage", () => {
     expect(getTemplateFormsPage).toHaveBeenCalledWith(
       expect.objectContaining({
         page: 0,
+        pageSize: 20,
       }),
     );
 
@@ -305,17 +313,43 @@ describe("TemplatesPage", () => {
     resolveRefresh(createTemplatesPage([createTemplate(1, { title: "Тяжёлый шаблон" })]));
   });
 
+  it("loads the next 20 templates when clicking the show more button", async () => {
+    const templates = Array.from({ length: 25 }, (_, index) => createTemplate(index + 1, { title: `Шаблон ${index + 1}` }));
+
+    getTemplateFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+      Promise.resolve(createTemplatesPage(templates.slice(page * pageSize, (page + 1) * pageSize), templates.length)),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Шаблон 20")).toBeInTheDocument();
+    expect(screen.queryByText("Шаблон 21")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 20,
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Шаблон 25")).toBeInTheDocument();
+  });
+
   it("triggers a background refresh when returning to templates with a refresh state", async () => {
     const queryClient = createQueryClient();
     const templatesQueryKey = getTemplateFormsQueryKey({
       section: "mine",
-      pageSize: 24,
+      pageSize: 20,
       userId: "user-1",
     });
 
     queryClient.setQueryData(
       templatesQueryKey,
-      createTemplatesPage([createTemplate(1, { title: "Кэшированный шаблон" })]),
+      createInfiniteTemplatesData(createTemplatesPage([createTemplate(1, { title: "Кэшированный шаблон" })])),
     );
 
     getTemplateFormsPage.mockResolvedValueOnce(
