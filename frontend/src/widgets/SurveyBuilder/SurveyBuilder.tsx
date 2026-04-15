@@ -420,6 +420,26 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     scheduleQueryInvalidation(queryClient, affectedFormId ? `builder refresh ${affectedFormId}` : "builder refresh", targets);
   };
 
+  const navigateToSavedList = (target: "forms" | "templates") => {
+    navigate(target === "templates" ? routes.templates : routes.dashboardMy, {
+      replace: true,
+      state: { refreshList: true },
+    });
+  };
+
+  const clearCurrentBuilderState = () => {
+    clearSurveyBuilderDraft(formId);
+
+    if (!creator) {
+      return;
+    }
+
+    const emptySchema = createEmptyBuilderSchema();
+    creator.locale = emptySchema.locale ?? "ru";
+    creator.JSON = resolveDefaultSurveyLogo(emptySchema);
+    draftHydrationStateRef.current = "empty";
+  };
+
   const handleSaveAsTemplate = async () => {
     if (!creator) {
       return;
@@ -444,7 +464,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       });
 
       scheduleBuilderQueryRefresh();
+      clearCurrentBuilderState();
       showToast("Шаблон сохранён", "success");
+      navigateToSavedList("templates");
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, "Не удалось сохранить шаблон"), "error");
@@ -557,7 +579,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
   const closePostSaveSettings = () => {
     setPostSaveSettings(null);
-    navigate(routes.dashboardMy, { replace: true });
+    navigateToSavedList("forms");
   };
 
   const handleSavePostSaveSettings = async () => {
@@ -658,7 +680,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
             responseLimitValue: editableForm?.max_responses ? String(editableForm.max_responses) : "",
           });
         } else {
-          navigate(routes.dashboardMy, { replace: true });
+          if (isTemplate) {
+            clearCurrentBuilderState();
+            navigateToSavedList("templates");
+          } else {
+            navigateToSavedList("forms");
+          }
         }
         callback(saveNo, true);
       } catch (error) {

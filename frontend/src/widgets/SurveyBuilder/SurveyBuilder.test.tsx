@@ -208,6 +208,29 @@ function readAppCss() {
   return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
 
+function createTemplateForm(overrides: Partial<SurveySchema & { id: string; title: string }> = {}) {
+  return {
+    id: "template-1",
+    title: "Редактируемый шаблон",
+    created_at: "2026-04-15T10:00:00.000Z",
+    is_public: false,
+    author_id: "user-1",
+    author_name: "Я",
+    author_email: "me@example.com",
+    form_type: "template",
+    form_reason: "plan",
+    deadline_at: null,
+    max_responses: null,
+    responses_count: 0,
+    schema: {
+      title: "Редактируемый шаблон",
+      locale: "ru",
+      pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+    },
+    ...overrides,
+  };
+}
+
 describe("SurveyBuilder", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -546,6 +569,76 @@ describe("SurveyBuilder", () => {
       expect(setFormDeadline).toHaveBeenCalledWith("created-form-id", new Date("2026-05-01T12:30").toISOString());
     });
     expect(setFormResponseLimit).toHaveBeenCalledWith("created-form-id", 25);
-    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true });
+    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: { refreshList: true } });
+  });
+
+  it("returns to the templates page with a refresh state after saving an existing template", async () => {
+    getFormById.mockResolvedValue(createTemplateForm({ id: "template-7", title: "Шаблон для правки" }) as never);
+
+    renderBuilder("template-7");
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+      expect(getFormById).toHaveBeenCalledWith("template-7");
+    });
+
+    await waitFor(() => {
+      expect(creatorInstances[0].JSON).toMatchObject({
+        title: "Шаблон для правки",
+      });
+    });
+
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    expect(callback).toHaveBeenCalledWith(1, true);
+    expect(saveSurveySchema).toHaveBeenCalledWith(
+      "template-7",
+      expect.objectContaining({
+        title: "Шаблон для правки",
+      }),
+      "Шаблон для правки",
+    );
+    expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
+  });
+
+  it("saves the current builder draft as a template, clears it, and opens the templates page", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    act(() => {
+      creatorInstances[0].JSON = {
+        title: "Шаблон из конструктора",
+        locale: "ru",
+        pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      };
+      creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
+    });
+
+    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey())).not.toBeNull();
+
+    await act(async () => {
+      const saveTemplateAction = creatorInstances[0].toolbar.getActionById("builder-save-template") as { action: () => void };
+      await saveTemplateAction.action();
+    });
+
+    await waitFor(() => {
+      expect(createSurveyMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Шаблон из конструктора",
+          formType: "template",
+          isPublic: false,
+        }),
+      );
+    });
+
+    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey())).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
   });
 });

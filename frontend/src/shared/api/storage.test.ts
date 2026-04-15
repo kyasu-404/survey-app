@@ -30,6 +30,7 @@ describe("storage api", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("uploads files under the current user's prefix and stores the storage path", async () => {
@@ -65,6 +66,45 @@ describe("storage api", () => {
       { allowAnonymous: true },
     );
 
+    expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(result).toEqual(
+      expect.objectContaining({
+        path: `public/form-1/${fileId}.txt`,
+      }),
+    );
+  });
+
+  it("falls back to getRandomValues when randomUUID is unavailable", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const getRandomValues = vi.fn((buffer: Uint8Array) => {
+      buffer.set([
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00,
+        0x40, 0x00,
+        0x80, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      ]);
+      return buffer;
+    });
+
+    vi.stubGlobal("crypto", {
+      ...crypto,
+      randomUUID: undefined,
+      getRandomValues,
+    });
+    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
+      data: { user: null },
+      error: new AuthSessionMissingError(),
+    } as never);
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+
+    const result = await uploadFileToStorage(
+      "form-1",
+      new File(["hello"], "answer.txt", { type: "text/plain" }),
+      { allowAnonymous: true },
+    );
+
+    expect(getRandomValues).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
     expect(result).toEqual(
       expect.objectContaining({

@@ -6,7 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -45,6 +45,10 @@ type TemplateActionOptions = {
   logLabel: string;
 };
 
+type ListRefreshNavigationState = {
+  refreshList?: boolean;
+};
+
 const TEMPLATE_PAGE_SIZE = 24;
 
 function formatCreatedAt(dateTime: string) {
@@ -73,6 +77,7 @@ function renderTemplateSkeletonCards(count: number) {
 export default function TemplatesPage() {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
+  const location = useLocation();
   const [section, setSection] = useState<TemplatesSection>("mine");
   const [visibleCount, setVisibleCount] = useState(TEMPLATE_PAGE_SIZE);
   const [openedMenuTemplateId, setOpenedMenuTemplateId] = useState<string | null>(null);
@@ -151,6 +156,24 @@ export default function TemplatesPage() {
 
     showToast(getErrorMessage(templatesError, "Не удалось загрузить шаблоны"), "error");
   }, [showToast, templatesError]);
+
+  useEffect(() => {
+    const shouldRefreshList =
+      location.state &&
+      typeof location.state === "object" &&
+      (location.state as ListRefreshNavigationState).refreshList === true;
+
+    if (!shouldRefreshList) {
+      return;
+    }
+
+    if (isAuthLoading || (section === "mine" && !user?.id)) {
+      return;
+    }
+
+    void reloadTemplates();
+    navigate(location.pathname, { replace: true, state: null });
+  }, [isAuthLoading, location.pathname, location.state, navigate, reloadTemplates, section, user?.id]);
 
   useEffect(() => {
     if (!previewTemplateError) {

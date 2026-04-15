@@ -76,12 +76,26 @@ describe("FormResponsesHtmlPage", () => {
     vi.clearAllMocks();
   });
 
+  it("uses the branded browser tab title", () => {
+    const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
+
+    expect(html).toContain("<title>Формы ИМЦ</title>");
+  });
+
   it("uses a slightly smaller text scale for the HTML responses preview", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.responses-html-preview\s+\.responses-html-report\s*\{[^}]*font-size:\s*13px;/);
     expect(css).toMatch(/\.responses-html-preview h1\s*\{[^}]*font-size:\s*1\.75rem;/);
     expect(css).toMatch(/\.responses-html-preview table\s*\{[^}]*font-size:\s*13px;/);
+  });
+
+  it("styles the print button as yellow with dark text", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.responses-print-button-orange\s*\{[^}]*border-color:\s*rgba\(234,\s*179,\s*8,\s*0\.42\);[^}]*background:\s*linear-gradient\(180deg,\s*#fde68a,\s*#facc15\);[^}]*color:\s*#111827;/);
+    expect(css).toMatch(/\.responses-print-button-orange:hover,\s*\.responses-print-button-orange:focus-visible\s*\{[^}]*border-color:\s*rgba\(202,\s*138,\s*4,\s*0\.48\);[^}]*background:\s*linear-gradient\(180deg,\s*#fef08a,\s*#eab308\);[^}]*color:\s*#111827;/);
+    expect(css).toMatch(/\.responses-print-button-orange\s+\.toolbar-icon\s*\{[^}]*filter:\s*none;/);
   });
 
   it("renders generated static HTML preview actions and response rows", async () => {

@@ -8,7 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -88,6 +88,10 @@ type OpenMenuState =
   | { kind: "stats" }
   | null;
 
+type ListRefreshNavigationState = {
+  refreshList?: boolean;
+};
+
 const PAGE_SIZE_OPTIONS = [20, 50, 200] as const;
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
@@ -140,6 +144,7 @@ function getAuthorLabel(form: SurveyFormSummary) {
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
+  const location = useLocation();
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -273,6 +278,24 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       showToast(getErrorMessage(formsError, "Не удалось загрузить формы"), "error");
     }
   }, [formsError, showToast]);
+
+  useEffect(() => {
+    const shouldRefreshList =
+      location.state &&
+      typeof location.state === "object" &&
+      (location.state as ListRefreshNavigationState).refreshList === true;
+
+    if (!shouldRefreshList) {
+      return;
+    }
+
+    if (isAuthLoading || (viewMode === "mine" && !user?.id)) {
+      return;
+    }
+
+    void reloadForms();
+    navigate(location.pathname, { replace: true, state: null });
+  }, [isAuthLoading, location.pathname, location.state, navigate, reloadForms, user?.id, viewMode]);
 
   useEffect(() => {
     setDeadlineReferenceTime(new Date());
@@ -1129,28 +1152,26 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               >
                 Отмена
               </button>
-              {responseLimitEditor.form.max_responses ? (
-                <button
-                  type="button"
-                  className="deadline-clear-button"
-                  onClick={() =>
-                    runAction(
-                      () => responseLimitMutation.mutateAsync({ id: responseLimitEditor.form.id, maxResponses: null }),
-                      {
-                        actionKey: getFormActionKey(responseLimitEditor.form.id),
-                        successMessage: "Ограничение снято",
-                        errorMessage: "Не удалось обновить ограничение",
-                        affectedFormId: responseLimitEditor.form.id,
-                        logLabel: `dashboard response limit clear ${responseLimitEditor.form.id}`,
-                      },
-                    ).finally(() => setResponseLimitEditor(null))
-                  }
-                  disabled={isFormActionPending(responseLimitEditor.form.id)}
-                >
-                  {isFormActionPending(responseLimitEditor.form.id) && <InlineSpinner />}
-                  Снять ограничение
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="deadline-clear-button"
+                onClick={() =>
+                  runAction(
+                    () => responseLimitMutation.mutateAsync({ id: responseLimitEditor.form.id, maxResponses: null }),
+                    {
+                      actionKey: getFormActionKey(responseLimitEditor.form.id),
+                      successMessage: "Ограничение снято",
+                      errorMessage: "Не удалось обновить ограничение",
+                      affectedFormId: responseLimitEditor.form.id,
+                      logLabel: `dashboard response limit clear ${responseLimitEditor.form.id}`,
+                    },
+                  ).finally(() => setResponseLimitEditor(null))
+                }
+                disabled={isFormActionPending(responseLimitEditor.form.id) || !responseLimitEditor.form.max_responses}
+              >
+                {isFormActionPending(responseLimitEditor.form.id) && <InlineSpinner />}
+                Снять ограничение
+              </button>
               <button
                 type="button"
                 onClick={() => {

@@ -3,9 +3,10 @@ import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
+import { getDashboardFormStatsQueryKey, getDashboardFormsQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import DashboardPage from "./DashboardPage";
 
@@ -171,9 +172,13 @@ function createDashboardStats(items: SurveyForm[], totalCount = items.length) {
   };
 }
 
-function renderPage(viewMode: "mine" | "all" = "all", queryClient = createQueryClient()) {
+function renderPage(
+  viewMode: "mine" | "all" = "all",
+  queryClient = createQueryClient(),
+  initialEntries: MemoryRouterProps["initialEntries"] = ["/"],
+) {
   const renderResult = render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <DashboardPage viewMode={viewMode} />
       </QueryClientProvider>
@@ -234,14 +239,79 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("button", { name: "2 ответа" })).toBeInTheDocument();
   });
 
+  it("triggers a background refresh when returning to my forms with a refresh state", async () => {
+    const queryClient = createQueryClient();
+    const formsQueryKey = getDashboardFormsQueryKey({
+      dateFrom: "",
+      dateTo: "",
+      search: "",
+      pageSize: 20,
+      viewMode: "mine",
+      userId: "user-1",
+    });
+    const statsQueryKey = getDashboardFormStatsQueryKey({
+      dateFrom: "",
+      dateTo: "",
+      search: "",
+      viewMode: "mine",
+      userId: "user-1",
+    });
+
+    queryClient.setQueryData(
+      formsQueryKey,
+      createDashboardPage([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })]),
+    );
+    queryClient.setQueryData(
+      statsQueryKey,
+      createDashboardStats([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })]),
+    );
+
+    getDashboardFormsPage.mockResolvedValueOnce(
+      createDashboardPage([
+        createForm(1, { title: "Кэшированная форма", author_id: "user-1" }),
+        createForm(2, { title: "Новая форма", author_id: "user-1" }),
+      ]),
+    );
+    getDashboardFormsStats.mockResolvedValueOnce(
+      createDashboardStats([
+        createForm(1, { title: "Кэшированная форма", author_id: "user-1" }),
+        createForm(2, { title: "Новая форма", author_id: "user-1" }),
+      ]),
+    );
+
+    renderPage("mine", queryClient, [{ pathname: routes.dashboardMy, state: { refreshList: true } }]);
+
+    expect(screen.getByText("Кэшированная форма")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByText("Новая форма")).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: null });
+  });
+
   it("shows form stats inside the info popover and paginates the list", async () => {
     const forms = Array.from({ length: 25 }, (_, index) => createForm(index + 1));
+    const queryClient = createQueryClient();
+
+    queryClient.setQueryData(
+      getDashboardFormStatsQueryKey({
+        dateFrom: "",
+        dateTo: "",
+        search: "",
+        viewMode: "all",
+        userId: "user-1",
+      }),
+      createDashboardStats(forms, forms.length),
+    );
+
     getDashboardFormsPage.mockImplementation(({ pageSize }: { pageSize: number }) =>
       Promise.resolve(createDashboardPage(forms.slice(0, pageSize), forms.length)),
     );
     getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
 
-    renderPage();
+    renderPage("all", queryClient);
 
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenCalledWith(
@@ -793,8 +863,10 @@ describe("DashboardPage", () => {
 
     const limitDialog = await screen.findByRole("dialog", { name: "Ограничение ответов" });
     const limitInput = within(limitDialog).getByLabelText("Максимум ответов");
+    const clearButton = within(limitDialog).getByRole("button", { name: "Снять ограничение" });
 
     expect(limitInput).toHaveValue(10);
+    expect(clearButton).toBeEnabled();
 
     await userEvent.clear(limitInput);
     await userEvent.type(limitInput, "12");
@@ -806,10 +878,31 @@ describe("DashboardPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Статус формы Лимитируемая форма: Активна" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Ограничить ответы" }));
-    await userEvent.click((await screen.findByRole("dialog", { name: "Ограничение ответов" })).querySelector(".deadline-clear-button")!);
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Ограничение ответов" })).getByRole("button", { name: "Снять ограничение" }));
 
     await waitFor(() => {
       expect(setFormResponseLimit).toHaveBeenCalledWith("form-1", null);
     });
+  });
+
+  it("keeps the response limit clear button visible but disabled when no limit is set", async () => {
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Форма без лимита",
+          author_id: "user-1",
+          responses_count: 2,
+          max_responses: null,
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Форма без лимита: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ограничить ответы" }));
+
+    expect((await screen.findByRole("dialog", { name: "Ограничение ответов" })).querySelector(".deadline-clear-button")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Снять ограничение" })).toBeDisabled();
   });
 });

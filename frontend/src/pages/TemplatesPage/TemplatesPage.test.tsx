@@ -3,9 +3,10 @@ import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
+import { getTemplateFormsQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import { getSurveyBuilderDraftStorageKey } from "../../widgets/SurveyBuilder/builderDraft";
 import TemplatesPage from "./TemplatesPage";
@@ -106,9 +107,12 @@ function createTemplatesPage(items: SurveyForm[], totalCount = items.length) {
   };
 }
 
-function renderPage(queryClient = createQueryClient()) {
+function renderPage(
+  queryClient = createQueryClient(),
+  initialEntries: MemoryRouterProps["initialEntries"] = ["/"],
+) {
   const renderResult = render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <TemplatesPage />
       </QueryClientProvider>
@@ -294,6 +298,38 @@ describe("TemplatesPage", () => {
     resolveRefresh(createTemplatesPage([createTemplate(1, { title: "Тяжёлый шаблон" })]));
   });
 
+  it("triggers a background refresh when returning to templates with a refresh state", async () => {
+    const queryClient = createQueryClient();
+    const templatesQueryKey = getTemplateFormsQueryKey({
+      section: "mine",
+      pageSize: 24,
+      userId: "user-1",
+    });
+
+    queryClient.setQueryData(
+      templatesQueryKey,
+      createTemplatesPage([createTemplate(1, { title: "Кэшированный шаблон" })]),
+    );
+
+    getTemplateFormsPage.mockResolvedValueOnce(
+      createTemplatesPage([
+        createTemplate(1, { title: "Кэшированный шаблон" }),
+        createTemplate(2, { title: "Новый шаблон" }),
+      ]),
+    );
+
+    renderPage(queryClient, [{ pathname: routes.templates, state: { refreshList: true } }]);
+
+    expect(screen.getByText("Кэшированный шаблон")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByText("Новый шаблон")).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: null });
+  });
+
   it("keeps the template preview drawer wide enough for the survey page layout", () => {
     expect(readAppCss()).toContain("width: min(820px, calc(100vw - 32px));");
   });
@@ -305,5 +341,12 @@ describe("TemplatesPage", () => {
     expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
     expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
     expect(css).not.toContain("border: 2px solid rgba(20, 20, 20, 0.72);");
+  });
+
+  it("matches template card border thickness with dashboard form cards", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.dashboard-forms-grid > \.dashboard-form-card\s*\{[^}]*border:\s*2px solid rgba\(20,\s*20,\s*20,\s*0\.14\);/);
+    expect(css).toMatch(/\.templates-gallery-grid > \.templates-card\s*\{[^}]*border:\s*2px solid rgba\(20,\s*20,\s*20,\s*0\.14\);/);
   });
 });

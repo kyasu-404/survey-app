@@ -217,6 +217,21 @@ describe("FormResponsesPage", () => {
     });
   });
 
+  it("keeps the responses toolbar below the title and pinned to the right", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.responses-page-header\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+    expect(css).toMatch(/\.responses-page-toolbar\s*\{[^}]*justify-content:\s*flex-end;[^}]*justify-self:\s*end;/);
+    expect(css).toMatch(/\.responses-page-header-copy\s*\{[^}]*min-width:\s*0;/);
+  });
+
+  it("uses a gray secondary style for the HTML preview button", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*border-color:\s*rgba\(100,\s*116,\s*139,\s*0\.36\);[^}]*background:\s*linear-gradient\(180deg,\s*#f8fafc,\s*#e2e8f0\);[^}]*color:\s*#334155;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*border-color:\s*rgba\(71,\s*85,\s*105,\s*0\.44\);[^}]*background:\s*linear-gradient\(180deg,\s*#f8fafc,\s*#cbd5e1\);[^}]*color:\s*#1e293b;/);
+  });
+
   it("refreshes responses after a realtime database change", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
