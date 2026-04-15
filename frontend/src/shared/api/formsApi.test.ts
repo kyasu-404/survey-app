@@ -167,6 +167,29 @@ describe("fetchDashboardFormsPage", () => {
     vi.resetAllMocks();
   });
 
+  it("requests the first 20 newest dashboard forms from the server", async () => {
+    const listQuery = createSummaryQuery({
+      data: [],
+      count: 75,
+      error: null,
+    });
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await expect(
+      fetchDashboardFormsPage({
+        page: 0,
+        pageSize: 20,
+      }),
+    ).resolves.toEqual({
+      items: [],
+      totalCount: 75,
+    });
+
+    expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(listQuery.range).toHaveBeenCalledWith(0, 19);
+  });
+
   it("fetches lightweight dashboard cards with exact count and server range", async () => {
     const listQuery = createSummaryQuery({
       data: [

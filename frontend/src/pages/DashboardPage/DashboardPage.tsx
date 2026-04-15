@@ -95,7 +95,7 @@ type ListRefreshNavigationState = {
   refreshList?: boolean;
 };
 
-const PAGE_SIZE_OPTIONS = [20, 50, 200] as const;
+const PAGE_SIZE_OPTIONS = [20, 100, 200] as const;
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
 function formatDateTimeLocalValue(dateTime: string | null) {

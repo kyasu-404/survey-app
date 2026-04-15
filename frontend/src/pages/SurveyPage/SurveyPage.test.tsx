@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +37,10 @@ function createQueryClient() {
   });
 }
 
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+}
+
 describe("SurveyPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,6 +68,14 @@ describe("SurveyPage", () => {
     expect(container.querySelector(".survey-page")).toBeInTheDocument();
     expect(container.querySelector(".survey-page-card")).toBeInTheDocument();
     expect(container.querySelector(".survey-page-shell")).toBeInTheDocument();
+  });
+
+  it("lets the page, not the survey card, own scrolling so dropdowns do not shift the form", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.survey-page\s*\{[^}]*align-items:\s*flex-start;[^}]*overflow-x:\s*clip;/);
+    expect(css).toMatch(/\.survey-page-card\s*\{[^}]*min-width:\s*0;[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/);
+    expect(css).toMatch(/\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
   it("opens dashboard card navigation as readonly preview", async () => {

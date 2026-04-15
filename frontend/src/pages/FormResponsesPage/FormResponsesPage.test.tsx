@@ -141,14 +141,15 @@ describe("FormResponsesPage", () => {
     resetRealtimeChannel();
   });
 
-  it("keeps wide response tables scrolling inside the table content only", () => {
+  it("keeps response tables square and vertically scrollable inside the table content", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.app-main\s*\{[^}]*min-width:\s*0;/);
     expect(css).toMatch(/\.dashboard-page\s*\{[^}]*min-width:\s*0;/);
     expect(css).toMatch(/\.responses-page-card\s*\{[^}]*min-width:\s*0;/);
-    expect(css).toMatch(/\.responses-page-table-shell\s*\{[^}]*max-width:\s*100%;/);
+    expect(css).toMatch(/\.responses-page-table-shell\s*\{[^}]*max-width:\s*100%;[^}]*max-height:\s*min\(68vh,\s*720px\);[^}]*overflow:\s*auto;[^}]*border-radius:\s*0;/);
     expect(css).toMatch(/\.responses-page-table-shell\s+\.responses-table\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*100%;/);
+    expect(css).toMatch(/\.responses-table\s*\{[^}]*border-radius:\s*0;[^}]*overflow:\s*visible;/);
   });
 
   it("renders the form title, responses table, and export action", async () => {
@@ -196,14 +197,17 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Выгрузить страницу XLSX" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
     expect(container.querySelector(".responses-export-button .toolbar-icon")).toBeInTheDocument();
+    expect(container.querySelector(".responses-table-date-cell")).toHaveTextContent(/^\d{2}\.\d{2}\.\d{4}\d{2}:\d{2}$/);
+    expect(container.querySelector(".responses-table-date-cell")).not.toHaveTextContent(/\d{2}:\d{2}:\d{2}/);
+    expect(container.querySelectorAll(".responses-table-date-line")).toHaveLength(2);
 
-    await userEvent.click(screen.getByRole("button", { name: "Выгрузить страницу XLSX" }));
+    await userEvent.click(screen.getByRole("button", { name: "XLSX" }));
 
     await waitFor(() => {
       expect(exportToExcel).toHaveBeenCalledWith(
@@ -225,11 +229,26 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.responses-page-header-copy\s*\{[^}]*min-width:\s*0;/);
   });
 
-  it("uses a gray secondary style for the HTML preview button", () => {
+  it("uses a dark gradient style with a white icon for the HTML preview button", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*border-color:\s*rgba\(100,\s*116,\s*139,\s*0\.36\);[^}]*background:\s*linear-gradient\(180deg,\s*#f8fafc,\s*#e2e8f0\);[^}]*color:\s*#334155;/);
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*border-color:\s*rgba\(71,\s*85,\s*105,\s*0\.44\);[^}]*background:\s*linear-gradient\(180deg,\s*#f8fafc,\s*#cbd5e1\);[^}]*color:\s*#1e293b;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*border-color:\s*rgba\(39,\s*39,\s*42,\s*0\.52\);[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#27272a\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*border-color:\s*rgba\(63,\s*63,\s*70,\s*0\.72\);[^}]*background:\s*linear-gradient\(180deg,\s*#52525b,\s*#3f3f46\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.responses-html-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+  });
+
+  it("keeps row hover highlighting stronger than alternating row backgrounds", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.responses-table\s+tbody\s+\.responses-table-row-clickable:hover\s+td,\s*\.responses-table\s+tbody\s+\.responses-table-row-clickable:focus-visible\s+td\s*\{[^}]*background:\s*rgba\(251,\s*146,\s*60,\s*0\.14\);/);
+  });
+
+  it("keeps the response preview drawer from scrolling horizontally when a dropdown opens", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.response-preview-drawer\s*\{[^}]*width:\s*min\(820px,\s*calc\(100vw - 32px\)\);/);
+    expect(css).toMatch(/\.response-preview-drawer\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*clip;/);
+    expect(css).toMatch(/\.response-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
   it("refreshes responses after a realtime database change", async () => {
@@ -479,7 +498,7 @@ describe("FormResponsesPage", () => {
     });
   });
 
-  it("loads responses by page and moves through server-side pagination", async () => {
+  it("loads all response pages into one vertically scrollable table without pagination controls", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -510,7 +529,7 @@ describe("FormResponsesPage", () => {
         ],
         count: 75,
         page: options?.page ?? 1,
-        pageSize: 50,
+        pageSize: 100,
         totalPages: 2,
       }),
     );
@@ -526,13 +545,10 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
-    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 1, pageSize: 50 });
-    expect(screen.getByText("Показаны 1-50 из 75")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Следующая" }));
-
     expect(await screen.findByText("Борис")).toBeInTheDocument();
-    expect(getResponsesByForm).toHaveBeenLastCalledWith("form-1", { page: 2, pageSize: 50 });
-    expect(screen.getByText("Показаны 51-75 из 75")).toBeInTheDocument();
+    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 1, pageSize: 100 });
+    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });
+    expect(screen.queryByLabelText("Пагинация ответов")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Следующая" })).not.toBeInTheDocument();
   });
 });

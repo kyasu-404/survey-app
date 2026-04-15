@@ -346,10 +346,17 @@ describe("DashboardPage", () => {
     });
     expect(await screen.findByText("Форма 25")).toBeInTheDocument();
 
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Количество форм" }), "50");
+    const pageSizeSelect = screen.getByRole("combobox", { name: "Количество форм" });
+    expect(within(pageSizeSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "20",
+      "100",
+      "200",
+    ]);
+
+    await userEvent.selectOptions(pageSizeSelect, "100");
     expect(screen.getByText("Форма 21")).toBeInTheDocument();
 
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Количество форм" }), "20");
+    await userEvent.selectOptions(pageSizeSelect, "20");
     expect(screen.queryByText("Форма 21")).not.toBeInTheDocument();
   });
 

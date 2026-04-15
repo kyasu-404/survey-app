@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Model } from "survey-core";
+import { Model, type OpenDropdownMenuEvent } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
 import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
@@ -22,6 +22,30 @@ type SurveyFormRendererProps = {
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
 };
+
+type DropdownPopupModel = {
+  focusFirstInputSelector?: string;
+};
+
+const disabledDropdownAutofocusSelector = ".surveyjs-dropdown-autofocus-disabled";
+
+function getDropdownPopupModel(question: unknown): DropdownPopupModel | undefined {
+  if (!question || typeof question !== "object" || !("dropdownListModel" in question)) {
+    return undefined;
+  }
+
+  const dropdownListModel = (question as { dropdownListModel?: unknown }).dropdownListModel;
+  if (!dropdownListModel || typeof dropdownListModel !== "object" || !("popupModel" in dropdownListModel)) {
+    return undefined;
+  }
+
+  const popupModel = (dropdownListModel as { popupModel?: unknown }).popupModel;
+  if (!popupModel || typeof popupModel !== "object" || !("focusFirstInputSelector" in popupModel)) {
+    return undefined;
+  }
+
+  return popupModel as DropdownPopupModel;
+}
 
 function normalizeSurveyFileQuestions(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -63,6 +87,7 @@ export function SurveyFormRenderer({
     registerCustomSurveyQuestionTypes();
     const resolvedSchema = normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema;
     const nextModel = new Model(resolvedSchema);
+    nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = "Отправить";
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
@@ -78,6 +103,16 @@ export function SurveyFormRenderer({
   }, [initialData, isPreview, schema]);
 
   useEffect(() => {
+    const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
+      if (options.deviceType === "desktop") {
+        options.menuType = "dropdown";
+        const popupModel = getDropdownPopupModel(options.question);
+        if (popupModel) {
+          popupModel.focusFirstInputSelector = disabledDropdownAutofocusSelector;
+        }
+      }
+    };
+
     const handleDownloadFile = async (
       _sender: Model,
       options: { fileValue?: unknown; callback: (status: "success" | "error", data: unknown) => void }
@@ -91,10 +126,12 @@ export function SurveyFormRenderer({
       }
     };
 
+    model.onOpenDropdownMenu.add(handleOpenDropdownMenu);
     model.onDownloadFile.add(handleDownloadFile);
 
     if (isPreview) {
       return () => {
+        model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
         model.onDownloadFile.remove(handleDownloadFile);
       };
     }
@@ -181,6 +218,7 @@ export function SurveyFormRenderer({
 
     return () => {
       model.onUploadFiles.remove(handleUploadFiles);
+      model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
       model.onDownloadFile.remove(handleDownloadFile);
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);

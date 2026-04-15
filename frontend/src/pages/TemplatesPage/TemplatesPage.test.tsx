@@ -331,7 +331,11 @@ describe("TemplatesPage", () => {
   });
 
   it("keeps the template preview drawer wide enough for the survey page layout", () => {
-    expect(readAppCss()).toContain("width: min(820px, calc(100vw - 32px));");
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.template-preview-drawer\s*\{[^}]*width:\s*min\(820px,\s*calc\(100vw - 32px\)\);/);
+    expect(css).toMatch(/\.template-preview-drawer\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*clip;/);
+    expect(css).toMatch(/\.template-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
   it("uses a gray border for template action menu trigger buttons", () => {

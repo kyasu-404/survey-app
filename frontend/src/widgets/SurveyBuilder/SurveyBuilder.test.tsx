@@ -535,12 +535,20 @@ describe("SurveyBuilder", () => {
     expect(finalOverride).toContain(".survey-page-card .sd-question__description");
     expect(finalOverride).toContain("background: rgba(219, 234, 254, 0.88) !important;");
     expect(finalOverride).toContain("color: #141414 !important;");
+    expect(finalOverride).toContain("padding: 4px 8px;");
     expect(finalOverride).toContain(".builder-creator-shell .sd-description,");
     expect(finalOverride).toContain("white-space: normal !important;");
     expect(finalOverride).toContain("font-size: 1.06rem !important;");
     expect(finalOverride).toContain("font-size: 0.88rem !important;");
     expect(finalOverride).toContain(".dashboard-status-dropdown");
     expect(finalOverride).toContain("background: #ffffff !important;");
+  });
+
+  it("uses dark action buttons in the post-save settings dialog", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(/\.deadline-modal\s+\.deadline-modal-actions\s+button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#222222\s*0%,\s*#0c0c0c\s*100%\);[^}]*color:\s*#ffffff;/);
+    expect(appCss).toMatch(/\.deadline-modal\s+\.deadline-modal-actions\s+button:hover,\s*\.deadline-modal\s+\.deadline-modal-actions\s+button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#2a2a2a\s*0%,\s*#101010\s*100%\);[^}]*color:\s*#ffffff;/);
   });
 
   it("opens response settings after saving a form and applies them before returning to the dashboard", async () => {

@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import UsersPage from "./UsersPage";
 
@@ -54,6 +56,10 @@ function createQueryClient() {
       queries: { retry: false },
     },
   });
+}
+
+function readAppCss() {
+  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
 
 describe("UsersPage", () => {
@@ -129,6 +135,12 @@ describe("UsersPage", () => {
 
     expect(controls.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(filters.compareDocumentPosition(tableShell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders the users table shell without rounded corners", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.users-table-shell\s*\{[^}]*border-radius:\s*0;/);
   });
 
   it("filters users by name, role, and status", async () => {

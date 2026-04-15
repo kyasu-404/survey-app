@@ -11,7 +11,7 @@ import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
 import refreshIcon from "../../img/refresh.png";
-import { RESPONSES_PAGE_SIZE, supabaseClient } from "../../shared/api";
+import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
@@ -25,6 +25,8 @@ type SelectedResponsePreview = {
   response: SurveyResponse;
 };
 
+const RESPONSES_SCROLL_PAGE_SIZE = 100;
+
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   const primaryValue = Object.entries(row).find(
     ([header, value]) => header !== "Дата ответа" && value.trim().length > 0,
@@ -33,16 +35,67 @@ function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   return primaryValue ? `Ответ ${primaryValue}` : `Ответ ${index + 1}`;
 }
 
+function getDateCellParts(value: string) {
+  const [datePart, timePart] = value.split(",").map((part) => part.trim());
+
+  if (!timePart) {
+    return { datePart: value, timePart: "" };
+  }
+
+  return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
+}
+
+async function getAllResponsesByForm(formId: string) {
+  const firstPage = await getResponsesByForm(formId, {
+    page: 1,
+    pageSize: RESPONSES_SCROLL_PAGE_SIZE,
+  });
+
+  if (firstPage.totalPages <= 1) {
+    return firstPage;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      getResponsesByForm(formId, {
+        page: index + 2,
+        pageSize: RESPONSES_SCROLL_PAGE_SIZE,
+      }),
+    ),
+  );
+
+  return {
+    ...firstPage,
+    data: firstPage.data.concat(remainingPages.flatMap((page) => page.data)),
+    page: 1,
+    pageSize: RESPONSES_SCROLL_PAGE_SIZE,
+    totalPages: 1,
+  };
+}
+
+function renderResponseCell(header: string, value: string) {
+  if (header !== "Дата ответа") {
+    return value;
+  }
+
+  const { datePart, timePart } = getDateCellParts(value);
+
+  return (
+    <span className="responses-table-date-cell">
+      <span className="responses-table-date-line">{datePart}</span>
+      {timePart && <span className="responses-table-date-line">{timePart}</span>}
+    </span>
+  );
+}
+
 export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [currentPage, setCurrentPage] = useState(1);
   const [selectedResponsePreview, setSelectedResponsePreview] = useState<SelectedResponsePreview | null>(null);
 
   useEffect(() => {
-    setCurrentPage(1);
     setSelectedResponsePreview(null);
   }, [id]);
 
@@ -64,19 +117,19 @@ export default function FormResponsesPage() {
   });
 
   const responsesQuery = useQuery({
-    queryKey: getFormResponsesQueryKey(id, currentPage, RESPONSES_PAGE_SIZE),
+    queryKey: getFormResponsesQueryKey(id, "all", RESPONSES_SCROLL_PAGE_SIZE),
     queryFn: async () => {
       if (!id) {
         return {
           data: [],
           count: 0,
           page: 1,
-          pageSize: RESPONSES_PAGE_SIZE,
+          pageSize: RESPONSES_SCROLL_PAGE_SIZE,
           totalPages: 1,
         };
       }
 
-      return getResponsesByForm(id, { page: currentPage, pageSize: RESPONSES_PAGE_SIZE });
+      return getAllResponsesByForm(id);
     },
     enabled: Boolean(id),
     retry: 1,
@@ -97,12 +150,6 @@ export default function FormResponsesPage() {
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const combinedError = formQuery.error ?? responsesQuery.error;
   const totalResponses = responsesQuery.data?.count ?? 0;
-  const responsePage = responsesQuery.data?.page ?? currentPage;
-  const totalPages = responsesQuery.data?.totalPages ?? 1;
-  const pageStart = totalResponses ? (responsePage - 1) * RESPONSES_PAGE_SIZE + 1 : 0;
-  const pageEnd = totalResponses ? Math.min(responsePage * RESPONSES_PAGE_SIZE, totalResponses) : 0;
-  const canGoPrevious = responsePage > 1;
-  const canGoNext = responsePage < totalPages;
 
   useEffect(() => {
     if (!id) {
@@ -208,7 +255,7 @@ export default function FormResponsesPage() {
           </div>
           <div className="responses-page-toolbar">
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
-              <span>Выгрузить страницу XLSX</span>
+              <span>XLSX</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <button
@@ -267,9 +314,14 @@ export default function FormResponsesPage() {
             <table className="responses-table">
               <thead>
                 <tr>
-                  {headers.map((header) => (
-                    <th key={header}>{header}</th>
-                  ))}
+                  {headers.map((header) => {
+                    const isDateColumn = header === "Дата ответа";
+                    return (
+                      <th key={header} className={isDateColumn ? "responses-table-date-column" : undefined}>
+                        {header}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -295,9 +347,17 @@ export default function FormResponsesPage() {
                         }
                       }}
                     >
-                      {headers.map((header, columnIndex) => (
-                        <td key={`${rowId}-${header}-${columnIndex}`}>{row[header]}</td>
-                      ))}
+                      {headers.map((header, columnIndex) => {
+                        const isDateColumn = header === "Дата ответа";
+                        return (
+                          <td
+                            key={`${rowId}-${header}-${columnIndex}`}
+                            className={isDateColumn ? "responses-table-date-column" : undefined}
+                          >
+                            {renderResponseCell(header, row[header])}
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })}
@@ -307,35 +367,9 @@ export default function FormResponsesPage() {
         )}
 
         {!isLoading && !combinedError && totalResponses > 0 && (
-          <div className="responses-pagination" aria-label="Пагинация ответов">
-            <p aria-live="polite">
-              Показаны {pageStart}-{pageEnd} из {totalResponses}
-            </p>
-            <div className="responses-pagination-actions">
-              <button
-                type="button"
-                className="responses-pagination-button"
-                onClick={() => {
-                  setSelectedResponsePreview(null);
-                  setCurrentPage((page) => Math.max(1, page - 1));
-                }}
-                disabled={isRefreshing || !canGoPrevious}
-              >
-                Предыдущая
-              </button>
-              <button
-                type="button"
-                className="responses-pagination-button"
-                onClick={() => {
-                  setSelectedResponsePreview(null);
-                  setCurrentPage((page) => Math.min(totalPages, page + 1));
-                }}
-                disabled={isRefreshing || !canGoNext}
-              >
-                Следующая
-              </button>
-            </div>
-          </div>
+          <p className="responses-page-total" aria-live="polite">
+            Ответов: {totalResponses}
+          </p>
         )}
       </div>
 

@@ -61,11 +61,13 @@ vi.mock("survey-core", () => ({
     completeText = "";
     completedHtml = "";
     data: Record<string, unknown> = {};
+    fitToContainer = true;
     questionNames: string[] = [];
     onCompleting = new FakeSurveyEvent();
     onUploadFiles = new FakeSurveyEvent();
     onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
+    onOpenDropdownMenu = new FakeSurveyEvent();
     doComplete = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
@@ -231,6 +233,50 @@ describe("SurveyFormRenderer", () => {
       }),
     );
     expect(screen.getByTestId("survey-question-names")).toHaveTextContent("school,phone,email");
+  });
+
+  it("keeps SurveyJS dropdown menus from reflowing the survey container", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [
+            {
+              name: "page1",
+              elements: [
+                {
+                  type: "dropdown",
+                  name: "choice",
+                  title: "Выберите вариант",
+                  choices: ["Пункт 1", "Пункт 2"],
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      fitToContainer?: boolean;
+      onOpenDropdownMenu: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+    const popupModel = { focusFirstInputSelector: ".sv-list__item--selected" };
+    const dropdownOptions = {
+      deviceType: "desktop",
+      menuType: "popup",
+      question: {
+        dropdownListModel: {
+          popupModel,
+        },
+      },
+    };
+
+    await model.onOpenDropdownMenu.fire(model, dropdownOptions);
+
+    expect(model.fitToContainer).toBe(false);
+    expect(dropdownOptions.menuType).toBe("dropdown");
+    expect(popupModel.focusFirstInputSelector).toBe(".surveyjs-dropdown-autofocus-disabled");
   });
 
   it("passes uploaded files to SurveyJS using the upload callback contract", async () => {
