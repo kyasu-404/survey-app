@@ -3,7 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
-import { getSurveyFormQueryKey } from "../../entities/survey/model/queryKeys";
+import {
+  getPrivateSurveyFormQueryKey,
+  getPublicSurveyFormQueryKey,
+} from "../../entities/survey/model/queryKeys";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
@@ -30,43 +33,42 @@ export default function SurveyPage() {
       location.state.isPreview === true,
   );
 
-  const {
-    data: form,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: getSurveyFormQueryKey(id),
+  const isPrivatePreview = isPreview;
+  const surveyQuery = useQuery({
+    queryKey: isPrivatePreview ? getPrivateSurveyFormQueryKey(id) : getPublicSurveyFormQueryKey(id),
     queryFn: async () => {
       if (!id) {
         return null;
       }
 
-      if (user?.id) {
+      if (isPrivatePreview) {
         return getFormById(id);
       }
 
       return getPublicFormById(id);
     },
-    enabled: Boolean(id) && !isAuthLoading,
+    enabled: isPrivatePreview ? Boolean(id) && !isAuthLoading && Boolean(user?.id) : Boolean(id),
     retry: 1,
     staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
+  const form = surveyQuery.data;
+  const showInitialSkeleton = !form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading));
 
   const errorMessage = useMemo(() => {
-    if (!error) {
+    if (!surveyQuery.error) {
       return null;
     }
 
-    return error instanceof Error
-      ? error.message
+    return surveyQuery.error instanceof Error
+      ? surveyQuery.error.message
       : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
-  }, [error]);
+  }, [surveyQuery.error]);
 
   if (!id) return <SurveyNotFound />;
-  if (isLoading || isAuthLoading) {
+  if (showInitialSkeleton) {
     return (
       <div className="survey-page survey-page-shell">
         <div className="survey-page-card card survey-page-skeleton">
@@ -87,6 +89,7 @@ export default function SurveyPage() {
     );
   }
   if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
+  if (isPrivatePreview && !user?.id) return <SurveyNotFound />;
   if (!form || (!form.is_public && !isPreview)) return <SurveyNotFound />;
 
   return (

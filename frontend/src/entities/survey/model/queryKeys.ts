@@ -45,6 +45,14 @@ export function getSurveyFormQueryKey(formId: string | undefined) {
   return [...SURVEY_FORM_QUERY_ROOT, formId] as const;
 }
 
+export function getPublicSurveyFormQueryKey(formId: string | undefined) {
+  return [...getSurveyFormQueryKey(formId), "public"] as const;
+}
+
+export function getPrivateSurveyFormQueryKey(formId: string | undefined) {
+  return [...getSurveyFormQueryKey(formId), "private"] as const;
+}
+
 export function getFormResponsesQueryKey(
   formId: string | undefined,
   ...segments: Array<string | number | boolean | null | undefined>
