@@ -13,7 +13,6 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import { supabaseClient } from "../../shared/api";
-import refreshIcon from "../../img/refresh.png";
 import infoIcon from "../../img/info.svg";
 import copyLinkIcon from "../../img/copy_link.svg";
 import qrIcon from "../../img/qr.svg";
@@ -60,6 +59,7 @@ import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleDebouncedQueryInvalidation, scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { RefreshButton } from "../../shared/ui/RefreshButton";
 
 type DashboardPageProps = {
   viewMode: "mine" | "all";
@@ -726,19 +726,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              className="dashboard-refresh-button"
+            <RefreshButton
+              isRefreshing={isRefreshingForms}
+              lastUpdatedAt={formsUpdatedAt}
               onClick={() => void reloadForms()}
               disabled={isInitialFormsLoading || isRefreshingForms}
-            >
-              {isRefreshingForms ? (
-                <InlineSpinner />
-              ) : (
-                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-              )}
-              <span>{isRefreshingForms ? "Обновляется..." : "Обновить"}</span>
-            </button>
+            />
           </div>
         </div>
 

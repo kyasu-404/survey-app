@@ -965,6 +965,21 @@ textarea:focus {
   min-height: 42px;
 }
 
+.dashboard-refresh-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.dashboard-refresh-meta {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .icon-action-button {
   width: 40px;
   height: 34px;
@@ -2122,6 +2137,10 @@ textarea:focus {
 .responses-page-toolbar .dashboard-refresh-button {
   min-width: 154px;
   justify-content: center;
+}
+
+.responses-page-toolbar .dashboard-refresh-control {
+  align-self: flex-start;
 }
 
 .responses-export-button {

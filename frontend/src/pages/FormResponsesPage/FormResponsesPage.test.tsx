@@ -465,6 +465,7 @@ describe("FormResponsesPage", () => {
     );
 
     const refreshButton = await screen.findByRole("button", { name: "Обновить" });
+    expect(screen.getByText(/Обновлено \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
 
     await userEvent.click(refreshButton);
 

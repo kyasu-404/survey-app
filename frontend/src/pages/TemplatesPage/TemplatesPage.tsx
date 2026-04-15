@@ -13,7 +13,6 @@ import { routes } from "../../app/routes";
 import deleteIcon from "../../img/delete.svg";
 import editIcon from "../../img/edit.svg";
 import renameIcon from "../../img/rename.svg";
-import refreshIcon from "../../img/refresh.png";
 import shareIcon from "../../img/share.svg";
 import useIcon from "../../img/use.svg";
 import {
@@ -35,6 +34,7 @@ import { getErrorMessage } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { saveSurveyBuilderDraft } from "../../widgets/SurveyBuilder/builderDraft";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
@@ -110,6 +110,7 @@ export default function TemplatesPage() {
     error: templatesError,
     refetch: reloadTemplates,
     fetchNextPage: loadNextTemplatesPage,
+    dataUpdatedAt: templatesUpdatedAt,
   } = useInfiniteQuery({
     queryKey: templatesQueryKey,
     initialPageParam: 0,
@@ -427,19 +428,12 @@ export default function TemplatesPage() {
                 Публичные
               </button>
             </div>
-            <button
-              type="button"
-              className="dashboard-refresh-button"
+            <RefreshButton
+              isRefreshing={isRefreshingTemplates}
+              lastUpdatedAt={templatesUpdatedAt}
               onClick={() => void reloadTemplates()}
               disabled={isInitialTemplatesLoading || isRefreshingTemplates}
-            >
-              {isRefreshingTemplates ? (
-                <InlineSpinner />
-              ) : (
-                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-              )}
-              <span>{isRefreshingTemplates ? "Обновляется..." : "Обновить"}</span>
-            </button>
+            />
           </div>
         </div>
 

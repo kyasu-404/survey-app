@@ -11,14 +11,13 @@ import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey
 import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
-import refreshIcon from "../../img/refresh.png";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
-import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
@@ -148,6 +147,7 @@ export default function FormResponsesPage() {
   const isLoading =
     (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
+  const lastUpdatedAt = Math.max(formQuery.dataUpdatedAt ?? 0, responsesQuery.dataUpdatedAt ?? 0);
   const combinedError = formQuery.error ?? responsesQuery.error;
   const totalResponses = responsesQuery.data?.count ?? 0;
 
@@ -275,22 +275,15 @@ export default function FormResponsesPage() {
               <span>HTML</span>
               <img src={previewIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
-            <button
-              type="button"
-              className="dashboard-refresh-button"
+            <RefreshButton
+              isRefreshing={isRefreshing}
+              lastUpdatedAt={lastUpdatedAt}
               onClick={() => {
                 void formQuery.refetch();
                 void responsesQuery.refetch();
               }}
               disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <InlineSpinner />
-              ) : (
-                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
-              )}
-              <span>{isRefreshing ? "Обновляется..." : "Обновить"}</span>
-            </button>
+            />
           </div>
         </div>
 

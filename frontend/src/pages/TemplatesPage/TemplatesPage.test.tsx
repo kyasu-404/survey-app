@@ -297,6 +297,7 @@ describe("TemplatesPage", () => {
     const { container } = renderPage();
 
     expect(await screen.findByText("Тяжёлый шаблон")).toBeInTheDocument();
+    expect(screen.getByText(/Обновлено \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
 
     const refreshButton = screen.getByRole("button", { name: "Обновить" });
     expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
