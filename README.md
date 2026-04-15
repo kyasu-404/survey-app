@@ -8,6 +8,51 @@
 - `database/supabase_schema.sql` — недеструктивный baseline схемы таблиц и RLS-политик для пустого Supabase-проекта.
 - `database/migrations/` — место для production-миграций. Каждый применённый файл считается неизменяемым.
 
+## Запуск тестов
+
+Сначала установите зависимости фронтенда:
+
+```bash
+cd frontend
+npm ci
+```
+
+Корневые policy/smoke-тесты, которые запускаются в CI, выполняются из корня репозитория:
+
+```bash
+node --test database/supabase_schema.test.mjs functions/user-admin/index.test.mjs frontend/tooling.test.mjs frontend/Dockerfile.test.mjs
+```
+
+Основной frontend suite запускается из `frontend/`:
+
+```bash
+npm test
+```
+
+Проверка типов:
+
+```bash
+npm run typecheck
+```
+
+Если нужно прогнать только один или несколько vitest-сьютов:
+
+```bash
+npm test -- src/app/router/routeGuards.test.tsx
+```
+
+End-to-end smoke через Playwright:
+
+```bash
+npm run test:e2e
+```
+
+При первом запуске Playwright может потребоваться установить браузеры:
+
+```bash
+npx playwright install
+```
+
 ## Переменные окружения (frontend/.env)
 
 Скопируйте `frontend/.env.example` в локальный `frontend/.env`. Фронтенд читает только эти переменные:
