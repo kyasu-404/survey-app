@@ -1870,9 +1870,9 @@ textarea:focus {
 }
 
 .dashboard-form-footer {
-  margin-top: 12px;
+  margin-top: 4px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
 }
@@ -1947,7 +1947,7 @@ textarea:focus {
 }
 
 .dashboard-actions-menu-shell {
-  align-self: flex-start;
+  align-self: center;
   margin-top: 0;
   margin-left: auto;
 }

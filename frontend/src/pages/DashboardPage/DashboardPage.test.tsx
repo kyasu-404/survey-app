@@ -461,8 +461,15 @@ describe("DashboardPage", () => {
     renderPage("all");
 
     expect(await screen.findByText("Мониторинг по приказу")).toBeInTheDocument();
-    expect(screen.getByText(/Тип:\s*Мониторинг/)).toBeInTheDocument();
-    expect(screen.getByText(/Основание:\s*Приказ/)).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => {
+        if (!element?.classList.contains("dashboard-form-classification")) {
+          return false;
+        }
+
+        return element.textContent?.replace(/\s+/g, "").trim() === "Мониторинг•Приказ";
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("admin")).toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");

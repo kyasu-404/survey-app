@@ -1055,9 +1055,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                       </div>
                       {!isTemplate && (
                         <p className="dashboard-form-classification">
-                          <span>Тип: {formTypeLabel}</span>
+                          <span>{formTypeLabel}</span>
                           <span aria-hidden="true">•</span>
-                          <span>Основание: {formReasonLabel}</span>
+                          <span>{formReasonLabel}</span>
                         </p>
                       )}
                     </div>
