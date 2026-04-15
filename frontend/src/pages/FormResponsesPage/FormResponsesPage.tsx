@@ -6,6 +6,7 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
+import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
@@ -46,7 +47,7 @@ export default function FormResponsesPage() {
   }, [id]);
 
   const formQuery = useQuery({
-    queryKey: ["form", id],
+    queryKey: getFormQueryKey(id),
     queryFn: async () => {
       if (!id) {
         return null;
@@ -56,10 +57,14 @@ export default function FormResponsesPage() {
     },
     enabled: Boolean(id),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const responsesQuery = useQuery({
-    queryKey: ["form-responses", id, currentPage, RESPONSES_PAGE_SIZE],
+    queryKey: getFormResponsesQueryKey(id, currentPage, RESPONSES_PAGE_SIZE),
     queryFn: async () => {
       if (!id) {
         return {
@@ -75,6 +80,10 @@ export default function FormResponsesPage() {
     },
     enabled: Boolean(id),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const responses = responsesQuery.data?.data ?? [];
@@ -112,8 +121,8 @@ export default function FormResponsesPage() {
         },
         () => {
           scheduleQueryInvalidation(queryClient, `responses realtime ${id}`, [
-            { queryKey: ["form", id] },
-            { queryKey: ["form-responses", id] },
+            { queryKey: getFormQueryKey(id) },
+            { queryKey: getFormResponsesQueryKey(id) },
           ]);
         },
       )
@@ -126,7 +135,7 @@ export default function FormResponsesPage() {
           filter: `id=eq.${id}`,
         },
         () => {
-          scheduleQueryInvalidation(queryClient, `form realtime ${id}`, [{ queryKey: ["form", id] }]);
+          scheduleQueryInvalidation(queryClient, `form realtime ${id}`, [{ queryKey: getFormQueryKey(id) }]);
         },
       )
       .subscribe((status) => {

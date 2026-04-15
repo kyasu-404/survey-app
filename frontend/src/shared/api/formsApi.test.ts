@@ -354,6 +354,25 @@ describe("fetchDashboardFormsStats", () => {
     expect(activeQuery.eq).toHaveBeenCalledWith("is_public", true);
     expect(deadlineQuery.not).toHaveBeenCalledWith("deadline_at", "is", null);
   });
+
+  it("skips the profiles join for dashboard stats when there is no author search", async () => {
+    const totalQuery = createSummaryQuery({ data: null, count: 25, error: null });
+    const activeQuery = createSummaryQuery({ data: null, count: 18, error: null });
+    const deadlineQuery = createSummaryQuery({ data: null, count: 7, error: null });
+
+    vi.mocked(apiClient.from)
+      .mockReturnValueOnce(totalQuery as never)
+      .mockReturnValueOnce(activeQuery as never)
+      .mockReturnValueOnce(deadlineQuery as never);
+
+    await fetchDashboardFormsStats({
+      authorId: "user-1",
+    });
+
+    expect(totalQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(activeQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(deadlineQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+  });
 });
 
 describe("insertForm", () => {

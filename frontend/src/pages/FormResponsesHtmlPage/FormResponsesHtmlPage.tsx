@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { getResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
+import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
 import { RESPONSES_PAGE_SIZE } from "../../shared/api";
@@ -19,7 +20,7 @@ export default function FormResponsesHtmlPage() {
   const { id } = useParams();
 
   const formQuery = useQuery({
-    queryKey: ["form", id],
+    queryKey: getFormQueryKey(id),
     queryFn: async () => {
       if (!id) {
         return null;
@@ -29,10 +30,14 @@ export default function FormResponsesHtmlPage() {
     },
     enabled: Boolean(id),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const responsesQuery = useQuery({
-    queryKey: ["form-responses", id, "html", RESPONSES_PAGE_SIZE],
+    queryKey: getFormResponsesQueryKey(id, "html", RESPONSES_PAGE_SIZE),
     queryFn: async () => {
       if (!id) {
         return {
@@ -48,6 +53,10 @@ export default function FormResponsesHtmlPage() {
     },
     enabled: Boolean(id),
     retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const responses = responsesQuery.data?.data ?? [];

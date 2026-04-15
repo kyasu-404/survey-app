@@ -40,8 +40,11 @@ import {
   getNextDeadlineRefreshDelayMs,
 } from "../../entities/survey/model/deadlineState";
 import {
+  getFormQueryKey,
+  getFormResponsesQueryKey,
   getDashboardFormStatsQueryKey,
   getDashboardFormsQueryKey,
+  getSurveyFormQueryKey,
 } from "../../entities/survey/model/queryKeys";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
@@ -217,7 +220,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -228,7 +231,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -410,9 +413,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const scheduleFormDetailsRefresh = (formId: string) => {
     scheduleQueryInvalidation(queryClient, `dashboard form ${formId} refresh`, [
-      { queryKey: ["form", formId] },
-      { queryKey: ["survey-form", formId] },
-      { queryKey: ["form-responses", formId] },
+      { queryKey: getFormQueryKey(formId) },
+      { queryKey: getSurveyFormQueryKey(formId) },
     ]);
   };
 

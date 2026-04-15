@@ -42,6 +42,8 @@ import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import {
   DASHBOARD_FORMS_QUERY_ROOT,
   DASHBOARD_FORM_STATS_QUERY_ROOT,
+  getFormQueryKey,
+  getSurveyFormQueryKey,
   TEMPLATE_FORMS_QUERY_ROOT,
 } from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
@@ -322,9 +324,14 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     isLoading: isEditableFormLoading,
     error: editableFormError,
   } = useQuery({
-    queryKey: ["form", formId],
+    queryKey: getFormQueryKey(formId),
     queryFn: () => getFormById(formId ?? ""),
     enabled: isEditMode,
+    retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   useEffect(() => {
@@ -403,7 +410,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   }, [creator, formId]);
 
   const scheduleBuilderQueryRefresh = (affectedFormId?: string) => {
-    const targets = [
+    const targets: Array<{ queryKey: readonly unknown[] }> = [
       { queryKey: DASHBOARD_FORMS_QUERY_ROOT },
       { queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT },
       { queryKey: TEMPLATE_FORMS_QUERY_ROOT },
@@ -412,8 +419,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     if (affectedFormId) {
       targets.push(
-        { queryKey: ["form", affectedFormId] },
-        { queryKey: ["survey-form", affectedFormId] },
+        { queryKey: getFormQueryKey(affectedFormId) },
+        { queryKey: getSurveyFormQueryKey(affectedFormId) },
       );
     }
 

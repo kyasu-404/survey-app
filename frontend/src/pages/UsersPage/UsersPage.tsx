@@ -12,6 +12,7 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { getErrorMessage } from "../../shared/lib/error";
 import { useAuth } from "../../app/providers/AuthProvider";
 import type { UserProfile, UserRole } from "../../entities/user/types";
+import { USERS_QUERY_ROOT } from "../../entities/survey/model/queryKeys";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import searchIcon from "../../img/search.svg";
@@ -64,9 +65,13 @@ export default function UsersPage() {
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
 
   const usersQuery = useQuery({
-    queryKey: ["users"],
+    queryKey: USERS_QUERY_ROOT,
     queryFn: getAllUsers,
     enabled: !isAuthLoading && Boolean(user),
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const createUserMutation = useMutation({
@@ -74,7 +79,7 @@ export default function UsersPage() {
     onSuccess: () => {
       setNewUser({ name: "", email: "", password: "", role: "user" });
       showToast("Пользователь создан", "success");
-      scheduleQueryInvalidation(queryClient, "create user", [{ queryKey: ["users"] }]);
+      scheduleQueryInvalidation(queryClient, "create user", [{ queryKey: USERS_QUERY_ROOT }]);
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось создать пользователя"), "error");
@@ -85,7 +90,7 @@ export default function UsersPage() {
     mutationFn: deleteUser,
     onSuccess: () => {
       showToast("Пользователь удалён", "success");
-      scheduleQueryInvalidation(queryClient, "delete user", [{ queryKey: ["users"] }]);
+      scheduleQueryInvalidation(queryClient, "delete user", [{ queryKey: USERS_QUERY_ROOT }]);
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось удалить пользователя"), "error");
@@ -99,7 +104,7 @@ export default function UsersPage() {
     },
     onSuccess: (_data, variables) => {
       showToast(variables.disabled ? "Пользователь отключён" : "Пользователь включён", "success");
-      scheduleQueryInvalidation(queryClient, "toggle user disabled", [{ queryKey: ["users"] }]);
+      scheduleQueryInvalidation(queryClient, "toggle user disabled", [{ queryKey: USERS_QUERY_ROOT }]);
     },
     onSettled: () => {
       setPendingStatusUserId(null);

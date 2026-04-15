@@ -23,7 +23,12 @@ import {
   removeForm,
   renameForm,
 } from "../../entities/survey/api/surveysApi";
-import { TEMPLATE_FORMS_QUERY_ROOT, getTemplateFormsQueryKey } from "../../entities/survey/model/queryKeys";
+import {
+  TEMPLATE_FORMS_QUERY_ROOT,
+  getFormQueryKey,
+  getSurveyFormQueryKey,
+  getTemplateFormsQueryKey,
+} from "../../entities/survey/model/queryKeys";
 import { TEMPLATE_FORM_TYPE, getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
 import { getErrorMessage } from "../../shared/lib/error";
@@ -124,7 +129,7 @@ export default function TemplatesPage() {
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -138,12 +143,14 @@ export default function TemplatesPage() {
     isLoading: isPreviewTemplateLoading,
     error: previewTemplateError,
   } = useQuery({
-    queryKey: ["form", previewTemplateCard?.id],
+    queryKey: getFormQueryKey(previewTemplateCard?.id),
     queryFn: () => getFormById(previewTemplateCard!.id),
     enabled: Boolean(previewTemplateCard?.id),
     retry: 1,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
 
   const isInitialTemplatesLoading = isTemplatesLoading && templates.length === 0;
@@ -244,8 +251,8 @@ export default function TemplatesPage() {
 
   const scheduleTemplateDetailsRefresh = (templateId: string) => {
     scheduleQueryInvalidation(queryClient, `template ${templateId} refresh`, [
-      { queryKey: ["form", templateId] },
-      { queryKey: ["survey-form", templateId] },
+      { queryKey: getFormQueryKey(templateId) },
+      { queryKey: getSurveyFormQueryKey(templateId) },
     ]);
   };
 

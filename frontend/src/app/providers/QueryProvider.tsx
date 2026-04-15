@@ -1,7 +1,9 @@
 import { useState, type PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-function createQueryClient() {
+export const DEFAULT_QUERY_STALE_TIME_MS = 30_000;
+
+export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
@@ -18,11 +20,11 @@ function createQueryClient() {
 
           return failureCount < 2;
         },
-        staleTime: 0,
+        staleTime: DEFAULT_QUERY_STALE_TIME_MS,
         gcTime: 5 * 60_000,
-        refetchOnMount: true,
+        refetchOnMount: false,
         refetchOnReconnect: true,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
       },
     },
   });

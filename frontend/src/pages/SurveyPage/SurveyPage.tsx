@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
+import { getSurveyFormQueryKey } from "../../entities/survey/model/queryKeys";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
@@ -34,7 +35,7 @@ export default function SurveyPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["survey-form", id],
+    queryKey: getSurveyFormQueryKey(id),
     queryFn: async () => {
       if (!id) {
         return null;
@@ -47,6 +48,11 @@ export default function SurveyPage() {
       return getPublicFormById(id);
     },
     enabled: Boolean(id) && !isAuthLoading,
+    retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const errorMessage = useMemo(() => {
