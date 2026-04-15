@@ -17,6 +17,7 @@ import { exportToExcel } from "../../shared/lib/export";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
+import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
@@ -276,7 +277,11 @@ export default function FormResponsesPage() {
               }}
               disabled={isRefreshing}
             >
-              <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              {isRefreshing ? (
+                <InlineSpinner />
+              ) : (
+                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              )}
               <span>{isRefreshing ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>

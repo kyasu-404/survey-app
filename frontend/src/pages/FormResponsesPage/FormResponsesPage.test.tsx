@@ -199,7 +199,10 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
+    const refreshButton = screen.getByRole("button", { name: "Обновить" });
+    expect(refreshButton).toBeInTheDocument();
+    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
     expect(container.querySelector(".responses-export-button .toolbar-icon")).toBeInTheDocument();
@@ -464,7 +467,10 @@ describe("FormResponsesPage", () => {
     await userEvent.click(refreshButton);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Обновляется..." })).toBeDisabled();
+      const refreshingButton = screen.getByRole("button", { name: "Обновляется..." });
+      expect(refreshingButton).toBeDisabled();
+      expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
+      expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
     });
 
     formDeferred.resolve({
@@ -494,7 +500,10 @@ describe("FormResponsesPage", () => {
     ]));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Обновить" })).not.toBeDisabled();
+      const refreshButton = screen.getByRole("button", { name: "Обновить" });
+      expect(refreshButton).not.toBeDisabled();
+      expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+      expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
     });
   });
 

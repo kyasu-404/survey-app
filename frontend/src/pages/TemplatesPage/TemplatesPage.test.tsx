@@ -290,8 +290,15 @@ describe("TemplatesPage", () => {
 
     expect(await screen.findByText("Тяжёлый шаблон")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    const refreshButton = screen.getByRole("button", { name: "Обновить" });
+    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
 
+    await userEvent.click(refreshButton);
+
+    const refreshingButton = screen.getByRole("button", { name: "Обновляется..." });
+    expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
+    expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
     expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
     expect(screen.getByText("Тяжёлый шаблон")).toBeInTheDocument();
 

@@ -701,7 +701,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               onClick={() => void reloadForms()}
               disabled={isFormsLoading || isFormsFetching}
             >
-              <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              {isFormsFetching ? (
+                <InlineSpinner />
+              ) : (
+                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              )}
               <span>{isFormsFetching ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>

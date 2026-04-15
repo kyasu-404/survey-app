@@ -422,7 +422,11 @@ export default function TemplatesPage() {
               onClick={() => void reloadTemplates()}
               disabled={isTemplatesLoading || isTemplatesFetching}
             >
-              <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              {isTemplatesFetching ? (
+                <InlineSpinner />
+              ) : (
+                <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              )}
               <span>{isTemplatesFetching ? "Обновляется..." : "Обновить"}</span>
             </button>
           </div>
