@@ -158,7 +158,7 @@ describe("fetchForms", () => {
 
     await fetchForms();
 
-    expect(listQuery.select).toHaveBeenCalledWith("*, profiles:author_id(email, name)");
+    expect(listQuery.select).toHaveBeenCalledWith("*");
   });
 });
 
@@ -202,9 +202,9 @@ describe("fetchDashboardFormsPage", () => {
           deadline_at: "2026-05-01T12:00:00.000Z",
           max_responses: 50,
           author_id: "user-1",
+          author_name: "Автор",
           created_at: "2026-04-01T10:00:00.000Z",
           responses_count: 3,
-          profiles: { email: "author@example.com", name: "Автор" },
         },
       ],
       count: 41,
@@ -226,7 +226,6 @@ describe("fetchDashboardFormsPage", () => {
       items: [
         expect.objectContaining({
           id: "form-1",
-          author_email: "author@example.com",
           author_name: "Автор",
           responses_count: 3,
         }),
@@ -235,11 +234,11 @@ describe("fetchDashboardFormsPage", () => {
     });
 
     expect(listQuery.select).toHaveBeenCalledWith(
-      expect.stringContaining("profiles:author_id!inner(email, name)"),
+      expect.stringContaining("author_name"),
       { count: "exact" },
     );
     expect(listQuery.select).toHaveBeenCalledWith(
-      expect.not.stringContaining("schema"),
+      expect.not.stringContaining("profiles:author_id"),
       { count: "exact" },
     );
     expect(listQuery.neq).toHaveBeenCalledWith("form_type", "template");
@@ -324,8 +323,8 @@ describe("fetchTemplateFormsPage", () => {
           form_reason: "plan",
           is_public: true,
           author_id: "user-1",
+          author_name: "Автор",
           created_at: "2026-04-01T10:00:00.000Z",
-          profiles: { email: "author@example.com", name: "Автор" },
         },
       ],
       count: 9,
@@ -347,7 +346,6 @@ describe("fetchTemplateFormsPage", () => {
       items: [
         expect.objectContaining({
           id: "template-1",
-          author_email: "author@example.com",
           author_name: "Автор",
         }),
       ],
@@ -355,11 +353,11 @@ describe("fetchTemplateFormsPage", () => {
     });
 
     expect(listQuery.select).toHaveBeenCalledWith(
-      expect.stringContaining("profiles:author_id!inner(email, name)"),
+      expect.stringContaining("author_name"),
       { count: "exact" },
     );
     expect(listQuery.select).toHaveBeenCalledWith(
-      expect.not.stringContaining("schema"),
+      expect.not.stringContaining("profiles:author_id"),
       { count: "exact" },
     );
     expect(listQuery.range).toHaveBeenCalledWith(0, 23);
@@ -393,7 +391,7 @@ describe("fetchDashboardFormsStats", () => {
     });
 
     expect(totalQuery.select).toHaveBeenCalledWith(
-      expect.stringContaining("profiles:author_id!inner(id)"),
+      "id",
       { count: "exact", head: true },
     );
     expect(activeQuery.eq).toHaveBeenCalledWith("is_public", true);

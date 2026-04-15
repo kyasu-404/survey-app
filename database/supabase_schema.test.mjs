@@ -78,6 +78,32 @@ test("authenticated users can update only safe profile columns", () => {
   assert.match(schema, /grant update \(name\) on table public\.profiles to authenticated;/i);
 });
 
+test("forms cache the author display name without widening profile reads", () => {
+  assert.match(schema, /author_name text not null default ''/i);
+
+  const setAuthorName = getFunctionDefinition("set_form_author_name");
+  const syncAuthorName = getFunctionDefinition("sync_profile_name_to_forms");
+
+  assert.match(setAuthorName, /security definer\s+set search_path = ''/i);
+  assert.match(setAuthorName, /into new\.author_name/i);
+  assert.match(setAuthorName, /from public\.profiles p/i);
+  assert.match(setAuthorName, /split_part\(p\.email,\s*'@',\s*1\)/i);
+
+  assert.match(syncAuthorName, /security definer\s+set search_path = ''/i);
+  assert.match(syncAuthorName, /update public\.forms f/i);
+  assert.match(syncAuthorName, /set author_name =/i);
+  assert.match(syncAuthorName, /where f\.author_id = new\.id/i);
+
+  assert.match(
+    schema,
+    /create or replace trigger forms_set_author_name\s+before insert or update of author_id on public\.forms\s+for each row execute procedure public\.set_form_author_name\(\);/i,
+  );
+  assert.match(
+    schema,
+    /create or replace trigger profiles_sync_name_to_forms\s+after update of name, email on public\.profiles\s+for each row execute procedure public\.sync_profile_name_to_forms\(\);/i,
+  );
+});
+
 test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);

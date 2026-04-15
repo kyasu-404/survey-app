@@ -20,17 +20,15 @@ export type FormsFilters = {
   isPublic?: boolean;
 };
 
-type RawForm = Omit<SurveyForm, "responses_count" | "author_email" | "author_name"> & {
-  profiles?: { email?: string | null; name?: string | null } | null;
+type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
   responses_count?: number | null;
 };
 
 type RawFormSummary = Pick<
   SurveyFormSummary,
-  "id" | "title" | "form_type" | "form_reason" | "is_public" | "author_id" | "created_at"
+  "id" | "title" | "form_type" | "form_reason" | "is_public" | "author_id" | "author_name" | "created_at"
 > &
   Partial<Pick<SurveyFormSummary, "deadline_at" | "max_responses">> & {
-  profiles?: { email?: string | null; name?: string | null } | null;
   responses_count?: number | null;
 };
 
@@ -49,9 +47,9 @@ const DASHBOARD_FORMS_SUMMARY_SELECT = `
   deadline_at,
   max_responses,
   author_id,
+  author_name,
   created_at,
-  responses_count,
-  profiles:author_id!inner(email, name)
+  responses_count
 `;
 
 const TEMPLATE_FORMS_SUMMARY_SELECT = `
@@ -61,12 +59,11 @@ const TEMPLATE_FORMS_SUMMARY_SELECT = `
   form_reason,
   is_public,
   author_id,
-  created_at,
-  profiles:author_id!inner(email, name)
+  author_name,
+  created_at
 `;
 
 const DASHBOARD_FORMS_COUNT_SELECT = "id";
-const DASHBOARD_FORMS_COUNT_WITH_PROFILE_SELECT = "id, profiles:author_id!inner(id)";
 
 function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
   if (typeof isPublic === "boolean") {
@@ -95,8 +92,8 @@ function syncFetchedDeadlineState<T extends Pick<SurveyForm, "deadline_at" | "fo
 function mapRawForm(form: RawForm): SurveyForm {
   return {
     ...form,
-    author_email: form.profiles?.email ?? null,
-    author_name: form.profiles?.name ?? null,
+    author_email: null,
+    author_name: form.author_name ?? null,
     responses_count: form.responses_count ?? 0,
   };
 }
@@ -105,18 +102,14 @@ function mapRawFormSummary(form: RawFormSummary): SurveyFormSummary {
   return {
     ...form,
     deadline_at: form.deadline_at ?? null,
-    author_email: form.profiles?.email ?? null,
-    author_name: form.profiles?.name ?? null,
+    author_email: null,
+    author_name: form.author_name ?? null,
     responses_count: form.responses_count ?? 0,
   };
 }
 
 function normalizeSearchValue(search: string) {
   return search.trim().replace(/[,()]/g, " ");
-}
-
-function getDashboardFormsCountSelect(filters?: FormsFilters) {
-  return filters?.search ? DASHBOARD_FORMS_COUNT_WITH_PROFILE_SELECT : DASHBOARD_FORMS_COUNT_SELECT;
 }
 
 function applyFormsFilters<TQuery extends {
@@ -129,9 +122,7 @@ function applyFormsFilters<TQuery extends {
 
   if (normalizedSearch) {
     const wildcard = `%${normalizedSearch}%`;
-    query = query.or(
-      `title.ilike.${wildcard},profiles.email.ilike.${wildcard},profiles.name.ilike.${wildcard}`,
-    );
+    query = query.or(`title.ilike.${wildcard},author_name.ilike.${wildcard}`);
   }
 
   if (filters?.dateFrom) {
@@ -179,18 +170,8 @@ async function getAuthenticatedUserId(): Promise<string> {
 }
 
 export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> {
-  let query = apiClient
-    .from("forms")
-    .select("*, profiles:author_id(email, name)")
-    .order("created_at", { ascending: false });
-
-  if (filters?.search) query = query.ilike("title", `%${filters.search}%`);
-  if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom);
-  if (filters?.dateTo) query = query.lte("created_at", filters.dateTo);
-  if (filters?.authorId) query = query.eq("author_id", filters.authorId);
-  if (filters?.formType) query = query.eq("form_type", filters.formType);
-  if (filters?.formReason) query = query.eq("form_reason", filters.formReason);
-  if (typeof filters?.isPublic === "boolean") query = query.eq("is_public", filters.isPublic);
+  let query = apiClient.from("forms").select("*").order("created_at", { ascending: false });
+  query = applyFormsFilters(query, filters);
 
   const { data, error } = await runRequest(
     "forms.fetchList",
@@ -280,20 +261,20 @@ export async function fetchTemplateFormsPage(
 export async function fetchDashboardFormsStats(filters?: FormsFilters): Promise<DashboardFormsStats> {
   let totalQuery = apiClient
     .from("forms")
-    .select(getDashboardFormsCountSelect(filters), { count: "exact", head: true })
+    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
     .neq("form_type", TEMPLATE_FORM_TYPE);
   totalQuery = applyFormsFilters(totalQuery, filters);
 
   let activeQuery = apiClient
     .from("forms")
-    .select(getDashboardFormsCountSelect(filters), { count: "exact", head: true })
+    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
     .neq("form_type", TEMPLATE_FORM_TYPE)
     .eq("is_public", true);
   activeQuery = applyFormsFilters(activeQuery, filters);
 
   let deadlineQuery = apiClient
     .from("forms")
-    .select(getDashboardFormsCountSelect(filters), { count: "exact", head: true })
+    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
     .neq("form_type", TEMPLATE_FORM_TYPE)
     .not("deadline_at", "is", null);
   deadlineQuery = applyFormsFilters(deadlineQuery, filters);

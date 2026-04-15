@@ -247,6 +247,7 @@ using (
   - `max_responses integer | null`
   - `responses_count integer`
   - `author_id uuid`
+  - `author_name text`
   - `created_at timestamptz`
 - `public.responses`
   - `id uuid`
