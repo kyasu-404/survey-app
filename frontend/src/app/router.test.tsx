@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { routes } from "./routes";
 
 const pageLoads = vi.hoisted(() => ({
   builder: 0,
@@ -58,15 +59,35 @@ vi.mock("./router/ProtectedRoute", () => ({
 }));
 
 describe("router", () => {
-  it("defers loading route modules until the route is rendered", async () => {
-    await import("./router");
+  it("registers the expected routes and keeps page imports eager for preview compatibility", async () => {
+    const { router } = await import("./router");
+    const rootRoute = router.routes[0];
+    const childPaths = (rootRoute.children ?? []).map((route) => route.path);
 
-    expect(pageLoads.builder).toBe(0);
-    expect(pageLoads.dashboard).toBe(0);
-    expect(pageLoads.responses).toBe(0);
-    expect(pageLoads.responsesHtml).toBe(0);
-    expect(pageLoads.survey).toBe(0);
-    expect(pageLoads.templates).toBe(0);
-    expect(pageLoads.users).toBe(0);
+    expect(childPaths).toEqual(
+      expect.arrayContaining([
+        routes.home,
+        routes.dashboardMy,
+        routes.dashboardAll,
+        routes.templates,
+        routes.formResponsesById,
+        routes.formResponsesHtmlById,
+        routes.surveyById,
+        routes.legacySurveyById,
+        routes.builder,
+        routes.builderById,
+        routes.users,
+        routes.login,
+        "*",
+      ]),
+    );
+
+    expect(pageLoads.builder).toBe(1);
+    expect(pageLoads.dashboard).toBe(1);
+    expect(pageLoads.responses).toBe(1);
+    expect(pageLoads.responsesHtml).toBe(1);
+    expect(pageLoads.survey).toBe(1);
+    expect(pageLoads.templates).toBe(1);
+    expect(pageLoads.users).toBe(1);
   });
 });
