@@ -1,22 +1,16 @@
-import { Suspense, lazy, type ReactNode } from "react";
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
+import DashboardPage from "../pages/DashboardPage/DashboardPage";
+import FormResponsesHtmlPage from "../pages/FormResponsesHtmlPage/FormResponsesHtmlPage";
+import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
+import SurveyPage from "../pages/SurveyPage/SurveyPage";
+import BuilderPage from "../pages/BuilderPage/BuilderPage";
+import LoginPage from "../pages/LoginPage/LoginPage";
+import TemplatesPage from "../pages/TemplatesPage/TemplatesPage";
+import UsersPage from "../pages/UsersPage/UsersPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import { AdminRoute } from "./router/AdminRoute";
-
-const DashboardPage = lazy(() => import("../pages/DashboardPage/DashboardPage"));
-const FormResponsesHtmlPage = lazy(() => import("../pages/FormResponsesHtmlPage/FormResponsesHtmlPage"));
-const FormResponsesPage = lazy(() => import("../pages/FormResponsesPage/FormResponsesPage"));
-const SurveyPage = lazy(() => import("../pages/SurveyPage/SurveyPage"));
-const BuilderPage = lazy(() => import("../pages/BuilderPage/BuilderPage"));
-const LoginPage = lazy(() => import("../pages/LoginPage/LoginPage"));
-const TemplatesPage = lazy(() => import("../pages/TemplatesPage/TemplatesPage"));
-const UsersPage = lazy(() => import("../pages/UsersPage/UsersPage"));
-
-function withSuspense(element: ReactNode) {
-  return <Suspense fallback={null}>{element}</Suspense>;
-}
 
 function LegacySurveyRedirect() {
   const { id } = useParams();
@@ -39,7 +33,7 @@ export const router = createBrowserRouter([
         path: routes.dashboardMy,
         element: (
           <ProtectedRoute>
-            {withSuspense(<DashboardPage viewMode="mine" />)}
+            <DashboardPage viewMode="mine" />
           </ProtectedRoute>
         ),
       },
@@ -47,7 +41,7 @@ export const router = createBrowserRouter([
         path: routes.dashboardAll,
         element: (
           <ProtectedRoute>
-            {withSuspense(<DashboardPage viewMode="all" />)}
+            <DashboardPage viewMode="all" />
           </ProtectedRoute>
         ),
       },
@@ -55,7 +49,7 @@ export const router = createBrowserRouter([
         path: routes.templates,
         element: (
           <ProtectedRoute>
-            {withSuspense(<TemplatesPage />)}
+            <TemplatesPage />
           </ProtectedRoute>
         ),
       },
@@ -63,7 +57,7 @@ export const router = createBrowserRouter([
         path: routes.formResponsesById,
         element: (
           <ProtectedRoute>
-            {withSuspense(<FormResponsesPage />)}
+            <FormResponsesPage />
           </ProtectedRoute>
         ),
       },
@@ -71,17 +65,17 @@ export const router = createBrowserRouter([
         path: routes.formResponsesHtmlById,
         element: (
           <ProtectedRoute>
-            {withSuspense(<FormResponsesHtmlPage />)}
+            <FormResponsesHtmlPage />
           </ProtectedRoute>
         ),
       },
-      { path: routes.surveyById, element: withSuspense(<SurveyPage />) },
+      { path: routes.surveyById, element: <SurveyPage /> },
       { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {
         path: routes.builder,
         element: (
           <ProtectedRoute>
-            {withSuspense(<BuilderPage />)}
+            <BuilderPage />
           </ProtectedRoute>
         ),
       },
@@ -89,7 +83,7 @@ export const router = createBrowserRouter([
         path: routes.builderById,
         element: (
           <ProtectedRoute>
-            {withSuspense(<BuilderPage />)}
+            <BuilderPage />
           </ProtectedRoute>
         ),
       },
@@ -98,12 +92,12 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <AdminRoute>
-              {withSuspense(<UsersPage />)}
+              <UsersPage />
             </AdminRoute>
           </ProtectedRoute>
         ),
       },
-      { path: routes.login, element: withSuspense(<LoginPage />) },
+      { path: routes.login, element: <LoginPage /> },
       { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },
     ],
   },
