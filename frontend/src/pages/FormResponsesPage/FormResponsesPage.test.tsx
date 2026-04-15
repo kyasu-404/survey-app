@@ -474,6 +474,7 @@ describe("FormResponsesPage", () => {
       expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
       expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
     });
+    expect(screen.getByText("Анна")).toBeInTheDocument();
 
     formDeferred.resolve({
       id: "form-1",
@@ -509,7 +510,7 @@ describe("FormResponsesPage", () => {
     });
   });
 
-  it("loads all response pages into one vertically scrollable table without pagination controls", async () => {
+  it("renders only the first response page on initial load even when more pages exist", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -556,10 +557,79 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
-    expect(await screen.findByText("Борис")).toBeInTheDocument();
+    expect(screen.queryByText("Борис")).not.toBeInTheDocument();
+    expect(getResponsesByForm).toHaveBeenCalledTimes(1);
     expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 1, pageSize: 100 });
-    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });
     expect(screen.queryByLabelText("Пагинация ответов")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Следующая" })).not.toBeInTheDocument();
+  });
+
+  it("fetches remaining response pages only when exporting xlsx", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm.mockImplementation((_formId: string, options?: { page?: number }) =>
+      Promise.resolve({
+        data: [
+          {
+            id: `response-page-${options?.page ?? 1}`,
+            form_id: "form-1",
+            created_at: "2026-04-08T11:30:00.000Z",
+            data: { name: options?.page === 2 ? "Борис" : "Анна" },
+          },
+        ],
+        count: 2,
+        page: options?.page ?? 1,
+        pageSize: 100,
+        totalPages: 2,
+      }),
+    );
+
+    exportToExcel.mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    getResponsesByForm.mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: "XLSX" }));
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });
+      expect(exportToExcel).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            Имя: "Анна",
+          }),
+          expect.objectContaining({
+            Имя: "Борис",
+          }),
+        ],
+        "ответы-Форма обратной связи",
+      );
+    });
   });
 });

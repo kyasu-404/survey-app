@@ -28,6 +28,7 @@ type SelectedResponsePreview = {
 };
 
 const RESPONSES_SCROLL_PAGE_SIZE = 100;
+type ResponsesPage = Awaited<ReturnType<typeof getResponsesByForm>>;
 
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   const primaryValue = Object.entries(row).find(
@@ -47,14 +48,16 @@ function getDateCellParts(value: string) {
   return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
 }
 
-async function getAllResponsesByForm(formId: string) {
-  const firstPage = await getResponsesByForm(formId, {
+async function getResponsePage(formId: string) {
+  return getResponsesByForm(formId, {
     page: 1,
     pageSize: RESPONSES_SCROLL_PAGE_SIZE,
   });
+}
 
+async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage) {
   if (firstPage.totalPages <= 1) {
-    return firstPage;
+    return firstPage.data;
   }
 
   const remainingPages = await Promise.all(
@@ -66,13 +69,7 @@ async function getAllResponsesByForm(formId: string) {
     ),
   );
 
-  return {
-    ...firstPage,
-    data: firstPage.data.concat(remainingPages.flatMap((page) => page.data)),
-    page: 1,
-    pageSize: RESPONSES_SCROLL_PAGE_SIZE,
-    totalPages: 1,
-  };
+  return firstPage.data.concat(remainingPages.flatMap((page) => page.data));
 }
 
 function renderResponseCell(header: string, value: string) {
@@ -119,7 +116,7 @@ export default function FormResponsesPage() {
   });
 
   const responsesQuery = useQuery({
-    queryKey: getFormResponsesQueryKey(id, "all", RESPONSES_SCROLL_PAGE_SIZE),
+    queryKey: getFormResponsesQueryKey(id, "page", 1, RESPONSES_SCROLL_PAGE_SIZE),
     queryFn: async () => {
       if (!id) {
         return {
@@ -131,7 +128,7 @@ export default function FormResponsesPage() {
         };
       }
 
-      return getAllResponsesByForm(id);
+      return getResponsePage(id);
     },
     enabled: Boolean(id),
     retry: 1,
@@ -148,7 +145,8 @@ export default function FormResponsesPage() {
   );
 
   const headers = getResponseTableHeaders(rows);
-  const isLoading = formQuery.isLoading || responsesQuery.isLoading;
+  const isLoading =
+    (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const combinedError = formQuery.error ?? responsesQuery.error;
   const totalResponses = responsesQuery.data?.count ?? 0;
@@ -200,13 +198,15 @@ export default function FormResponsesPage() {
   }, [id, queryClient]);
 
   const handleExport = () => {
-    if (!rows.length) {
+    if (!id || !formQuery.data || !responsesQuery.data || !rows.length) {
       showToast("Нет данных для выгрузки", "warning");
       return;
     }
 
     const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
-    void Promise.resolve(exportToExcel(rows, `ответы-${formTitle}`))
+    void Promise.resolve(getAllResponsesForExport(id, responsesQuery.data))
+      .then((exportResponses) => formatResponsesForTable(exportResponses, formQuery.data!.schema))
+      .then((exportRows) => exportToExcel(exportRows, `ответы-${formTitle}`))
       .then(() => {
         showToast("Ответы выгружены в XLSX", "success");
       })
