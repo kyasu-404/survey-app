@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
-import "survey-core/defaultV2.min.css";
 import "survey-creator-core/survey-creator-core.min.css";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
 import emailIcon from "../../img/constructor/Email.svg?raw";

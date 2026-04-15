@@ -1,12 +1,8 @@
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import DashboardPage from "../pages/DashboardPage/DashboardPage";
-import FormResponsesHtmlPage from "../pages/FormResponsesHtmlPage/FormResponsesHtmlPage";
 import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
 import SurveyPage from "../pages/SurveyPage/SurveyPage";
-import BuilderPage from "../pages/BuilderPage/BuilderPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
-import TemplatesPage from "../pages/TemplatesPage/TemplatesPage";
-import UsersPage from "../pages/UsersPage/UsersPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
 import { ProtectedRoute } from "./router/ProtectedRoute";
@@ -19,6 +15,64 @@ function LegacySurveyRedirect() {
   }
 
   return <Navigate to={routes.survey(id)} replace />;
+}
+
+async function loadTemplatesRoute() {
+  const { default: TemplatesPage } = await import("../pages/TemplatesPage/TemplatesPage");
+
+  return {
+    Component: function TemplatesRoute() {
+      return (
+        <ProtectedRoute>
+          <TemplatesPage />
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
+async function loadFormResponsesHtmlRoute() {
+  const { default: FormResponsesHtmlPage } = await import("../pages/FormResponsesHtmlPage/FormResponsesHtmlPage");
+
+  return {
+    Component: function FormResponsesHtmlRoute() {
+      return (
+        <ProtectedRoute>
+          <FormResponsesHtmlPage />
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
+async function loadBuilderRoute() {
+  const { default: BuilderPage } = await import("../pages/BuilderPage/BuilderPage");
+
+  return {
+    Component: function BuilderRoute() {
+      return (
+        <ProtectedRoute>
+          <BuilderPage />
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
+async function loadUsersRoute() {
+  const { default: UsersPage } = await import("../pages/UsersPage/UsersPage");
+
+  return {
+    Component: function UsersRoute() {
+      return (
+        <ProtectedRoute>
+          <AdminRoute>
+            <UsersPage />
+          </AdminRoute>
+        </ProtectedRoute>
+      );
+    },
+  };
 }
 
 export const router = createBrowserRouter([
@@ -47,11 +101,7 @@ export const router = createBrowserRouter([
       },
       {
         path: routes.templates,
-        element: (
-          <ProtectedRoute>
-            <TemplatesPage />
-          </ProtectedRoute>
-        ),
+        lazy: loadTemplatesRoute,
       },
       {
         path: routes.formResponsesById,
@@ -63,39 +113,21 @@ export const router = createBrowserRouter([
       },
       {
         path: routes.formResponsesHtmlById,
-        element: (
-          <ProtectedRoute>
-            <FormResponsesHtmlPage />
-          </ProtectedRoute>
-        ),
+        lazy: loadFormResponsesHtmlRoute,
       },
       { path: routes.surveyById, element: <SurveyPage /> },
       { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {
         path: routes.builder,
-        element: (
-          <ProtectedRoute>
-            <BuilderPage />
-          </ProtectedRoute>
-        ),
+        lazy: loadBuilderRoute,
       },
       {
         path: routes.builderById,
-        element: (
-          <ProtectedRoute>
-            <BuilderPage />
-          </ProtectedRoute>
-        ),
+        lazy: loadBuilderRoute,
       },
       {
         path: routes.users,
-        element: (
-          <ProtectedRoute>
-            <AdminRoute>
-              <UsersPage />
-            </AdminRoute>
-          </ProtectedRoute>
-        ),
+        lazy: loadUsersRoute,
       },
       { path: routes.login, element: <LoginPage /> },
       { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },

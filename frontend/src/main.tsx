@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { surveyLocalization } from "survey-core";
+import "survey-core/defaultV2.min.css";
 import "survey-core/i18n/russian";
 import "survey-creator-core/i18n/russian";
 import { router } from './app/router'

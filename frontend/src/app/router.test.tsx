@@ -59,10 +59,12 @@ vi.mock("./router/ProtectedRoute", () => ({
 }));
 
 describe("router", () => {
-  it("registers the expected routes and keeps page imports eager for preview compatibility", async () => {
+  it("keeps critical form routes eager and lazy-loads approved secondary route modules", async () => {
     const { router } = await import("./router");
     const rootRoute = router.routes[0];
-    const childPaths = (rootRoute.children ?? []).map((route) => route.path);
+    const childRoutes = rootRoute.children ?? [];
+    const childPaths = childRoutes.map((route) => route.path);
+    const routeByPath = new Map(childRoutes.map((route) => [route.path, route]));
 
     expect(childPaths).toEqual(
       expect.arrayContaining([
@@ -82,12 +84,23 @@ describe("router", () => {
       ]),
     );
 
-    expect(pageLoads.builder).toBe(1);
+    expect(routeByPath.get(routes.builder)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.builderById)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.formResponsesHtmlById)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.templates)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
+
+    expect(routeByPath.get(routes.surveyById)?.lazy).toBeUndefined();
+    expect(routeByPath.get(routes.formResponsesById)?.lazy).toBeUndefined();
+    expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeUndefined();
+    expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeUndefined();
+
+    expect(pageLoads.builder).toBe(0);
     expect(pageLoads.dashboard).toBe(1);
     expect(pageLoads.responses).toBe(1);
-    expect(pageLoads.responsesHtml).toBe(1);
+    expect(pageLoads.responsesHtml).toBe(0);
     expect(pageLoads.survey).toBe(1);
-    expect(pageLoads.templates).toBe(1);
-    expect(pageLoads.users).toBe(1);
+    expect(pageLoads.templates).toBe(0);
+    expect(pageLoads.users).toBe(0);
   });
 });
