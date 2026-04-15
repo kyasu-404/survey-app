@@ -544,14 +544,15 @@ describe("SurveyBuilder", () => {
     expect(finalOverride).toContain("background: #ffffff !important;");
   });
 
-  it("uses dark action buttons in the post-save settings dialog", () => {
+  it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {
     const appCss = readAppCss();
 
-    expect(appCss).toMatch(/\.deadline-modal\s+\.deadline-modal-actions\s+button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#222222\s*0%,\s*#0c0c0c\s*100%\);[^}]*color:\s*#ffffff;/);
-    expect(appCss).toMatch(/\.deadline-modal\s+\.deadline-modal-actions\s+button:hover,\s*\.deadline-modal\s+\.deadline-modal-actions\s+button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#2a2a2a\s*0%,\s*#101010\s*100%\);[^}]*color:\s*#ffffff;/);
+    expect(appCss).toMatch(/\.deadline-modal-primary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+    expect(appCss).toMatch(/\.deadline-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#22c55e,\s*#15803d\);[^}]*color:\s*#ffffff;/);
+    expect(appCss).toMatch(/\.deadline-clear-button\s*\{[^}]*background:\s*rgba\(254,\s*226,\s*226,\s*0\.8\);[^}]*color:\s*#b91c1c;/);
   });
 
-  it("opens response settings after saving a form and applies them before returning to the dashboard", async () => {
+  it("opens response settings before creating a form and publishes it only after saving the dialog", async () => {
     renderBuilder();
 
     await waitFor(() => {
@@ -566,18 +567,83 @@ describe("SurveyBuilder", () => {
 
     expect(callback).toHaveBeenCalledWith(1, true);
     expect(navigate).not.toHaveBeenCalledWith(routes.dashboardMy, { replace: true });
+    expect(createSurveyMutateAsync).not.toHaveBeenCalled();
 
     const settingsDialog = await screen.findByRole("dialog", { name: "Настройки формы" });
+    expect(within(settingsDialog).getByLabelText("Тип формы")).toBeInTheDocument();
+    expect(within(settingsDialog).getByLabelText("Основание формы")).toBeInTheDocument();
+    expect(within(settingsDialog).queryByRole("button", { name: "Пропустить" })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(within(settingsDialog).getByLabelText("Тип формы"), "monitoring");
+    await userEvent.selectOptions(within(settingsDialog).getByLabelText("Основание формы"), "order");
     await userEvent.type(within(settingsDialog).getByLabelText("Дедлайн"), "2026-05-01T12:30");
     await userEvent.clear(within(settingsDialog).getByLabelText("Лимит ответов"));
     await userEvent.type(within(settingsDialog).getByLabelText("Лимит ответов"), "25");
-    await userEvent.click(within(settingsDialog).getByRole("button", { name: "Сохранить настройки" }));
+    await userEvent.click(within(settingsDialog).getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() => {
-      expect(setFormDeadline).toHaveBeenCalledWith("created-form-id", new Date("2026-05-01T12:30").toISOString());
+      expect(createSurveyMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Новая форма",
+          formType: "monitoring",
+          formReason: "order",
+          isPublic: true,
+          deadlineAt: new Date("2026-05-01T12:30").toISOString(),
+          maxResponses: 25,
+        }),
+      );
     });
-    expect(setFormResponseLimit).toHaveBeenCalledWith("created-form-id", 25);
+    expect(setFormDeadline).not.toHaveBeenCalled();
+    expect(setFormResponseLimit).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: { refreshList: true } });
+  });
+
+  it("closes the post-save settings dialog without resetting the builder when the user cancels", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    act(() => {
+      creatorInstances[0].JSON = {
+        title: "Черновая форма",
+        locale: "ru",
+        pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      };
+      creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
+    });
+
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+      schema: expect.objectContaining({
+        title: "Черновая форма",
+      }),
+    });
+
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    const settingsDialog = await screen.findByRole("dialog", { name: "Настройки формы" });
+    await userEvent.click(within(settingsDialog).getByRole("button", { name: "Отмена" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Настройки формы" })).not.toBeInTheDocument();
+    });
+
+    expect(createSurveyMutateAsync).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(creatorInstances[0].JSON).toMatchObject({
+      title: "Черновая форма",
+      pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+    });
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+      schema: expect.objectContaining({
+        title: "Черновая форма",
+      }),
+    });
   });
 
   it("returns to the templates page with a refresh state after saving an existing template", async () => {

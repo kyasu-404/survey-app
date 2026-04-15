@@ -19,9 +19,11 @@ import { routes } from "../../app/routes";
 import {
   getFormById,
   saveSurveySchema,
-  setFormDeadline,
-  setFormResponseLimit,
 } from "../../entities/survey/api/surveysApi";
+import {
+  FORM_REASON_OPTIONS,
+  REGULAR_FORM_TYPE_OPTIONS,
+} from "../../entities/survey/model/formOptions";
 import {
   resolveDefaultSurveyLogo,
   serializeDefaultSurveyLogo,
@@ -68,10 +70,12 @@ type CreatorToolboxItem = {
 };
 
 type PostSaveSettingsState = {
-  formId: string;
   title: string;
+  schema: SurveySchema;
   deadlineValue: string;
   responseLimitValue: string;
+  formTypeValue: string;
+  formReasonValue: string;
 };
 
 const CREATOR_SURVEY_THEME: ITheme = {
@@ -244,20 +248,6 @@ function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
   return normalizedTitle || fallbackTitle;
 }
 
-function formatDateTimeLocalValue(dateTime: string | null) {
-  if (!dateTime) {
-    return "";
-  }
-
-  const date = new Date(dateTime);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const offsetInMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetInMs).toISOString().slice(0, 16);
-}
-
 function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSchema {
   const builderSchema = cloneSchema(schema) as BuilderSchema;
 
@@ -303,13 +293,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const saveSurveyMutation = useMutation({
     mutationFn: ({ id, schema, title }: { id: string; schema: SurveySchema; title: string }) =>
       saveSurveySchema(id, schema, title),
-  });
-  const deadlineMutation = useMutation({
-    mutationFn: ({ id, deadlineAt }: { id: string; deadlineAt: string | null }) => setFormDeadline(id, deadlineAt),
-  });
-  const responseLimitMutation = useMutation({
-    mutationFn: ({ id, maxResponses }: { id: string; maxResponses: number | null }) =>
-      setFormResponseLimit(id, maxResponses),
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -586,7 +569,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
   const closePostSaveSettings = () => {
     setPostSaveSettings(null);
-    navigateToSavedList("forms");
   };
 
   const handleSavePostSaveSettings = async () => {
@@ -594,10 +576,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
+    const normalizedFormType = postSaveSettings.formTypeValue.trim();
+    const normalizedFormReason = postSaveSettings.formReasonValue.trim();
     const normalizedDeadline = postSaveSettings.deadlineValue.trim();
     const normalizedLimit = postSaveSettings.responseLimitValue.trim();
     let deadlineAt: string | null = null;
     let maxResponses: number | null = null;
+
+    if (!normalizedFormType || !normalizedFormReason) {
+      showToast("Выберите тип формы и основание формы", "error");
+      return;
+    }
 
     if (normalizedDeadline) {
       const parsedDate = new Date(normalizedDeadline);
@@ -618,17 +607,24 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     setIsPostSaveSettingsSaving(true);
-    const stopPendingLogger = createPendingStateLogger(queryClient, `builder post-save settings ${postSaveSettings.formId}`);
+    const stopPendingLogger = createPendingStateLogger(queryClient, "builder post-save settings");
 
     try {
-      await Promise.all([
-        deadlineMutation.mutateAsync({ id: postSaveSettings.formId, deadlineAt }),
-        responseLimitMutation.mutateAsync({ id: postSaveSettings.formId, maxResponses }),
-      ]);
+      const createdForm = await createSurveyMutation.mutateAsync({
+        schema: postSaveSettings.schema,
+        title: postSaveSettings.title,
+        formType: normalizedFormType,
+        formReason: normalizedFormReason,
+        deadlineAt,
+        maxResponses,
+        isPublic: true,
+      });
 
-      scheduleBuilderQueryRefresh(postSaveSettings.formId);
-      showToast("Настройки формы сохранены", "success");
-      closePostSaveSettings();
+      clearSurveyBuilderDraft(formId);
+      scheduleBuilderQueryRefresh(createdForm.id);
+      setPostSaveSettings(null);
+      showToast("Форма сохранена", "success");
+      navigateToSavedList("forms");
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, "Не удалось сохранить настройки формы"), "error");
@@ -665,34 +661,27 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
             title,
           });
         } else {
-          const createdForm = await createSurveyMutation.mutateAsync({
-            schema,
+          setPostSaveSettings({
             title,
+            schema,
+            deadlineValue: "",
+            responseLimitValue: "",
+            formTypeValue: "",
+            formReasonValue: "",
           });
-          savedFormId = createdForm.id;
+          callback(saveNo, true);
+          return;
         }
 
         scheduleBuilderQueryRefresh(savedFormId);
-
-        showToast(
-          formId ? (isTemplate ? "Шаблон обновлён" : "Форма обновлена") : "Форма сохранена",
-          "success",
-        );
+        showToast(isTemplate ? "Шаблон обновлён" : "Форма обновлена", "success");
         clearSurveyBuilderDraft(formId);
-        if (savedFormId && !isTemplate) {
-          setPostSaveSettings({
-            formId: savedFormId,
-            title,
-            deadlineValue: formatDateTimeLocalValue(editableForm?.deadline_at ?? null),
-            responseLimitValue: editableForm?.max_responses ? String(editableForm.max_responses) : "",
-          });
+
+        if (isTemplate) {
+          clearCurrentBuilderState();
+          navigateToSavedList("templates");
         } else {
-          if (isTemplate) {
-            clearCurrentBuilderState();
-            navigateToSavedList("templates");
-          } else {
-            navigateToSavedList("forms");
-          }
+          navigateToSavedList("forms");
         }
         callback(saveNo, true);
       } catch (error) {
@@ -761,6 +750,50 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
           <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Настройки формы</h3>
             <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
+            <div className="deadline-modal-primary-grid">
+              <label className="deadline-field">
+                <span>
+                  Тип формы <span className="deadline-required-mark" aria-hidden="true">*</span>
+                </span>
+                <select
+                  aria-label="Тип формы"
+                  value={postSaveSettings.formTypeValue}
+                  onChange={(event) =>
+                    setPostSaveSettings((current) =>
+                      current ? { ...current, formTypeValue: event.target.value } : current,
+                    )
+                  }
+                >
+                  <option value="">Выберите тип</option>
+                  {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="deadline-field">
+                <span>
+                  Основание формы <span className="deadline-required-mark" aria-hidden="true">*</span>
+                </span>
+                <select
+                  aria-label="Основание формы"
+                  value={postSaveSettings.formReasonValue}
+                  onChange={(event) =>
+                    setPostSaveSettings((current) =>
+                      current ? { ...current, formReasonValue: event.target.value } : current,
+                    )
+                  }
+                >
+                  <option value="">Выберите основание</option>
+                  {FORM_REASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <label className="deadline-field">
               <span>Дедлайн</span>
               <input
@@ -789,19 +822,15 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
               />
             </label>
             <p className="deadline-modal-hint">
-              Оставьте поле пустым, если дедлайн или ограничение по ответам не нужны.
+              Дедлайн и лимит ответов можно оставить пустыми.
             </p>
             <div className="deadline-modal-actions">
-              <button type="button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
-                Пропустить
+              <button type="button" className="deadline-clear-button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
+                Отмена
               </button>
-              <button
-                type="button"
-                onClick={() => void handleSavePostSaveSettings()}
-                disabled={isPostSaveSettingsSaving}
-              >
+              <button type="button" className="deadline-save-button" onClick={() => void handleSavePostSaveSettings()} disabled={isPostSaveSettingsSaving}>
                 {isPostSaveSettingsSaving && <InlineSpinner />}
-                Сохранить настройки
+                Сохранить
               </button>
             </div>
           </div>

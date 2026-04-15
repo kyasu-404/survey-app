@@ -152,7 +152,7 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.responses-table\s*\{[^}]*border-radius:\s*0;[^}]*overflow:\s*visible;/);
   });
 
-  it("renders the form title, responses table, and export action", async () => {
+  it("renders the form title, type and reason metadata, responses table, and export action", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -197,6 +197,8 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
+    expect(screen.getByText("Тип: Анкетирование")).toBeInTheDocument();
+    expect(screen.getByText("Основание: План работ")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     const refreshButton = screen.getByRole("button", { name: "Обновить" });

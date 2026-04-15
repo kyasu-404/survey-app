@@ -1,6 +1,8 @@
 export type DashboardFormsQueryParams = {
   dateFrom: string;
   dateTo: string;
+  formReason: string;
+  formType: string;
   search: string;
   pageSize: number;
   viewMode: "mine" | "all";

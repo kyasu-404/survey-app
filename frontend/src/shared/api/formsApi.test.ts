@@ -246,6 +246,28 @@ describe("fetchDashboardFormsPage", () => {
     expect(listQuery.range).toHaveBeenCalledWith(20, 39);
   });
 
+  it("applies both type and reason filters to dashboard queries", async () => {
+    const listQuery = createSummaryQuery({
+      data: [],
+      count: 0,
+      error: null,
+    });
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await fetchDashboardFormsPage({
+      page: 0,
+      pageSize: 20,
+      filters: {
+        formType: "monitoring",
+        formReason: "order",
+      },
+    });
+
+    expect(listQuery.eq).toHaveBeenCalledWith("form_type", "monitoring");
+    expect(listQuery.eq).toHaveBeenCalledWith("form_reason", "order");
+  });
+
   it("applies expired deadline state locally in dashboard summaries", async () => {
     const listQuery = createSummaryQuery({
       data: [

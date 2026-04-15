@@ -244,6 +244,8 @@ describe("DashboardPage", () => {
     const formsQueryKey = getDashboardFormsQueryKey({
       dateFrom: "",
       dateTo: "",
+      formReason: "",
+      formType: "",
       search: "",
       pageSize: 20,
       viewMode: "mine",
@@ -252,6 +254,8 @@ describe("DashboardPage", () => {
     const statsQueryKey = getDashboardFormStatsQueryKey({
       dateFrom: "",
       dateTo: "",
+      formReason: "",
+      formType: "",
       search: "",
       viewMode: "mine",
       userId: "user-1",
@@ -299,6 +303,8 @@ describe("DashboardPage", () => {
       getDashboardFormStatsQueryKey({
         dateFrom: "",
         dateTo: "",
+        formReason: "",
+        formType: "",
         search: "",
         viewMode: "all",
         userId: "user-1",
@@ -401,6 +407,80 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Обновляемая форма")).toBeInTheDocument();
 
     deferred.resolve(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]));
+  });
+
+  it("shows type and reason on form cards and filters the list by both fields", async () => {
+    const forms = [
+      createForm(1, {
+        title: "Мониторинг по приказу",
+        author_id: "user-1",
+        author_name: "admin",
+        form_type: "monitoring",
+        form_reason: "order",
+      }),
+      createForm(2, {
+        title: "Опрос по запросу",
+        author_id: "user-2",
+        author_name: "operator",
+        form_type: "survey",
+        form_reason: "request",
+      }),
+    ];
+
+    getDashboardFormsPage.mockImplementation(({ filters }: { filters?: { formType?: string; formReason?: string } }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardPage(filteredItems, filteredItems.length));
+    });
+    getDashboardFormsStats.mockImplementation((filters?: { formType?: string; formReason?: string }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardStats(filteredItems, filteredItems.length));
+    });
+
+    renderPage("all");
+
+    expect(await screen.findByText("Мониторинг по приказу")).toBeInTheDocument();
+    expect(screen.getByText(/Тип:\s*Мониторинг/)).toBeInTheDocument();
+    expect(screen.getByText(/Основание:\s*Приказ/)).toBeInTheDocument();
+    expect(screen.getByText("admin")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            formType: "survey",
+            formReason: "request",
+          }),
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Опрос по запросу")).toBeInTheDocument();
+    expect(screen.queryByText("Мониторинг по приказу")).not.toBeInTheDocument();
   });
 
   it("keeps the current scroll position when showing more forms", async () => {
@@ -751,7 +831,8 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Обычная форма")).toBeInTheDocument();
     expect(screen.queryByText("Шаблон отчёта")).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Тип форм" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Тип формы" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Основание формы" })).toBeInTheDocument();
   });
 
   it("renders the delete modal action wrapper for dashboard styling", async () => {

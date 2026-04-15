@@ -46,6 +46,12 @@ import {
   getDashboardFormsQueryKey,
   getSurveyFormQueryKey,
 } from "../../entities/survey/model/queryKeys";
+import {
+  FORM_REASON_OPTIONS,
+  REGULAR_FORM_TYPE_OPTIONS,
+  getFormReasonLabel,
+  getFormTypeLabel,
+} from "../../entities/survey/model/formOptions";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
@@ -151,6 +157,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [formType, setFormType] = useState("");
+  const [formReason, setFormReason] = useState("");
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
   const [visibleCount, setVisibleCount] = useState(20);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
@@ -171,9 +179,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       search: search.trim() || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
+      formType: formType || undefined,
+      formReason: formReason || undefined,
       authorId: viewMode === "mine" ? user?.id : undefined,
     }),
-    [dateFrom, dateTo, search, user?.id, viewMode],
+    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
   );
 
   const formsQueryKey = useMemo(
@@ -181,12 +191,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       getDashboardFormsQueryKey({
         dateFrom,
         dateTo,
+        formReason,
+        formType,
         search,
         pageSize: visibleCount,
         viewMode,
         userId: user?.id ?? null,
       }),
-    [dateFrom, dateTo, search, user?.id, viewMode, visibleCount],
+    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode, visibleCount],
   );
 
   const formsStatsQueryKey = useMemo(
@@ -194,11 +206,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       getDashboardFormStatsQueryKey({
         dateFrom,
         dateTo,
+        formReason,
+        formType,
         search,
         viewMode,
         userId: user?.id ?? null,
       }),
-    [dateFrom, dateTo, search, user?.id, viewMode],
+    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
   );
 
   const {
@@ -274,7 +288,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   useEffect(() => {
     setVisibleCount(pageSize);
-  }, [dateFrom, dateTo, pageSize, search, viewMode]);
+  }, [dateFrom, dateTo, formReason, formType, pageSize, search, viewMode]);
 
   useEffect(() => {
     if (formsError) {
@@ -682,6 +696,28 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
             <label className="dashboard-filter-field">
+              <span>Тип формы</span>
+              <select aria-label="Тип формы" value={formType} onChange={(event) => setFormType(event.target.value)}>
+                <option value="">Все типы</option>
+                {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="dashboard-filter-field">
+              <span>Основание формы</span>
+              <select aria-label="Основание формы" value={formReason} onChange={(event) => setFormReason(event.target.value)}>
+                <option value="">Все основания</option>
+                {FORM_REASON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="dashboard-filter-field">
               <span>Количество</span>
               <select
                 aria-label="Количество форм"
@@ -739,9 +775,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const createdAtLabel = new Date(form.created_at).toLocaleString("ru-RU");
             const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : null;
             const hasReachedResponseLimit = isResponseLimitReached(responsesCount, form.max_responses);
+            const formTypeLabel = getFormTypeLabel(form.form_type);
+            const formReasonLabel = getFormReasonLabel(form.form_reason);
 
             const metaItems = [
-              !isTemplate && viewMode === "all" ? (
+              !isTemplate ? (
                 <span key="author" className="dashboard-meta-item">
                   {getAuthorLabel(form)}
                 </span>
@@ -924,95 +962,104 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               >
                 <div className={`dashboard-form-header ${statusMenuOpen ? "dashboard-form-header-status-menu-open" : ""}`.trim()}>
                   <div className="dashboard-form-heading">
-                    <div className="dashboard-form-heading-row">
-                      {isTemplate ? (
-                        <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
-                      ) : isOwnForm ? (
-                        <div className="form-menu dashboard-floating-root dashboard-status-menu-shell">
-                          <button
-                            type="button"
-                            className={`dashboard-status-pill dashboard-status-trigger dashboard-status-trigger-glossy ${
+                    <div className="dashboard-form-heading-content">
+                      <div className="dashboard-form-heading-row">
+                        {isTemplate ? (
+                          <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
+                        ) : isOwnForm ? (
+                          <div className="form-menu dashboard-floating-root dashboard-status-menu-shell">
+                            <button
+                              type="button"
+                              className={`dashboard-status-pill dashboard-status-trigger dashboard-status-trigger-glossy ${
+                                isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"
+                              }`.trim()}
+                              aria-label={`Статус формы ${title}: ${statusLabel}`}
+                              aria-expanded={statusMenuOpen}
+                              onClick={(event) => {
+                                stopCardEvent(event);
+                                setOpenedMenu((current) =>
+                                  current?.kind === "status" && current.formId === form.id
+                                    ? null
+                                    : { kind: "status", formId: form.id },
+                                );
+                              }}
+                            >
+                              {statusLabel}
+                            </button>
+
+                            {statusMenuOpen && (
+                              <div
+                                className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
+                                role="menu"
+                                aria-label={`Статус формы ${title}`}
+                                onClick={stopCardEvent}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className={`form-menu-item ${
+                                    isFormActive ? "form-menu-item-danger" : "dashboard-status-menu-item-open"
+                                  }`.trim()}
+                                  onClick={(event) => {
+                                    stopCardEvent(event);
+                                    setOpenedMenu(null);
+                                    void handleToggleFormStatus(form);
+                                  }}
+                                  disabled={isCurrentFormPending}
+                                >
+                                  {isFormActive ? "Закрыть" : "Открыть"}
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="form-menu-item"
+                                  onClick={(event) => {
+                                    stopCardEvent(event);
+                                    setOpenedMenu(null);
+                                    setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) });
+                                  }}
+                                  disabled={isCurrentFormPending}
+                                >
+                                  Установить дедлайн
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="form-menu-item"
+                                  onClick={(event) => {
+                                    stopCardEvent(event);
+                                    setOpenedMenu(null);
+                                    setResponseLimitEditor({
+                                      form,
+                                      value: form.max_responses ? String(form.max_responses) : "",
+                                    });
+                                  }}
+                                  disabled={isCurrentFormPending}
+                                >
+                                  Ограничить ответы
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span
+                            className={`dashboard-status-pill ${
                               isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"
                             }`.trim()}
-                            aria-label={`Статус формы ${title}: ${statusLabel}`}
-                            aria-expanded={statusMenuOpen}
-                            onClick={(event) => {
-                              stopCardEvent(event);
-                              setOpenedMenu((current) =>
-                                current?.kind === "status" && current.formId === form.id
-                                  ? null
-                                  : { kind: "status", formId: form.id },
-                              );
-                            }}
                           >
                             {statusLabel}
-                          </button>
+                          </span>
+                        )}
 
-                          {statusMenuOpen && (
-                            <div
-                              className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
-                              role="menu"
-                              aria-label={`Статус формы ${title}`}
-                              onClick={stopCardEvent}
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className={`form-menu-item ${
-                                  isFormActive ? "form-menu-item-danger" : "dashboard-status-menu-item-open"
-                                }`.trim()}
-                                onClick={(event) => {
-                                  stopCardEvent(event);
-                                  setOpenedMenu(null);
-                                  void handleToggleFormStatus(form);
-                                }}
-                                disabled={isCurrentFormPending}
-                              >
-                                {isFormActive ? "Закрыть" : "Открыть"}
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="form-menu-item"
-                                onClick={(event) => {
-                                  stopCardEvent(event);
-                                  setOpenedMenu(null);
-                                  setDeadlineEditor({ form, value: formatDateTimeLocalValue(form.deadline_at) });
-                                }}
-                                disabled={isCurrentFormPending}
-                              >
-                                Установить дедлайн
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="form-menu-item"
-                                onClick={(event) => {
-                                  stopCardEvent(event);
-                                  setOpenedMenu(null);
-                                  setResponseLimitEditor({
-                                    form,
-                                    value: form.max_responses ? String(form.max_responses) : "",
-                                  });
-                                }}
-                                disabled={isCurrentFormPending}
-                              >
-                                Ограничить ответы
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span
-                          className={`dashboard-status-pill ${
-                            isFormActive ? "dashboard-status-pill-active" : "dashboard-status-pill-closed"
-                          }`.trim()}
-                        >
-                          {statusLabel}
-                        </span>
+                        <strong className="dashboard-form-title">{title}</strong>
+                      </div>
+                      {!isTemplate && (
+                        <p className="dashboard-form-classification">
+                          <span>Тип: {formTypeLabel}</span>
+                          <span aria-hidden="true">•</span>
+                          <span>Основание: {formReasonLabel}</span>
+                        </p>
                       )}
-
-                      <strong className="dashboard-form-title">{title}</strong>
                     </div>
                   </div>
                 </div>

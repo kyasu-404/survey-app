@@ -16,6 +16,7 @@ export type FormsFilters = {
   dateTo?: string;
   authorId?: string;
   formType?: string;
+  formReason?: string;
   isPublic?: boolean;
 };
 
@@ -73,6 +74,12 @@ function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
   }
 
   return formType === "template" ? false : true;
+}
+
+function normalizeMaxResponses(maxResponses?: number | null) {
+  return typeof maxResponses === "number" && Number.isFinite(maxResponses)
+    ? Math.max(1, Math.trunc(maxResponses))
+    : null;
 }
 
 function syncFetchedDeadlineState<T extends Pick<SurveyForm, "deadline_at" | "form_type" | "is_public">>(form: T): T {
@@ -143,6 +150,10 @@ function applyFormsFilters<TQuery extends {
     query = query.eq("form_type", filters.formType);
   }
 
+  if (filters?.formReason) {
+    query = query.eq("form_reason", filters.formReason);
+  }
+
   if (typeof filters?.isPublic === "boolean") {
     query = query.eq("is_public", filters.isPublic);
   }
@@ -178,6 +189,7 @@ export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> 
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo);
   if (filters?.authorId) query = query.eq("author_id", filters.authorId);
   if (filters?.formType) query = query.eq("form_type", filters.formType);
+  if (filters?.formReason) query = query.eq("form_reason", filters.formReason);
   if (typeof filters?.isPublic === "boolean") query = query.eq("is_public", filters.isPublic);
 
   const { data, error } = await runRequest(
@@ -346,6 +358,8 @@ export async function insertForm(payload: {
   formReason: string;
   schema: SurveySchema;
   authorId: string;
+  deadlineAt?: string | null;
+  maxResponses?: number | null;
   isPublic?: boolean;
 }) {
   const currentUserId = await getAuthenticatedUserId();
@@ -353,6 +367,11 @@ export async function insertForm(payload: {
   if (payload.authorId !== currentUserId) {
     throw new Error("author_id должен совпадать с текущим пользователем");
   }
+
+  const normalizedMaxResponses = normalizeMaxResponses(payload.maxResponses);
+  const deadlinePayload = buildDeadlineUpdatePayload(payload.deadlineAt ?? null);
+  const initialPublicationState = resolveInitialPublicationState(payload.formType, payload.isPublic);
+  const resolvedPublicationState = initialPublicationState && deadlinePayload.is_public !== false;
 
   const { data, error } = await runRequest(
     "forms.insert",
@@ -364,8 +383,10 @@ export async function insertForm(payload: {
           form_type: payload.formType,
           form_reason: payload.formReason,
           schema: payload.schema,
+          deadline_at: deadlinePayload.deadline_at ?? null,
+          max_responses: normalizedMaxResponses,
           author_id: currentUserId,
-          is_public: resolveInitialPublicationState(payload.formType, payload.isPublic),
+          is_public: resolvedPublicationState,
         })
         .select("id")
         .single(),
@@ -454,10 +475,7 @@ export async function updateFormDeadline(id: string, deadlineAt: string | null) 
 }
 
 export async function updateFormResponseLimit(id: string, maxResponses: number | null) {
-  const normalizedLimit =
-    typeof maxResponses === "number" && Number.isFinite(maxResponses)
-      ? Math.max(1, Math.trunc(maxResponses))
-      : null;
+  const normalizedLimit = normalizeMaxResponses(maxResponses);
 
   const { error } = await runRequest(
     "forms.updateResponseLimit",

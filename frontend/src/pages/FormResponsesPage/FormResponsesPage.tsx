@@ -6,6 +6,7 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
+import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
@@ -253,6 +254,12 @@ export default function FormResponsesPage() {
         <div className="responses-page-header">
           <div className="responses-page-header-copy">
             <h1 className="responses-page-title">{formQuery.data?.title ?? "Ответы формы"}</h1>
+            {formQuery.data && (
+              <div className="responses-page-meta">
+                <p className="responses-page-meta-item">Тип: {getFormTypeLabel(formQuery.data.form_type)}</p>
+                <p className="responses-page-meta-item">Основание: {getFormReasonLabel(formQuery.data.form_reason)}</p>
+              </div>
+            )}
           </div>
           <div className="responses-page-toolbar">
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>

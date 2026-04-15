@@ -63,6 +63,8 @@ export async function createSurvey(params: {
   formReason: string;
   schema: SurveySchema;
   authorId: string;
+  deadlineAt?: string | null;
+  maxResponses?: number | null;
   isPublic?: boolean;
 }) {
   return insertForm(params);
