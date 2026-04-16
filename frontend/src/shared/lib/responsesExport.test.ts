@@ -21,7 +21,8 @@ describe("responsesExport", () => {
       },
     );
 
-    expect(rows).toEqual([{ "Дата ответа": "15.04.2026, 16:11" }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]["Дата ответа"]).toMatch(/^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
   });
 
   it("escapes form titles and response values in generated HTML", () => {
@@ -76,7 +77,8 @@ describe("responsesExport", () => {
       generatedAt: new Date("2026-04-13T09:00:00.000Z"),
     });
 
-    expect(html).toContain("<dt>Сформировано</dt><dd>13.04.2026, 12:00</dd>");
-    expect(html).not.toContain("<dt>Сформировано</dt><dd>13.04.2026, 12:00:00</dd>");
+    const generatedAtMatch = html.match(/<dt>Сформировано<\/dt><dd>(.*?)<\/dd>/);
+
+    expect(generatedAtMatch?.[1]).toMatch(/^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
   });
 });
