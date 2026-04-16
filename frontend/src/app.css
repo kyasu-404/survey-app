@@ -1264,7 +1264,7 @@ textarea:focus {
   bottom: 20px;
   display: grid;
   gap: 8px;
-  z-index: 1000;
+  z-index: 1200;
 }
 
 .toast {
@@ -1357,9 +1357,16 @@ textarea:focus {
   margin-bottom: 6px;
 }
 
+.deadline-modal-title {
+  margin: 0 0 6px;
+  text-align: center;
+}
+
 .deadline-modal-subtitle {
   margin: 0 0 16px;
-  color: var(--text-muted);
+  color: #4f6f91;
+  font-weight: 700;
+  text-align: center;
 }
 
 .deadline-modal-primary-grid {
@@ -1378,6 +1385,31 @@ textarea:focus {
 
 .deadline-field span {
   font-size: 0.92rem;
+}
+
+.deadline-select-shell {
+  position: relative;
+  display: grid;
+}
+
+.deadline-select-shell select {
+  width: 100%;
+}
+
+.deadline-select-placeholder {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  max-width: calc(100% - 46px);
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1;
+  overflow: hidden;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  white-space: nowrap;
 }
 
 .deadline-required-mark {
@@ -2132,6 +2164,7 @@ textarea:focus {
   gap: 10px;
   justify-self: end;
   align-self: start;
+  align-items: flex-end;
 }
 
 .responses-page-toolbar .dashboard-refresh-button {
@@ -2784,7 +2817,7 @@ button.dashboard-status-trigger-glossy:focus-visible {
 .templates-page-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-end;
   gap: 10px;
 }
@@ -2870,6 +2903,42 @@ button.dashboard-status-trigger-glossy:focus-visible {
 
 .templates-card-title {
   align-self: center;
+}
+
+.templates-pin-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 1.4rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.templates-pin-button:hover,
+.templates-pin-button:focus-visible {
+  border: none;
+  background: transparent;
+  color: #d97706;
+  box-shadow: none;
+  text-shadow: 0 4px 12px rgba(217, 119, 6, 0.24);
+  transform: scale(1.08);
+}
+
+.templates-pin-button-active,
+.templates-pin-button-active:hover,
+.templates-pin-button-active:focus-visible {
+  border: none;
+  background: transparent;
+  color: #f59e0b;
+  text-shadow: 0 4px 14px rgba(245, 158, 11, 0.28);
 }
 
 .templates-actions-menu-shell {
@@ -4615,6 +4684,7 @@ button.responses-export-button:disabled {
 .responses-html-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 10px;
 }
@@ -4770,6 +4840,28 @@ button.responses-export-button.responses-print-button-orange:focus-visible {
   min-width: 640px;
   border-collapse: collapse;
   font-size: 13px;
+}
+
+.responses-html-preview .responses-table-date-column {
+  width: 10ch;
+  min-width: 10ch;
+  max-width: 10ch;
+  white-space: normal;
+}
+
+.responses-html-preview td.responses-table-date-column {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.responses-html-preview .responses-table-date-cell {
+  display: grid;
+  width: 10ch;
+  line-height: 1.25;
+}
+
+.responses-html-preview .responses-table-date-line {
+  display: block;
 }
 
 .responses-html-preview th,

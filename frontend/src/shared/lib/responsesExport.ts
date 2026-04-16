@@ -11,6 +11,8 @@ type ResponsesHtmlInput = {
   generatedAt?: Date;
 };
 
+const RESPONSE_DATE_HEADER = "Дата ответа";
+
 function getQuestionMeta(schema: SurveySchema) {
   const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
   const choiceMap = new Map<string, Map<string, string>>();
@@ -100,12 +102,55 @@ function sanitizeFileName(fileName: string) {
   return trimmed.replace(/[\\/:*?"<>|]/g, "-");
 }
 
+function formatResponseDate(value: string) {
+  const formatter = new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(new Date(value));
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  const datePart = [getPart("day"), getPart("month"), getPart("year")].filter(Boolean).join(".");
+  const timePart = [getPart("hour"), getPart("minute")].filter(Boolean).join(":");
+
+  return timePart ? `${datePart}, ${timePart}` : datePart;
+}
+
+function getDateCellParts(value: string) {
+  const [datePart, timePart] = value.split(",").map((part) => part.trim());
+
+  return {
+    datePart: datePart || value,
+    timePart: timePart || "",
+  };
+}
+
+function getResponseColumnClassName(header: string) {
+  return header === RESPONSE_DATE_HEADER ? "responses-table-date-column" : "";
+}
+
+function renderResponseHtmlCell(header: string, value: string) {
+  if (header !== RESPONSE_DATE_HEADER) {
+    return escapeHtml(value);
+  }
+
+  const { datePart, timePart } = getDateCellParts(value);
+
+  return `<span class="responses-table-date-cell"><span class="responses-table-date-line">${escapeHtml(
+    datePart,
+  )}</span>${timePart ? `<span class="responses-table-date-line">${escapeHtml(timePart)}</span>` : ""}</span>`;
+}
+
 export function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
   const { choiceMap, titleMap } = getQuestionMeta(schema);
 
   return responses.map((response) => {
     const base: ResponsesTableRow = {
-      "Дата ответа": new Date(response.created_at).toLocaleString("ru-RU"),
+      [RESPONSE_DATE_HEADER]: formatResponseDate(response.created_at),
     };
 
     Object.entries(response.data).forEach(([key, value]) => {
@@ -132,15 +177,26 @@ export function getResponseTableHeaders(rows: ResponsesTableRow[]) {
 
 export function createResponsesHtmlReport({ title, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
   const headers = getResponseTableHeaders(rows);
-  const generatedAtLabel = generatedAt.toLocaleString("ru-RU");
+  const generatedAtLabel = formatResponseDate(generatedAt.toISOString());
 
   const body = rows.length
     ? `<div class="responses-table-wrap"><table><thead><tr>${headers
-        .map((header) => `<th>${escapeHtml(header)}</th>`)
+        .map((header) => {
+          const className = getResponseColumnClassName(header);
+          return `<th${className ? ` class="${className}"` : ""}>${escapeHtml(header)}</th>`;
+        })
         .join("")}</tr></thead><tbody>${rows
         .map(
           (row) =>
-            `<tr>${headers.map((header) => `<td>${escapeHtml(row[header] ?? "")}</td>`).join("")}</tr>`,
+            `<tr>${headers
+              .map((header) => {
+                const className = getResponseColumnClassName(header);
+                return `<td${className ? ` class="${className}"` : ""}>${renderResponseHtmlCell(
+                  header,
+                  row[header] ?? "",
+                )}</td>`;
+              })
+              .join("")}</tr>`,
         )
         .join("")}</tbody></table></div>`
     : `<section class="empty-state"><h2>Ответов пока нет</h2><p>Новые ответы появятся здесь после отправки формы.</p></section>`;
@@ -249,6 +305,28 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       min-width: 640px;
       border-collapse: collapse;
       font-size: 13px;
+    }
+
+    .responses-table-date-column {
+      width: 10ch;
+      min-width: 10ch;
+      max-width: 10ch;
+      white-space: normal;
+    }
+
+    td.responses-table-date-column {
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
+    .responses-table-date-cell {
+      display: grid;
+      width: 10ch;
+      line-height: 1.25;
+    }
+
+    .responses-table-date-line {
+      display: block;
     }
 
     th,

@@ -226,11 +226,13 @@ describe("FormResponsesPage", () => {
     });
   });
 
-  it("keeps the responses toolbar below the title and pinned to the right", () => {
+  it("keeps the responses toolbar below the title, pinned right, and aligned on the button row", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.responses-page-header\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
-    expect(css).toMatch(/\.responses-page-toolbar\s*\{[^}]*justify-content:\s*flex-end;[^}]*justify-self:\s*end;/);
+    expect(css).toMatch(
+      /\.responses-page-toolbar\s*\{[^}]*justify-content:\s*flex-end;[^}]*justify-self:\s*end;[^}]*align-items:\s*flex-end;/,
+    );
     expect(css).toMatch(/\.responses-page-header-copy\s*\{[^}]*min-width:\s*0;/);
   });
 

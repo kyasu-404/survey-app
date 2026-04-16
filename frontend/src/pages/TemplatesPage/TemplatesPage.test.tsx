@@ -12,6 +12,7 @@ import { getSurveyBuilderDraftStorageKey } from "../../widgets/SurveyBuilder/bui
 import TemplatesPage from "./TemplatesPage";
 
 const {
+  authState,
   changeFormStatus,
   createFormFromTemplate,
   getFormById,
@@ -21,6 +22,10 @@ const {
   renameForm,
   showToast,
 } = vi.hoisted(() => ({
+  authState: {
+    loading: false,
+    user: { id: "user-1" },
+  },
   changeFormStatus: vi.fn(),
   createFormFromTemplate: vi.fn(),
   getFormById: vi.fn(),
@@ -32,10 +37,7 @@ const {
 }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
-  useAuth: () => ({
-    user: { id: "user-1" },
-    loading: false,
-  }),
+  useAuth: () => authState,
 }));
 
 vi.mock("../../app/providers/ToastProvider", () => ({
@@ -137,6 +139,8 @@ describe("TemplatesPage", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    authState.loading = false;
+    authState.user = { id: "user-1" };
     changeFormStatus.mockResolvedValue(undefined);
     createFormFromTemplate.mockResolvedValue({ id: "created-from-template" });
     getFormById.mockResolvedValue(createTemplate(1));
@@ -284,6 +288,95 @@ describe("TemplatesPage", () => {
     );
   });
 
+  it("pins templates locally, highlights the star, and keeps pinned templates first", async () => {
+    getTemplateFormsPage.mockResolvedValue(
+      createTemplatesPage([
+        createTemplate(1, { title: "Первый шаблон" }),
+        createTemplate(2, { title: "Важный шаблон" }),
+        createTemplate(3, { title: "Третий шаблон" }),
+      ]),
+    );
+
+    const { container } = renderPage();
+
+    expect(await screen.findByText("Первый шаблон")).toBeInTheDocument();
+
+    const getCardTitles = () =>
+      Array.from(container.querySelectorAll(".templates-card-title")).map((title) => title.textContent);
+
+    expect(getCardTitles()).toEqual(["Первый шаблон", "Важный шаблон", "Третий шаблон"]);
+
+    const pinButton = screen.getByRole("button", { name: "Закрепить шаблон Важный шаблон" });
+    await userEvent.click(pinButton);
+
+    expect(screen.getByRole("button", { name: "Открепить шаблон Важный шаблон" })).toHaveClass(
+      "templates-pin-button-active",
+    );
+    expect(getCardTitles()).toEqual(["Важный шаблон", "Первый шаблон", "Третий шаблон"]);
+    expect(localStorage.getItem("survey-app:pinned-template-ids:user-1:mine")).toContain("template-2");
+  });
+
+  it("keeps pins in my templates separate from public templates", async () => {
+    getTemplateFormsPage.mockImplementation((options: { filters?: { authorId?: string } } | undefined) =>
+      Promise.resolve(
+        createTemplatesPage(
+          options?.filters?.authorId
+            ? [
+                createTemplate(1, { title: "Общий мой шаблон", is_public: true }),
+                createTemplate(2, { title: "Мой второй шаблон" }),
+              ]
+            : [
+                createTemplate(3, {
+                  title: "Публичный первый шаблон",
+                  is_public: true,
+                  author_id: "user-2",
+                }),
+                createTemplate(1, { title: "Общий мой шаблон", is_public: true }),
+              ],
+        ),
+      ),
+    );
+
+    const { container } = renderPage();
+    const getCardTitles = () =>
+      Array.from(container.querySelectorAll(".templates-card-title")).map((title) => title.textContent);
+
+    expect(await screen.findByText("Общий мой шаблон")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Закрепить шаблон Общий мой шаблон" }));
+
+    await userEvent.click(screen.getByRole("tab", { name: "Публичные" }));
+
+    expect(await screen.findByText("Публичный первый шаблон")).toBeInTheDocument();
+    expect(getCardTitles()).toEqual(["Публичный первый шаблон", "Общий мой шаблон"]);
+    expect(screen.getByRole("button", { name: "Закрепить шаблон Общий мой шаблон" })).toBeInTheDocument();
+  });
+
+  it("does not show another user's pins to the current user", async () => {
+    getTemplateFormsPage.mockResolvedValue(
+      createTemplatesPage([
+        createTemplate(1, { title: "Первый шаблон" }),
+        createTemplate(2, { title: "Второй шаблон" }),
+      ]),
+    );
+
+    authState.user = { id: "user-2" };
+    const firstUserView = renderPage();
+
+    expect(await screen.findByText("Первый шаблон")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Закрепить шаблон Второй шаблон" }));
+    firstUserView.unmount();
+
+    authState.user = { id: "user-1" };
+    const { container } = renderPage();
+
+    expect(await screen.findByText("Первый шаблон")).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll(".templates-card-title")).map((title) => title.textContent)).toEqual([
+      "Первый шаблон",
+      "Второй шаблон",
+    ]);
+    expect(screen.getByRole("button", { name: "Закрепить шаблон Второй шаблон" })).toBeInTheDocument();
+  });
+
   it("keeps template cards visible during a background refresh", async () => {
     let resolveRefresh!: (value: ReturnType<typeof createTemplatesPage>) => void;
     const refreshPromise = new Promise<ReturnType<typeof createTemplatesPage>>((resolve) => {
@@ -394,5 +487,19 @@ describe("TemplatesPage", () => {
 
     expect(css).toMatch(/\.dashboard-forms-grid > \.dashboard-form-card\s*\{[^}]*border:\s*2px solid rgba\(20,\s*20,\s*20,\s*0\.14\);/);
     expect(css).toMatch(/\.templates-gallery-grid > \.templates-card\s*\{[^}]*border:\s*2px solid rgba\(20,\s*20,\s*20,\s*0\.14\);/);
+  });
+
+  it("aligns the template section tabs with the refresh button row", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.templates-page-actions\s*\{[^}]*align-items:\s*flex-end;/);
+  });
+
+  it("renders template pin stars without a framed button background", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*border:\s*none;[^}]*background:\s*transparent;[^}]*font-size:\s*1\.4rem;/);
+    expect(css).toMatch(/\.templates-pin-button:hover,\s*\.templates-pin-button:focus-visible\s*\{[^}]*background:\s*transparent;/);
+    expect(css).toMatch(/\.templates-pin-button-active,[^{]*\{[^}]*background:\s*transparent;/);
   });
 });

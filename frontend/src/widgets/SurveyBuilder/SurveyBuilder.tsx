@@ -747,50 +747,64 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       {postSaveSettings && (
         <div className="modal-backdrop">
           <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
-            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Настройки формы</h3>
+            <h3 className="deadline-modal-title">Настройки формы</h3>
             <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
             <div className="deadline-modal-primary-grid">
               <label className="deadline-field">
                 <span>
                   Тип формы <span className="deadline-required-mark" aria-hidden="true">*</span>
                 </span>
-                <select
-                  aria-label="Тип формы"
-                  value={postSaveSettings.formTypeValue}
-                  onChange={(event) =>
-                    setPostSaveSettings((current) =>
-                      current ? { ...current, formTypeValue: event.target.value } : current,
-                    )
-                  }
-                >
-                  <option value="">Выберите тип</option>
-                  {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="deadline-select-shell">
+                  <select
+                    aria-label="Тип формы"
+                    value={postSaveSettings.formTypeValue}
+                    onChange={(event) =>
+                      setPostSaveSettings((current) =>
+                        current ? { ...current, formTypeValue: event.target.value } : current,
+                      )
+                    }
+                  >
+                    <option value="" disabled hidden />
+                    {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!postSaveSettings.formTypeValue && (
+                    <span className="deadline-select-placeholder" aria-hidden="true">
+                      Выберите тип
+                    </span>
+                  )}
+                </div>
               </label>
               <label className="deadline-field">
                 <span>
                   Основание формы <span className="deadline-required-mark" aria-hidden="true">*</span>
                 </span>
-                <select
-                  aria-label="Основание формы"
-                  value={postSaveSettings.formReasonValue}
-                  onChange={(event) =>
-                    setPostSaveSettings((current) =>
-                      current ? { ...current, formReasonValue: event.target.value } : current,
-                    )
-                  }
-                >
-                  <option value="">Выберите основание</option>
-                  {FORM_REASON_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="deadline-select-shell">
+                  <select
+                    aria-label="Основание формы"
+                    value={postSaveSettings.formReasonValue}
+                    onChange={(event) =>
+                      setPostSaveSettings((current) =>
+                        current ? { ...current, formReasonValue: event.target.value } : current,
+                      )
+                    }
+                  >
+                    <option value="" disabled hidden />
+                    {FORM_REASON_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!postSaveSettings.formReasonValue && (
+                    <span className="deadline-select-placeholder" aria-hidden="true">
+                      Выберите основание
+                    </span>
+                  )}
+                </div>
               </label>
             </div>
             <label className="deadline-field">

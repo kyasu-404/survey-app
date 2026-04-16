@@ -55,6 +55,60 @@ type ListRefreshNavigationState = {
 };
 
 const TEMPLATE_PAGE_SIZE = 20;
+const PINNED_TEMPLATE_IDS_STORAGE_PREFIX = "survey-app:pinned-template-ids";
+
+function getPinnedTemplateIdsStorageKey(userId: string | null | undefined, section: TemplatesSection) {
+  return `${PINNED_TEMPLATE_IDS_STORAGE_PREFIX}:${userId ?? "anonymous"}:${section}`;
+}
+
+function readPinnedTemplateIds(storageKey: string) {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const value = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePinnedTemplateIds(storageKey: string, templateIds: string[]) {
+  window.localStorage.setItem(storageKey, JSON.stringify(templateIds));
+}
+
+function sortTemplatesByPins(templates: SurveyFormSummary[], pinnedTemplateIds: string[]) {
+  if (pinnedTemplateIds.length === 0) {
+    return templates;
+  }
+
+  return templates
+    .map((template, index) => ({
+      index,
+      pinnedIndex: pinnedTemplateIds.indexOf(template.id),
+      template,
+    }))
+    .sort((left, right) => {
+      const leftPinned = left.pinnedIndex >= 0;
+      const rightPinned = right.pinnedIndex >= 0;
+
+      if (leftPinned && rightPinned) {
+        return left.pinnedIndex - right.pinnedIndex;
+      }
+
+      if (leftPinned) {
+        return -1;
+      }
+
+      if (rightPinned) {
+        return 1;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ template }) => template);
+}
 
 function formatCreatedAt(dateTime: string) {
   return new Date(dateTime).toLocaleString("ru-RU");
@@ -88,8 +142,15 @@ export default function TemplatesPage() {
   const [previewTemplateCard, setPreviewTemplateCard] = useState<SurveyFormSummary | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<SurveyFormSummary | null>(null);
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
+  const [pinnedTemplateIds, setPinnedTemplateIds] = useState(() =>
+    readPinnedTemplateIds(getPinnedTemplateIdsStorageKey(user?.id, "mine")),
+  );
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const pinnedTemplateIdsStorageKey = useMemo(
+    () => getPinnedTemplateIdsStorageKey(user?.id, section),
+    [section, user?.id],
+  );
 
   const templatesQueryKey = useMemo(
     () =>
@@ -145,6 +206,7 @@ export default function TemplatesPage() {
     const templateForms = (templatesPages?.pages.flatMap((page) => page.items) ?? []).filter((form) => isTemplateForm(form));
     return section === "public" ? templateForms.filter((form) => form.is_public) : templateForms;
   }, [section, templatesPages]);
+  const sortedTemplates = useMemo(() => sortTemplatesByPins(templates, pinnedTemplateIds), [pinnedTemplateIds, templates]);
 
   const {
     data: previewTemplate,
@@ -202,6 +264,10 @@ export default function TemplatesPage() {
   useEffect(() => {
     setPreviewTemplateCard(null);
   }, [section]);
+
+  useEffect(() => {
+    setPinnedTemplateIds(readPinnedTemplateIds(pinnedTemplateIdsStorageKey));
+  }, [pinnedTemplateIdsStorageKey]);
 
   useEffect(() => {
     if (!openedMenuTemplateId) {
@@ -373,6 +439,22 @@ export default function TemplatesPage() {
     });
   };
 
+  const handleTogglePin = (templateId: string) => {
+    setPinnedTemplateIds((currentTemplateIds) => {
+      const nextTemplateIds = currentTemplateIds.includes(templateId)
+        ? currentTemplateIds.filter((currentTemplateId) => currentTemplateId !== templateId)
+        : [templateId, ...currentTemplateIds];
+
+      writePinnedTemplateIds(pinnedTemplateIdsStorageKey, nextTemplateIds);
+      return nextTemplateIds;
+    });
+  };
+
+  const handleSectionChange = (nextSection: TemplatesSection) => {
+    setSection(nextSection);
+    setPinnedTemplateIds(readPinnedTemplateIds(getPinnedTemplateIdsStorageKey(user?.id, nextSection)));
+  };
+
   const confirmDelete = async () => {
     if (!templateToDelete) {
       return;
@@ -414,7 +496,7 @@ export default function TemplatesPage() {
                 role="tab"
                 className={section === "mine" ? "templates-segment templates-segment-active" : "templates-segment"}
                 aria-selected={section === "mine"}
-                onClick={() => setSection("mine")}
+                onClick={() => handleSectionChange("mine")}
               >
                 Мои
               </button>
@@ -423,7 +505,7 @@ export default function TemplatesPage() {
                 role="tab"
                 className={section === "public" ? "templates-segment templates-segment-active" : "templates-segment"}
                 aria-selected={section === "public"}
-                onClick={() => setSection("public")}
+                onClick={() => handleSectionChange("public")}
               >
                 Публичные
               </button>
@@ -459,9 +541,10 @@ export default function TemplatesPage() {
             openedMenuTemplateId ? "templates-gallery-grid-menu-open" : ""
           }`.trim()}
         >
-          {templates.map((template) => {
+          {sortedTemplates.map((template) => {
             const title = getSurveyDisplayTitle(template);
             const isOwnTemplate = template.author_id === user?.id;
+            const isPinnedTemplate = pinnedTemplateIds.includes(template.id);
             const isCurrentTemplatePending = isTemplateActionPending(template.id);
             const actionMenuOpen = openedMenuTemplateId === template.id;
             const createdAtLabel = formatCreatedAt(template.created_at);
@@ -553,6 +636,18 @@ export default function TemplatesPage() {
                     <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
                     <strong className="dashboard-form-title templates-card-title">{title}</strong>
                   </div>
+                  <button
+                    type="button"
+                    className={`templates-pin-button ${isPinnedTemplate ? "templates-pin-button-active" : ""}`.trim()}
+                    aria-label={`${isPinnedTemplate ? "Открепить" : "Закрепить"} шаблон ${title}`}
+                    aria-pressed={isPinnedTemplate}
+                    onClick={(event) => {
+                      stopCardEvent(event);
+                      handleTogglePin(template.id);
+                    }}
+                  >
+                    <span aria-hidden="true">★</span>
+                  </button>
                 </div>
 
                 <div className="templates-card-meta-line">

@@ -142,6 +142,27 @@ test("form authors and admins can read responses", () => {
   assert.match(selectPolicy, /f\.author_id = \(select auth\.uid\(\)\)/i);
 });
 
+test("authenticated users can read responses for public active admin-authored forms", () => {
+  const helper = getFunctionDefinition("is_public_active_admin_authored_form");
+  const selectPolicy = getPolicyDefinition("responses_select_author_or_admin");
+
+  assert.match(helper, /security definer\s+set search_path = ''/i);
+  assert.match(helper, /from public\.forms f/i);
+  assert.match(helper, /join public\.profiles p on p\.id = f\.author_id/i);
+  assert.match(helper, /p\.role = 'admin'/i);
+  assert.match(helper, /f\.is_public = true/i);
+  assert.match(helper, /f\.deadline_at is null or f\.deadline_at > now\(\)/i);
+  assert.match(selectPolicy, /public\.is_public_active_admin_authored_form\(form_id\)/i);
+  assert.match(
+    schema,
+    /revoke all on function public\.is_public_active_admin_authored_form\(uuid\) from public;/i,
+  );
+  assert.match(
+    schema,
+    /grant execute on function public\.is_public_active_admin_authored_form\(uuid\) to authenticated, service_role;/i,
+  );
+});
+
 test("response limits use an atomic form counter instead of counting response rows", () => {
   assert.match(schema, /responses_count integer not null default 0/i);
 

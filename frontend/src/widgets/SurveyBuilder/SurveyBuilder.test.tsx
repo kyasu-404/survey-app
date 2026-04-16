@@ -547,9 +547,19 @@ describe("SurveyBuilder", () => {
   it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {
     const appCss = readAppCss();
 
+    expect(appCss).toMatch(/\.deadline-modal-title\s*\{[^}]*text-align:\s*center;/);
+    expect(appCss).toMatch(/\.deadline-modal-subtitle\s*\{[^}]*color:\s*#4f6f91;[^}]*font-weight:\s*700;/);
     expect(appCss).toMatch(/\.deadline-modal-primary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
     expect(appCss).toMatch(/\.deadline-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#22c55e,\s*#15803d\);[^}]*color:\s*#ffffff;/);
     expect(appCss).toMatch(/\.deadline-clear-button\s*\{[^}]*background:\s*rgba\(254,\s*226,\s*226,\s*0\.8\);[^}]*color:\s*#b91c1c;/);
+  });
+
+  it("keeps toast notifications above modal backdrops", () => {
+    const appCss = readAppCss();
+    const toastZIndex = Number(appCss.match(/\.toast-container\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
+    const modalZIndex = Number(appCss.match(/\.modal-backdrop\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
+
+    expect(toastZIndex).toBeGreaterThan(modalZIndex);
   });
 
   it("opens response settings before creating a form and publishes it only after saving the dialog", async () => {
@@ -596,6 +606,35 @@ describe("SurveyBuilder", () => {
     expect(setFormDeadline).not.toHaveBeenCalled();
     expect(setFormResponseLimit).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: { refreshList: true } });
+  });
+
+  it("shows empty form metadata selects with visual placeholders instead of placeholder options", async () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(/\.deadline-select-placeholder\s*\{[^}]*color:\s*var\(--text-muted\);[^}]*font-weight:\s*400;/);
+
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, vi.fn());
+    });
+
+    const settingsDialog = await screen.findByRole("dialog", { name: "Настройки формы" });
+    const formTypeSelect = within(settingsDialog).getByLabelText("Тип формы");
+    const formReasonSelect = within(settingsDialog).getByLabelText("Основание формы");
+    const typePlaceholder = within(settingsDialog).getByText("Выберите тип");
+    const reasonPlaceholder = within(settingsDialog).getByText("Выберите основание");
+
+    expect(formTypeSelect).toHaveValue("");
+    expect(formReasonSelect).toHaveValue("");
+    expect(typePlaceholder.tagName).toBe("SPAN");
+    expect(reasonPlaceholder.tagName).toBe("SPAN");
+    expect(within(formTypeSelect).queryByRole("option", { name: "Выберите тип" })).not.toBeInTheDocument();
+    expect(within(formReasonSelect).queryByRole("option", { name: "Выберите основание" })).not.toBeInTheDocument();
   });
 
   it("closes the post-save settings dialog without resetting the builder when the user cancels", async () => {
