@@ -12,7 +12,7 @@ import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import previewIcon from "../../img/preview.svg";
 import { supabaseClient } from "../../shared/api";
-import { getErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
@@ -47,10 +47,11 @@ function getDateCellParts(value: string) {
   return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
 }
 
-async function getResponsePage(formId: string) {
+async function getResponsePage(formId: string, signal?: AbortSignal) {
   return getResponsesByForm(formId, {
     page: 1,
     pageSize: RESPONSES_SCROLL_PAGE_SIZE,
+    signal,
   });
 }
 
@@ -99,12 +100,12 @@ export default function FormResponsesPage() {
 
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) {
         return null;
       }
 
-      return getFormById(id);
+      return getFormById(id, { signal });
     },
     enabled: Boolean(id),
     retry: 1,
@@ -116,7 +117,7 @@ export default function FormResponsesPage() {
 
   const responsesQuery = useQuery({
     queryKey: getFormResponsesQueryKey(id, "page", 1, RESPONSES_SCROLL_PAGE_SIZE),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) {
         return {
           data: [],
@@ -127,12 +128,11 @@ export default function FormResponsesPage() {
         };
       }
 
-      return getResponsePage(id);
+      return getResponsePage(id, signal);
     },
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
@@ -148,7 +148,7 @@ export default function FormResponsesPage() {
     (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const lastUpdatedAt = Math.max(formQuery.dataUpdatedAt ?? 0, responsesQuery.dataUpdatedAt ?? 0);
-  const combinedError = formQuery.error ?? responsesQuery.error;
+  const combinedError = [formQuery.error, responsesQuery.error].find((error) => error && !isAbortError(error)) ?? null;
   const totalResponses = responsesQuery.data?.count ?? 0;
 
   useEffect(() => {

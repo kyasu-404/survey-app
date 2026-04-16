@@ -181,3 +181,21 @@ test("forms and responses are published to realtime", () => {
   assert.match(schema, /alter publication supabase_realtime add table public\.forms;/i);
   assert.match(schema, /alter publication supabase_realtime add table public\.responses;/i);
 });
+
+test("list and search indexes support stable paginated reads", () => {
+  assert.match(schema, /create extension if not exists "pg_trgm";/i);
+  assert.match(schema, /create index idx_forms_created_at_id\s+on public\.forms\(created_at desc,\s*id desc\);/i);
+  assert.match(
+    schema,
+    /create index idx_forms_author_created_at_id\s+on public\.forms\(author_id,\s*created_at desc,\s*id desc\);/i,
+  );
+  assert.match(
+    schema,
+    /create index idx_responses_form_created_at_id\s+on public\.responses\(form_id,\s*created_at desc,\s*id desc\);/i,
+  );
+  assert.match(schema, /create index idx_forms_title_trgm\s+on public\.forms using gin \(title gin_trgm_ops\);/i);
+  assert.match(
+    schema,
+    /create index idx_forms_author_name_trgm\s+on public\.forms using gin \(author_name gin_trgm_ops\);/i,
+  );
+});

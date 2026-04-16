@@ -37,7 +37,7 @@ import {
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import type { SurveySchema } from "../../entities/survey/types";
 import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
-import { getErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import {
@@ -307,7 +307,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     error: editableFormError,
   } = useQuery({
     queryKey: getFormQueryKey(formId),
-    queryFn: () => getFormById(formId ?? ""),
+    queryFn: ({ signal }) => getFormById(formId ?? "", { signal }),
     enabled: isEditMode,
     retry: 1,
     staleTime: 30_000,
@@ -331,7 +331,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   }, [formId]);
 
   useEffect(() => {
-    if (!editableFormError) {
+    if (!editableFormError || isAbortError(editableFormError)) {
       return;
     }
 

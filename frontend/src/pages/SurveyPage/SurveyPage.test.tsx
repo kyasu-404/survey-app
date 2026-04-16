@@ -108,7 +108,7 @@ describe("SurveyPage", () => {
     });
 
     expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-preview", "true");
-    expect(getFormById).toHaveBeenCalledWith("form-1");
+    expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(getPublicFormById).not.toHaveBeenCalled();
   });
 
@@ -155,7 +155,10 @@ describe("SurveyPage", () => {
     renderSurveyPage();
 
     await waitFor(() => {
-      expect(getPublicFormById).toHaveBeenCalledWith("form-1");
+      expect(getPublicFormById).toHaveBeenCalledWith(
+        "form-1",
+        expect.objectContaining({ signal: expect.any(Object) }),
+      );
     });
   });
 
@@ -188,7 +191,7 @@ describe("SurveyPage", () => {
 
     expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-preview", "true");
     await waitFor(() => {
-      expect(getFormById).toHaveBeenCalledWith("form-1");
+      expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     });
   });
 

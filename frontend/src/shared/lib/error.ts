@@ -6,6 +6,16 @@ export function getErrorMessage(error: unknown, fallbackMessage: string) {
   return fallbackMessage;
 }
 
+export function isAbortError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    typeof error.name === "string" &&
+    error.name === "AbortError"
+  );
+}
+
 export function getAuthErrorMessage(error: unknown) {
   const fallbackMessage = "Не удалось выполнить вход. Проверьте данные и попробуйте снова.";
 

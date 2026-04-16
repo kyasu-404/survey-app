@@ -30,7 +30,7 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { TEMPLATE_FORM_TYPE, getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
-import { getErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
@@ -175,10 +175,11 @@ export default function TemplatesPage() {
   } = useInfiniteQuery({
     queryKey: templatesQueryKey,
     initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       getTemplateFormsPage({
         page: pageParam,
         pageSize: TEMPLATE_PAGE_SIZE,
+        signal,
         filters:
           section === "mine"
             ? {
@@ -198,7 +199,6 @@ export default function TemplatesPage() {
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -214,7 +214,7 @@ export default function TemplatesPage() {
     error: previewTemplateError,
   } = useQuery({
     queryKey: getFormQueryKey(previewTemplateCard?.id),
-    queryFn: () => getFormById(previewTemplateCard!.id),
+    queryFn: ({ signal }) => getFormById(previewTemplateCard!.id, { signal }),
     enabled: Boolean(previewTemplateCard?.id),
     retry: 1,
     staleTime: 60_000,
@@ -228,7 +228,7 @@ export default function TemplatesPage() {
   const hasMoreTemplates = Boolean(hasNextTemplatesPage);
 
   useEffect(() => {
-    if (!templatesError) {
+    if (!templatesError || isAbortError(templatesError)) {
       return;
     }
 
@@ -254,7 +254,7 @@ export default function TemplatesPage() {
   }, [isAuthLoading, location.pathname, location.state, navigate, reloadTemplates, section, user?.id]);
 
   useEffect(() => {
-    if (!previewTemplateError) {
+    if (!previewTemplateError || isAbortError(previewTemplateError)) {
       return;
     }
 
@@ -368,7 +368,7 @@ export default function TemplatesPage() {
   const ensureTemplateDetails = async (templateId: string) => {
     return queryClient.fetchQuery({
       queryKey: ["form", templateId],
-      queryFn: () => getFormById(templateId),
+      queryFn: ({ signal }) => getFormById(templateId, { signal }),
       staleTime: 60_000,
     });
   };

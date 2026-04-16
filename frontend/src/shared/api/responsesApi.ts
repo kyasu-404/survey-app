@@ -9,6 +9,7 @@ const MAX_RESPONSES_PAGE_SIZE = 100;
 export type FetchResponsesByFormOptions = {
   page?: number;
   pageSize?: number;
+  signal?: AbortSignal;
 };
 
 export type PaginatedResponses = {
@@ -30,6 +31,18 @@ function normalizePositiveInteger(value: number | undefined, fallback: number) {
 function normalizePageSize(pageSize: number | undefined) {
   const normalizedPageSize = normalizePositiveInteger(pageSize, RESPONSES_PAGE_SIZE);
   return Math.min(MAX_RESPONSES_PAGE_SIZE, Math.max(MIN_RESPONSES_PAGE_SIZE, normalizedPageSize));
+}
+
+function applyAbortSignal<TQuery>(query: TQuery, signal?: AbortSignal): TQuery {
+  if (!signal) {
+    return query;
+  }
+
+  const abortableQuery = query as TQuery & {
+    abortSignal?: (signal: AbortSignal) => TQuery;
+  };
+
+  return typeof abortableQuery.abortSignal === "function" ? abortableQuery.abortSignal(signal) : query;
 }
 
 export async function insertResponse(formId: string, data: Record<string, unknown>) {
@@ -58,12 +71,15 @@ export async function fetchResponsesByForm(
   const { data, error, count } = await runRequest(
     "responses.fetchByForm",
     () =>
-      apiClient
-        .from("responses")
-        .select("*", { count: "exact" })
-        .eq("form_id", formId)
-        .order("created_at", { ascending: false })
-        .range(from, to),
+      applyAbortSignal(
+        apiClient
+          .from("responses")
+          .select("*", { count: "exact" })
+          .eq("form_id", formId)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+        options.signal,
+      ).range(from, to),
     { context: { formId, page, pageSize } },
   );
 

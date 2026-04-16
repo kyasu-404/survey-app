@@ -7,7 +7,7 @@ import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey
 import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
 import { RESPONSES_PAGE_SIZE } from "../../shared/api";
-import { getErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import {
   createResponsesHtmlDocument,
   createResponsesHtmlReport,
@@ -21,12 +21,12 @@ export default function FormResponsesHtmlPage() {
 
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) {
         return null;
       }
 
-      return getFormById(id);
+      return getFormById(id, { signal });
     },
     enabled: Boolean(id),
     retry: 1,
@@ -38,7 +38,7 @@ export default function FormResponsesHtmlPage() {
 
   const responsesQuery = useQuery({
     queryKey: getFormResponsesQueryKey(id, "html", RESPONSES_PAGE_SIZE),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) {
         return {
           data: [],
@@ -49,12 +49,11 @@ export default function FormResponsesHtmlPage() {
         };
       }
 
-      return getResponsesByForm(id, { page: 1, pageSize: RESPONSES_PAGE_SIZE });
+      return getResponsesByForm(id, { page: 1, pageSize: RESPONSES_PAGE_SIZE, signal });
     },
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
@@ -77,7 +76,7 @@ export default function FormResponsesHtmlPage() {
     [formTitle, generatedAt, rows],
   );
   const isLoading = formQuery.isLoading || responsesQuery.isLoading;
-  const combinedError = formQuery.error ?? responsesQuery.error;
+  const combinedError = [formQuery.error, responsesQuery.error].find((error) => error && !isAbortError(error)) ?? null;
   const canUseHtml = !isLoading && !combinedError;
 
   const handleDownload = () => {

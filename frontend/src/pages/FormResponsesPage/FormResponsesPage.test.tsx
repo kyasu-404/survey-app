@@ -562,7 +562,10 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(screen.queryByText("Борис")).not.toBeInTheDocument();
     expect(getResponsesByForm).toHaveBeenCalledTimes(1);
-    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 1, pageSize: 100 });
+    expect(getResponsesByForm).toHaveBeenCalledWith(
+      "form-1",
+      expect.objectContaining({ page: 1, pageSize: 100, signal: expect.any(Object) }),
+    );
     expect(screen.queryByLabelText("Пагинация ответов")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Следующая" })).not.toBeInTheDocument();
   });

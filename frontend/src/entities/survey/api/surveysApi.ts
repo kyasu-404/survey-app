@@ -25,6 +25,10 @@ import type {
 
 export type { FormsFilters };
 
+type QueryRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
   return fetchForms(filters);
 }
@@ -33,28 +37,33 @@ export async function getDashboardFormsPage(params: {
   page: number;
   pageSize: number;
   filters?: FormsFilters;
+  signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {
   return fetchDashboardFormsPage(params);
 }
 
-export async function getDashboardFormsStats(filters?: FormsFilters): Promise<DashboardFormsStats> {
-  return fetchDashboardFormsStats(filters);
+export async function getDashboardFormsStats(
+  filters?: FormsFilters,
+  options?: QueryRequestOptions,
+): Promise<DashboardFormsStats> {
+  return fetchDashboardFormsStats(filters, options);
 }
 
 export async function getTemplateFormsPage(params: {
   page: number;
   pageSize: number;
   filters?: FormsFilters;
+  signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {
   return fetchTemplateFormsPage(params);
 }
 
-export async function getFormById(id: string): Promise<SurveyForm> {
-  return fetchFormById(id);
+export async function getFormById(id: string, options?: QueryRequestOptions): Promise<SurveyForm> {
+  return fetchFormById(id, options);
 }
 
-export async function getPublicFormById(id: string): Promise<SurveyForm | null> {
-  return fetchPublicFormById(id);
+export async function getPublicFormById(id: string, options?: QueryRequestOptions): Promise<SurveyForm | null> {
+  return fetchPublicFormById(id, options);
 }
 
 export async function createSurvey(params: {

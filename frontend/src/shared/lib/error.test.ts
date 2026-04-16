@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAuthErrorMessage, getErrorMessage, getSubmitResponseErrorMessage } from "./error";
+import { getAuthErrorMessage, getErrorMessage, getSubmitResponseErrorMessage, isAbortError } from "./error";
 
 describe("error helpers", () => {
   it("prefers a concrete Error message over the fallback", () => {
@@ -30,5 +30,11 @@ describe("error helpers", () => {
     expect(getSubmitResponseErrorMessage(new Error("23514 check violation"))).toBe(
       "Лимит ответов для этой формы уже достигнут.",
     );
+  });
+
+  it("recognizes aborted requests without treating ordinary errors as cancellations", () => {
+    expect(isAbortError(new DOMException("The user aborted a request.", "AbortError"))).toBe(true);
+    expect(isAbortError(Object.assign(new Error("aborted"), { name: "AbortError" }))).toBe(true);
+    expect(isAbortError(new Error("fetch failed"))).toBe(false);
   });
 });

@@ -580,7 +580,7 @@ describe("DashboardPage", () => {
     await userEvent.click(within(menu).getByRole("menuitem", { name: "Дублировать" }));
 
     await waitFor(() => {
-      expect(getFormById).toHaveBeenCalledWith("form-1");
+      expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
       expect(cloneForm).toHaveBeenCalledWith(
         expect.objectContaining({ id: "form-1" }),
         "user-1",

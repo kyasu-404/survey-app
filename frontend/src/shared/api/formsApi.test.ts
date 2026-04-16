@@ -43,6 +43,7 @@ function createSummaryQuery(response: { data?: unknown[] | null; count?: number 
   const query = {
     select: vi.fn(() => query),
     order: vi.fn(() => query),
+    abortSignal: vi.fn(() => query),
     ilike: vi.fn(() => query),
     gte: vi.fn(() => query),
     lte: vi.fn(() => query),
@@ -147,11 +148,13 @@ describe("fetchForms", () => {
   it("reads the cached responses counter from forms instead of aggregate embedding responses", async () => {
     const listQuery = {
       select: vi.fn(() => listQuery),
-      order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      order: vi.fn(() => listQuery),
       ilike: vi.fn(() => listQuery),
       gte: vi.fn(() => listQuery),
       lte: vi.fn(() => listQuery),
       eq: vi.fn(() => listQuery),
+      then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+        Promise.resolve({ data: [], error: null }).then(resolve, reject),
     };
 
     vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
@@ -159,6 +162,8 @@ describe("fetchForms", () => {
     await fetchForms();
 
     expect(listQuery.select).toHaveBeenCalledWith("*");
+    expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
   });
 });
 
@@ -187,7 +192,27 @@ describe("fetchDashboardFormsPage", () => {
     });
 
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
     expect(listQuery.range).toHaveBeenCalledWith(0, 19);
+  });
+
+  it("passes abort signals to paginated dashboard requests", async () => {
+    const signal = new AbortController().signal;
+    const listQuery = createSummaryQuery({
+      data: [],
+      count: 0,
+      error: null,
+    });
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await fetchDashboardFormsPage({
+      page: 0,
+      pageSize: 20,
+      signal,
+    });
+
+    expect(listQuery.abortSignal).toHaveBeenCalledWith(signal);
   });
 
   it("fetches lightweight dashboard cards with exact count and server range", async () => {
@@ -360,6 +385,8 @@ describe("fetchTemplateFormsPage", () => {
       expect.not.stringContaining("profiles:author_id"),
       { count: "exact" },
     );
+    expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
     expect(listQuery.range).toHaveBeenCalledWith(0, 23);
   });
 });
@@ -396,6 +423,24 @@ describe("fetchDashboardFormsStats", () => {
     );
     expect(activeQuery.eq).toHaveBeenCalledWith("is_public", true);
     expect(deadlineQuery.not).toHaveBeenCalledWith("deadline_at", "is", null);
+  });
+
+  it("passes abort signals to dashboard stats count queries", async () => {
+    const signal = new AbortController().signal;
+    const totalQuery = createSummaryQuery({ data: null, count: 25, error: null });
+    const activeQuery = createSummaryQuery({ data: null, count: 18, error: null });
+    const deadlineQuery = createSummaryQuery({ data: null, count: 7, error: null });
+
+    vi.mocked(apiClient.from)
+      .mockReturnValueOnce(totalQuery as never)
+      .mockReturnValueOnce(activeQuery as never)
+      .mockReturnValueOnce(deadlineQuery as never);
+
+    await fetchDashboardFormsStats(undefined, { signal });
+
+    expect(totalQuery.abortSignal).toHaveBeenCalledWith(signal);
+    expect(activeQuery.abortSignal).toHaveBeenCalledWith(signal);
+    expect(deadlineQuery.abortSignal).toHaveBeenCalledWith(signal);
   });
 
   it("skips the profiles join for dashboard stats when there is no author search", async () => {

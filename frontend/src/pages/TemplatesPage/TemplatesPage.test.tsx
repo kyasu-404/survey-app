@@ -173,7 +173,7 @@ describe("TemplatesPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Открыть превью шаблона Заявка на конкурс" }));
 
     expect(await screen.findByRole("dialog", { name: "Превью шаблона Заявка на конкурс" })).toBeInTheDocument();
-    expect(getFormById).toHaveBeenCalledWith("template-1");
+    expect(getFormById).toHaveBeenCalledWith("template-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(container.querySelector(".template-preview-body")).toHaveClass("survey-page-card");
     expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
   });
@@ -193,7 +193,7 @@ describe("TemplatesPage", () => {
       expect(navigate).toHaveBeenCalledWith(routes.builder);
     });
 
-    expect(getFormById).toHaveBeenCalledWith("template-1");
+    expect(getFormById).toHaveBeenCalledWith("template-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(createFormFromTemplate).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({

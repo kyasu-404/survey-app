@@ -58,6 +58,7 @@ describe("fetchResponsesByForm", () => {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
       order: vi.fn(() => query),
+      abortSignal: vi.fn(() => query),
       range: vi.fn(() => Promise.resolve({ data: [response], count: 72, error: null })),
     };
     vi.mocked(apiClient.from).mockReturnValue(query as never);
@@ -73,6 +74,23 @@ describe("fetchResponsesByForm", () => {
     expect(query.select).toHaveBeenCalledWith("*", { count: "exact" });
     expect(query.eq).toHaveBeenCalledWith("form_id", "form-1");
     expect(query.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(query.order).toHaveBeenCalledWith("id", { ascending: false });
     expect(query.range).toHaveBeenCalledWith(25, 49);
+  });
+
+  it("passes abort signals to response page requests", async () => {
+    const signal = new AbortController().signal;
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      order: vi.fn(() => query),
+      abortSignal: vi.fn(() => query),
+      range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await fetchResponsesByForm("form-1", { page: 1, pageSize: 25, signal });
+
+    expect(query.abortSignal).toHaveBeenCalledWith(signal);
   });
 });

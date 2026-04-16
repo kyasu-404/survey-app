@@ -36,6 +36,11 @@ type FetchFormsPageOptions = {
   page: number;
   pageSize: number;
   filters?: FormsFilters;
+  signal?: AbortSignal;
+};
+
+type RequestSignalOptions = {
+  signal?: AbortSignal;
 };
 
 const DASHBOARD_FORMS_SUMMARY_SELECT = `
@@ -152,6 +157,18 @@ function applyFormsFilters<TQuery extends {
   return query;
 }
 
+function applyAbortSignal<TQuery>(query: TQuery, signal?: AbortSignal): TQuery {
+  if (!signal) {
+    return query;
+  }
+
+  const abortableQuery = query as TQuery & {
+    abortSignal?: (signal: AbortSignal) => TQuery;
+  };
+
+  return typeof abortableQuery.abortSignal === "function" ? abortableQuery.abortSignal(signal) : query;
+}
+
 async function getAuthenticatedUserId(): Promise<string> {
   const {
     data: { user },
@@ -169,13 +186,17 @@ async function getAuthenticatedUserId(): Promise<string> {
   return user.id;
 }
 
-export async function fetchForms(filters?: FormsFilters): Promise<SurveyForm[]> {
-  let query = apiClient.from("forms").select("*").order("created_at", { ascending: false });
+export async function fetchForms(filters?: FormsFilters, options: RequestSignalOptions = {}): Promise<SurveyForm[]> {
+  let query = apiClient
+    .from("forms")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
   query = applyFormsFilters(query, filters);
 
   const { data, error } = await runRequest(
     "forms.fetchList",
-    () => query,
+    () => applyAbortSignal(query, options.signal),
     { context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) } },
   );
   if (error) throw error;
@@ -195,13 +216,14 @@ export async function fetchDashboardFormsPage(
     .from("forms")
     .select(DASHBOARD_FORMS_SUMMARY_SELECT, { count: "exact" })
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .neq("form_type", TEMPLATE_FORM_TYPE);
 
   query = applyFormsFilters(query, options.filters);
 
   const { data, count, error } = await runRequest(
     "forms.fetchDashboardPage",
-    () => query.range(rangeFrom, rangeTo),
+    () => applyAbortSignal(query, options.signal).range(rangeFrom, rangeTo),
     {
       context: {
         authorId: options.filters?.authorId ?? null,
@@ -232,13 +254,14 @@ export async function fetchTemplateFormsPage(
   let query = apiClient
     .from("forms")
     .select(TEMPLATE_FORMS_SUMMARY_SELECT, { count: "exact" })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
 
   query = applyFormsFilters(query, options.filters);
 
   const { data, count, error } = await runRequest(
     "forms.fetchTemplatePage",
-    () => query.range(rangeFrom, rangeTo),
+    () => applyAbortSignal(query, options.signal).range(rangeFrom, rangeTo),
     {
       context: {
         authorId: options.filters?.authorId ?? null,
@@ -258,7 +281,10 @@ export async function fetchTemplateFormsPage(
   };
 }
 
-export async function fetchDashboardFormsStats(filters?: FormsFilters): Promise<DashboardFormsStats> {
+export async function fetchDashboardFormsStats(
+  filters?: FormsFilters,
+  options: RequestSignalOptions = {},
+): Promise<DashboardFormsStats> {
   let totalQuery = apiClient
     .from("forms")
     .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
@@ -280,13 +306,13 @@ export async function fetchDashboardFormsStats(filters?: FormsFilters): Promise<
   deadlineQuery = applyFormsFilters(deadlineQuery, filters);
 
   const [totalResult, activeResult, deadlineResult] = await Promise.all([
-    runRequest("forms.fetchDashboardStats.total", () => totalQuery, {
+    runRequest("forms.fetchDashboardStats.total", () => applyAbortSignal(totalQuery, options.signal), {
       context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
     }),
-    runRequest("forms.fetchDashboardStats.active", () => activeQuery, {
+    runRequest("forms.fetchDashboardStats.active", () => applyAbortSignal(activeQuery, options.signal), {
       context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
     }),
-    runRequest("forms.fetchDashboardStats.deadline", () => deadlineQuery, {
+    runRequest("forms.fetchDashboardStats.deadline", () => applyAbortSignal(deadlineQuery, options.signal), {
       context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
     }),
   ]);
@@ -308,20 +334,20 @@ export async function fetchDashboardFormsStats(filters?: FormsFilters): Promise<
   };
 }
 
-export async function fetchFormById(id: string): Promise<SurveyForm> {
+export async function fetchFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm> {
   const { data, error } = await runRequest(
     "forms.fetchById",
-    () => apiClient.from("forms").select("*").eq("id", id).single(),
+    () => applyAbortSignal(apiClient.from("forms").select("*").eq("id", id), options.signal).single(),
     { context: { formId: id } },
   );
   if (error) throw error;
   return syncFetchedDeadlineState(data as SurveyForm);
 }
 
-export async function fetchPublicFormById(id: string): Promise<SurveyForm | null> {
+export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
   const { data, error } = await runRequest(
     "forms.fetchPublicById",
-    () => publicApiClient.from("forms").select("*").eq("id", id).maybeSingle(),
+    () => applyAbortSignal(publicApiClient.from("forms").select("*").eq("id", id), options.signal).maybeSingle(),
     { context: { formId: id } },
   );
   if (error) throw error;

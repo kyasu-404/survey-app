@@ -692,7 +692,7 @@ describe("SurveyBuilder", () => {
 
     await waitFor(() => {
       expect(creatorInstances).toHaveLength(1);
-      expect(getFormById).toHaveBeenCalledWith("template-7");
+      expect(getFormById).toHaveBeenCalledWith("template-7", expect.objectContaining({ signal: expect.any(Object) }));
     });
 
     await waitFor(() => {

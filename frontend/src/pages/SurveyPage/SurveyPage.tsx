@@ -7,6 +7,7 @@ import {
   getPrivateSurveyFormQueryKey,
   getPublicSurveyFormQueryKey,
 } from "../../entities/survey/model/queryKeys";
+import { isAbortError } from "../../shared/lib/error";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
 
@@ -36,16 +37,16 @@ export default function SurveyPage() {
   const isPrivatePreview = isPreview;
   const surveyQuery = useQuery({
     queryKey: isPrivatePreview ? getPrivateSurveyFormQueryKey(id) : getPublicSurveyFormQueryKey(id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) {
         return null;
       }
 
       if (isPrivatePreview) {
-        return getFormById(id);
+        return getFormById(id, { signal });
       }
 
-      return getPublicFormById(id);
+      return getPublicFormById(id, { signal });
     },
     enabled: isPrivatePreview ? Boolean(id) && !isAuthLoading && Boolean(user?.id) : Boolean(id),
     retry: 1,
@@ -58,7 +59,7 @@ export default function SurveyPage() {
   const showInitialSkeleton = !form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading));
 
   const errorMessage = useMemo(() => {
-    if (!surveyQuery.error) {
+    if (!surveyQuery.error || isAbortError(surveyQuery.error)) {
       return null;
     }
 

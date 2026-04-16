@@ -54,7 +54,7 @@ import {
 import { getSurveyDisplayTitle, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveyFormSummary } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
-import { getErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "../../shared/lib/qrCode";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { scheduleDebouncedQueryInvalidation, scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
@@ -226,11 +226,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   } = useInfiniteQuery({
     queryKey: formsQueryKey,
     initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       getDashboardFormsPage({
         page: pageParam,
         pageSize: DASHBOARD_PAGE_SIZE,
         filters: listFilters,
+        signal,
       }),
     getNextPageParam: (lastPage, allPages) => {
       const loadedCount = allPages.reduce((count, page) => count + page.items.length, 0);
@@ -240,18 +241,16 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
   const { data: formsStats } = useQuery({
     queryKey: formsStatsQueryKey,
-    queryFn: () => getDashboardFormsStats(listFilters),
+    queryFn: ({ signal }) => getDashboardFormsStats(listFilters, { signal }),
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
     retry: 1,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -296,7 +295,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   }, [loadedForms.length]);
 
   useEffect(() => {
-    if (formsError) {
+    if (formsError && !isAbortError(formsError)) {
       showToast(getErrorMessage(formsError, "Не удалось загрузить формы"), "error");
     }
   }, [formsError, showToast]);
@@ -575,7 +574,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     await runAction(async () => {
       const fullForm = await queryClient.fetchQuery({
         queryKey: ["form", form.id],
-        queryFn: () => getFormById(form.id),
+        queryFn: ({ signal }) => getFormById(form.id, { signal }),
         staleTime: 60_000,
       });
 
