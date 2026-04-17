@@ -3,6 +3,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 12_000;
 type RequestOptions = {
   timeoutMs?: number;
   context?: Record<string, unknown>;
+  signal?: AbortSignal;
 };
 
 export class RequestTimeoutError extends Error {
@@ -18,12 +19,20 @@ function getDurationMs(startedAt: number) {
 
 export async function runRequest<T>(
   operation: string,
-  request: () => PromiseLike<T> | T,
+  request: (signal: AbortSignal) => PromiseLike<T> | T,
   options: RequestOptions = {},
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const startedAt = Date.now();
+  const abortController = new AbortController();
+  const forwardAbort = () => abortController.abort();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (options.signal?.aborted) {
+    abortController.abort();
+  } else {
+    options.signal?.addEventListener("abort", forwardAbort, { once: true });
+  }
 
   console.info(`[api] start ${operation}`, {
     timeoutMs,
@@ -32,9 +41,10 @@ export async function runRequest<T>(
 
   try {
     const result = await Promise.race([
-      Promise.resolve(request()),
+      Promise.resolve(request(abortController.signal)),
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
+          abortController.abort();
           reject(new RequestTimeoutError(operation, timeoutMs));
         }, timeoutMs);
       }),
@@ -60,5 +70,6 @@ export async function runRequest<T>(
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
+    options.signal?.removeEventListener("abort", forwardAbort);
   }
 }

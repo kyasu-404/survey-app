@@ -32,6 +32,12 @@ type RawFormSummary = Pick<
   responses_count?: number | null;
 };
 
+type RawDashboardFormsStats = {
+  total_count?: number | string | null;
+  active_count?: number | string | null;
+  forms_with_deadline_count?: number | string | null;
+};
+
 type FetchFormsPageOptions = {
   page: number;
   pageSize: number;
@@ -68,7 +74,8 @@ const TEMPLATE_FORMS_SUMMARY_SELECT = `
   created_at
 `;
 
-const DASHBOARD_FORMS_COUNT_SELECT = "id";
+const PAGINATED_COUNT_MODE = "planned";
+const DASHBOARD_FORMS_STATS_RPC = "get_dashboard_forms_stats";
 
 function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
   if (typeof isPublic === "boolean") {
@@ -115,6 +122,33 @@ function mapRawFormSummary(form: RawFormSummary): SurveyFormSummary {
 
 function normalizeSearchValue(search: string) {
   return search.trim().replace(/[,()]/g, " ");
+}
+
+function toCount(value: number | string | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function buildDashboardStatsParams(filters?: FormsFilters) {
+  const search = filters?.search ? normalizeSearchValue(filters.search) : "";
+
+  return {
+    p_author_id: filters?.authorId ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_form_reason: filters?.formReason ?? null,
+    p_form_type: filters?.formType ?? null,
+    p_is_public: filters?.isPublic ?? null,
+    p_search: search || null,
+  };
 }
 
 function applyFormsFilters<TQuery extends {
@@ -196,8 +230,11 @@ export async function fetchForms(filters?: FormsFilters, options: RequestSignalO
 
   const { data, error } = await runRequest(
     "forms.fetchList",
-    () => applyAbortSignal(query, options.signal),
-    { context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) } },
+    (signal) => applyAbortSignal(query, signal),
+    {
+      signal: options.signal,
+      context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
+    },
   );
   if (error) throw error;
 
@@ -214,7 +251,7 @@ export async function fetchDashboardFormsPage(
 
   let query = apiClient
     .from("forms")
-    .select(DASHBOARD_FORMS_SUMMARY_SELECT, { count: "exact" })
+    .select(DASHBOARD_FORMS_SUMMARY_SELECT, { count: PAGINATED_COUNT_MODE })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .neq("form_type", TEMPLATE_FORM_TYPE);
@@ -223,8 +260,9 @@ export async function fetchDashboardFormsPage(
 
   const { data, count, error } = await runRequest(
     "forms.fetchDashboardPage",
-    () => applyAbortSignal(query, options.signal).range(rangeFrom, rangeTo),
+    (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
     {
+      signal: options.signal,
       context: {
         authorId: options.filters?.authorId ?? null,
         hasSearch: Boolean(options.filters?.search),
@@ -253,7 +291,7 @@ export async function fetchTemplateFormsPage(
 
   let query = apiClient
     .from("forms")
-    .select(TEMPLATE_FORMS_SUMMARY_SELECT, { count: "exact" })
+    .select(TEMPLATE_FORMS_SUMMARY_SELECT, { count: PAGINATED_COUNT_MODE })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
 
@@ -261,8 +299,9 @@ export async function fetchTemplateFormsPage(
 
   const { data, count, error } = await runRequest(
     "forms.fetchTemplatePage",
-    () => applyAbortSignal(query, options.signal).range(rangeFrom, rangeTo),
+    (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
     {
+      signal: options.signal,
       context: {
         authorId: options.filters?.authorId ?? null,
         isPublic: options.filters?.isPublic ?? null,
@@ -285,60 +324,36 @@ export async function fetchDashboardFormsStats(
   filters?: FormsFilters,
   options: RequestSignalOptions = {},
 ): Promise<DashboardFormsStats> {
-  let totalQuery = apiClient
-    .from("forms")
-    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
-    .neq("form_type", TEMPLATE_FORM_TYPE);
-  totalQuery = applyFormsFilters(totalQuery, filters);
-
-  let activeQuery = apiClient
-    .from("forms")
-    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
-    .neq("form_type", TEMPLATE_FORM_TYPE)
-    .eq("is_public", true);
-  activeQuery = applyFormsFilters(activeQuery, filters);
-
-  let deadlineQuery = apiClient
-    .from("forms")
-    .select(DASHBOARD_FORMS_COUNT_SELECT, { count: "exact", head: true })
-    .neq("form_type", TEMPLATE_FORM_TYPE)
-    .not("deadline_at", "is", null);
-  deadlineQuery = applyFormsFilters(deadlineQuery, filters);
-
-  const [totalResult, activeResult, deadlineResult] = await Promise.all([
-    runRequest("forms.fetchDashboardStats.total", () => applyAbortSignal(totalQuery, options.signal), {
+  const { data, error } = await runRequest<{
+    data: RawDashboardFormsStats[] | null;
+    error: unknown | null;
+  }>(
+    "forms.fetchDashboardStats",
+    (signal) => applyAbortSignal(apiClient.rpc(DASHBOARD_FORMS_STATS_RPC, buildDashboardStatsParams(filters)), signal),
+    {
+      signal: options.signal,
       context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
-    }),
-    runRequest("forms.fetchDashboardStats.active", () => applyAbortSignal(activeQuery, options.signal), {
-      context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
-    }),
-    runRequest("forms.fetchDashboardStats.deadline", () => applyAbortSignal(deadlineQuery, options.signal), {
-      context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
-    }),
-  ]);
+    },
+  );
 
-  if (totalResult.error) {
-    throw totalResult.error;
+  if (error) {
+    throw error;
   }
-  if (activeResult.error) {
-    throw activeResult.error;
-  }
-  if (deadlineResult.error) {
-    throw deadlineResult.error;
-  }
+
+  const stats = data?.[0];
 
   return {
-    totalCount: totalResult.count ?? 0,
-    activeCount: activeResult.count ?? 0,
-    formsWithDeadlineCount: deadlineResult.count ?? 0,
+    totalCount: toCount(stats?.total_count),
+    activeCount: toCount(stats?.active_count),
+    formsWithDeadlineCount: toCount(stats?.forms_with_deadline_count),
   };
 }
 
 export async function fetchFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm> {
   const { data, error } = await runRequest(
     "forms.fetchById",
-    () => applyAbortSignal(apiClient.from("forms").select("*").eq("id", id), options.signal).single(),
-    { context: { formId: id } },
+    (signal) => applyAbortSignal(apiClient.from("forms").select("*").eq("id", id), signal).single(),
+    { signal: options.signal, context: { formId: id } },
   );
   if (error) throw error;
   return syncFetchedDeadlineState(data as SurveyForm);
@@ -347,8 +362,8 @@ export async function fetchFormById(id: string, options: RequestSignalOptions = 
 export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
   const { data, error } = await runRequest(
     "forms.fetchPublicById",
-    () => applyAbortSignal(publicApiClient.from("forms").select("*").eq("id", id), options.signal).maybeSingle(),
-    { context: { formId: id } },
+    (signal) => applyAbortSignal(publicApiClient.from("forms").select("*").eq("id", id), signal).maybeSingle(),
+    { signal: options.signal, context: { formId: id } },
   );
   if (error) throw error;
 

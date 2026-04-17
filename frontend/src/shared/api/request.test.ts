@@ -47,6 +47,46 @@ describe("runRequest", () => {
     });
   });
 
+  it("aborts the request signal when the local timeout fires", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const abortListener = vi.fn();
+
+    const requestPromise = runRequest(
+      "forms.load",
+      (signal) =>
+        new Promise<string>(() => {
+          signal.addEventListener("abort", abortListener);
+        }),
+      { timeoutMs: 200 },
+    ).catch((error) => error);
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    await expect(requestPromise).resolves.toBeInstanceOf(RequestTimeoutError);
+    expect(abortListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("links an upstream abort signal to the request signal", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const upstreamController = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+
+    await runRequest(
+      "forms.load",
+      (signal) => {
+        requestSignal = signal;
+        upstreamController.abort();
+        return "ok";
+      },
+      { signal: upstreamController.signal },
+    );
+
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
   it("rethrows regular request errors and still clears the timer", async () => {
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
     vi.spyOn(console, "info").mockImplementation(() => undefined);

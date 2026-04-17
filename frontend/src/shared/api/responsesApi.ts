@@ -5,6 +5,7 @@ import { runRequest } from "./request";
 export const RESPONSES_PAGE_SIZE = 50;
 const MIN_RESPONSES_PAGE_SIZE = 1;
 const MAX_RESPONSES_PAGE_SIZE = 100;
+const PAGINATED_COUNT_MODE = "planned";
 
 export type FetchResponsesByFormOptions = {
   page?: number;
@@ -70,17 +71,17 @@ export async function fetchResponsesByForm(
 
   const { data, error, count } = await runRequest(
     "responses.fetchByForm",
-    () =>
+    (signal) =>
       applyAbortSignal(
         apiClient
           .from("responses")
-          .select("*", { count: "exact" })
+          .select("*", { count: PAGINATED_COUNT_MODE })
           .eq("form_id", formId)
           .order("created_at", { ascending: false })
           .order("id", { ascending: false }),
-        options.signal,
+        signal,
       ).range(from, to),
-    { context: { formId, page, pageSize } },
+    { signal: options.signal, context: { formId, page, pageSize } },
   );
 
   if (error) throw error;

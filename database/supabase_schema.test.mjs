@@ -199,3 +199,21 @@ test("list and search indexes support stable paginated reads", () => {
     /create index idx_forms_author_name_trgm\s+on public\.forms using gin \(author_name gin_trgm_ops\);/i,
   );
 });
+
+test("dashboard form stats use one aggregate rpc with nullable filters", () => {
+  const statsFunction = getFunctionDefinition("get_dashboard_forms_stats");
+
+  assert.doesNotMatch(statsFunction, /security definer/i);
+  assert.match(
+    statsFunction,
+    /returns table\s*\(\s*total_count bigint,\s*active_count bigint,\s*forms_with_deadline_count bigint\s*\)/i,
+  );
+  assert.match(statsFunction, /from public\.forms f/i);
+  assert.match(statsFunction, /f\.form_type <> 'template'/i);
+  assert.match(statsFunction, /count\(\*\) filter \(where f\.is_public = true\)/i);
+  assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at is not null\)/i);
+  assert.match(
+    schema,
+    /grant execute on function public\.get_dashboard_forms_stats\(text, timestamptz, timestamptz, uuid, text, text, boolean\) to authenticated, service_role;/i,
+  );
+});

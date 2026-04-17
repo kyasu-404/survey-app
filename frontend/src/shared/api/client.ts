@@ -41,6 +41,8 @@ export const apiClient = {
       supabaseClient.auth.onAuthStateChange(callback),
   },
   from: <TTable extends string>(table: TTable) => supabaseClient.from(table),
+  rpc: (functionName: string, args?: Record<string, unknown>) =>
+    supabaseClient.rpc(functionName as never, args as never),
 };
 
 export const publicApiClient = {

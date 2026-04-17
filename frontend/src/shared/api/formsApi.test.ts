@@ -15,6 +15,7 @@ vi.mock("./client", () => ({
       getCurrentUser: vi.fn(),
     },
     from: vi.fn(),
+    rpc: vi.fn(),
   },
   publicApiClient: {
     from: vi.fn(),
@@ -52,6 +53,16 @@ function createSummaryQuery(response: { data?: unknown[] | null; count?: number 
     not: vi.fn(() => query),
     or: vi.fn(() => query),
     range: vi.fn(() => Promise.resolve(response)),
+    then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+      Promise.resolve(response).then(resolve, reject),
+  };
+
+  return query;
+}
+
+function createRpcQuery(response: { data?: unknown[] | null; error: unknown | null }) {
+  const query = {
+    abortSignal: vi.fn(() => query),
     then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
       Promise.resolve(response).then(resolve, reject),
   };
@@ -215,7 +226,7 @@ describe("fetchDashboardFormsPage", () => {
     expect(listQuery.abortSignal).toHaveBeenCalledWith(signal);
   });
 
-  it("fetches lightweight dashboard cards with exact count and server range", async () => {
+  it("fetches lightweight dashboard cards with planned count and server range", async () => {
     const listQuery = createSummaryQuery({
       data: [
         {
@@ -260,11 +271,11 @@ describe("fetchDashboardFormsPage", () => {
 
     expect(listQuery.select).toHaveBeenCalledWith(
       expect.stringContaining("author_name"),
-      { count: "exact" },
+      { count: "planned" },
     );
     expect(listQuery.select).toHaveBeenCalledWith(
       expect.not.stringContaining("profiles:author_id"),
-      { count: "exact" },
+      { count: "planned" },
     );
     expect(listQuery.neq).toHaveBeenCalledWith("form_type", "template");
     expect(listQuery.range).toHaveBeenCalledWith(20, 39);
@@ -379,11 +390,11 @@ describe("fetchTemplateFormsPage", () => {
 
     expect(listQuery.select).toHaveBeenCalledWith(
       expect.stringContaining("author_name"),
-      { count: "exact" },
+      { count: "planned" },
     );
     expect(listQuery.select).toHaveBeenCalledWith(
       expect.not.stringContaining("profiles:author_id"),
-      { count: "exact" },
+      { count: "planned" },
     );
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
@@ -396,15 +407,19 @@ describe("fetchDashboardFormsStats", () => {
     vi.resetAllMocks();
   });
 
-  it("requests exact counts for total, active, and deadline-filtered forms", async () => {
-    const totalQuery = createSummaryQuery({ data: null, count: 25, error: null });
-    const activeQuery = createSummaryQuery({ data: null, count: 18, error: null });
-    const deadlineQuery = createSummaryQuery({ data: null, count: 7, error: null });
+  it("requests dashboard stats through one aggregate rpc", async () => {
+    const statsQuery = createRpcQuery({
+      data: [
+        {
+          total_count: 25,
+          active_count: 18,
+          forms_with_deadline_count: 7,
+        },
+      ],
+      error: null,
+    });
 
-    vi.mocked(apiClient.from)
-      .mockReturnValueOnce(totalQuery as never)
-      .mockReturnValueOnce(activeQuery as never)
-      .mockReturnValueOnce(deadlineQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(statsQuery as never);
 
     await expect(
       fetchDashboardFormsStats({
@@ -417,49 +432,58 @@ describe("fetchDashboardFormsStats", () => {
       formsWithDeadlineCount: 7,
     });
 
-    expect(totalQuery.select).toHaveBeenCalledWith(
-      "id",
-      { count: "exact", head: true },
-    );
-    expect(activeQuery.eq).toHaveBeenCalledWith("is_public", true);
-    expect(deadlineQuery.not).toHaveBeenCalledWith("deadline_at", "is", null);
+    expect(apiClient.from).not.toHaveBeenCalled();
+    expect(apiClient.rpc).toHaveBeenCalledWith("get_dashboard_forms_stats", {
+      p_author_id: "user-1",
+      p_date_from: null,
+      p_date_to: null,
+      p_form_reason: null,
+      p_form_type: null,
+      p_is_public: null,
+      p_search: "автор",
+    });
   });
 
-  it("passes abort signals to dashboard stats count queries", async () => {
+  it("passes abort signals to dashboard stats rpc", async () => {
     const signal = new AbortController().signal;
-    const totalQuery = createSummaryQuery({ data: null, count: 25, error: null });
-    const activeQuery = createSummaryQuery({ data: null, count: 18, error: null });
-    const deadlineQuery = createSummaryQuery({ data: null, count: 7, error: null });
+    const statsQuery = createRpcQuery({
+      data: [{ total_count: 25, active_count: 18, forms_with_deadline_count: 7 }],
+      error: null,
+    });
 
-    vi.mocked(apiClient.from)
-      .mockReturnValueOnce(totalQuery as never)
-      .mockReturnValueOnce(activeQuery as never)
-      .mockReturnValueOnce(deadlineQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(statsQuery as never);
 
     await fetchDashboardFormsStats(undefined, { signal });
 
-    expect(totalQuery.abortSignal).toHaveBeenCalledWith(signal);
-    expect(activeQuery.abortSignal).toHaveBeenCalledWith(signal);
-    expect(deadlineQuery.abortSignal).toHaveBeenCalledWith(signal);
+    expect(statsQuery.abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
   });
 
-  it("skips the profiles join for dashboard stats when there is no author search", async () => {
-    const totalQuery = createSummaryQuery({ data: null, count: 25, error: null });
-    const activeQuery = createSummaryQuery({ data: null, count: 18, error: null });
-    const deadlineQuery = createSummaryQuery({ data: null, count: 7, error: null });
+  it("passes optional dashboard stats filters as nullable rpc params", async () => {
+    const statsQuery = createRpcQuery({
+      data: [{ total_count: 0, active_count: 0, forms_with_deadline_count: 0 }],
+      error: null,
+    });
 
-    vi.mocked(apiClient.from)
-      .mockReturnValueOnce(totalQuery as never)
-      .mockReturnValueOnce(activeQuery as never)
-      .mockReturnValueOnce(deadlineQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(statsQuery as never);
 
     await fetchDashboardFormsStats({
       authorId: "user-1",
+      dateFrom: "2026-04-01T00:00:00.000Z",
+      dateTo: "2026-04-30T23:59:59.999Z",
+      formReason: "plan",
+      formType: "monitoring",
+      isPublic: true,
     });
 
-    expect(totalQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
-    expect(activeQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
-    expect(deadlineQuery.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(apiClient.rpc).toHaveBeenCalledWith("get_dashboard_forms_stats", {
+      p_author_id: "user-1",
+      p_date_from: "2026-04-01T00:00:00.000Z",
+      p_date_to: "2026-04-30T23:59:59.999Z",
+      p_form_reason: "plan",
+      p_form_type: "monitoring",
+      p_is_public: true,
+      p_search: null,
+    });
   });
 });
 
