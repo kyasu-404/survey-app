@@ -199,7 +199,7 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
     expect(screen.getByText("Тип: Анкетирование")).toBeInTheDocument();
     expect(screen.getByText("Основание: План работ")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "XLSX" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скачать XLSX" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     const refreshButton = screen.getByRole("button", { name: "Обновить" });
     expect(refreshButton).toBeInTheDocument();
@@ -212,7 +212,7 @@ describe("FormResponsesPage", () => {
     expect(container.querySelector(".responses-table-date-cell")).not.toHaveTextContent(/\d{2}:\d{2}:\d{2}/);
     expect(container.querySelectorAll(".responses-table-date-line")).toHaveLength(2);
 
-    await userEvent.click(screen.getByRole("button", { name: "XLSX" }));
+    await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
 
     await waitFor(() => {
       expect(exportToExcel).toHaveBeenCalledWith(
@@ -236,11 +236,19 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.responses-page-header-copy\s*\{[^}]*min-width:\s*0;/);
   });
 
-  it("uses a dark gradient style with a white icon for the HTML preview button", () => {
+  it("uses monochrome primary styling with matching icons for export buttons", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*border-color:\s*rgba\(39,\s*39,\s*42,\s*0\.52\);[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#27272a\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*border-color:\s*rgba\(63,\s*63,\s*70,\s*0\.72\);[^}]*background:\s*linear-gradient\(180deg,\s*#52525b,\s*#3f3f46\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button:hover,\s*button\.responses-export-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+  });
+
+  it("keeps the HTML export button in the same monochrome family", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#27272a\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#52525b,\s*#3f3f46\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.responses-html-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
   });
 
@@ -621,7 +629,7 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     getResponsesByForm.mockClear();
 
-    await userEvent.click(screen.getByRole("button", { name: "XLSX" }));
+    await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
 
     await waitFor(() => {
       expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });

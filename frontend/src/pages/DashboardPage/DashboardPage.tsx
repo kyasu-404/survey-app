@@ -167,6 +167,23 @@ function getAuthorLabel(form: SurveyFormSummary) {
   return form.author_name || form.author_email || form.author_id;
 }
 
+function formatDashboardDeadlineLabel(dateTime: string) {
+  const date = new Date(dateTime);
+
+  if (Number.isNaN(date.getTime())) {
+    return dateTime;
+  }
+
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
@@ -296,9 +313,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const isRefreshingForms = isFormsFetching && loadedForms.length > 0 && !isFetchingNextFormsPage;
   const fallbackActiveFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && form.is_public).length;
   const fallbackDeadlineFormsCount = filteredForms.filter((form) => !isTemplateForm(form) && Boolean(form.deadline_at)).length;
-  const totalFormsCount = Math.max(formsStats?.totalCount ?? 0, loadedFormsTotalCount, filteredForms.length);
-  const activeFormsCount = Math.max(formsStats?.activeCount ?? 0, fallbackActiveFormsCount);
-  const formsWithDeadlineCount = Math.max(formsStats?.formsWithDeadlineCount ?? 0, fallbackDeadlineFormsCount);
+  const totalFormsCount = formsStats ? formsStats.totalCount : Math.max(loadedFormsTotalCount, filteredForms.length);
+  const activeFormsCount = formsStats ? formsStats.activeCount : fallbackActiveFormsCount;
+  const formsWithDeadlineCount = formsStats ? formsStats.formsWithDeadlineCount : fallbackDeadlineFormsCount;
   const hasMoreForms = Boolean(hasNextFormsPage);
 
   useLayoutEffect(() => {
@@ -777,14 +794,17 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             const actionMenuOpen = openedMenu?.kind === "actions" && openedMenu.formId === form.id;
             const statusMenuOpen = openedMenu?.kind === "status" && openedMenu.formId === form.id;
             const createdAtLabel = new Date(form.created_at).toLocaleString("ru-RU");
-            const deadlineLabel = form.deadline_at ? new Date(form.deadline_at).toLocaleString("ru-RU") : null;
+            const deadlineLabel = form.deadline_at ? formatDashboardDeadlineLabel(form.deadline_at) : null;
             const hasReachedResponseLimit = isResponseLimitReached(responsesCount, form.max_responses);
             const formTypeLabel = getFormTypeLabel(form.form_type);
             const formReasonLabel = getFormReasonLabel(form.form_reason);
 
             const metaItems = [
-              !isTemplate ? (
-                <span key="author" className="dashboard-meta-item">
+              !isTemplate && viewMode === "all" ? (
+                <span
+                  key="author"
+                  className={`dashboard-meta-item ${isOwnForm ? "dashboard-meta-item-author-own" : ""}`.trim()}
+                >
                   {getAuthorLabel(form)}
                 </span>
               ) : null,
@@ -1105,8 +1125,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
       {deadlineEditor && (
         <div className="modal-backdrop">
-          <div className="modal-card card deadline-modal">
-            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Дедлайн формы</h3>
+          <div
+            className="modal-card card deadline-modal dashboard-settings-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Дедлайн формы"
+          >
+            <h3 className="deadline-modal-title">Дедлайн формы</h3>
             <p className="deadline-modal-subtitle">{deadlineEditor.form.title}</p>
             <label className="deadline-field">
               <span>Дата и время окончания</span>
@@ -1124,12 +1149,17 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               При наступлении дедлайна форма автоматически закроется, а дедлайн снимется.
             </p>
             <div className="deadline-modal-actions">
-              <button type="button" onClick={() => setDeadlineEditor(null)} disabled={isFormActionPending(deadlineEditor.form.id)}>
+              <button
+                type="button"
+                className="deadline-action-cancel-button"
+                onClick={() => setDeadlineEditor(null)}
+                disabled={isFormActionPending(deadlineEditor.form.id)}
+              >
                 Отмена
               </button>
               <button
                 type="button"
-                className="deadline-clear-button"
+                className="deadline-clear-button deadline-action-clear-button"
                 onClick={() =>
                   runAction(
                     () => deadlineMutation.mutateAsync({ id: deadlineEditor.form.id, deadlineAt: null }),
@@ -1149,6 +1179,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </button>
               <button
                 type="button"
+                className="deadline-action-save-button"
                 onClick={() => {
                   const normalizedInput = deadlineEditor.value.trim();
                   if (!normalizedInput) {
@@ -1185,8 +1216,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
       {responseLimitEditor && (
         <div className="modal-backdrop">
-          <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Ограничение ответов">
-            <h3 style={{ marginTop: 0, marginBottom: 6 }}>Ограничение ответов</h3>
+          <div
+            className="modal-card card deadline-modal dashboard-settings-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ограничение ответов"
+          >
+            <h3 className="deadline-modal-title">Ограничение ответов</h3>
             <p className="deadline-modal-subtitle">{responseLimitEditor.form.title}</p>
             <label className="deadline-field">
               <span>Максимум ответов</span>
@@ -1209,6 +1245,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
             <div className="deadline-modal-actions">
               <button
                 type="button"
+                className="deadline-action-cancel-button"
                 onClick={() => setResponseLimitEditor(null)}
                 disabled={isFormActionPending(responseLimitEditor.form.id)}
               >
@@ -1216,7 +1253,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </button>
               <button
                 type="button"
-                className="deadline-clear-button"
+                className="deadline-clear-button deadline-action-clear-button"
                 onClick={() =>
                   runAction(
                     () => responseLimitMutation.mutateAsync({ id: responseLimitEditor.form.id, maxResponses: null }),
@@ -1236,6 +1273,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
               </button>
               <button
                 type="button"
+                className="deadline-action-save-button"
                 onClick={() => {
                   const normalizedInput = responseLimitEditor.value.trim();
                   const parsedLimit = Number(normalizedInput);
@@ -1297,8 +1335,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
                 <h3 className="dashboard-qr-modal-title">QR-код формы</h3>
                 <p className="dashboard-qr-modal-copy">{qrDialog.title}</p>
               </div>
-              <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть QR-код" onClick={() => setQrDialog(null)}>
-                x
+              <button
+                type="button"
+                className="dashboard-qr-close-button"
+                aria-label="Закрыть QR-код"
+                onClick={() => setQrDialog(null)}
+              >
+                ×
               </button>
             </div>
             <div className="dashboard-qr-download-actions">

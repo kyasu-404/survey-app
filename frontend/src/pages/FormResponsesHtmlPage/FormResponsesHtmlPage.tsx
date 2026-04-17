@@ -95,12 +95,12 @@ export default function FormResponsesHtmlPage() {
     <main className="responses-html-page">
       <div className="responses-html-actions" aria-label="Действия HTML">
         <button type="button" className="responses-export-button" onClick={handleDownload} disabled={!canUseHtml}>
-          <span>Скачать HTML страницы</span>
+          <span>Скачать HTML</span>
           <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
         </button>
         <button
           type="button"
-          className="responses-export-button responses-print-button responses-print-button-orange"
+          className="responses-export-button responses-print-button responses-print-button-secondary"
           onClick={handlePrint}
           disabled={!canUseHtml}
         >

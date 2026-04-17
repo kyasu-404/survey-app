@@ -90,12 +90,22 @@ describe("FormResponsesHtmlPage", () => {
     expect(css).toMatch(/\.responses-html-preview table\s*\{[^}]*font-size:\s*13px;/);
   });
 
-  it("styles the print button as yellow with dark text", () => {
+  it("styles the print button as a secondary monochrome action with a matching icon", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.responses-print-button-orange\s*\{[^}]*border-color:\s*rgba\(234,\s*179,\s*8,\s*0\.42\);[^}]*background:\s*linear-gradient\(180deg,\s*#fde68a,\s*#facc15\);[^}]*color:\s*#111827;/);
-    expect(css).toMatch(/\.responses-print-button-orange:hover,\s*\.responses-print-button-orange:focus-visible\s*\{[^}]*border-color:\s*rgba\(202,\s*138,\s*4,\s*0\.48\);[^}]*background:\s*linear-gradient\(180deg,\s*#fef08a,\s*#eab308\);[^}]*color:\s*#111827;/);
-    expect(css).toMatch(/\.responses-print-button-orange\s+\.toolbar-icon\s*\{[^}]*filter:\s*none;/);
+    expect(css).toMatch(/\.responses-print-button-secondary\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#f4f4f5\);[^}]*color:\s*#111827;/);
+    expect(css).toMatch(/\.responses-print-button-secondary:hover,\s*\.responses-print-button-secondary:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#f4f4f5,\s*#e4e4e7\);[^}]*color:\s*#111827;/);
+    expect(css).toMatch(/\.responses-print-button-secondary\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\);/);
+  });
+
+  it("uses monochrome primary styling with matching icons for export buttons and borders every HTML response table cell", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/button\.responses-export-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button:hover,\s*button\.responses-export-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+    expect(css).toMatch(/\.responses-html-preview th,\s*\.responses-html-preview td\s*\{[^}]*border:\s*1px solid #d8dee8;/);
+    expect(css).toMatch(/\.responses-html-preview tr:last-child td\s*\{[^}]*border-bottom:\s*1px solid #d8dee8;/);
   });
 
   it("renders generated static HTML preview actions and response rows", async () => {
@@ -142,8 +152,8 @@ describe("FormResponsesHtmlPage", () => {
     const { container } = renderHtmlPage();
 
     expect(await screen.findByRole("heading", { name: "Форма обратной связи" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Скачать HTML страницы" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-orange");
+    expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-secondary");
     expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
     expect(screen.getByText("Анна")).toBeInTheDocument();
     expect(screen.getByText("Хорошее")).toBeInTheDocument();
@@ -181,7 +191,7 @@ describe("FormResponsesHtmlPage", () => {
 
     renderHtmlPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Скачать HTML страницы" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Скачать HTML" }));
 
     await waitFor(() => {
       expect(downloadHtmlDocument).toHaveBeenCalledWith(

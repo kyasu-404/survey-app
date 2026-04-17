@@ -392,6 +392,24 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Форма 21")).toBeInTheDocument();
   });
 
+  it("shows exact stats instead of an inflated planned list count", async () => {
+    const forms = Array.from({ length: 4 }, (_, index) => createForm(index + 1, { deadline_at: null }));
+
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage(forms, 58));
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
+
+    renderPage();
+
+    expect(await screen.findByText("Форма 4")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Статистика форм" }));
+
+    const statsPopover = await screen.findByRole("dialog", { name: "Сводка по формам" });
+    expect(within(statsPopover).queryByText("58")).not.toBeInTheDocument();
+    expect(within(statsPopover).getAllByText("4")).toHaveLength(2);
+    expect(within(statsPopover).getByText("0")).toBeInTheDocument();
+  });
+
   it("debounces dashboard search before requesting filtered forms and stats", async () => {
     getDashboardFormsPage.mockResolvedValue(createDashboardPage([]));
     getDashboardFormsStats.mockResolvedValue(createDashboardStats([], 0));
@@ -707,6 +725,9 @@ describe("DashboardPage", () => {
     expect(deleteButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
 
     expect(container.querySelector(".dashboard-meta-item-deadline .dashboard-meta-icon")).toBeInTheDocument();
+    const deadlineText = container.querySelector(".dashboard-meta-item-deadline")?.textContent ?? "";
+    expect(deadlineText).toMatch(/открыта до \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
+    expect(deadlineText).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   });
 
   it("opens a generated QR dialog and downloads the QR on request", async () => {
@@ -745,6 +766,7 @@ describe("DashboardPage", () => {
     });
 
     const dialog = await screen.findByRole("dialog", { name: "QR-код формы QR форма" });
+    expect(within(dialog).getByRole("button", { name: "Закрыть QR-код" })).toHaveClass("dashboard-qr-close-button");
     expect(within(dialog).getByRole("button", { name: "PNG" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "SVG" })).toBeInTheDocument();
     expect(within(dialog).getByAltText("QR-код формы QR форма")).toHaveAttribute("src", expect.stringMatching(/^data:image\/svg\+xml/));
@@ -832,6 +854,22 @@ describe("DashboardPage", () => {
     expect(css).not.toContain("border-width: 3px;");
   });
 
+  it("changes the form status trigger color on hover", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(62,\s*62,\s*62,\s*0\.98\),\s*rgba\(24,\s*24,\s*24,\s*1\)\s*55%,\s*rgba\(5,\s*5,\s*5,\s*1\)\);/);
+    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#d7d7d7\);/);
+  });
+
+  it("uses requested colors for dashboard deadline, limit, and QR close actions", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-clear-button\s*\{[^}]*background:\s*#fee2e2;[^}]*color:\s*#b91c1c;/);
+    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.dashboard-qr-close-button\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*#b91c1c;[^}]*font-size:\s*3\.2rem;[^}]*font-weight:\s*800;/);
+  });
+
   it("opens form action menus to the left of the trigger instead of below the card", () => {
     const css = readAppCss();
 
@@ -909,9 +947,37 @@ describe("DashboardPage", () => {
     renderPage("mine");
 
     expect(await screen.findByText("Обычная форма")).toBeInTheDocument();
+    expect(screen.queryByText("Автор 1")).not.toBeInTheDocument();
     expect(screen.queryByText("Шаблон отчёта")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Тип формы" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Основание формы" })).toBeInTheDocument();
+  });
+
+  it("marks the current user's author name subtly on the all forms dashboard", async () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.dashboard-meta-item-author-own\s*\{[^}]*color:\s*#2f6f4e;[^}]*font-weight:\s*800;/);
+
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Своя форма",
+          author_id: "user-1",
+          author_name: "Автор текущий",
+        }),
+        createForm(2, {
+          title: "Чужая форма",
+          author_id: "user-2",
+          author_name: "Автор другой",
+        }),
+      ]),
+    );
+
+    renderPage("all");
+
+    expect(await screen.findByText("Своя форма")).toBeInTheDocument();
+    expect(screen.getByText("Автор текущий")).toHaveClass("dashboard-meta-item-author-own");
+    expect(screen.getByText("Автор другой")).not.toHaveClass("dashboard-meta-item-author-own");
   });
 
   it("renders the delete modal action wrapper for dashboard styling", async () => {
@@ -1002,6 +1068,11 @@ describe("DashboardPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Статус формы Форма без дедлайна: Активна" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Установить дедлайн" }));
 
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Дедлайн формы" })).toHaveClass("deadline-modal-title");
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toHaveClass("deadline-action-cancel-button");
+    expect(within(dialog).getByRole("button", { name: "Снять дедлайн" })).toHaveClass("deadline-action-clear-button");
+    expect(within(dialog).getByRole("button", { name: "Сохранить" })).toHaveClass("deadline-action-save-button");
     expect(screen.getByRole("button", { name: "Снять дедлайн" })).toBeDisabled();
   });
 
@@ -1036,6 +1107,7 @@ describe("DashboardPage", () => {
     await userEvent.click(within(statusMenu).getByRole("menuitem", { name: "Ограничить ответы" }));
 
     const limitDialog = await screen.findByRole("dialog", { name: "Ограничение ответов" });
+    expect(within(limitDialog).getByRole("heading", { name: "Ограничение ответов" })).toHaveClass("deadline-modal-title");
     const limitInput = within(limitDialog).getByLabelText("Максимум ответов");
     const clearButton = within(limitDialog).getByRole("button", { name: "Снять ограничение" });
 

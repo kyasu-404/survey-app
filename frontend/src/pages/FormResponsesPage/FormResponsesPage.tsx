@@ -10,7 +10,7 @@ import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/mode
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
-import previewIcon from "../../img/preview.svg";
+import useIcon from "../../img/use.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
@@ -263,7 +263,7 @@ export default function FormResponsesPage() {
           </div>
           <div className="responses-page-toolbar">
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
-              <span>XLSX</span>
+              <span>Скачать XLSX</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <button
@@ -273,7 +273,7 @@ export default function FormResponsesPage() {
               disabled={isLoading}
             >
               <span>HTML</span>
-              <img src={previewIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <RefreshButton
               isRefreshing={isRefreshing}

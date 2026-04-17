@@ -47,7 +47,7 @@ describe("fetchResponsesByForm", () => {
     vi.clearAllMocks();
   });
 
-  it("loads a bounded response page with a planned total count", async () => {
+  it("loads a bounded response page with an exact total count", async () => {
     const response = {
       id: "response-1",
       form_id: "form-1",
@@ -71,7 +71,7 @@ describe("fetchResponsesByForm", () => {
       totalPages: 3,
     });
 
-    expect(query.select).toHaveBeenCalledWith("*", { count: "planned" });
+    expect(query.select).toHaveBeenCalledWith("*", { count: "exact" });
     expect(query.eq).toHaveBeenCalledWith("form_id", "form-1");
     expect(query.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(query.order).toHaveBeenCalledWith("id", { ascending: false });
