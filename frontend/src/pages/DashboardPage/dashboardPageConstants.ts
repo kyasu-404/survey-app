@@ -1,0 +1,3 @@
+export const DASHBOARD_PAGE_SIZE = 20;
+export const DASHBOARD_SEARCH_DEBOUNCE_MS = 300;
+export const MAX_TIMEOUT_MS = 2_147_483_647;
