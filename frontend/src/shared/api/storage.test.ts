@@ -137,7 +137,7 @@ describe("storage api", () => {
     );
   });
 
-  it("removes public-form files with the stateless client when the browser session is stale", async () => {
+  it("rejects client-side deletion of anonymous public-form files", async () => {
     const remove = vi.fn().mockResolvedValue({ error: null });
 
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
@@ -146,12 +146,14 @@ describe("storage api", () => {
     } as never);
     vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ remove } as never);
 
-    await removeFileFromStorage("public/form-1/file-id.txt", {
-      allowAnonymous: true,
-      formId: "form-1",
-    });
+    await expect(
+      removeFileFromStorage("public/form-1/file-id.txt", {
+        allowAnonymous: true,
+        formId: "form-1",
+      }),
+    ).rejects.toThrow("Публичные файлы удаляются только сервером");
 
-    expect(remove).toHaveBeenCalledWith(["public/form-1/file-id.txt"]);
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it("extracts raw storage paths from file values stored in responses", () => {

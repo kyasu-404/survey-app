@@ -1,4 +1,4 @@
-import { apiClient, publicApiClient } from "./client";
+import { apiClient, publicApiClient, supabaseClient } from "./client";
 import { applyDeadlineStatePatch, buildDeadlineUpdatePayload, getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
 import { TEMPLATE_FORM_TYPE } from "../../entities/survey/model/surveyModel";
 import type {
@@ -76,6 +76,34 @@ const TEMPLATE_FORMS_SUMMARY_SELECT = `
 
 const PAGINATED_COUNT_MODE = "planned";
 const DASHBOARD_FORMS_STATS_RPC = "get_dashboard_forms_stats";
+
+async function getFunctionErrorMessage(error: unknown, response?: Response): Promise<string> {
+  const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
+
+  if (errorResponse instanceof Response) {
+    const contentType = errorResponse.headers.get("Content-Type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      const payload: unknown = await errorResponse
+        .clone()
+        .json()
+        .catch((): null => null);
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof payload.error === "string"
+          ? payload.error.trim()
+          : "";
+
+      if (message) {
+        return message;
+      }
+    }
+  }
+
+  return error instanceof Error && error.message.trim() ? error.message : "Не удалось удалить форму";
+}
 
 function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
   if (typeof isPublic === "boolean") {
@@ -513,12 +541,30 @@ export async function updateFormResponseLimit(id: string, maxResponses: number |
 }
 
 export async function deleteForm(id: string) {
-  const { error } = await runRequest(
-    "forms.delete",
-    () => apiClient.from("forms").delete().eq("id", id),
-    { context: { formId: id } },
+  const {
+    data: { session },
+  } = await runRequest("auth.getSession", () => apiClient.auth.getCurrentSession(), { context: { formId: id } });
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
+  const { error, response } = await runRequest(
+    "functions.form-admin",
+    () =>
+      supabaseClient.functions.invoke("form-admin", {
+        body: { action: "delete", formId: id },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }),
+    { context: { formId: id, action: "delete" } },
   );
-  if (error) throw error;
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error, response));
+  }
 }
 
 export async function duplicateForm(form: SurveyForm, authorId: string) {

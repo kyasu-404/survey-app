@@ -5,14 +5,21 @@ import {
   fetchForms,
   fetchTemplateFormsPage,
   insertForm,
+  deleteForm,
   updateFormResponseLimit,
 } from "./formsApi";
 import { apiClient } from "./client";
 
 vi.mock("./client", () => ({
+  supabaseClient: {
+    functions: {
+      invoke: vi.fn(),
+    },
+  },
   apiClient: {
     auth: {
       getCurrentUser: vi.fn(),
+      getCurrentSession: vi.fn(),
     },
     from: vi.fn(),
     rpc: vi.fn(),
@@ -83,6 +90,15 @@ function createInsertQuery() {
 function createUpdateQuery() {
   const query = {
     update: vi.fn(() => query),
+    eq: vi.fn(() => Promise.resolve({ error: null })),
+  };
+
+  return query;
+}
+
+function createDeleteQuery() {
+  const query = {
+    delete: vi.fn(() => query),
     eq: vi.fn(() => Promise.resolve({ error: null })),
   };
 
@@ -532,6 +548,34 @@ describe("insertForm", () => {
         is_public: true,
       }),
     );
+  });
+
+  it("deletes forms through the server cleanup function instead of direct table delete", async () => {
+    const deleteQuery = createDeleteQuery();
+    const invoke = vi.fn().mockResolvedValue({ data: { success: true }, error: null });
+
+    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({
+      data: {
+        session: {
+          access_token: "access-token",
+        },
+      },
+      error: null,
+    } as never);
+    vi.mocked(apiClient.from).mockReturnValue(deleteQuery as never);
+
+    const clientModule = await import("./client");
+    vi.mocked(clientModule.supabaseClient.functions.invoke).mockImplementation(invoke);
+
+    await deleteForm("form-1");
+
+    expect(invoke).toHaveBeenCalledWith("form-admin", {
+      body: { action: "delete", formId: "form-1" },
+      headers: {
+        Authorization: "Bearer access-token",
+      },
+    });
+    expect(deleteQuery.delete).not.toHaveBeenCalled();
   });
 });
 

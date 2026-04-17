@@ -14,10 +14,18 @@ import {
   resolveSurveyFileValueContent,
   uploadFileToStorage,
 } from "../../shared/api/storage";
+import {
+  cleanupExpiredSurveyResponseDrafts,
+  clearSurveyResponseDraft,
+  getSurveyResponseDraftStorageKey,
+  loadSurveyResponseDraft,
+  saveSurveyResponseDraft,
+} from "./responseDraft";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
+  respondentId?: string;
   initialData?: Record<string, unknown>;
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
@@ -27,7 +35,21 @@ type DropdownPopupModel = {
   focusFirstInputSelector?: string;
 };
 
+type SurveyEventLike = {
+  add: (handler: (sender: Model) => void) => void;
+  remove: (handler: (sender: Model) => void) => void;
+};
+
+type SurveyModelWithOptionalUIState = Model & {
+  onUIStateChanged?: SurveyEventLike;
+  uiState?: unknown;
+};
+
 const disabledDropdownAutofocusSelector = ".surveyjs-dropdown-autofocus-disabled";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function getDropdownPopupModel(question: unknown): DropdownPopupModel | undefined {
   if (!question || typeof question !== "object" || !("dropdownListModel" in question)) {
@@ -71,9 +93,22 @@ function normalizeSurveyFileQuestions(value: unknown): unknown {
   return normalizedObject;
 }
 
+function getSurveyUIState(model: Model): Record<string, unknown> | undefined {
+  const uiState = (model as SurveyModelWithOptionalUIState).uiState;
+  return isRecord(uiState) ? uiState : undefined;
+}
+
+function restoreSurveyUIState(model: Model, uiState: Record<string, unknown>) {
+  const modelWithUIState = model as SurveyModelWithOptionalUIState;
+  if ("uiState" in modelWithUIState) {
+    modelWithUIState.uiState = uiState;
+  }
+}
+
 export function SurveyFormRenderer({
   schema,
   formId,
+  respondentId,
   initialData,
   isPreview = false,
   allowAnonymousUploads = false,
@@ -83,6 +118,10 @@ export function SurveyFormRenderer({
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
   const allowProgrammaticCompleteRef = useRef(false);
+  const responseDraftStorageKey = useMemo(
+    () => (isPreview ? null : getSurveyResponseDraftStorageKey(formId, respondentId)),
+    [formId, isPreview, respondentId],
+  );
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
     const resolvedSchema = normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema;
@@ -93,6 +132,17 @@ export function SurveyFormRenderer({
     nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
     if (initialData) {
       nextModel.data = initialData;
+    } else {
+      const savedDraft = loadSurveyResponseDraft(responseDraftStorageKey);
+      if (savedDraft) {
+        nextModel.data = savedDraft.data;
+        if (typeof savedDraft.currentPageNo === "number") {
+          nextModel.currentPageNo = savedDraft.currentPageNo;
+        }
+        if (savedDraft.uiState) {
+          restoreSurveyUIState(nextModel, savedDraft.uiState);
+        }
+      }
     }
     if (isPreview) {
       nextModel.readOnly = true;
@@ -100,7 +150,7 @@ export function SurveyFormRenderer({
       nextModel.showNavigationButtons = false;
     }
     return nextModel;
-  }, [initialData, isPreview, schema]);
+  }, [initialData, isPreview, responseDraftStorageKey, schema]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -135,6 +185,17 @@ export function SurveyFormRenderer({
         model.onDownloadFile.remove(handleDownloadFile);
       };
     }
+
+    cleanupExpiredSurveyResponseDrafts();
+
+    const saveCurrentDraft = (sender: Model) => {
+      saveSurveyResponseDraft(responseDraftStorageKey, {
+        data: sender.data as Record<string, unknown>,
+        uiState: getSurveyUIState(sender),
+        currentPageNo: sender.currentPageNo,
+      });
+    };
+    const uiStateChangedEvent = (model as SurveyModelWithOptionalUIState).onUIStateChanged;
 
     const handleUploadFiles = async (
       _sender: Model,
@@ -198,6 +259,7 @@ export function SurveyFormRenderer({
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
         await submitResponseMutation.mutateAsync({ formId: payload.formId, data: payload.answers });
+        clearSurveyResponseDraft(responseDraftStorageKey);
         allowProgrammaticCompleteRef.current = true;
         sender.doComplete();
         showToast("Ответ успешно отправлен", "success");
@@ -212,18 +274,24 @@ export function SurveyFormRenderer({
       }
     };
 
+    model.onValueChanged.add(saveCurrentDraft);
+    model.onCurrentPageChanged.add(saveCurrentDraft);
+    uiStateChangedEvent?.add(saveCurrentDraft);
     model.onUploadFiles.add(handleUploadFiles);
     model.onClearFiles.add(handleClearFiles);
     model.onCompleting.add(handleCompleting);
 
     return () => {
+      model.onValueChanged.remove(saveCurrentDraft);
+      model.onCurrentPageChanged.remove(saveCurrentDraft);
+      uiStateChangedEvent?.remove(saveCurrentDraft);
       model.onUploadFiles.remove(handleUploadFiles);
       model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
       model.onDownloadFile.remove(handleDownloadFile);
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
-  }, [allowAnonymousUploads, formId, isPreview, model, showToast, submitResponseMutation]);
+  }, [allowAnonymousUploads, formId, isPreview, model, responseDraftStorageKey, showToast, submitResponseMutation]);
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>

@@ -98,32 +98,15 @@ using (
   bucket_id = 'survey-files'
   and (
     (storage.foldername(name))[1] = (select auth.uid())::text
-    or (
-      (storage.foldername(name))[1] = 'public'
-      and exists (
-        select 1
-        from public.forms f
-        where f.id::text = (storage.foldername(name))[2]
-          and f.is_public = true
-          and (f.deadline_at is null or f.deadline_at > now())
-      )
+    or exists (
+      select 1
+      from public.forms f
+      where f.id::text = (storage.foldername(name))[2]
+        and (
+          f.author_id = (select auth.uid())
+          or (select public.request_role()) = 'admin'
+        )
     )
-  )
-);
-
-create policy "survey files delete anon"
-on storage.objects
-for delete
-to anon
-using (
-  bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = 'public'
-  and exists (
-    select 1
-    from public.forms f
-    where f.id::text = (storage.foldername(name))[2]
-      and f.is_public = true
-      and (f.deadline_at is null or f.deadline_at > now())
   )
 );
 

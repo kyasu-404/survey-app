@@ -99,6 +99,7 @@ export default function SurveyPage() {
         <SurveyRenderer
           schema={form.schema}
           formId={form.id}
+          respondentId={user?.id}
           isPreview={isPreview}
           allowAnonymousUploads={form.is_public}
         />

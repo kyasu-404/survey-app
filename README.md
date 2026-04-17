@@ -437,6 +437,23 @@ supabase functions deploy user-admin
 
 > Для корректного отображения статуса блокировки пользователей в таблице используется поле `public.profiles.is_disabled`.
 
+## Edge Function для удаления форм и файлов
+
+Удаление формы выполняется через Edge Function `form-admin`, чтобы вместе со строкой `forms` удалить объекты из bucket `survey-files`. Функция принимает JWT текущего пользователя, разрешает удаление автору формы или администратору, удаляет Storage-объекты с префиксом `*/<formId>/*`, затем удаляет форму.
+
+### Как включить
+
+1. cp -R ./functions/form-admin ./supabase/docker/volumes/functions/
+2. cd ./supabase/docker/
+3. docker compose restart functions --no-deps
+
+```bash
+supabase functions deploy form-admin
+```
+
+4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions.
+5. Если frontend работает не на локальных origin-ах, задайте `FORM_ADMIN_ALLOWED_ORIGINS` списком origin-ов через запятую. Bucket можно переопределить переменной `SURVEY_FILES_BUCKET`; по умолчанию используется `survey-files`.
+
 ## Запуск frontend
 
 ```bash

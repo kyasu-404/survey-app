@@ -4,6 +4,7 @@ import { SurveyFormRenderer } from "../../features/render-form/SurveyFormRendere
 type SurveyRendererProps = {
   schema: SurveySchema;
   formId: string;
+  respondentId?: string;
   initialData?: Record<string, unknown>;
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
@@ -12,6 +13,7 @@ type SurveyRendererProps = {
 export function SurveyRenderer({
   schema,
   formId,
+  respondentId,
   initialData,
   isPreview = false,
   allowAnonymousUploads = false,
@@ -20,6 +22,7 @@ export function SurveyRenderer({
     <SurveyFormRenderer
       schema={schema}
       formId={formId}
+      respondentId={respondentId}
       initialData={initialData}
       isPreview={isPreview}
       allowAnonymousUploads={allowAnonymousUploads}

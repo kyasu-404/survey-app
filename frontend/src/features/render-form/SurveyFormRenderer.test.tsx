@@ -8,6 +8,7 @@ const {
   componentCollectionGetByName,
   createdModels,
   createdModelSchemas,
+  includeUIStateEvent,
   mutateAsync,
   registeredCustomQuestionTypes,
   uploadFileToStorage,
@@ -26,6 +27,7 @@ const {
     componentCollectionGetByName,
     createdModels: [] as Array<Record<string, unknown>>,
     createdModelSchemas: [] as Array<Record<string, unknown>>,
+    includeUIStateEvent: { current: true },
     mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
     uploadFileToStorage: vi.fn(),
@@ -62,12 +64,17 @@ vi.mock("survey-core", () => ({
     completedHtml = "";
     data: Record<string, unknown> = {};
     fitToContainer = true;
+    currentPageNo = 0;
+    uiState: Record<string, unknown> = {};
     questionNames: string[] = [];
     onCompleting = new FakeSurveyEvent();
     onUploadFiles = new FakeSurveyEvent();
     onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
     onOpenDropdownMenu = new FakeSurveyEvent();
+    onValueChanged = new FakeSurveyEvent();
+    onCurrentPageChanged = new FakeSurveyEvent();
+    onUIStateChanged = includeUIStateEvent.current ? new FakeSurveyEvent() : undefined;
     doComplete = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
@@ -142,6 +149,8 @@ describe("SurveyFormRenderer", () => {
     componentCollectionGetByName.mockClear();
     uploadFileToStorage.mockReset();
     mutateAsync.mockRejectedValue(new Error("api failed"));
+    includeUIStateEvent.current = true;
+    window.localStorage.clear();
   });
 
   it("shows error toast when API submission fails", async () => {
@@ -233,6 +242,168 @@ describe("SurveyFormRenderer", () => {
       }),
     );
     expect(screen.getByTestId("survey-question-names")).toHaveTextContent("school,phone,email");
+  });
+
+  it("restores a fresh respondent draft before the survey is rendered", () => {
+    window.localStorage.setItem(
+      "survey-response:draft:user-1:form-1",
+      JSON.stringify({
+        data: { email: "saved@example.com" },
+        uiState: { questions: { email: { collapsed: true } } },
+        currentPageNo: 1,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        schema={{
+          pages: [
+            { name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] },
+            { name: "page2", elements: [{ type: "text", name: "name", title: "Имя" }] },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      currentPageNo: number;
+      uiState: Record<string, unknown>;
+    };
+
+    expect(model.data).toEqual({ email: "saved@example.com" });
+    expect(model.currentPageNo).toBe(1);
+    expect(model.uiState).toEqual({ questions: { email: { collapsed: true } } });
+  });
+
+  it("saves respondent draft data and UI state when answers change", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      currentPageNo: number;
+      uiState: Record<string, unknown>;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+    };
+    model.data = { email: "draft@example.com" };
+    model.currentPageNo = 0;
+    model.uiState = { questions: { email: { collapsed: false } } };
+
+    await model.onValueChanged.fire(model);
+
+    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+      data: { email: "draft@example.com" },
+      uiState: { questions: { email: { collapsed: false } } },
+      currentPageNo: 0,
+      updatedAt: expect.any(String),
+    });
+  });
+
+  it("keeps saving drafts when the installed SurveyJS runtime has no UI state event", async () => {
+    includeUIStateEvent.current = false;
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+    };
+    model.data = { email: "draft@example.com" };
+
+    await model.onValueChanged.fire(model);
+
+    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+      data: { email: "draft@example.com" },
+      updatedAt: expect.any(String),
+    });
+  });
+
+  it("uses a stable anonymous respondent draft key when no user id is available", async () => {
+    window.localStorage.setItem("survey-response:draft:anonymous-id", "anon-browser");
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "text", name: "name", title: "Имя" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+    };
+    model.data = { name: "Анонимный респондент" };
+
+    await model.onValueChanged.fire(model);
+
+    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:anon-browser:form-1") ?? "{}")).toMatchObject({
+      data: { name: "Анонимный респондент" },
+    });
+  });
+
+  it("drops stale respondent drafts instead of restoring them", () => {
+    window.localStorage.setItem(
+      "survey-response:draft:user-1:form-1",
+      JSON.stringify({
+        data: { email: "old@example.com" },
+        updatedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as { data: Record<string, unknown> };
+
+    expect(model.data).toEqual({});
+    expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+  });
+
+  it("clears the respondent draft after a successful submission", async () => {
+    mutateAsync.mockResolvedValueOnce(undefined);
+    window.localStorage.setItem(
+      "survey-response:draft:user-1:form-1",
+      JSON.stringify({
+        data: { email: "saved@example.com" },
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={{ pages: [] }} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+    });
   });
 
   it("keeps SurveyJS dropdown menus from reflowing the survey container", async () => {

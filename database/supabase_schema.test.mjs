@@ -3,6 +3,21 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const schema = readFileSync(new URL("./supabase_schema.sql", import.meta.url), "utf8");
+const apiRoleGrantsMigration = readFileSync(
+  new URL("./migrations/202604141147_api_role_grants.sql", import.meta.url),
+  "utf8",
+);
+const publicStoragePoliciesMigration = readFileSync(
+  new URL("./migrations/202604141430_storage_policies_for_public_uploads.sql", import.meta.url),
+  "utf8",
+);
+const restrictedStorageDeletesMigration = readFileSync(
+  new URL("./migrations/202604170130_restrict_public_storage_deletes.sql", import.meta.url),
+  "utf8",
+);
+
+const safeFormsUpdateColumns =
+  "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
 
 function getFunctionDefinition(functionName) {
   const pattern = new RegExp(
@@ -20,6 +35,14 @@ function getPolicyDefinition(policyName) {
   const match = schema.match(pattern);
 
   assert.ok(match, `Policy ${policyName} should exist`);
+  return match[0];
+}
+
+function getMigrationPolicyDefinition(migration, policyName) {
+  const pattern = new RegExp(`create policy "${policyName}"[\\s\\S]*?;`, "i");
+  const match = migration.match(pattern);
+
+  assert.ok(match, `Policy ${policyName} should exist in migration`);
   return match[0];
 }
 
@@ -108,13 +131,64 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
   assert.match(schema, /grant select on table public\.forms to anon;/i);
-  assert.match(schema, /grant select, insert, update, delete on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant select, insert, delete on table public\.forms to authenticated;/i);
+  assert.match(schema, /revoke update on table public\.forms from authenticated;/i);
+  assert.match(
+    schema,
+    new RegExp(`grant update \\(${safeFormsUpdateColumns}\\) on table public\\.forms to authenticated;`, "i"),
+  );
+  assert.doesNotMatch(
+    schema,
+    /grant select, insert, update, delete on table public\.forms to authenticated;/i,
+  );
   assert.match(schema, /grant insert on table public\.responses to anon;/i);
   assert.match(schema, /grant select, insert on table public\.responses to authenticated;/i);
   assert.match(
     schema,
     /grant select, insert, update, delete on table public\.profiles, public\.forms, public\.responses to service_role;/i,
   );
+});
+
+test("api role grants migration restricts form updates to client-editable columns", () => {
+  assert.match(apiRoleGrantsMigration, /grant select on table public\.forms to anon;/i);
+  assert.match(
+    apiRoleGrantsMigration,
+    /grant select, insert, delete on table public\.forms to authenticated;/i,
+  );
+  assert.match(apiRoleGrantsMigration, /revoke update on table public\.forms from authenticated;/i);
+  assert.match(
+    apiRoleGrantsMigration,
+    new RegExp(`grant update \\(${safeFormsUpdateColumns}\\) on table public\\.forms to authenticated;`, "i"),
+  );
+  assert.doesNotMatch(
+    apiRoleGrantsMigration,
+    /grant select, insert, update, delete on table public\.forms to authenticated;/i,
+  );
+});
+
+test("public storage uploads cannot be deleted from anonymous clients", () => {
+  assert.doesNotMatch(publicStoragePoliciesMigration, /for delete\s+to anon/i);
+  assert.match(restrictedStorageDeletesMigration, /drop policy if exists "survey files delete anon"/i);
+  assert.doesNotMatch(restrictedStorageDeletesMigration, /create policy "survey files delete anon"/i);
+});
+
+test("storage delete policies are limited to owners, form authors, and admins", () => {
+  const initialDeletePolicy = getMigrationPolicyDefinition(
+    publicStoragePoliciesMigration,
+    "survey files delete authenticated",
+  );
+  const restrictedDeletePolicy = getMigrationPolicyDefinition(
+    restrictedStorageDeletesMigration,
+    "survey files delete authenticated",
+  );
+
+  for (const policy of [initialDeletePolicy, restrictedDeletePolicy]) {
+    assert.match(policy, /for delete\s+to authenticated/i);
+    assert.match(policy, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/i);
+    assert.match(policy, /f\.author_id = \(select auth\.uid\(\)\)/i);
+    assert.match(policy, /\(select public\.request_role\(\)\) = 'admin'/i);
+    assert.doesNotMatch(policy, /f\.is_public = true/i);
+  }
 });
 
 test("response inserts are attributed to the current auth user", () => {

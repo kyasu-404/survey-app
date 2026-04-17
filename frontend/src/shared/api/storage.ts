@@ -92,11 +92,11 @@ function looksLikeStoragePath(value: string) {
 }
 
 function assertDeletablePath(path: string, userId: string | null, options: RemoveFileFromStorageOptions) {
-  if (userId && path.startsWith(`${userId}/`)) {
-    return;
+  if (path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
+    throw new Error("Публичные файлы удаляются только сервером");
   }
 
-  if (options.allowAnonymous && options.formId && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/${options.formId}/`)) {
+  if (userId && path.startsWith(`${userId}/`)) {
     return;
   }
 
