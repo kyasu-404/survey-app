@@ -102,7 +102,24 @@ type ListRefreshNavigationState = {
 };
 
 const DASHBOARD_PAGE_SIZE = 20;
+const DASHBOARD_SEARCH_DEBOUNCE_MS = 300;
 const MAX_TIMEOUT_MS = 2_147_483_647;
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
 
 function formatDateTimeLocalValue(dateTime: string | null) {
   if (!dateTime) {
@@ -155,6 +172,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { showToast } = useToast();
   const location = useLocation();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, DASHBOARD_SEARCH_DEBOUNCE_MS);
+  const normalizedSearch = debouncedSearch.trim();
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [formType, setFormType] = useState("");
@@ -174,14 +193,14 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
 
   const listFilters = useMemo(
     () => ({
-      search: search.trim() || undefined,
+      search: normalizedSearch || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       formType: formType || undefined,
       formReason: formReason || undefined,
       authorId: viewMode === "mine" ? user?.id : undefined,
     }),
-    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
+    [dateFrom, dateTo, formReason, formType, normalizedSearch, user?.id, viewMode],
   );
 
   const formsQueryKey = useMemo(
@@ -191,12 +210,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         dateTo,
         formReason,
         formType,
-        search,
+        search: normalizedSearch,
         pageSize: DASHBOARD_PAGE_SIZE,
         viewMode,
         userId: user?.id ?? null,
       }),
-    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
+    [dateFrom, dateTo, formReason, formType, normalizedSearch, user?.id, viewMode],
   );
 
   const formsStatsQueryKey = useMemo(
@@ -206,11 +225,11 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         dateTo,
         formReason,
         formType,
-        search,
+        search: normalizedSearch,
         viewMode,
         userId: user?.id ?? null,
       }),
-    [dateFrom, dateTo, formReason, formType, search, user?.id, viewMode],
+    [dateFrom, dateTo, formReason, formType, normalizedSearch, user?.id, viewMode],
   );
 
   const {
@@ -233,10 +252,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         filters: listFilters,
         signal,
       }),
-    getNextPageParam: (lastPage, allPages) => {
-      const loadedCount = allPages.reduce((count, page) => count + page.items.length, 0);
-      return loadedCount < lastPage.totalCount ? allPages.length : undefined;
-    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.items.length === DASHBOARD_PAGE_SIZE ? allPages.length : undefined,
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(user?.id)),
     retry: 1,
     staleTime: 30_000,

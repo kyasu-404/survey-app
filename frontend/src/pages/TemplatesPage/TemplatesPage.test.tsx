@@ -433,6 +433,39 @@ describe("TemplatesPage", () => {
     expect(await screen.findByText("Шаблон 25")).toBeInTheDocument();
   });
 
+  it("keeps pagination available when planned count underestimates a full templates page", async () => {
+    const templates = Array.from({ length: 21 }, (_, index) =>
+      createTemplate(index + 1, { title: `Шаблон ${index + 1}` }),
+    );
+
+    getTemplateFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+      Promise.resolve(
+        createTemplatesPage(
+          templates.slice(page * pageSize, (page + 1) * pageSize),
+          page === 0 ? 19 : templates.length,
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Шаблон 20")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать ещё" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 20,
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Шаблон 21")).toBeInTheDocument();
+  });
+
   it("triggers a background refresh when returning to templates with a refresh state", async () => {
     const queryClient = createQueryClient();
     const templatesQueryKey = getTemplateFormsQueryKey({

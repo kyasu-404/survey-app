@@ -191,10 +191,8 @@ export default function TemplatesPage() {
                 isPublic: true,
               },
       }),
-    getNextPageParam: (lastPage, allPages) => {
-      const loadedCount = allPages.reduce((count, page) => count + page.items.length, 0);
-      return loadedCount < lastPage.totalCount ? allPages.length : undefined;
-    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.items.length === TEMPLATE_PAGE_SIZE ? allPages.length : undefined,
     enabled: !isAuthLoading && (section === "public" || Boolean(user?.id)),
     retry: 1,
     staleTime: 30_000,

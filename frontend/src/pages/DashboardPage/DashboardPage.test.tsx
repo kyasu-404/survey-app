@@ -361,6 +361,82 @@ describe("DashboardPage", () => {
     expect(screen.queryByRole("combobox", { name: "Количество форм" })).not.toBeInTheDocument();
   });
 
+  it("keeps pagination available when planned count underestimates a full dashboard page", async () => {
+    const forms = Array.from({ length: 21 }, (_, index) => createForm(index + 1));
+
+    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+      Promise.resolve(
+        createDashboardPage(
+          forms.slice(page * pageSize, (page + 1) * pageSize),
+          page === 0 ? 19 : forms.length,
+        ),
+      ),
+    );
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
+
+    renderPage();
+
+    expect(await screen.findByText("Форма 20")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать ещё" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 20,
+        }),
+      );
+    });
+    expect(await screen.findByText("Форма 21")).toBeInTheDocument();
+  });
+
+  it("debounces dashboard search before requesting filtered forms and stats", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([]));
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats([], 0));
+
+    renderPage();
+
+    const searchInput = await screen.findByPlaceholderText("Поиск по названию и автору");
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+      expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
+    });
+
+    await userEvent.type(searchInput, "план");
+
+    expect(searchInput).toHaveValue("план");
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+
+    expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+    expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
+
+    await waitFor(
+      () => {
+        expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+        expect(getDashboardFormsStats).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 800 },
+    );
+
+    expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          search: "план",
+        }),
+      }),
+    );
+    expect(getDashboardFormsStats).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        search: "план",
+      }),
+      expect.objectContaining({ signal: expect.any(Object) }),
+    );
+  });
+
   it("renders a loading label with a spinner while the forms list is loading", async () => {
     const deferred = createDeferred<ReturnType<typeof createDashboardPage>>();
 
