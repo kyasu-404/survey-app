@@ -6,8 +6,9 @@ begin;
 -- =========================
 -- EXTENSIONS
 -- =========================
+create schema if not exists extensions;
 create extension if not exists "pgcrypto";
-create extension if not exists "pg_trgm";
+create extension if not exists "pg_trgm" with schema extensions;
 
 -- =========================
 -- TABLES
@@ -305,6 +306,7 @@ alter table public.responses enable row level security;
 -- =========================
 
 grant usage on schema public to anon, authenticated, service_role;
+grant usage on schema extensions to anon, authenticated, service_role;
 
 grant select on table public.profiles to authenticated;
 grant select on table public.forms to anon;
@@ -329,25 +331,17 @@ using (
   OR (select public.request_role()) = 'admin'
 );
 
-create policy "profiles_update_self"
+create policy "profiles_update_own_or_admin"
 on public.profiles
 for update
 to authenticated
 using (
   id = (select auth.uid())
+  or (select public.request_role()) = 'admin'
 )
 with check (
   id = (select auth.uid())
-);
-
-create policy "profiles_update_admin"
-on public.profiles
-for update
-to authenticated
-using (
-  (select public.request_role()) = 'admin'
-)
-with check (
+  or
   (select public.request_role()) = 'admin'
 );
 
@@ -445,8 +439,8 @@ create index idx_forms_created_at_id on public.forms(created_at desc, id desc);
 create index idx_forms_author_created_at_id on public.forms(author_id, created_at desc, id desc);
 create index idx_responses_form_id on public.responses(form_id);
 create index idx_responses_form_created_at_id on public.responses(form_id, created_at desc, id desc);
-create index idx_forms_title_trgm on public.forms using gin (title gin_trgm_ops);
-create index idx_forms_author_name_trgm on public.forms using gin (author_name gin_trgm_ops);
+create index idx_forms_title_trgm on public.forms using gin (title extensions.gin_trgm_ops);
+create index idx_forms_author_name_trgm on public.forms using gin (author_name extensions.gin_trgm_ops);
 
 alter publication supabase_realtime add table public.forms;
 alter publication supabase_realtime add table public.responses;

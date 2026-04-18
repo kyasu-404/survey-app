@@ -19,6 +19,10 @@ const restrictedClientFormDeletesMigration = readFileSync(
   new URL("./migrations/202604180900_restrict_client_form_deletes.sql", import.meta.url),
   "utf8",
 );
+const supabaseLintMigration = readFileSync(
+  new URL("./migrations/202604181200_resolve_supabase_lints.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
   "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
@@ -90,16 +94,14 @@ test("all security definer functions pin search_path", () => {
 
 test("authenticated users can update only safe profile columns", () => {
   assert.doesNotMatch(schema, /create policy "profiles_update"\s+on public\.profiles/i);
+  assert.doesNotMatch(schema, /create policy "profiles_update_self"\s+on public\.profiles/i);
+  assert.doesNotMatch(schema, /create policy "profiles_update_admin"\s+on public\.profiles/i);
 
-  const selfUpdate = getPolicyDefinition("profiles_update_self");
-  const adminUpdate = getPolicyDefinition("profiles_update_admin");
+  const profileUpdate = getPolicyDefinition("profiles_update_own_or_admin");
 
-  assert.match(selfUpdate, /for update\s+to authenticated/i);
-  assert.match(selfUpdate, /using\s*\(\s*id = \(select auth\.uid\(\)\)\s*\)/i);
-  assert.match(selfUpdate, /with check\s*\(\s*id = \(select auth\.uid\(\)\)\s*\)/i);
-
-  assert.match(adminUpdate, /for update\s+to authenticated/i);
-  assert.match(adminUpdate, /\(select public\.request_role\(\)\) = 'admin'/i);
+  assert.match(profileUpdate, /for update\s+to authenticated/i);
+  assert.match(profileUpdate, /using\s*\(\s*id = \(select auth\.uid\(\)\)\s+or\s+\(select public\.request_role\(\)\) = 'admin'\s*\)/i);
+  assert.match(profileUpdate, /with check\s*\(\s*id = \(select auth\.uid\(\)\)\s+or\s+\(select public\.request_role\(\)\) = 'admin'\s*\)/i);
 
   assert.match(schema, /revoke update on table public\.profiles from authenticated;/i);
   assert.match(schema, /grant update \(name\) on table public\.profiles to authenticated;/i);
@@ -272,7 +274,10 @@ test("forms and responses are published to realtime", () => {
 });
 
 test("list and search indexes support stable paginated reads", () => {
-  assert.match(schema, /create extension if not exists "pg_trgm";/i);
+  assert.match(schema, /create schema if not exists extensions;/i);
+  assert.match(schema, /create extension if not exists "pg_trgm" with schema extensions;/i);
+  assert.doesNotMatch(schema, /create extension if not exists "pg_trgm";/i);
+  assert.match(schema, /grant usage on schema extensions to anon, authenticated, service_role;/i);
   assert.match(schema, /create index idx_forms_created_at_id\s+on public\.forms\(created_at desc,\s*id desc\);/i);
   assert.match(
     schema,
@@ -282,11 +287,20 @@ test("list and search indexes support stable paginated reads", () => {
     schema,
     /create index idx_responses_form_created_at_id\s+on public\.responses\(form_id,\s*created_at desc,\s*id desc\);/i,
   );
-  assert.match(schema, /create index idx_forms_title_trgm\s+on public\.forms using gin \(title gin_trgm_ops\);/i);
+  assert.match(schema, /create index idx_forms_title_trgm\s+on public\.forms using gin \(title extensions\.gin_trgm_ops\);/i);
   assert.match(
     schema,
-    /create index idx_forms_author_name_trgm\s+on public\.forms using gin \(author_name gin_trgm_ops\);/i,
+    /create index idx_forms_author_name_trgm\s+on public\.forms using gin \(author_name extensions\.gin_trgm_ops\);/i,
   );
+});
+
+test("supabase lint migration moves pg_trgm and merges profile update policies", () => {
+  assert.match(supabaseLintMigration, /create schema if not exists extensions;/i);
+  assert.match(supabaseLintMigration, /create extension if not exists "pg_trgm" with schema extensions;/i);
+  assert.match(supabaseLintMigration, /alter extension "pg_trgm" set schema extensions;/i);
+  assert.match(supabaseLintMigration, /drop policy if exists "profiles_update_self" on public\.profiles;/i);
+  assert.match(supabaseLintMigration, /drop policy if exists "profiles_update_admin" on public\.profiles;/i);
+  assert.match(supabaseLintMigration, /create policy "profiles_update_own_or_admin"[\s\S]*?for update\s+to authenticated/i);
 });
 
 test("dashboard form stats use one aggregate rpc with nullable filters", () => {
