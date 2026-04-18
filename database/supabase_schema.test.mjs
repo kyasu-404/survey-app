@@ -15,6 +15,10 @@ const restrictedStorageDeletesMigration = readFileSync(
   new URL("./migrations/202604170130_restrict_public_storage_deletes.sql", import.meta.url),
   "utf8",
 );
+const restrictedClientFormDeletesMigration = readFileSync(
+  new URL("./migrations/202604180900_restrict_client_form_deletes.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
   "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
@@ -131,7 +135,8 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
   assert.match(schema, /grant select on table public\.forms to anon;/i);
-  assert.match(schema, /grant select, insert, delete on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant select, insert on table public\.forms to authenticated;/i);
+  assert.match(schema, /revoke delete on table public\.forms from authenticated;/i);
   assert.match(schema, /revoke update on table public\.forms from authenticated;/i);
   assert.match(
     schema,
@@ -141,12 +146,22 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
     schema,
     /grant select, insert, update, delete on table public\.forms to authenticated;/i,
   );
+  assert.doesNotMatch(
+    schema,
+    /grant select, insert, delete on table public\.forms to authenticated;/i,
+  );
   assert.match(schema, /grant insert on table public\.responses to anon;/i);
   assert.match(schema, /grant select, insert on table public\.responses to authenticated;/i);
   assert.match(
     schema,
     /grant select, insert, update, delete on table public\.profiles, public\.forms, public\.responses to service_role;/i,
   );
+});
+
+test("form rows cannot be deleted directly by authenticated clients", () => {
+  assert.doesNotMatch(schema, /create policy "forms_delete"\s+on public\.forms/i);
+  assert.match(restrictedClientFormDeletesMigration, /revoke delete on table public\.forms from authenticated;/i);
+  assert.match(restrictedClientFormDeletesMigration, /drop policy if exists "forms_delete" on public\.forms;/i);
 });
 
 test("api role grants migration restricts form updates to client-editable columns", () => {

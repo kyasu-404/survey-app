@@ -105,6 +105,10 @@ function restoreSurveyUIState(model: Model, uiState: Record<string, unknown>) {
   }
 }
 
+function isAnonymousPublicUploadPathForForm(path: string, formId: string) {
+  return path.startsWith(`public/${formId}/`);
+}
+
 export function SurveyFormRenderer({
   schema,
   formId,
@@ -228,10 +232,13 @@ export function SurveyFormRenderer({
         const paths = values
           .map((value) => getStoragePathFromSurveyFileValue(value))
           .filter((path): path is string => Boolean(path));
+        const removablePaths = paths.filter(
+          (path) => !(allowAnonymousUploads && isAnonymousPublicUploadPathForForm(path, formId)),
+        );
 
-        if (paths.length > 0) {
+        if (removablePaths.length > 0) {
           await Promise.all(
-            paths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
+            removablePaths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
           );
         }
 

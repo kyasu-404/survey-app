@@ -308,7 +308,8 @@ grant usage on schema public to anon, authenticated, service_role;
 
 grant select on table public.profiles to authenticated;
 grant select on table public.forms to anon;
-grant select, insert, delete on table public.forms to authenticated;
+grant select, insert on table public.forms to authenticated;
+revoke delete on table public.forms from authenticated;
 revoke update on table public.forms from authenticated;
 grant update (title, schema, form_type, form_reason, is_public, deadline_at, max_responses) on table public.forms to authenticated;
 grant insert on table public.responses to anon;
@@ -394,15 +395,6 @@ using (
   OR (select public.request_role()) = 'admin'
 )
 with check (
-  author_id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
-);
-
-create policy "forms_delete"
-on public.forms
-for delete
-to authenticated
-using (
   author_id = (select auth.uid())
   OR (select public.request_role()) = 'admin'
 );

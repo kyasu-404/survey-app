@@ -11,6 +11,9 @@ const {
   includeUIStateEvent,
   mutateAsync,
   registeredCustomQuestionTypes,
+  getStoragePathFromSurveyFileValue,
+  removeFileFromStorage,
+  resolveSurveyFileValueContent,
   uploadFileToStorage,
   showToast,
 } = vi.hoisted(() => {
@@ -30,6 +33,9 @@ const {
     includeUIStateEvent: { current: true },
     mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
+    getStoragePathFromSurveyFileValue: vi.fn(),
+    removeFileFromStorage: vi.fn(),
+    resolveSurveyFileValueContent: vi.fn(),
     uploadFileToStorage: vi.fn(),
     showToast: vi.fn(),
   };
@@ -132,9 +138,9 @@ vi.mock("../../app/providers/ToastProvider", () => ({
 }));
 
 vi.mock("../../shared/api/storage", () => ({
-  getStoragePathFromSurveyFileValue: vi.fn(),
-  removeFileFromStorage: vi.fn(),
-  resolveSurveyFileValueContent: vi.fn(),
+  getStoragePathFromSurveyFileValue,
+  removeFileFromStorage,
+  resolveSurveyFileValueContent,
   uploadFileToStorage,
 }));
 
@@ -147,10 +153,14 @@ describe("SurveyFormRenderer", () => {
     mutateAsync.mockClear();
     componentCollectionAdd.mockClear();
     componentCollectionGetByName.mockClear();
+    getStoragePathFromSurveyFileValue.mockReset();
+    removeFileFromStorage.mockReset();
+    resolveSurveyFileValueContent.mockReset();
     uploadFileToStorage.mockReset();
     mutateAsync.mockRejectedValue(new Error("api failed"));
     includeUIStateEvent.current = true;
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it("shows error toast when API submission fails", async () => {
@@ -245,7 +255,7 @@ describe("SurveyFormRenderer", () => {
   });
 
   it("restores a fresh respondent draft before the survey is rendered", () => {
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       "survey-response:draft:user-1:form-1",
       JSON.stringify({
         data: { email: "saved@example.com" },
@@ -279,7 +289,7 @@ describe("SurveyFormRenderer", () => {
     expect(model.uiState).toEqual({ questions: { email: { collapsed: true } } });
   });
 
-  it("saves respondent draft data and UI state when answers change", async () => {
+  it("saves respondent draft data and UI state in session storage when answers change", async () => {
     render(
       <SurveyFormRenderer
         formId="form-1"
@@ -302,12 +312,49 @@ describe("SurveyFormRenderer", () => {
 
     await model.onValueChanged.fire(model);
 
-    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+    expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
       data: { email: "draft@example.com" },
       uiState: { questions: { email: { collapsed: false } } },
       currentPageNo: 0,
       updatedAt: expect.any(String),
     });
+  });
+
+  it("omits uploaded file values from response drafts", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "file", name: "attachment", title: "Файл" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+    };
+    model.data = {
+      email: "draft@example.com",
+      attachment: [{ name: "answer.txt", content: "public/form-1/file-id.txt" }],
+      signedAttachment: [
+        {
+          name: "signed.txt",
+          content: "https://storage.local/object/sign/survey-files/public/form-1/signed-id.txt?token=secret",
+        },
+      ],
+      inlineAttachment: [{ name: "legacy.txt", content: "data:text/plain;base64,aGVsbG8=" }],
+    };
+
+    await model.onValueChanged.fire(model);
+
+    const storedDraft = JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}") as {
+      data?: Record<string, unknown>;
+    };
+
+    expect(storedDraft.data).toEqual({ email: "draft@example.com" });
   });
 
   it("keeps saving drafts when the installed SurveyJS runtime has no UI state event", async () => {
@@ -331,14 +378,14 @@ describe("SurveyFormRenderer", () => {
 
     await model.onValueChanged.fire(model);
 
-    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
       data: { email: "draft@example.com" },
       updatedAt: expect.any(String),
     });
   });
 
   it("uses a stable anonymous respondent draft key when no user id is available", async () => {
-    window.localStorage.setItem("survey-response:draft:anonymous-id", "anon-browser");
+    window.sessionStorage.setItem("survey-response:draft:anonymous-id", "anon-browser");
 
     render(
       <SurveyFormRenderer
@@ -357,13 +404,14 @@ describe("SurveyFormRenderer", () => {
 
     await model.onValueChanged.fire(model);
 
-    expect(JSON.parse(window.localStorage.getItem("survey-response:draft:anon-browser:form-1") ?? "{}")).toMatchObject({
+    expect(window.localStorage.getItem("survey-response:draft:anon-browser:form-1")).toBeNull();
+    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:anon-browser:form-1") ?? "{}")).toMatchObject({
       data: { name: "Анонимный респондент" },
     });
   });
 
   it("drops stale respondent drafts instead of restoring them", () => {
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       "survey-response:draft:user-1:form-1",
       JSON.stringify({
         data: { email: "old@example.com" },
@@ -384,12 +432,28 @@ describe("SurveyFormRenderer", () => {
     const model = createdModels[0] as { data: Record<string, unknown> };
 
     expect(model.data).toEqual({});
+    expect(window.sessionStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+  });
+
+  it("removes legacy response drafts from local storage when the renderer mounts", () => {
+    window.localStorage.setItem(
+      "survey-response:draft:user-1:form-1",
+      JSON.stringify({
+        data: { email: "persisted@example.com" },
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    window.localStorage.setItem("survey-response:draft:anonymous-id", "anon-browser");
+
+    render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={{ pages: [] }} />);
+
     expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+    expect(window.localStorage.getItem("survey-response:draft:anonymous-id")).toBeNull();
   });
 
   it("clears the respondent draft after a successful submission", async () => {
     mutateAsync.mockResolvedValueOnce(undefined);
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       "survey-response:draft:user-1:form-1",
       JSON.stringify({
         data: { email: "saved@example.com" },
@@ -402,7 +466,7 @@ describe("SurveyFormRenderer", () => {
     await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+      expect(window.sessionStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
     });
   });
 
@@ -485,6 +549,35 @@ describe("SurveyFormRenderer", () => {
         content: "public/form-1/file-id.txt",
       },
     ]);
+  });
+
+  it("treats anonymous public file clears as successful UI-only cleanup", async () => {
+    const callback = vi.fn();
+    getStoragePathFromSurveyFileValue.mockReturnValue("public/form-1/file-id.txt");
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        allowAnonymousUploads
+        schema={{
+          pages: [
+            {
+              name: "page1",
+              elements: [{ type: "file", name: "attachment", title: "Файл" }],
+            },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      onClearFiles: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+
+    await model.onClearFiles.fire(model, { value: { content: "public/form-1/file-id.txt" }, callback });
+
+    expect(removeFileFromStorage).not.toHaveBeenCalled();
+    expect(callback).toHaveBeenCalledWith("success");
   });
 
   it("forces file questions to use server-side uploads instead of inline base64 storage", () => {
