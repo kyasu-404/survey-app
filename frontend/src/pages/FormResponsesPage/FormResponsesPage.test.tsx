@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
+import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import FormResponsesPage from "./FormResponsesPage";
 
 const { getFormById, getResponsesByForm, exportToExcel, showToast } = vi.hoisted(() => ({
@@ -16,10 +17,17 @@ const { getFormById, getResponsesByForm, exportToExcel, showToast } = vi.hoisted
 }));
 
 const { createRealtimeChannel, removeRealtimeChannel, emitRealtimeChange, resetRealtimeChannel } = vi.hoisted(() => {
-  const changeHandlers: Array<() => void> = [];
+  type RealtimeHandler = {
+    config: { table?: string };
+    callback: (payload?: unknown) => void;
+  };
+  const changeHandlers: RealtimeHandler[] = [];
   const channel = {
-    on: vi.fn((_event: string, _config: unknown, callback: () => void) => {
-      changeHandlers.push(callback);
+    on: vi.fn((_event: string, config: unknown, callback: (payload?: unknown) => void) => {
+      changeHandlers.push({
+        config: (config ?? {}) as { table?: string },
+        callback,
+      });
       return channel;
     }),
     subscribe: vi.fn(() => channel),
@@ -30,9 +38,11 @@ const { createRealtimeChannel, removeRealtimeChannel, emitRealtimeChange, resetR
   return {
     createRealtimeChannel,
     removeRealtimeChannel,
-    emitRealtimeChange: () => {
+    emitRealtimeChange: (table?: string) => {
       for (const handler of changeHandlers) {
-        handler();
+        if (!table || handler.config.table === table) {
+          handler.callback();
+        }
       }
     },
     resetRealtimeChannel: () => {
@@ -337,6 +347,213 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByText("Анна")).toBeInTheDocument();
 
     emitRealtimeChange();
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("Борис")).toBeInTheDocument();
+  });
+
+  it("refreshes response rows when only the form counter realtime update is delivered", async () => {
+    const baseForm = {
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      responses_count: 1,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    };
+
+    getFormById
+      .mockResolvedValueOnce(baseForm)
+      .mockResolvedValueOnce({
+        ...baseForm,
+        responses_count: 2,
+      });
+
+    getResponsesByForm
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ]))
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-2",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:31:00.000Z",
+          data: { name: "Борис" },
+        },
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ], { count: 2 }));
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+
+    emitRealtimeChange("forms");
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("Борис")).toBeInTheDocument();
+    expect(screen.getByText("Ответов: 2")).toBeInTheDocument();
+  });
+
+  it("forces a fresh responses fetch when opening with fresh cached data", async () => {
+    const queryClient = createQueryClient();
+    const form = {
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      responses_count: 2,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    };
+
+    queryClient.setQueryData(getFormQueryKey("form-1"), form);
+    queryClient.setQueryData(
+      getFormResponsesQueryKey("form-1", "page", 1, 100),
+      createResponsesPage([
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ], { pageSize: 100 }),
+    );
+
+    getFormById.mockResolvedValue(form);
+    getResponsesByForm.mockResolvedValue(createResponsesPage([
+      {
+        id: "response-2",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:31:00.000Z",
+        data: { name: "Борис" },
+      },
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { name: "Анна" },
+      },
+    ], { count: 2, pageSize: 100 }));
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={queryClient}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Анна")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByText("Борис")).toBeInTheDocument();
+  });
+
+  it("refreshes responses when the browser tab becomes focused again", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ]))
+      .mockResolvedValueOnce(createResponsesPage([
+        {
+          id: "response-2",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:31:00.000Z",
+          data: { name: "Борис" },
+        },
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: { name: "Анна" },
+        },
+      ], { count: 2 }));
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
 
     await waitFor(() => {
       expect(getResponsesByForm).toHaveBeenCalledTimes(2);

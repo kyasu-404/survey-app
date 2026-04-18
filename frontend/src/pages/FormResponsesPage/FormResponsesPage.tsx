@@ -14,7 +14,7 @@ import useIcon from "../../img/use.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
-import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { scheduleDebouncedQueryInvalidation } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { RefreshButton } from "../../shared/ui/RefreshButton";
@@ -110,8 +110,8 @@ export default function FormResponsesPage() {
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: true,
   });
 
@@ -133,7 +133,8 @@ export default function FormResponsesPage() {
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: true,
   });
 
@@ -156,6 +157,19 @@ export default function FormResponsesPage() {
       return;
     }
 
+    const realtimeRefreshTargets = [
+      { queryKey: getFormQueryKey(id) },
+      { queryKey: getFormResponsesQueryKey(id) },
+    ];
+    const refreshResponses = () => {
+      scheduleDebouncedQueryInvalidation(
+        queryClient,
+        `form responses realtime ${id}`,
+        realtimeRefreshTargets,
+        100,
+      );
+    };
+
     const channel = supabaseClient
       .channel(`form-responses:${id}`)
       .on(
@@ -166,12 +180,7 @@ export default function FormResponsesPage() {
           table: "responses",
           filter: `form_id=eq.${id}`,
         },
-        () => {
-          scheduleQueryInvalidation(queryClient, `responses realtime ${id}`, [
-            { queryKey: getFormQueryKey(id) },
-            { queryKey: getFormResponsesQueryKey(id) },
-          ]);
-        },
+        refreshResponses,
       )
       .on(
         "postgres_changes",
@@ -181,9 +190,7 @@ export default function FormResponsesPage() {
           table: "forms",
           filter: `id=eq.${id}`,
         },
-        () => {
-          scheduleQueryInvalidation(queryClient, `form realtime ${id}`, [{ queryKey: getFormQueryKey(id) }]);
-        },
+        refreshResponses,
       )
       .subscribe((status) => {
         console.info("[realtime] form responses channel status", {

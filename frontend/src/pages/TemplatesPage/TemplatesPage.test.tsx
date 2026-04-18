@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
@@ -496,6 +496,56 @@ describe("TemplatesPage", () => {
 
     expect(await screen.findByText("Новый шаблон")).toBeInTheDocument();
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: null });
+  });
+
+  it("forces a background refresh when opening templates with fresh cached data", async () => {
+    const queryClient = createQueryClient();
+    const templatesQueryKey = getTemplateFormsQueryKey({
+      section: "mine",
+      pageSize: 20,
+      userId: "user-1",
+    });
+
+    queryClient.setQueryData(
+      templatesQueryKey,
+      createInfiniteTemplatesData(createTemplatesPage([createTemplate(1, { title: "Кэшированный шаблон" })])),
+    );
+
+    getTemplateFormsPage.mockResolvedValueOnce(
+      createTemplatesPage([
+        createTemplate(1, { title: "Кэшированный шаблон" }),
+        createTemplate(2, { title: "Новый шаблон после открытия" }),
+      ]),
+    );
+
+    renderPage(queryClient);
+
+    expect(screen.getByText("Кэшированный шаблон")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByText("Новый шаблон после открытия")).toBeInTheDocument();
+  });
+
+  it("refreshes templates when the browser tab becomes focused again", async () => {
+    getTemplateFormsPage
+      .mockResolvedValueOnce(createTemplatesPage([createTemplate(1, { title: "Шаблон до фокуса" })]))
+      .mockResolvedValueOnce(createTemplatesPage([createTemplate(2, { title: "Шаблон после фокуса" })]));
+
+    renderPage();
+
+    expect(await screen.findByText("Шаблон до фокуса")).toBeInTheDocument();
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("Шаблон после фокуса")).toBeInTheDocument();
   });
 
   it("keeps the template preview drawer wide enough for the survey page layout", () => {

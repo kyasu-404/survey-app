@@ -32,6 +32,11 @@ export default function TemplatesPage() {
 
   useTemplatesListRefresh({
     isAuthLoading,
+    isListFetching:
+      templatesData.isInitialTemplatesLoading ||
+      templatesData.isRefreshingTemplates ||
+      templatesData.isFetchingNextTemplatesPage,
+    listUpdatedAt: templatesData.templatesUpdatedAt,
     reloadTemplates: templatesData.reloadTemplates,
     section,
     userId: user?.id,

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
@@ -320,6 +320,80 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Новая форма")).toBeInTheDocument();
     expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: null });
+  });
+
+  it("forces a background refresh when opening my forms with fresh cached data", async () => {
+    const queryClient = createQueryClient();
+    const formsQueryKey = getDashboardFormsQueryKey({
+      dateFrom: "",
+      dateTo: "",
+      formReason: "",
+      formType: "",
+      search: "",
+      pageSize: 20,
+      viewMode: "mine",
+      userId: "user-1",
+    });
+    const statsQueryKey = getDashboardFormStatsQueryKey({
+      dateFrom: "",
+      dateTo: "",
+      formReason: "",
+      formType: "",
+      search: "",
+      viewMode: "mine",
+      userId: "user-1",
+    });
+
+    queryClient.setQueryData(
+      formsQueryKey,
+      createInfiniteDashboardData(createDashboardPage([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })])),
+    );
+    queryClient.setQueryData(
+      statsQueryKey,
+      createDashboardStats([createForm(1, { title: "Кэшированная форма", author_id: "user-1" })]),
+    );
+
+    getDashboardFormsPage.mockResolvedValueOnce(
+      createDashboardPage([
+        createForm(1, { title: "Кэшированная форма", author_id: "user-1" }),
+        createForm(2, { title: "Новая форма после открытия", author_id: "user-1" }),
+      ]),
+    );
+    getDashboardFormsStats.mockResolvedValueOnce(
+      createDashboardStats([
+        createForm(1, { title: "Кэшированная форма", author_id: "user-1" }),
+        createForm(2, { title: "Новая форма после открытия", author_id: "user-1" }),
+      ]),
+    );
+
+    renderPage("mine", queryClient, [routes.dashboardMy]);
+
+    expect(screen.getByText("Кэшированная форма")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+    });
+
+    expect(await screen.findByText("Новая форма после открытия")).toBeInTheDocument();
+  });
+
+  it("refreshes forms when the browser tab becomes focused again", async () => {
+    getDashboardFormsPage
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { title: "Форма до фокуса" })]))
+      .mockResolvedValueOnce(createDashboardPage([createForm(2, { title: "Форма после фокуса" })]));
+
+    renderPage();
+
+    expect(await screen.findByText("Форма до фокуса")).toBeInTheDocument();
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("Форма после фокуса")).toBeInTheDocument();
   });
 
   it("shows form stats inside the info popover and paginates the list", async () => {

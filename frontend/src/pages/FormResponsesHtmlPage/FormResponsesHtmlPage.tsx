@@ -31,8 +31,8 @@ export default function FormResponsesHtmlPage() {
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: true,
   });
 
@@ -54,7 +54,8 @@ export default function FormResponsesHtmlPage() {
     enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: true,
   });
 

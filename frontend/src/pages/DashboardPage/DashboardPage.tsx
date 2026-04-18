@@ -62,6 +62,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   });
   useDashboardListRefresh({
     isAuthLoading,
+    isListFetching: forms.isInitialFormsLoading || forms.isRefreshingForms || forms.isFetchingNextFormsPage,
+    listUpdatedAt: forms.formsUpdatedAt,
     reloadForms: forms.reloadForms,
     userId: user?.id,
     viewMode,

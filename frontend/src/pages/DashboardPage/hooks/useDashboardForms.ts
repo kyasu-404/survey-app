@@ -61,7 +61,8 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
     retry: 1,
     staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: true,
   });
 
