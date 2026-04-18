@@ -64,7 +64,7 @@ export default function FormResponsesHtmlPage() {
     [formQuery.data, responses],
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
-  const totalResponses = responsesQuery.data?.count ?? 0;
+  const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
   const shownResponses = rows.length;
   const generatedAt = useMemo(() => new Date(), [formTitle, rows]);
   const htmlDocument = useMemo(

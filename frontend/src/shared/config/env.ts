@@ -1,8 +1,15 @@
-const DEFAULT_SUPABASE_URL = "http://localhost:8000";
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function trimTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function readRequiredEnv(value: string | undefined, name: string) {
+  if (!value?.trim()) {
+    throw new Error(`Missing required environment variable ${name}. Set ${name} before starting the frontend.`);
+  }
+
+  return value;
 }
 
 export function resolveSupabaseUrl(
@@ -10,7 +17,7 @@ export function resolveSupabaseUrl(
   currentLocationHref?: string,
   isDev = import.meta.env.DEV,
 ) {
-  const normalizedConfiguredUrl = trimTrailingSlash(configuredUrl || DEFAULT_SUPABASE_URL);
+  const normalizedConfiguredUrl = trimTrailingSlash(configuredUrl);
 
   if (!isDev || !currentLocationHref) {
     return normalizedConfiguredUrl;
@@ -34,10 +41,10 @@ export function resolveSupabaseUrl(
 const currentLocationHref = typeof window !== "undefined" ? window.location.href : undefined;
 
 export const SUPABASE_URL = resolveSupabaseUrl(
-  import.meta.env.VITE_SUPABASE_URL ?? DEFAULT_SUPABASE_URL,
+  readRequiredEnv(import.meta.env.VITE_SUPABASE_URL, "VITE_SUPABASE_URL"),
   currentLocationHref,
 );
 
-export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "ANON_PUBLIC_KEY";
+export const SUPABASE_ANON_KEY = readRequiredEnv(import.meta.env.VITE_SUPABASE_ANON_KEY, "VITE_SUPABASE_ANON_KEY");
 
 export const SUPABASE_STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET ?? "survey-files";

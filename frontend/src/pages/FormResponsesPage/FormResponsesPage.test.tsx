@@ -131,6 +131,21 @@ function createResponsesPage(data: SurveyResponse[], overrides: Partial<{
   };
 }
 
+function createResponse(index: number, name = `Ответ ${index}`): SurveyResponse {
+  return {
+    id: `response-${index}`,
+    form_id: "form-1",
+    created_at: "2026-04-08T11:30:00.000Z",
+    data: { name },
+  };
+}
+
+function createFullResponsePage(page: number, pageSize = 100) {
+  return Array.from({ length: pageSize }, (_, index) =>
+    createResponse((page - 1) * pageSize + index + 1),
+  );
+}
+
 function readAppCss() {
   return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
@@ -578,7 +593,7 @@ describe("FormResponsesPage", () => {
     expect(screen.queryByRole("button", { name: "Следующая" })).not.toBeInTheDocument();
   });
 
-  it("fetches remaining response pages only when exporting xlsx", async () => {
+  it("fetches response export pages sequentially instead of starting every remaining page at once", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -597,22 +612,35 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getResponsesByForm.mockImplementation((_formId: string, options?: { page?: number }) =>
-      Promise.resolve({
-        data: [
-          {
-            id: `response-page-${options?.page ?? 1}`,
-            form_id: "form-1",
-            created_at: "2026-04-08T11:30:00.000Z",
-            data: { name: options?.page === 2 ? "Борис" : "Анна" },
-          },
-        ],
-        count: 2,
-        page: options?.page ?? 1,
+    const page2 = createDeferred<ReturnType<typeof createResponsesPage>>();
+    const page3 = createDeferred<ReturnType<typeof createResponsesPage>>();
+    getResponsesByForm.mockImplementation((_formId: string, options?: { page?: number }) => {
+      const page = options?.page ?? 1;
+
+      if (page === 1) {
+        return Promise.resolve(createResponsesPage(createFullResponsePage(1), {
+          count: 300,
+          page: 1,
+          pageSize: 100,
+          totalPages: 3,
+        }));
+      }
+
+      if (page === 2) {
+        return page2.promise;
+      }
+
+      if (page === 3) {
+        return page3.promise;
+      }
+
+      return Promise.resolve(createResponsesPage([], {
+        count: 300,
+        page,
         pageSize: 100,
-        totalPages: 2,
-      }),
-    );
+        totalPages: 3,
+      }));
+    });
 
     exportToExcel.mockResolvedValue(undefined);
 
@@ -626,7 +654,102 @@ describe("FormResponsesPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    expect(await screen.findByText("Ответ 1")).toBeInTheDocument();
+    getResponsesByForm.mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });
+    });
+    expect(getResponsesByForm).not.toHaveBeenCalledWith("form-1", { page: 3, pageSize: 100 });
+    expect(exportToExcel).not.toHaveBeenCalled();
+
+    page2.resolve(createResponsesPage(createFullResponsePage(2), {
+      count: 300,
+      page: 2,
+      pageSize: 100,
+      totalPages: 3,
+    }));
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 3, pageSize: 100 });
+    });
+
+    page3.resolve(createResponsesPage([createResponse(201, "Финальный ответ")], {
+      count: 300,
+      page: 3,
+      pageSize: 100,
+      totalPages: 3,
+    }));
+
+    await waitFor(() => {
+      expect(exportToExcel).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Имя: "Ответ 1",
+          }),
+          expect.objectContaining({
+            Имя: "Финальный ответ",
+          }),
+        ]),
+        "ответы-Форма обратной связи",
+      );
+    });
+  });
+
+  it("continues xlsx export after a full first page even when planned count underestimates total pages", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        pages: [
+          {
+            elements: [{ type: "text", name: "name", title: "Имя" }],
+          },
+        ],
+      },
+    });
+
+    getResponsesByForm.mockImplementation((_formId: string, options?: { page?: number }) => {
+      const page = options?.page ?? 1;
+
+      if (page === 1) {
+        return Promise.resolve(createResponsesPage(createFullResponsePage(1), {
+          count: 50,
+          page: 1,
+          pageSize: 100,
+          totalPages: 1,
+        }));
+      }
+
+      return Promise.resolve(createResponsesPage([createResponse(101, "Борис")], {
+        count: 50,
+        page,
+        pageSize: 100,
+        totalPages: 1,
+      }));
+    });
+
+    exportToExcel.mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Ответ 1")).toBeInTheDocument();
     getResponsesByForm.mockClear();
 
     await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
@@ -634,14 +757,14 @@ describe("FormResponsesPage", () => {
     await waitFor(() => {
       expect(getResponsesByForm).toHaveBeenCalledWith("form-1", { page: 2, pageSize: 100 });
       expect(exportToExcel).toHaveBeenCalledWith(
-        [
+        expect.arrayContaining([
           expect.objectContaining({
-            Имя: "Анна",
+            Имя: "Ответ 1",
           }),
           expect.objectContaining({
             Имя: "Борис",
           }),
-        ],
+        ]),
         "ответы-Форма обратной связи",
       );
     });

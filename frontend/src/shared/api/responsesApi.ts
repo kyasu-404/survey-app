@@ -5,7 +5,7 @@ import { runRequest } from "./request";
 export const RESPONSES_PAGE_SIZE = 50;
 const MIN_RESPONSES_PAGE_SIZE = 1;
 const MAX_RESPONSES_PAGE_SIZE = 100;
-const PAGINATED_COUNT_MODE = "exact";
+const PAGINATED_COUNT_MODE = "planned";
 
 export type FetchResponsesByFormOptions = {
   page?: number;

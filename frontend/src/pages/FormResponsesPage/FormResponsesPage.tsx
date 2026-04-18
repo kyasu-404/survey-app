@@ -56,20 +56,20 @@ async function getResponsePage(formId: string, signal?: AbortSignal) {
 }
 
 async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage) {
-  if (firstPage.totalPages <= 1) {
-    return firstPage.data;
+  const pageSize = firstPage.pageSize || RESPONSES_SCROLL_PAGE_SIZE;
+  const responses = [...firstPage.data];
+  let currentPage = firstPage;
+
+  while (currentPage.data.length >= pageSize) {
+    const nextPageNumber = currentPage.page + 1;
+    currentPage = await getResponsesByForm(formId, {
+      page: nextPageNumber,
+      pageSize,
+    });
+    responses.push(...currentPage.data);
   }
 
-  const remainingPages = await Promise.all(
-    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      getResponsesByForm(formId, {
-        page: index + 2,
-        pageSize: RESPONSES_SCROLL_PAGE_SIZE,
-      }),
-    ),
-  );
-
-  return firstPage.data.concat(remainingPages.flatMap((page) => page.data));
+  return responses;
 }
 
 function renderResponseCell(header: string, value: string) {
@@ -149,7 +149,7 @@ export default function FormResponsesPage() {
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching;
   const lastUpdatedAt = Math.max(formQuery.dataUpdatedAt ?? 0, responsesQuery.dataUpdatedAt ?? 0);
   const combinedError = [formQuery.error, responsesQuery.error].find((error) => error && !isAbortError(error)) ?? null;
-  const totalResponses = responsesQuery.data?.count ?? 0;
+  const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
 
   useEffect(() => {
     if (!id) {

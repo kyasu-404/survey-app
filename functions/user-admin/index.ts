@@ -170,11 +170,14 @@ Deno.serve(async (req) => {
         return jsonResponse(req, 400, { error: "Invalid create payload" });
       }
 
+      const name = payload.name.trim();
+      const email = payload.email.trim();
+
       const { data, error } = await adminClient.auth.admin.createUser({
-        email: payload.email.trim(),
+        email,
         password: payload.password,
         user_metadata: {
-          name: payload.name.trim(),
+          name,
         },
         email_confirm: true,
       });
@@ -183,24 +186,37 @@ Deno.serve(async (req) => {
         return jsonResponse(req, 400, { error: error.message });
       }
 
-      if (data.user?.id) {
-        const { error: profileError } = await adminClient.from("profiles").upsert(
-          {
-            id: data.user.id,
-            name: payload.name.trim(),
-            email: payload.email.trim(),
-            role: payload.role,
-            is_disabled: false,
-          },
-          { onConflict: "id" }
-        );
-
-        if (profileError) {
-          return jsonResponse(req, 400, { error: profileError.message });
-        }
+      const createdUserId = data.user?.id;
+      if (!createdUserId) {
+        return jsonResponse(req, 500, { error: "User was created without an id" });
       }
 
-      return jsonResponse(req, 200, { userId: data.user?.id ?? null });
+      const { error: profileError } = await adminClient.from("profiles").upsert(
+        {
+          id: createdUserId,
+          name,
+          email,
+          role: payload.role,
+          is_disabled: false,
+        },
+        { onConflict: "id" }
+      );
+
+      if (profileError) {
+        const { error: rollbackError } = await adminClient.auth.admin.deleteUser(createdUserId);
+
+        if (rollbackError) {
+          return jsonResponse(req, 500, {
+            error: `User was partially created: profile update failed (${profileError.message}) and cleanup failed (${rollbackError.message})`,
+          });
+        }
+
+        return jsonResponse(req, 400, {
+          error: `User creation failed and was rolled back: ${profileError.message}`,
+        });
+      }
+
+      return jsonResponse(req, 200, { userId: createdUserId });
     }
 
     case "delete": {
