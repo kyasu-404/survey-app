@@ -358,6 +358,47 @@ describe("fetchDashboardFormsPage", () => {
       totalCount: 1,
     });
   });
+
+  it("applies reached response limit state locally in dashboard summaries", async () => {
+    const listQuery = createSummaryQuery({
+      data: [
+        {
+          id: "form-1",
+          title: "Limited summary",
+          form_type: "anketa",
+          form_reason: "plan",
+          is_public: true,
+          deadline_at: null,
+          max_responses: 1,
+          author_id: "user-1",
+          created_at: "2026-04-18T10:00:00.000Z",
+          responses_count: 1,
+          profiles: null,
+        },
+      ],
+      count: 1,
+      error: null,
+    });
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    await expect(
+      fetchDashboardFormsPage({
+        page: 0,
+        pageSize: 20,
+      }),
+    ).resolves.toEqual({
+      items: [
+        expect.objectContaining({
+          id: "form-1",
+          is_public: false,
+          max_responses: 1,
+          responses_count: 1,
+        }),
+      ],
+      totalCount: 1,
+    });
+  });
 });
 
 describe("fetchTemplateFormsPage", () => {

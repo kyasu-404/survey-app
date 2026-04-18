@@ -129,6 +129,29 @@ function syncFetchedDeadlineState<T extends Pick<SurveyForm, "deadline_at" | "fo
   return applyDeadlineStatePatch(form, deadlineStatePatch);
 }
 
+function syncFetchedResponseLimitState<
+  T extends Pick<SurveyForm, "is_public"> & Partial<Pick<SurveyForm, "max_responses" | "responses_count">>,
+>(form: T): T {
+  const maxResponses = form.max_responses;
+  const responsesCount = form.responses_count ?? 0;
+
+  if (typeof maxResponses === "number" && maxResponses > 0 && responsesCount >= maxResponses) {
+    return {
+      ...form,
+      is_public: false,
+    };
+  }
+
+  return form;
+}
+
+function syncFetchedFormState<
+  T extends Pick<SurveyForm, "deadline_at" | "form_type" | "is_public"> &
+    Partial<Pick<SurveyForm, "max_responses" | "responses_count">>,
+>(form: T): T {
+  return syncFetchedResponseLimitState(syncFetchedDeadlineState(form));
+}
+
 function mapRawForm(form: RawForm): SurveyForm {
   return {
     ...form,
@@ -268,7 +291,7 @@ export async function fetchForms(filters?: FormsFilters, options: RequestSignalO
 
   const forms = ((data ?? []) as RawForm[]).map(mapRawForm);
 
-  return forms.map((form) => syncFetchedDeadlineState(form));
+  return forms.map((form) => syncFetchedFormState(form));
 }
 
 export async function fetchDashboardFormsPage(
@@ -306,7 +329,7 @@ export async function fetchDashboardFormsPage(
   return {
     items: ((data ?? []) as RawFormSummary[])
       .map(mapRawFormSummary)
-      .map((form) => syncFetchedDeadlineState(form)),
+      .map((form) => syncFetchedFormState(form)),
     totalCount: count ?? 0,
   };
 }
@@ -384,7 +407,7 @@ export async function fetchFormById(id: string, options: RequestSignalOptions = 
     { signal: options.signal, context: { formId: id } },
   );
   if (error) throw error;
-  return syncFetchedDeadlineState(data as SurveyForm);
+  return syncFetchedFormState(data as SurveyForm);
 }
 
 export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
@@ -399,7 +422,7 @@ export async function fetchPublicFormById(id: string, options: RequestSignalOpti
     return null;
   }
 
-  return syncFetchedDeadlineState(data as SurveyForm);
+  return syncFetchedFormState(data as SurveyForm);
 }
 
 export async function insertForm(payload: {

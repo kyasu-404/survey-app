@@ -261,6 +261,9 @@ test("response limits use an atomic form counter instead of counting response ro
 
   assert.doesNotMatch(ensureLimit, /count\s*\(\s*\*\s*\)/i);
   assert.match(ensureLimit, /update public\.forms f\s+set responses_count = f\.responses_count \+ 1/i);
+  assert.match(ensureLimit, /is_public = case/i);
+  assert.match(ensureLimit, /f\.responses_count \+ 1 >= f\.max_responses/i);
+  assert.match(ensureLimit, /then false/i);
   assert.match(ensureLimit, /f\.max_responses is null\s+or f\.responses_count < f\.max_responses/i);
   assert.match(
     schema,

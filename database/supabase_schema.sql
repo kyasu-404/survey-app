@@ -193,7 +193,11 @@ declare
   form_exists boolean;
 begin
   update public.forms f
-  set responses_count = f.responses_count + 1
+  set responses_count = f.responses_count + 1,
+      is_public = case
+        when f.max_responses is not null and f.responses_count + 1 >= f.max_responses then false
+        else f.is_public
+      end
   where f.id = new.form_id
     and (
       f.max_responses is null
@@ -224,28 +228,6 @@ $$;
 create or replace trigger responses_form_limit
 before insert on public.responses
 for each row execute procedure public.ensure_form_response_limit();
-
-create or replace function public.close_form_when_response_limit_reached()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  update public.forms f
-  set is_public = false
-  where f.id = new.form_id
-    and f.is_public = true
-    and f.max_responses is not null
-    and f.responses_count >= f.max_responses;
-
-  return new;
-end;
-$$;
-
-create or replace trigger responses_close_form_at_limit
-after insert on public.responses
-for each row execute procedure public.close_form_when_response_limit_reached();
 
 create or replace function public.decrement_form_response_count()
 returns trigger
