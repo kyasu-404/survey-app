@@ -116,6 +116,11 @@ export function useDashboardSettingsActions({
       return;
     }
 
+    if (parsedLimit < (responseLimitEditor.form.responses_count ?? 0)) {
+      showToast("Лимит ответов не может быть меньше количества уже полученных ответов", "error");
+      return;
+    }
+
     await runAction(() => saveResponseLimitAction(responseLimitEditor.form.id, parsedLimit), {
       actionKey: getFormActionKey(responseLimitEditor.form.id),
       successMessage: "Ограничение сохранено",

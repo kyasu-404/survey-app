@@ -11,6 +11,9 @@ type ResponseLimitModalProps = {
 };
 
 export function ResponseLimitModal({ editor, isPending, onCancel, onClear, onSave, onValueChange }: ResponseLimitModalProps) {
+  const responsesCount = editor.form.responses_count ?? 0;
+  const minimumLimit = Math.max(1, responsesCount);
+
   return (
     <div className="modal-backdrop">
       <div className="modal-card card deadline-modal dashboard-settings-modal" role="dialog" aria-modal="true" aria-label="Ограничение ответов">
@@ -20,14 +23,16 @@ export function ResponseLimitModal({ editor, isPending, onCancel, onClear, onSav
           <span>Максимум ответов</span>
           <input
             type="number"
-            min={1}
+            min={minimumLimit}
             step={1}
             inputMode="numeric"
             value={editor.value}
             onChange={(event) => onValueChange(event.target.value)}
           />
         </label>
-        <p className="deadline-modal-hint">Когда лимит будет достигнут, новые ответы не будут приниматься.</p>
+        <p className="deadline-modal-hint">
+          Когда лимит будет достигнут, форма закроется. Уже получено ответов: {responsesCount}.
+        </p>
         <div className="deadline-modal-actions">
           <button type="button" className="deadline-action-cancel-button" onClick={onCancel} disabled={isPending}>
             Отмена

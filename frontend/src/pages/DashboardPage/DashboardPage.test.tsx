@@ -1381,6 +1381,29 @@ describe("DashboardPage", () => {
     expect(setFormDeadline).not.toHaveBeenCalled();
   });
 
+  it("shows an error toast instead of reopening a form whose response limit is reached", async () => {
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Заполненная закрытая форма",
+          author_id: "user-1",
+          is_public: false,
+          deadline_at: null,
+          responses_count: 5,
+          max_responses: 5,
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Заполненная закрытая форма: Закрыта" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Открыть" }));
+
+    expect(showToast).toHaveBeenCalledWith("Сначала уберите или повысьте лимит ответов", "error");
+    expect(changeFormStatus).not.toHaveBeenCalled();
+  });
+
   it("disables deadline clearing when the form has no deadline", async () => {
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
@@ -1458,6 +1481,37 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(setFormResponseLimit).toHaveBeenCalledWith("form-1", null);
     });
+  });
+
+  it("does not save a response limit below the number of collected responses", async () => {
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Форма с ответами",
+          author_id: "user-1",
+          responses_count: 4,
+          max_responses: null,
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Статус формы Форма с ответами: Активна" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ограничить ответы" }));
+
+    const limitDialog = await screen.findByRole("dialog", { name: "Ограничение ответов" });
+    const limitInput = within(limitDialog).getByLabelText("Максимум ответов");
+
+    await userEvent.clear(limitInput);
+    await userEvent.type(limitInput, "3");
+    await userEvent.click(within(limitDialog).getByRole("button", { name: "Сохранить" }));
+
+    expect(showToast).toHaveBeenCalledWith(
+      "Лимит ответов не может быть меньше количества уже полученных ответов",
+      "error",
+    );
+    expect(setFormResponseLimit).not.toHaveBeenCalled();
   });
 
   it("keeps the response limit clear button visible but disabled when no limit is set", async () => {

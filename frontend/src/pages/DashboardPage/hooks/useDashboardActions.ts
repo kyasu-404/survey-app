@@ -4,6 +4,7 @@ import { useToast } from "../../../app/providers/ToastProvider";
 import { getFormById } from "../../../entities/survey/api/surveysApi";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import type { DashboardShowToast } from "../types";
+import { isResponseLimitReached } from "../dashboardPageUtils";
 import { useDashboardActionRunner } from "./useDashboardActionRunner";
 import { useDashboardMutations } from "./useDashboardMutations";
 import { useDashboardSettingsActions } from "./useDashboardSettingsActions";
@@ -95,6 +96,11 @@ export function useDashboardActions({ formsQueryKey, formsStatsQueryKey, userId 
 
   const handleToggleFormStatus = async (form: SurveyFormSummary) => {
     const nextStatus = !form.is_public;
+
+    if (nextStatus && isResponseLimitReached(form.responses_count ?? 0, form.max_responses)) {
+      showToast("Сначала уберите или повысьте лимит ответов", "error");
+      return;
+    }
 
     if (!nextStatus && form.deadline_at) {
       const shouldContinue = window.confirm(
