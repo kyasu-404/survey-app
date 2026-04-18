@@ -52,6 +52,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const qr = useQrDialog();
 
   useDashboardRealtime({
+    filters: filters.listFilters,
     formsQueryKey: forms.formsQueryKey,
     formsStatsQueryKey: stats.formsStatsQueryKey,
     isAuthLoading,

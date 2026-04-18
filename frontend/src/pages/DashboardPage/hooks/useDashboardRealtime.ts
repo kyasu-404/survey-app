@@ -1,10 +1,13 @@
 import { useEffect } from "react";
-import type { QueryKey, QueryClient } from "@tanstack/react-query";
+import type { InfiniteData, QueryKey, QueryClient } from "@tanstack/react-query";
+import type { PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
 import { supabaseClient } from "../../../shared/api";
 import { scheduleDebouncedQueryInvalidation } from "../../../shared/lib/queryRefresh";
-import type { DashboardViewMode } from "../types";
+import type { DashboardListFilters, DashboardViewMode } from "../types";
+import { shouldInvalidateDashboardForms, type DashboardRealtimePayload } from "./dashboardRealtimeFilters";
 
 type UseDashboardRealtimeOptions = {
+  filters: DashboardListFilters;
   formsQueryKey: QueryKey;
   formsStatsQueryKey: QueryKey;
   isAuthLoading: boolean;
@@ -13,7 +16,21 @@ type UseDashboardRealtimeOptions = {
   viewMode: DashboardViewMode;
 };
 
+function getCachedDashboardFormIds(queryClient: QueryClient, formsQueryKey: QueryKey) {
+  const cachedData = queryClient.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(formsQueryKey);
+  const ids = new Set<string>();
+
+  for (const page of cachedData?.pages ?? []) {
+    for (const form of page.items) {
+      ids.add(form.id);
+    }
+  }
+
+  return ids;
+}
+
 export function useDashboardRealtime({
+  filters,
   formsQueryKey,
   formsStatsQueryKey,
   isAuthLoading,
@@ -37,7 +54,18 @@ export function useDashboardRealtime({
           table: "forms",
           ...(formFilter ? { filter: formFilter } : {}),
         },
-        () => {
+        (payload) => {
+          const cachedFormIds = getCachedDashboardFormIds(queryClient, formsQueryKey);
+
+          if (!shouldInvalidateDashboardForms({ cachedFormIds, filters, payload: payload as DashboardRealtimePayload })) {
+            console.info("[realtime] dashboard forms change ignored", {
+              eventType: payload.eventType,
+              userId: userId ?? null,
+              viewMode,
+            });
+            return;
+          }
+
           scheduleDebouncedQueryInvalidation(
             queryClient,
             `dashboard realtime ${viewMode} forms`,
@@ -57,5 +85,5 @@ export function useDashboardRealtime({
     return () => {
       void supabaseClient.removeChannel(channel);
     };
-  }, [formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, userId, viewMode]);
+  }, [filters, formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, userId, viewMode]);
 }

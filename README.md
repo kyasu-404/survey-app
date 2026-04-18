@@ -68,10 +68,10 @@ VITE_SUPABASE_STORAGE_BUCKET=survey-files
 Для Edge Function `user-admin` дополнительно задайте allowlist origin-ов:
 
 ```env
-USER_ADMIN_ALLOWED_ORIGINS=https://app.example.com,https://staging.example.com
+USER_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
 ```
 
-Локально функция по умолчанию разрешает `http://localhost:5173` и `http://127.0.0.1:5173`.
+Локально функция по умолчанию разрешает `http://localhost:5173` и `http://127.0.0.1:5173`. Если фронтенд открыт через IP машины или WSL, добавьте этот origin в `USER_ADMIN_ALLOWED_ORIGINS` точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эта переменная задаётся в `supabase/docker/.env` и передаётся в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.
 
 ## Supabase клиент
 

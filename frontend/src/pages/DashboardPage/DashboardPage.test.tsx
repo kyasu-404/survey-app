@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,16 +27,36 @@ const {
   emitRealtimeChange,
   resetRealtimeChannel,
 } = vi.hoisted(() => {
-  const changeHandlers: Array<() => void> = [];
-  const channel = {
-    on: vi.fn((_event: string, _config: unknown, callback: () => void) => {
-      changeHandlers.push(callback);
-      return channel;
-    }),
-    subscribe: vi.fn(() => channel),
+  type RealtimePayload = {
+    eventType?: string;
+    new?: Record<string, unknown> | null;
+    old?: Record<string, unknown> | null;
   };
-  const createRealtimeChannel = vi.fn(() => channel);
-  const removeRealtimeChannel = vi.fn(() => Promise.resolve("ok"));
+  type RealtimeChannel = {
+    handlers: Array<(payload: RealtimePayload) => void>;
+    on: ReturnType<typeof vi.fn>;
+    subscribe: ReturnType<typeof vi.fn>;
+  };
+  const activeChannels: RealtimeChannel[] = [];
+  const createRealtimeChannel = vi.fn(() => {
+    const channel: RealtimeChannel = {
+      handlers: [],
+      on: vi.fn((_event: string, _config: unknown, callback: (payload: RealtimePayload) => void) => {
+        channel.handlers.push(callback);
+        return channel;
+      }),
+      subscribe: vi.fn(() => channel),
+    };
+    activeChannels.push(channel);
+    return channel;
+  });
+  const removeRealtimeChannel = vi.fn((channel: RealtimeChannel) => {
+    const channelIndex = activeChannels.indexOf(channel);
+    if (channelIndex !== -1) {
+      activeChannels.splice(channelIndex, 1);
+    }
+    return Promise.resolve("ok");
+  });
 
   return {
     showToast: vi.fn(),
@@ -52,16 +72,16 @@ const {
     qrToString: vi.fn(),
     createRealtimeChannel,
     removeRealtimeChannel,
-    emitRealtimeChange: () => {
-      for (const handler of changeHandlers) {
-        handler();
+    emitRealtimeChange: (payload: RealtimePayload = { eventType: "UPDATE", new: {}, old: {} }) => {
+      for (const channel of activeChannels) {
+        for (const handler of channel.handlers) {
+          handler(payload);
+        }
       }
     },
     resetRealtimeChannel: () => {
-      changeHandlers.length = 0;
+      activeChannels.length = 0;
       createRealtimeChannel.mockClear();
-      channel.on.mockClear();
-      channel.subscribe.mockClear();
       removeRealtimeChannel.mockClear();
     },
   };
@@ -578,6 +598,178 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Опрос по запросу")).toBeInTheDocument();
     expect(screen.queryByText("Мониторинг по приказу")).not.toBeInTheDocument();
+  });
+
+  it("does not refresh filtered all-forms dashboard for irrelevant realtime form changes", async () => {
+    const forms = [
+      createForm(1, {
+        title: "Мониторинг по приказу",
+        author_id: "user-1",
+        author_name: "admin",
+        form_type: "monitoring",
+        form_reason: "order",
+      }),
+      createForm(2, {
+        title: "Опрос по запросу",
+        author_id: "user-2",
+        author_name: "operator",
+        form_type: "survey",
+        form_reason: "request",
+      }),
+    ];
+
+    getDashboardFormsPage.mockImplementation(({ filters }: { filters?: { formType?: string; formReason?: string } }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardPage(filteredItems, filteredItems.length));
+    });
+    getDashboardFormsStats.mockImplementation((filters?: { formType?: string; formReason?: string }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardStats(filteredItems, filteredItems.length));
+    });
+
+    renderPage("all");
+
+    expect(await screen.findByText("Мониторинг по приказу")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            formType: "survey",
+            formReason: "request",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByText("Опрос по запросу")).toBeInTheDocument();
+
+    const callsAfterFiltering = getDashboardFormsPage.mock.calls.length;
+    emitRealtimeChange({
+      eventType: "UPDATE",
+      new: createForm(3, {
+        title: "Чужой мониторинг",
+        form_type: "monitoring",
+        form_reason: "order",
+      }),
+      old: createForm(3, {
+        title: "Чужой мониторинг",
+        form_type: "monitoring",
+        form_reason: "order",
+      }),
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 850));
+    });
+
+    expect(getDashboardFormsPage).toHaveBeenCalledTimes(callsAfterFiltering);
+  });
+
+  it("refreshes filtered all-forms dashboard for relevant realtime form changes", async () => {
+    const forms = [
+      createForm(1, {
+        title: "Опрос по запросу",
+        author_id: "user-2",
+        author_name: "operator",
+        form_type: "survey",
+        form_reason: "request",
+      }),
+    ];
+
+    getDashboardFormsPage.mockImplementation(({ filters }: { filters?: { formType?: string; formReason?: string } }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardPage(filteredItems, filteredItems.length));
+    });
+    getDashboardFormsStats.mockImplementation((filters?: { formType?: string; formReason?: string }) => {
+      const filteredItems = forms.filter((form) => {
+        if (filters?.formType && form.form_type !== filters.formType) {
+          return false;
+        }
+
+        if (filters?.formReason && form.form_reason !== filters.formReason) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return Promise.resolve(createDashboardStats(filteredItems, filteredItems.length));
+    });
+
+    renderPage("all");
+
+    expect(await screen.findByText("Опрос по запросу")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            formType: "survey",
+            formReason: "request",
+          }),
+        }),
+      );
+    });
+
+    const callsAfterFiltering = getDashboardFormsPage.mock.calls.length;
+    emitRealtimeChange({
+      eventType: "UPDATE",
+      new: createForm(1, {
+        title: "Опрос по запросу",
+        form_type: "survey",
+        form_reason: "request",
+        deadline_at: "2026-05-10T12:00:00.000Z",
+      }),
+      old: createForm(1, {
+        title: "Опрос по запросу",
+        form_type: "survey",
+        form_reason: "request",
+        deadline_at: null,
+      }),
+    });
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(callsAfterFiltering + 1);
+    });
   });
 
   it("keeps the current scroll position when showing more forms", async () => {
