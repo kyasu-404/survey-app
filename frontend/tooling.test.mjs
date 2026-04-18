@@ -43,5 +43,5 @@ test("CI workflow gates production releases", () => {
   assert.match(workflow, /npm run build:budget/);
   assert.match(workflow, /npx playwright install --with-deps chromium/);
   assert.match(workflow, /npm run test:e2e/);
-  assert.match(workflow, /aquasecurity\/trivy-action/);
+  assert.match(workflow, /aquasecurity\/trivy-action@v\d+\.\d+\.\d+/);
 });
