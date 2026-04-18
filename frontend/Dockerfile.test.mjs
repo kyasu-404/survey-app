@@ -38,6 +38,13 @@ test("Dockerfile builds a production image on Node 20 and serves static assets",
   assert.doesNotMatch(dockerfile, /npm run dev/);
 });
 
+test("production image runs nginx as a non-root user on an unprivileged port", () => {
+  assert.match(dockerfile, /^USER\s+(?!root\b)\S+/im);
+  assert.match(dockerfile, /^EXPOSE\s+8080\b/im);
+  assert.match(nginxConfig, /^\s*listen\s+8080;/im);
+  assert.doesNotMatch(nginxConfig, /^\s*listen\s+80;/im);
+});
+
 test("production nginx sends browser hardening security headers", () => {
   const contentSecurityPolicy = readHeader(nginxConfig, "Content-Security-Policy");
 

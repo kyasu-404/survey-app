@@ -13,6 +13,7 @@ type DashboardToolbarProps = {
   formType: string;
   formsUpdatedAt: number;
   formsWithDeadlineCount: number;
+  isBackgroundRefreshingForms: boolean;
   isInitialFormsLoading: boolean;
   isRefreshingForms: boolean;
   onRefresh: () => void;
@@ -35,6 +36,7 @@ export function DashboardToolbar({
   formType,
   formsUpdatedAt,
   formsWithDeadlineCount,
+  isBackgroundRefreshingForms,
   isInitialFormsLoading,
   isRefreshingForms,
   onRefresh,
@@ -122,6 +124,7 @@ export function DashboardToolbar({
         </label>
         <RefreshButton
           isRefreshing={isRefreshingForms}
+          isSyncing={isBackgroundRefreshingForms}
           lastUpdatedAt={formsUpdatedAt}
           onClick={onRefresh}
           disabled={isInitialFormsLoading || isRefreshingForms}

@@ -4,7 +4,11 @@ import type { PaginatedSurveyFormSummaries } from "../../../entities/survey/type
 import { supabaseClient } from "../../../shared/api";
 import { scheduleDebouncedQueryInvalidation } from "../../../shared/lib/queryRefresh";
 import type { DashboardListFilters, DashboardViewMode } from "../types";
-import { shouldInvalidateDashboardForms, type DashboardRealtimePayload } from "./dashboardRealtimeFilters";
+import {
+  shouldInvalidateDashboardForms,
+  shouldInvalidateDashboardFormStats,
+  type DashboardRealtimePayload,
+} from "./dashboardRealtimeFilters";
 
 type UseDashboardRealtimeOptions = {
   filters: DashboardListFilters;
@@ -56,8 +60,9 @@ export function useDashboardRealtime({
         },
         (payload) => {
           const cachedFormIds = getCachedDashboardFormIds(queryClient, formsQueryKey);
+          const realtimePayload = payload as DashboardRealtimePayload;
 
-          if (!shouldInvalidateDashboardForms({ cachedFormIds, filters, payload: payload as DashboardRealtimePayload })) {
+          if (!shouldInvalidateDashboardForms({ cachedFormIds, filters, payload: realtimePayload })) {
             console.info("[realtime] dashboard forms change ignored", {
               eventType: payload.eventType,
               userId: userId ?? null,
@@ -66,11 +71,18 @@ export function useDashboardRealtime({
             return;
           }
 
+          const targets = [{ queryKey: formsQueryKey }];
+
+          if (shouldInvalidateDashboardFormStats({ cachedFormIds, filters, payload: realtimePayload })) {
+            targets.push({ queryKey: formsStatsQueryKey });
+          }
+
           scheduleDebouncedQueryInvalidation(
             queryClient,
             `dashboard realtime ${viewMode} forms`,
-            [{ queryKey: formsQueryKey }, { queryKey: formsStatsQueryKey }],
+            targets,
             750,
+            { cancelRefetch: false, refetchType: "active" },
           );
         },
       )

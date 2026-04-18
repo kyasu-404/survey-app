@@ -50,4 +50,21 @@ describe("RefreshButton", () => {
 
     expect(screen.getByRole("button", { name: "Обновить" })).toBeInTheDocument();
   });
+
+  it("keeps the button idle while a background sync is running", () => {
+    render(
+      <RefreshButton
+        isRefreshing={false}
+        isSyncing
+        lastUpdatedAt={new Date(2026, 3, 15, 13, 14, 15).getTime()}
+        onClick={() => undefined}
+      />,
+    );
+
+    const refreshButton = screen.getByRole("button", { name: "Обновить" });
+
+    expect(screen.getByText("Обновлено 13:14:15, синхронизация...")).toBeInTheDocument();
+    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
+  });
 });

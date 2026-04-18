@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getDashboardFormsPage } from "../../../entities/survey/api/surveysApi";
 import {
@@ -29,6 +29,7 @@ type UseDashboardFormsOptions = {
 
 export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: UseDashboardFormsOptions) {
   const [deadlineReferenceTime, setDeadlineReferenceTime] = useState(() => new Date());
+  const [isManualRefreshingForms, setIsManualRefreshingForms] = useState(false);
   const pendingLoadMoreScrollPositionRef = useRef<{ left: number; top: number } | null>(null);
 
   const formsQueryKey = useMemo(
@@ -128,6 +129,19 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
 
     void query.fetchNextPage();
   };
+  const refetchForms = query.refetch;
+  const refreshFormsManually = useCallback(async () => {
+    setIsManualRefreshingForms(true);
+
+    try {
+      return await refetchForms({ cancelRefetch: true });
+    } finally {
+      setIsManualRefreshingForms(false);
+    }
+  }, [refetchForms]);
+  const refreshFormsInBackground = useCallback(() => refetchForms({ cancelRefetch: false }), [refetchForms]);
+  const isBackgroundRefreshingForms =
+    query.isRefetching && loadedForms.length > 0 && !query.isFetchingNextPage && !isManualRefreshingForms;
 
   return {
     displayedForms: filteredForms,
@@ -137,11 +151,13 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
     formsUpdatedAt: query.dataUpdatedAt,
     hasMoreForms: Boolean(query.hasNextPage),
     handleLoadMoreForms,
+    isBackgroundRefreshingForms,
     isFetchingNextFormsPage: query.isFetchingNextPage,
     isInitialFormsLoading: query.isLoading && loadedForms.length === 0,
-    isRefreshingForms: query.isFetching && loadedForms.length > 0 && !query.isFetchingNextPage,
+    isRefreshingForms: isManualRefreshingForms,
     loadedForms,
     loadedFormsTotalCount,
-    reloadForms: query.refetch,
+    refreshFormsInBackground,
+    reloadForms: refreshFormsManually,
   };
 }

@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResponse } from "../../entities/response/api";
 import {
-  DASHBOARD_FORMS_QUERY_ROOT,
-  DASHBOARD_FORM_STATS_QUERY_ROOT,
   getFormQueryKey,
   getFormResponsesQueryKey,
   getSurveyFormQueryKey,
@@ -21,8 +19,6 @@ export function useSubmitResponseMutation() {
       submitResponse(formId, data),
     onSuccess: (_data, variables) => {
       scheduleQueryInvalidation(queryClient, "submit response", [
-        { queryKey: DASHBOARD_FORMS_QUERY_ROOT },
-        { queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT },
         { queryKey: getFormQueryKey(variables.formId) },
         { queryKey: getSurveyFormQueryKey(variables.formId) },
         { queryKey: getFormResponsesQueryKey(variables.formId) },

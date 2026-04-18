@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardListFilters } from "../types";
-import { shouldInvalidateDashboardForms } from "./dashboardRealtimeFilters";
+import { shouldInvalidateDashboardForms, shouldInvalidateDashboardFormStats } from "./dashboardRealtimeFilters";
 
 function createRealtimeForm(overrides: Record<string, unknown> = {}) {
   return {
@@ -104,6 +104,43 @@ describe("shouldInvalidateDashboardForms", () => {
           eventType: "UPDATE",
           new: { id: "form-7", title: "Новое название" },
           old: { id: "form-7", title: "Старое название" },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps response count-only updates out of dashboard stats invalidation", () => {
+    const form = createRealtimeForm({ responses_count: 1 });
+    const payload = {
+      eventType: "UPDATE",
+      new: { ...form, responses_count: 2 },
+      old: form,
+    };
+
+    expect(
+      shouldInvalidateDashboardForms({
+        filters,
+        payload,
+      }),
+    ).toBe(true);
+    expect(
+      shouldInvalidateDashboardFormStats({
+        filters,
+        payload,
+      }),
+    ).toBe(false);
+  });
+
+  it("invalidates dashboard stats when a stats counter can change", () => {
+    const form = createRealtimeForm({ deadline_at: null });
+
+    expect(
+      shouldInvalidateDashboardFormStats({
+        filters,
+        payload: {
+          eventType: "UPDATE",
+          new: { ...form, deadline_at: "2026-04-20T10:00:00.000Z" },
+          old: form,
         },
       }),
     ).toBe(true);

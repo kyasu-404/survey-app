@@ -266,6 +266,63 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("button", { name: "2 ответа" })).toBeInTheDocument();
   });
 
+  it("refreshes only the forms list for response count-only realtime updates", async () => {
+    getDashboardFormsPage
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { responses_count: 1 })]))
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { responses_count: 2 })]));
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats([createForm(1, { responses_count: 1 })]));
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "1 ответ" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
+    });
+
+    emitRealtimeChange({
+      eventType: "UPDATE",
+      old: createForm(1, { responses_count: 1 }),
+      new: createForm(1, { responses_count: 2 }),
+    });
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByRole("button", { name: "2 ответа" })).toBeInTheDocument();
+    expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the refresh button idle during a realtime background refresh", async () => {
+    const deferred = createDeferred<ReturnType<typeof createDashboardPage>>();
+
+    getDashboardFormsPage
+      .mockResolvedValueOnce(createDashboardPage([createForm(1, { title: "Форма до realtime", responses_count: 1 })]))
+      .mockImplementationOnce(() => deferred.promise);
+
+    renderPage();
+
+    expect(await screen.findByText("Форма до realtime")).toBeInTheDocument();
+
+    emitRealtimeChange({
+      eventType: "UPDATE",
+      old: createForm(1, { title: "Форма до realtime", responses_count: 1 }),
+      new: createForm(1, { title: "Форма до realtime", responses_count: 2 }),
+    });
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+    });
+
+    const refreshButton = screen.getByRole("button", { name: "Обновить" });
+    expect(screen.getByText(/синхронизация/i)).toBeInTheDocument();
+    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
+
+    deferred.resolve(createDashboardPage([createForm(1, { title: "Форма до realtime", responses_count: 2 })]));
+  });
+
   it("triggers a background refresh when returning to my forms with a refresh state", async () => {
     const queryClient = createQueryClient();
     const formsQueryKey = getDashboardFormsQueryKey({
@@ -590,7 +647,13 @@ describe("DashboardPage", () => {
     expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
     expect(screen.getByText("Обновляемая форма")).toBeInTheDocument();
 
-    deferred.resolve(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]));
+    await act(async () => {
+      deferred.resolve(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Обновить|Обновлено/ })).not.toBeDisabled();
+    });
   });
 
   it("shows type and reason on form cards and filters the list by both fields", async () => {

@@ -167,6 +167,7 @@ export default function FormResponsesPage() {
         `form responses realtime ${id}`,
         realtimeRefreshTargets,
         100,
+        { cancelRefetch: false, refetchType: "active" },
       );
     };
 

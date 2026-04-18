@@ -5,12 +5,18 @@ type RefreshTarget = {
   queryKey: QueryKey;
 };
 
+type QueryInvalidationOptions = {
+  cancelRefetch?: boolean;
+  refetchType?: "active" | "inactive" | "all" | "none";
+};
+
 const pendingInvalidations = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function scheduleQueryInvalidation(
   queryClient: QueryClient,
   reason: string,
   targets: RefreshTarget[],
+  options: QueryInvalidationOptions = {},
 ) {
   logInfo(`[react-query] schedule invalidate for ${reason}`, {
     operation: "react-query.invalidate",
@@ -19,7 +25,17 @@ export function scheduleQueryInvalidation(
   });
 
   void Promise.allSettled(
-    targets.map((target) => queryClient.invalidateQueries({ queryKey: target.queryKey })),
+    targets.map((target) => {
+      const queryFilters = options.refetchType
+        ? { queryKey: target.queryKey, refetchType: options.refetchType }
+        : { queryKey: target.queryKey };
+      const invalidateOptions =
+        typeof options.cancelRefetch === "boolean" ? { cancelRefetch: options.cancelRefetch } : undefined;
+
+      return invalidateOptions
+        ? queryClient.invalidateQueries(queryFilters, invalidateOptions)
+        : queryClient.invalidateQueries(queryFilters);
+    }),
   ).then((results) => {
     const rejected = results.filter((result) => result.status === "rejected");
 
@@ -51,6 +67,7 @@ export function scheduleDebouncedQueryInvalidation(
   reason: string,
   targets: RefreshTarget[],
   debounceMs: number,
+  options: QueryInvalidationOptions = {},
 ) {
   const cacheKey = `${reason}:${JSON.stringify(targets.map((target) => target.queryKey))}`;
   const existingTimeoutId = pendingInvalidations.get(cacheKey);
@@ -61,7 +78,7 @@ export function scheduleDebouncedQueryInvalidation(
 
   const timeoutId = setTimeout(() => {
     pendingInvalidations.delete(cacheKey);
-    scheduleQueryInvalidation(queryClient, reason, targets);
+    scheduleQueryInvalidation(queryClient, reason, targets, options);
   }, debounceMs);
 
   pendingInvalidations.set(cacheKey, timeoutId);

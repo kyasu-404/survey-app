@@ -50,4 +50,30 @@ describe("query refresh helpers", () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["forms"] });
   });
+
+  it("can keep an active background refetch instead of canceling and restarting it", async () => {
+    vi.useFakeTimers();
+
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const queryClient = {
+      invalidateQueries,
+    } as unknown as QueryClient;
+
+    scheduleDebouncedQueryInvalidation(
+      queryClient,
+      "realtime forms",
+      [{ queryKey: ["forms"] }],
+      100,
+      { cancelRefetch: false, refetchType: "active" },
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(invalidateQueries).toHaveBeenCalledWith(
+      { queryKey: ["forms"], refetchType: "active" },
+      { cancelRefetch: false },
+    );
+  });
 });

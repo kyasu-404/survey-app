@@ -62,9 +62,13 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   });
   useDashboardListRefresh({
     isAuthLoading,
-    isListFetching: forms.isInitialFormsLoading || forms.isRefreshingForms || forms.isFetchingNextFormsPage,
+    isListFetching:
+      forms.isInitialFormsLoading ||
+      forms.isRefreshingForms ||
+      forms.isBackgroundRefreshingForms ||
+      forms.isFetchingNextFormsPage,
     listUpdatedAt: forms.formsUpdatedAt,
-    reloadForms: forms.reloadForms,
+    reloadForms: forms.refreshFormsInBackground,
     userId: user?.id,
     viewMode,
   });
@@ -95,6 +99,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           formType={filters.formType}
           formsUpdatedAt={forms.formsUpdatedAt}
           formsWithDeadlineCount={stats.formsWithDeadlineCount}
+          isBackgroundRefreshingForms={forms.isBackgroundRefreshingForms}
           isInitialFormsLoading={forms.isInitialFormsLoading}
           isRefreshingForms={forms.isRefreshingForms}
           onRefresh={() => void forms.reloadForms()}

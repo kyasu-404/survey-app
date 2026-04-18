@@ -50,8 +50,8 @@ describe("submitResponse", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: DASHBOARD_FORMS_QUERY_ROOT });
-    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: DASHBOARD_FORMS_QUERY_ROOT });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form", "form-1"] });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["survey-form", "form-1"] });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form-responses", "form-1"] });

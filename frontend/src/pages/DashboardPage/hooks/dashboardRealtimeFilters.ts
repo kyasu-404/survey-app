@@ -40,6 +40,17 @@ const DASHBOARD_RELEVANT_FORM_FIELDS = [
   "responses_count",
   "title",
 ] as const;
+const DASHBOARD_STATS_RELEVANT_FORM_FIELDS = [
+  "author_id",
+  "author_name",
+  "created_at",
+  "deadline_at",
+  "form_reason",
+  "form_type",
+  "is_public",
+  "title",
+] as const;
+const STATS_IRRELEVANT_CARD_FIELDS = ["max_responses", "responses_count"] as const;
 
 function isRecord(value: unknown): value is DashboardRealtimeRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -181,6 +192,70 @@ function hasRelevantDashboardFieldChange(
   return comparedFields === 0;
 }
 
+function changedFieldNames(
+  oldRecord: DashboardRealtimeRecord | null,
+  newRecord: DashboardRealtimeRecord | null,
+) {
+  if (!oldRecord || !newRecord) {
+    return null;
+  }
+
+  const fields = new Set([...Object.keys(oldRecord), ...Object.keys(newRecord)]);
+  const changedFields = new Set<string>();
+
+  for (const field of fields) {
+    if (!Object.is(oldRecord[field], newRecord[field])) {
+      changedFields.add(field);
+    }
+  }
+
+  return changedFields;
+}
+
+function hasOnlyStatsIrrelevantCardFieldChanges(
+  oldRecord: DashboardRealtimeRecord | null,
+  newRecord: DashboardRealtimeRecord | null,
+) {
+  const changedFields = changedFieldNames(oldRecord, newRecord);
+
+  if (!changedFields || changedFields.size === 0) {
+    return false;
+  }
+
+  return [...changedFields].every((field) =>
+    STATS_IRRELEVANT_CARD_FIELDS.includes(field as (typeof STATS_IRRELEVANT_CARD_FIELDS)[number]),
+  );
+}
+
+function hasRelevantDashboardStatsFieldChange(
+  oldRecord: DashboardRealtimeRecord | null,
+  newRecord: DashboardRealtimeRecord | null,
+) {
+  if (!oldRecord || !newRecord) {
+    return true;
+  }
+
+  if (hasOnlyStatsIrrelevantCardFieldChanges(oldRecord, newRecord)) {
+    return false;
+  }
+
+  let comparedFields = 0;
+
+  for (const field of DASHBOARD_STATS_RELEVANT_FORM_FIELDS) {
+    if (!(field in oldRecord) || !(field in newRecord)) {
+      return true;
+    }
+
+    comparedFields += 1;
+
+    if (!Object.is(oldRecord[field], newRecord[field])) {
+      return true;
+    }
+  }
+
+  return comparedFields === 0;
+}
+
 export function shouldInvalidateDashboardForms({
   cachedFormIds,
   filters,
@@ -206,6 +281,36 @@ export function shouldInvalidateDashboardForms({
       recordMayMatchDashboardFilters(newRecord, filters);
 
     return mayAffectCurrentFilters && hasRelevantDashboardFieldChange(oldRecord, newRecord);
+  }
+
+  return true;
+}
+
+export function shouldInvalidateDashboardFormStats({
+  cachedFormIds,
+  filters,
+  payload,
+}: ShouldInvalidateDashboardFormsOptions) {
+  const newRecord = isRecord(payload.new) ? payload.new : null;
+  const oldRecord = isRecord(payload.old) ? payload.old : null;
+  const eventType = payload.eventType?.toUpperCase();
+  const cachedRecordChanged = isCachedRecord(cachedFormIds, oldRecord, newRecord);
+
+  if (eventType === "INSERT") {
+    return recordMayMatchDashboardFilters(newRecord, filters);
+  }
+
+  if (eventType === "DELETE") {
+    return cachedRecordChanged || recordMayMatchDashboardFilters(oldRecord, filters);
+  }
+
+  if (eventType === "UPDATE") {
+    const mayAffectCurrentFilters =
+      cachedRecordChanged ||
+      recordMayMatchDashboardFilters(oldRecord, filters) ||
+      recordMayMatchDashboardFilters(newRecord, filters);
+
+    return mayAffectCurrentFilters && hasRelevantDashboardStatsFieldChange(oldRecord, newRecord);
   }
 
   return true;

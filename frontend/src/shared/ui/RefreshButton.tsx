@@ -16,6 +16,7 @@ function formatLastUpdatedLabel(lastUpdatedAt: number) {
 type RefreshButtonProps = {
   disabled?: boolean;
   isRefreshing: boolean;
+  isSyncing?: boolean;
   lastUpdatedAt?: number;
   onClick: () => void;
 };
@@ -23,6 +24,7 @@ type RefreshButtonProps = {
 export function RefreshButton({
   disabled = false,
   isRefreshing,
+  isSyncing = false,
   lastUpdatedAt = 0,
   onClick,
 }: RefreshButtonProps) {
@@ -70,10 +72,13 @@ export function RefreshButton({
 
   const buttonLabel = isRefreshing ? "Обновляется..." : isRecentlyUpdated ? "Обновлено" : "Обновить";
   const lastUpdatedLabel = lastUpdatedAt > 0 ? `Обновлено ${formatLastUpdatedLabel(lastUpdatedAt)}` : null;
+  const refreshMetaLabel = isSyncing
+    ? [lastUpdatedLabel, "синхронизация..."].filter(Boolean).join(", ")
+    : lastUpdatedLabel;
 
   return (
     <div className="dashboard-refresh-control">
-      {lastUpdatedLabel ? <p className="dashboard-refresh-meta">{lastUpdatedLabel}</p> : null}
+      {refreshMetaLabel ? <p className="dashboard-refresh-meta">{refreshMetaLabel}</p> : null}
       <button
         type="button"
         className="dashboard-refresh-button"
