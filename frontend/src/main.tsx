@@ -9,9 +9,11 @@ import { AuthProvider } from './app/providers/AuthProvider'
 import { QueryProvider } from './app/providers/QueryProvider'
 import { ToastProvider } from './app/providers/ToastProvider'
 import { AppErrorBoundary } from './app/providers/AppErrorBoundary'
+import { initializeObservability } from './shared/lib/observability'
 import './app.css'
 
 surveyLocalization.defaultLocale = "ru";
+initializeObservability();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <QueryProvider>

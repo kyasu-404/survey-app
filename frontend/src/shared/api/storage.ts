@@ -1,5 +1,6 @@
 import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { publicSupabaseClient, supabaseClient } from "./client";
+import { runRequest } from "./request";
 import { SUPABASE_STORAGE_BUCKET } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
@@ -57,7 +58,11 @@ async function getCurrentUserId(options: StorageAuthOptions = {}) {
   const {
     data: { user },
     error,
-  } = await supabaseClient.auth.getUser();
+  } = await runRequest(
+    "auth.getStorageUser",
+    () => supabaseClient.auth.getUser(),
+    { context: { allowAnonymous: Boolean(options.allowAnonymous) } },
+  );
 
   if (error) {
     if (isAuthSessionMissingError(error)) {
@@ -83,7 +88,6 @@ function looksLikeStoragePath(value: string) {
 
   try {
     // Fully qualified URLs are handled separately.
-    // eslint-disable-next-line no-new
     new URL(value);
     return false;
   } catch {
@@ -164,7 +168,16 @@ export function getStoragePathFromSurveyFileValue(value: unknown) {
 
 async function createSignedUrlForStoragePath(path: string) {
   const bucket = supabaseClient.storage.from(SUPABASE_STORAGE_BUCKET);
-  const { data, error } = await bucket.createSignedUrl(path, SIGNED_URL_EXPIRES_IN_SECONDS);
+  const { data, error } = await runRequest(
+    "storage.createSignedUrl",
+    () => bucket.createSignedUrl(path, SIGNED_URL_EXPIRES_IN_SECONDS),
+    {
+      context: {
+        bucket: SUPABASE_STORAGE_BUCKET,
+        expiresInSeconds: SIGNED_URL_EXPIRES_IN_SECONDS,
+      },
+    },
+  );
 
   if (error || !data?.signedUrl) {
     throw new Error(`Не удалось создать ссылку на файл: ${error?.message ?? "пустой ответ"}`);
@@ -204,9 +217,22 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
   const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
   const bucket = bucketClient.storage.from(SUPABASE_STORAGE_BUCKET);
 
-  const { error } = await bucket.upload(filePath, file, {
-    upsert: false,
-  });
+  const { error } = await runRequest(
+    "storage.upload",
+    () =>
+      bucket.upload(filePath, file, {
+        upsert: false,
+      }),
+    {
+      context: {
+        bucket: SUPABASE_STORAGE_BUCKET,
+        formId,
+        allowAnonymous: Boolean(options.allowAnonymous),
+        fileSize: file.size,
+        fileType: file.type || null,
+      },
+    },
+  );
 
   if (error) {
     throw new Error(`Не удалось загрузить файл: ${error.message}`);
@@ -223,7 +249,17 @@ export async function removeFileFromStorage(path: string, options: RemoveFileFro
   assertDeletablePath(path, currentUserId, options);
 
   const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
-  const { error } = await bucketClient.storage.from(SUPABASE_STORAGE_BUCKET).remove([path]);
+  const { error } = await runRequest(
+    "storage.remove",
+    () => bucketClient.storage.from(SUPABASE_STORAGE_BUCKET).remove([path]),
+    {
+      context: {
+        bucket: SUPABASE_STORAGE_BUCKET,
+        formId: options.formId ?? null,
+        allowAnonymous: Boolean(options.allowAnonymous),
+      },
+    },
+  );
 
   if (error) {
     throw new Error(`Не удалось удалить файл: ${error.message}`);

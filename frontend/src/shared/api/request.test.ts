@@ -22,6 +22,28 @@ describe("runRequest", () => {
     expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("attaches correlation headers to Supabase request builders", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const setHeader = vi.fn();
+    const builder = {
+      setHeader,
+      then: <TResult1 = string, TResult2 = never>(
+        onfulfilled?: ((value: string) => TResult1 | PromiseLike<TResult1>) | null,
+      ) => {
+        return Promise.resolve(onfulfilled ? onfulfilled("ok") : ("ok" as TResult1)) as PromiseLike<
+          TResult1 | TResult2
+        >;
+      },
+    } satisfies PromiseLike<string> & { setHeader: (name: string, value: string) => unknown };
+
+    await expect(runRequest("forms.load", () => builder)).resolves.toBe("ok");
+
+    expect(setHeader).toHaveBeenCalledWith("x-request-id", expect.stringMatching(/[0-9a-f-]{16,}/i));
+    expect(setHeader).toHaveBeenCalledWith("traceparent", expect.stringMatching(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/));
+    expect(setHeader).toHaveBeenCalledWith("x-client-release", expect.any(String));
+  });
+
   it("rejects with a timeout error when the request hangs", async () => {
     vi.useFakeTimers();
     vi.spyOn(console, "info").mockImplementation(() => undefined);

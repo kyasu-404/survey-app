@@ -33,10 +33,21 @@ type UserAdminAction =
       role: UserRole;
     };
 
+type RequestLogContext = {
+  requestId: string;
+  traceparent: string | null;
+  traceId: string | null;
+  release: string | null;
+  operation: string;
+  userId?: string;
+  targetUserId?: string;
+};
+
 const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 const baseCorsHeaders = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, x-client-release, traceparent",
+  "Access-Control-Expose-Headers": "x-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Vary": "Origin",
 };
@@ -44,6 +55,19 @@ const baseCorsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+function createRequestLogContext(req: Request, operation = "user-admin"): RequestLogContext {
+  const traceparent = req.headers.get("traceparent");
+  const traceId = req.headers.get("x-trace-id") ?? traceparent?.split("-")[1] ?? null;
+
+  return {
+    requestId: req.headers.get("x-request-id") ?? crypto.randomUUID(),
+    traceparent: req.headers.get("traceparent"),
+    traceId,
+    release: req.headers.get("x-client-release"),
+    operation,
+  };
+}
 
 function getAllowedOrigins() {
   const configuredOrigins = Deno.env.get("USER_ADMIN_ALLOWED_ORIGINS")
@@ -69,14 +93,34 @@ function buildCorsHeaders(req: Request) {
   return headers;
 }
 
-function jsonResponse(req: Request, status: number, body: Record<string, unknown>) {
+function jsonResponse(
+  req: Request,
+  status: number,
+  body: Record<string, unknown>,
+  requestLogContext = createRequestLogContext(req),
+) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...buildCorsHeaders(req),
       "Content-Type": "application/json",
+      "x-request-id": requestLogContext.requestId,
     },
   });
+}
+
+function errorResponse(req: Request, status: number, error: string, requestLogContext: RequestLogContext) {
+  console.error("user-admin action failed", {
+    ...requestLogContext,
+    status,
+    error,
+  });
+
+  return jsonResponse(req, status, { error }, requestLogContext);
+}
+
+function getTargetUserId(payload: UserAdminAction) {
+  return "userId" in payload ? payload.userId : undefined;
 }
 
 function isUserRole(value: unknown): value is UserRole {
@@ -84,6 +128,8 @@ function isUserRole(value: unknown): value is UserRole {
 }
 
 Deno.serve(async (req) => {
+  const requestLogContext = createRequestLogContext(req);
+
   if (req.method === "OPTIONS") {
     if (!isOriginAllowed(req.headers.get("Origin"))) {
       return new Response("Origin not allowed", { status: 403, headers: buildCorsHeaders(req) });
@@ -93,25 +139,25 @@ Deno.serve(async (req) => {
   }
 
   if (!isOriginAllowed(req.headers.get("Origin"))) {
-    return jsonResponse(req, 403, { error: "Origin not allowed" });
+    return errorResponse(req, 403, "Origin not allowed", requestLogContext);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse(req, 405, { error: "Method not allowed" });
+    return errorResponse(req, 405, "Method not allowed", requestLogContext);
   }
 
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-    return jsonResponse(req, 500, { error: "Supabase env vars are not configured" });
+    return errorResponse(req, 500, "Supabase env vars are not configured", requestLogContext);
   }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return jsonResponse(req, 401, { error: "Missing Authorization header" });
+    return errorResponse(req, 401, "Missing Authorization header", requestLogContext);
   }
 
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) {
-    return jsonResponse(req, 401, { error: "Invalid Authorization header" });
+    return errorResponse(req, 401, "Invalid Authorization header", requestLogContext);
   }
 
   const authClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -129,7 +175,7 @@ Deno.serve(async (req) => {
   } = await authClient.auth.getUser(jwt);
 
   if (requesterError || !requester) {
-    return jsonResponse(req, 401, { error: "Unauthorized" });
+    return errorResponse(req, 401, "Unauthorized", requestLogContext);
   }
 
   const { data: requesterProfile, error: requesterProfileError } = await adminClient
@@ -139,15 +185,24 @@ Deno.serve(async (req) => {
     .single();
 
   if (requesterProfileError || requesterProfile?.role !== "admin") {
-    return jsonResponse(req, 403, { error: "Forbidden" });
+    return errorResponse(req, 403, "Forbidden", { ...requestLogContext, userId: requester.id });
   }
 
   let payload: UserAdminAction;
   try {
     payload = (await req.json()) as UserAdminAction;
   } catch {
-    return jsonResponse(req, 400, { error: "Invalid JSON payload" });
+    return errorResponse(req, 400, "Invalid JSON payload", { ...requestLogContext, userId: requester.id });
   }
+
+  const actionLogContext: RequestLogContext = {
+    ...requestLogContext,
+    operation: `user-admin.${payload.action}`,
+    userId: requester.id,
+    targetUserId: getTargetUserId(payload),
+  };
+
+  console.info("user-admin action started", actionLogContext);
 
   switch (payload.action) {
     case "list": {
@@ -159,15 +214,20 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false });
 
       if (profilesError) {
-        return jsonResponse(req, 400, { error: profilesError.message });
+        return errorResponse(req, 400, profilesError.message, actionLogContext);
       }
 
-      return jsonResponse(req, 200, { users: profileUsers ?? [] });
+      console.info("user-admin action completed", {
+        ...actionLogContext,
+        resultCount: profileUsers?.length ?? 0,
+      });
+
+      return jsonResponse(req, 200, { users: profileUsers ?? [] }, actionLogContext);
     }
 
     case "create": {
       if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8 || !isUserRole(payload.role)) {
-        return jsonResponse(req, 400, { error: "Invalid create payload" });
+        return errorResponse(req, 400, "Invalid create payload", actionLogContext);
       }
 
       const name = payload.name.trim();
@@ -183,12 +243,12 @@ Deno.serve(async (req) => {
       });
 
       if (error) {
-        return jsonResponse(req, 400, { error: error.message });
+        return errorResponse(req, 400, error.message, actionLogContext);
       }
 
       const createdUserId = data.user?.id;
       if (!createdUserId) {
-        return jsonResponse(req, 500, { error: "User was created without an id" });
+        return errorResponse(req, 500, "User was created without an id", actionLogContext);
       }
 
       const { error: profileError } = await adminClient.from("profiles").upsert(
@@ -206,39 +266,52 @@ Deno.serve(async (req) => {
         const { error: rollbackError } = await adminClient.auth.admin.deleteUser(createdUserId);
 
         if (rollbackError) {
-          return jsonResponse(req, 500, {
-            error: `User was partially created: profile update failed (${profileError.message}) and cleanup failed (${rollbackError.message})`,
-          });
+          return errorResponse(
+            req,
+            500,
+            `User was partially created: profile update failed (${profileError.message}) and cleanup failed (${rollbackError.message})`,
+            { ...actionLogContext, targetUserId: createdUserId },
+          );
         }
 
-        return jsonResponse(req, 400, {
-          error: `User creation failed and was rolled back: ${profileError.message}`,
-        });
+        return errorResponse(
+          req,
+          400,
+          `User creation failed and was rolled back: ${profileError.message}`,
+          { ...actionLogContext, targetUserId: createdUserId },
+        );
       }
 
-      return jsonResponse(req, 200, { userId: createdUserId });
+      console.info("user-admin action completed", {
+        ...actionLogContext,
+        targetUserId: createdUserId,
+      });
+
+      return jsonResponse(req, 200, { userId: createdUserId }, { ...actionLogContext, targetUserId: createdUserId });
     }
 
     case "delete": {
       if (!payload.userId) {
-        return jsonResponse(req, 400, { error: "userId is required" });
+        return errorResponse(req, 400, "userId is required", actionLogContext);
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(req, 400, { error: "You cannot delete yourself" });
+        return errorResponse(req, 400, "You cannot delete yourself", actionLogContext);
       }
 
       const { error } = await adminClient.auth.admin.deleteUser(payload.userId);
       if (error) {
-        return jsonResponse(req, 400, { error: error.message });
+        return errorResponse(req, 400, error.message, actionLogContext);
       }
 
-      return jsonResponse(req, 200, { success: true });
+      console.info("user-admin action completed", actionLogContext);
+
+      return jsonResponse(req, 200, { success: true }, actionLogContext);
     }
 
     case "updatePassword": {
       if (!payload.userId || payload.password.length < 8) {
-        return jsonResponse(req, 400, { error: "Invalid password update payload" });
+        return errorResponse(req, 400, "Invalid password update payload", actionLogContext);
       }
 
       const { error } = await adminClient.auth.admin.updateUserById(payload.userId, {
@@ -246,19 +319,21 @@ Deno.serve(async (req) => {
       });
 
       if (error) {
-        return jsonResponse(req, 400, { error: error.message });
+        return errorResponse(req, 400, error.message, actionLogContext);
       }
 
-      return jsonResponse(req, 200, { success: true });
+      console.info("user-admin action completed", actionLogContext);
+
+      return jsonResponse(req, 200, { success: true }, actionLogContext);
     }
 
     case "setDisabled": {
       if (!payload.userId) {
-        return jsonResponse(req, 400, { error: "userId is required" });
+        return errorResponse(req, 400, "userId is required", actionLogContext);
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(req, 400, { error: "You cannot disable yourself" });
+        return errorResponse(req, 400, "You cannot disable yourself", actionLogContext);
       }
 
       const { error: authError } = await adminClient.auth.admin.updateUserById(payload.userId, {
@@ -266,7 +341,7 @@ Deno.serve(async (req) => {
       });
 
       if (authError) {
-        return jsonResponse(req, 400, { error: authError.message });
+        return errorResponse(req, 400, authError.message, actionLogContext);
       }
 
       const { error: profileError } = await adminClient
@@ -275,19 +350,24 @@ Deno.serve(async (req) => {
         .eq("id", payload.userId);
 
       if (profileError) {
-        return jsonResponse(req, 400, { error: profileError.message });
+        return errorResponse(req, 400, profileError.message, actionLogContext);
       }
 
-      return jsonResponse(req, 200, { success: true });
+      console.info("user-admin action completed", {
+        ...actionLogContext,
+        disabled: payload.disabled,
+      });
+
+      return jsonResponse(req, 200, { success: true }, actionLogContext);
     }
 
     case "updateRole": {
       if (!payload.userId || !isUserRole(payload.role)) {
-        return jsonResponse(req, 400, { error: "Invalid role update payload" });
+        return errorResponse(req, 400, "Invalid role update payload", actionLogContext);
       }
 
       if (payload.userId === requester.id) {
-        return jsonResponse(req, 400, { error: "You cannot change your own role" });
+        return errorResponse(req, 400, "You cannot change your own role", actionLogContext);
       }
 
       const { data: updatedProfile, error } = await adminClient
@@ -298,17 +378,22 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (error) {
-        return jsonResponse(req, 400, { error: error.message });
+        return errorResponse(req, 400, error.message, actionLogContext);
       }
 
       if (!updatedProfile) {
-        return jsonResponse(req, 404, { error: "User profile not found" });
+        return errorResponse(req, 404, "User profile not found", actionLogContext);
       }
 
-      return jsonResponse(req, 200, { success: true });
+      console.info("user-admin action completed", {
+        ...actionLogContext,
+        role: payload.role,
+      });
+
+      return jsonResponse(req, 200, { success: true }, actionLogContext);
     }
 
     default:
-      return jsonResponse(req, 400, { error: "Unsupported action" });
+      return errorResponse(req, 400, "Unsupported action", actionLogContext);
   }
 });

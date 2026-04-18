@@ -104,7 +104,7 @@ describe("storage api", () => {
       { allowAnonymous: true },
     );
 
-    expect(getRandomValues).toHaveBeenCalledTimes(1);
+    expect(getRandomValues).toHaveBeenCalled();
     expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
     expect(result).toEqual(
       expect.objectContaining({

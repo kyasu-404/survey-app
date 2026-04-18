@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "./AuthProvider";
-import { apiClient } from "../../shared/api";
 
 const { getCurrentSession, onAuthStateChange, from } = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),

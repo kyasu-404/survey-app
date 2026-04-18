@@ -1,11 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../config/env";
+import { createObservedFetch } from "../lib/observability";
+
+const observedFetch = createObservedFetch();
 
 export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+  },
+  global: {
+    fetch: observedFetch,
   },
 });
 
@@ -17,6 +23,9 @@ export const publicSupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
+  },
+  global: {
+    fetch: observedFetch,
   },
 });
 

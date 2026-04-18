@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { logWarning } from "./observability";
 
 function stringifyKey(queryKey: readonly unknown[]) {
   try {
@@ -31,10 +32,16 @@ export function logPendingReactQueryState(queryClient: QueryClient, label: strin
     return;
   }
 
-  console.warn(`[react-query] pending operations for ${label}`, {
-    pendingQueries,
-    pendingMutations,
-  });
+  logWarning(
+    `[react-query] pending operations for ${label}`,
+    {
+      operation: "react-query.pending",
+      label,
+      pendingQueries,
+      pendingMutations,
+    },
+    { report: true },
+  );
 }
 
 export function createPendingStateLogger(queryClient: QueryClient, label: string, delayMs = 1_500) {

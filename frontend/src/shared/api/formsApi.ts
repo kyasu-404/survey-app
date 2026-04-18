@@ -552,10 +552,11 @@ export async function deleteForm(id: string) {
 
   const { error, response } = await runRequest(
     "functions.form-admin",
-    () =>
+    (_signal, traceContext) =>
       supabaseClient.functions.invoke("form-admin", {
         body: { action: "delete", formId: id },
         headers: {
+          ...traceContext.headers,
           Authorization: `Bearer ${accessToken}`,
         },
       }),

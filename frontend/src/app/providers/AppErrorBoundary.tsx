@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { logError } from "../../shared/lib/observability";
 
 type AppErrorBoundaryProps = {
   children: ReactNode;
@@ -19,7 +20,10 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Unexpected UI error", error, info);
+    logError("Unexpected UI error", error, {
+      operation: "ui.render",
+      componentStack: info.componentStack,
+    });
   }
 
   render() {

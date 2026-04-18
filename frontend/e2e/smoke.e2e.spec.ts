@@ -3,6 +3,16 @@ import { expect, test } from "@playwright/test";
 const hasCreds = Boolean(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
 test.describe("core survey flows", () => {
+  test("login page is reachable without privileged test credentials", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(page.getByRole("heading", { name: "Авторизация" })).toBeVisible();
+    await expect(page.getByPlaceholder("Электронная почта")).toBeVisible();
+    await expect(page.getByPlaceholder("Пароль")).toBeVisible();
+  });
+});
+
+test.describe("credentialed survey flow", () => {
   test.skip(!hasCreds, "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run full E2E scenario");
 
   test("registration/login/create/fill/result scenario", async ({ page }) => {

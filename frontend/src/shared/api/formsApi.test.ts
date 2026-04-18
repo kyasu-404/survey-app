@@ -569,12 +569,15 @@ describe("insertForm", () => {
 
     await deleteForm("form-1");
 
-    expect(invoke).toHaveBeenCalledWith("form-admin", {
-      body: { action: "delete", formId: "form-1" },
-      headers: {
-        Authorization: "Bearer access-token",
-      },
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "form-admin",
+      expect.objectContaining({
+        body: { action: "delete", formId: "form-1" },
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token",
+        }),
+      }),
+    );
     expect(deleteQuery.delete).not.toHaveBeenCalled();
   });
 });

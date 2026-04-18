@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/api";
 import type { UserProfile } from "../../entities/user/types";
 import { runRequest } from "../../shared/api/request";
+import { setObservabilityUser } from "../../shared/lib/observability";
 import { refreshAuthDependentQueries } from "./authCache";
 
 type AuthContextValue = {
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         const currentUser = data.session?.user ?? null;
         previousUserIdRef.current = currentUser?.id ?? null;
+        setObservabilityUser(currentUser?.id ?? null);
         setUser(currentUser);
 
         if (currentUser?.id) {
@@ -96,6 +98,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         refreshAuthDependentQueries(queryClient);
       }
 
+      setObservabilityUser(nextUserId);
       setUser(sessionUser);
 
       if (sessionUser?.id) {
@@ -108,6 +111,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       mounted = false;
+      setObservabilityUser(null);
       listener.subscription.unsubscribe();
     };
   }, [queryClient]);

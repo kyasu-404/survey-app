@@ -1,9 +1,21 @@
+import {
+  createRequestTraceContext,
+  logError,
+  logInfo,
+  type RequestTraceContext,
+  withActiveRequestTraceContext,
+} from "../lib/observability";
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 12_000;
 
 type RequestOptions = {
   timeoutMs?: number;
   context?: Record<string, unknown>;
   signal?: AbortSignal;
+};
+
+type HeaderAwareRequest = {
+  setHeader?: (name: string, value: string) => unknown;
 };
 
 export class RequestTimeoutError extends Error {
@@ -17,13 +29,28 @@ function getDurationMs(startedAt: number) {
   return Date.now() - startedAt;
 }
 
+function attachCorrelationHeaders<T>(result: T, traceContext: RequestTraceContext): T {
+  const headerAwareRequest = result as HeaderAwareRequest | null;
+
+  if (!headerAwareRequest || typeof headerAwareRequest.setHeader !== "function") {
+    return result;
+  }
+
+  for (const [name, value] of Object.entries(traceContext.headers)) {
+    headerAwareRequest.setHeader(name, value);
+  }
+
+  return result;
+}
+
 export async function runRequest<T>(
   operation: string,
-  request: (signal: AbortSignal) => PromiseLike<T> | T,
+  request: (signal: AbortSignal, traceContext: RequestTraceContext) => PromiseLike<T> | T,
   options: RequestOptions = {},
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const startedAt = Date.now();
+  const traceContext = createRequestTraceContext(operation, options.context);
   const abortController = new AbortController();
   const forwardAbort = () => abortController.abort();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -34,14 +61,19 @@ export async function runRequest<T>(
     options.signal?.addEventListener("abort", forwardAbort, { once: true });
   }
 
-  console.info(`[api] start ${operation}`, {
+  logInfo(`[api] start ${operation}`, {
+    operation,
+    requestId: traceContext.requestId,
+    traceId: traceContext.traceId,
     timeoutMs,
-    ...options.context,
+    ...traceContext.attributes,
   });
 
   try {
     const result = await Promise.race([
-      Promise.resolve(request(abortController.signal)),
+      withActiveRequestTraceContext(traceContext, () =>
+        Promise.resolve(attachCorrelationHeaders(request(abortController.signal, traceContext), traceContext)),
+      ),
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
           abortController.abort();
@@ -50,19 +82,24 @@ export async function runRequest<T>(
       }),
     ]);
 
-    console.info(`[api] success ${operation}`, {
+    logInfo(`[api] success ${operation}`, {
+      operation,
+      requestId: traceContext.requestId,
+      traceId: traceContext.traceId,
       durationMs: getDurationMs(startedAt),
-      ...options.context,
+      ...traceContext.attributes,
     });
 
     return result;
   } catch (error) {
     const eventName = error instanceof RequestTimeoutError ? "timeout" : "error";
 
-    console.error(`[api] ${eventName} ${operation}`, {
+    logError(`[api] ${eventName} ${operation}`, error, {
+      operation,
+      requestId: traceContext.requestId,
+      traceId: traceContext.traceId,
       durationMs: getDurationMs(startedAt),
-      error,
-      ...options.context,
+      ...traceContext.attributes,
     });
 
     throw error;

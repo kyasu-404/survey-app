@@ -6,12 +6,22 @@ type FormAdminAction = {
 };
 
 type SupabaseAdminClient = ReturnType<typeof createClient>;
+type RequestLogContext = {
+  requestId: string;
+  traceparent: string | null;
+  traceId: string | null;
+  release: string | null;
+  operation: string;
+  userId?: string;
+  formId?: string;
+};
 
 const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const storageBucket = Deno.env.get("SURVEY_FILES_BUCKET") ?? "survey-files";
 
 const baseCorsHeaders = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, x-client-release, traceparent",
+  "Access-Control-Expose-Headers": "x-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Vary": "Origin",
 };
@@ -19,6 +29,19 @@ const baseCorsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+function createRequestLogContext(req: Request, operation = "form-admin"): RequestLogContext {
+  const traceparent = req.headers.get("traceparent");
+  const traceId = req.headers.get("x-trace-id") ?? traceparent?.split("-")[1] ?? null;
+
+  return {
+    requestId: req.headers.get("x-request-id") ?? crypto.randomUUID(),
+    traceparent: req.headers.get("traceparent"),
+    traceId,
+    release: req.headers.get("x-client-release"),
+    operation,
+  };
+}
 
 function getAllowedOrigins() {
   const configuredOrigins = Deno.env.get("FORM_ADMIN_ALLOWED_ORIGINS")
@@ -44,14 +67,30 @@ function buildCorsHeaders(req: Request) {
   return headers;
 }
 
-function jsonResponse(req: Request, status: number, body: Record<string, unknown>) {
+function jsonResponse(
+  req: Request,
+  status: number,
+  body: Record<string, unknown>,
+  requestLogContext = createRequestLogContext(req),
+) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...buildCorsHeaders(req),
       "Content-Type": "application/json",
+      "x-request-id": requestLogContext.requestId,
     },
   });
+}
+
+function errorResponse(req: Request, status: number, error: string, requestLogContext: RequestLogContext) {
+  console.error("form-admin action failed", {
+    ...requestLogContext,
+    status,
+    error,
+  });
+
+  return jsonResponse(req, status, { error }, requestLogContext);
 }
 
 function isUuid(value: unknown): value is string {
@@ -114,6 +153,8 @@ async function removeStorageObjectsForForm(adminClient: SupabaseAdminClient, for
 }
 
 Deno.serve(async (req) => {
+  const requestLogContext = createRequestLogContext(req);
+
   if (req.method === "OPTIONS") {
     if (!isOriginAllowed(req.headers.get("Origin"))) {
       return new Response("Origin not allowed", { status: 403, headers: buildCorsHeaders(req) });
@@ -123,25 +164,25 @@ Deno.serve(async (req) => {
   }
 
   if (!isOriginAllowed(req.headers.get("Origin"))) {
-    return jsonResponse(req, 403, { error: "Origin not allowed" });
+    return errorResponse(req, 403, "Origin not allowed", requestLogContext);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse(req, 405, { error: "Method not allowed" });
+    return errorResponse(req, 405, "Method not allowed", requestLogContext);
   }
 
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-    return jsonResponse(req, 500, { error: "Supabase env vars are not configured" });
+    return errorResponse(req, 500, "Supabase env vars are not configured", requestLogContext);
   }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return jsonResponse(req, 401, { error: "Missing Authorization header" });
+    return errorResponse(req, 401, "Missing Authorization header", requestLogContext);
   }
 
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) {
-    return jsonResponse(req, 401, { error: "Invalid Authorization header" });
+    return errorResponse(req, 401, "Invalid Authorization header", requestLogContext);
   }
 
   const authClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -159,19 +200,28 @@ Deno.serve(async (req) => {
   } = await authClient.auth.getUser(jwt);
 
   if (requesterError || !requester) {
-    return jsonResponse(req, 401, { error: "Unauthorized" });
+    return errorResponse(req, 401, "Unauthorized", requestLogContext);
   }
 
   let payload: FormAdminAction;
   try {
     payload = (await req.json()) as FormAdminAction;
   } catch {
-    return jsonResponse(req, 400, { error: "Invalid JSON payload" });
+    return errorResponse(req, 400, "Invalid JSON payload", { ...requestLogContext, userId: requester.id });
   }
 
   if (payload.action !== "delete" || !isUuid(payload.formId)) {
-    return jsonResponse(req, 400, { error: "Invalid delete payload" });
+    return errorResponse(req, 400, "Invalid delete payload", { ...requestLogContext, userId: requester.id });
   }
+
+  const actionLogContext: RequestLogContext = {
+    ...requestLogContext,
+    operation: "form-admin.delete",
+    userId: requester.id,
+    formId: payload.formId,
+  };
+
+  console.info("form-admin action started", actionLogContext);
 
   const { data: form, error: formError } = await adminClient
     .from("forms")
@@ -180,7 +230,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (formError || !form) {
-    return jsonResponse(req, 404, { error: "Form not found" });
+    return errorResponse(req, 404, "Form not found", actionLogContext);
   }
 
   const { data: requesterProfile, error: requesterProfileError } = await adminClient
@@ -193,13 +243,13 @@ Deno.serve(async (req) => {
     form.author_id !== requester.id &&
     (requesterProfileError || requesterProfile?.role !== "admin")
   ) {
-    return jsonResponse(req, 403, { error: "Forbidden" });
+    return errorResponse(req, 403, "Forbidden", actionLogContext);
   }
 
   const { removedCount, error: storageError } = await removeStorageObjectsForForm(adminClient, payload.formId);
 
   if (storageError) {
-    return jsonResponse(req, 400, { error: storageError.message });
+    return errorResponse(req, 400, storageError.message, actionLogContext);
   }
 
   const { error: deleteError } = await adminClient
@@ -208,8 +258,13 @@ Deno.serve(async (req) => {
     .eq("id", form.id);
 
   if (deleteError) {
-    return jsonResponse(req, 400, { error: deleteError.message });
+    return errorResponse(req, 400, deleteError.message, actionLogContext);
   }
 
-  return jsonResponse(req, 200, { success: true, removedFiles: removedCount });
+  console.info("form-admin action completed", {
+    ...actionLogContext,
+    removedFiles: removedCount,
+  });
+
+  return jsonResponse(req, 200, { success: true, removedFiles: removedCount }, actionLogContext);
 });

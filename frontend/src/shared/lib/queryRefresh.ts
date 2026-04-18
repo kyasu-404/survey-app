@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { logError, logInfo } from "./observability";
 
 type RefreshTarget = {
   queryKey: QueryKey;
@@ -11,7 +12,9 @@ export function scheduleQueryInvalidation(
   reason: string,
   targets: RefreshTarget[],
 ) {
-  console.info(`[react-query] schedule invalidate for ${reason}`, {
+  logInfo(`[react-query] schedule invalidate for ${reason}`, {
+    operation: "react-query.invalidate",
+    reason,
     queryKeys: targets.map((target) => target.queryKey),
   });
 
@@ -21,11 +24,23 @@ export function scheduleQueryInvalidation(
     const rejected = results.filter((result) => result.status === "rejected");
 
     if (rejected.length > 0) {
-      console.error(`[react-query] invalidate failed for ${reason}`, { rejectedCount: rejected.length });
+      const firstReason = rejected[0]?.reason;
+      logError(
+        `[react-query] invalidate failed for ${reason}`,
+        firstReason instanceof Error ? firstReason : new Error("React Query invalidation failed"),
+        {
+          operation: "react-query.invalidate",
+          reason,
+          rejectedCount: rejected.length,
+          queryKeys: targets.map((target) => target.queryKey),
+        },
+      );
       return;
     }
 
-    console.info(`[react-query] invalidate completed for ${reason}`, {
+    logInfo(`[react-query] invalidate completed for ${reason}`, {
+      operation: "react-query.invalidate",
+      reason,
       count: targets.length,
     });
   });

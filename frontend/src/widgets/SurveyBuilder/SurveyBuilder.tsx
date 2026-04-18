@@ -650,7 +650,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
         const title = getSchemaTitle(schema, editableForm?.title ?? "Новая форма");
 
-        let savedFormId = formId;
+        const savedFormId = formId;
         const isTemplate = Boolean(editableForm && isTemplateForm(editableForm));
 
         if (formId) {
