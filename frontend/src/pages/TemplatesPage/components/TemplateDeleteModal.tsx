@@ -15,7 +15,7 @@ export function TemplateDeleteModal({ isPending, onCancel, onConfirm, template }
         <h3 className="dashboard-delete-modal-title">Удаление шаблона</h3>
         <p className="dashboard-delete-modal-copy">Удалить шаблон «{template.title}»? Это действие нельзя отменить.</p>
         <div className="dashboard-delete-modal-actions">
-          <button type="button" onClick={onCancel} disabled={isPending}>
+          <button type="button" className="app-button" onClick={onCancel} disabled={isPending}>
             Отмена
           </button>
           <button type="button" className="dashboard-danger-button" onClick={onConfirm} disabled={isPending}>

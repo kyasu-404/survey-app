@@ -15,7 +15,7 @@ export function DeleteFormModal({ form, isPending, onCancel, onConfirm }: Delete
         <h3 className="dashboard-delete-modal-title">Удаление формы</h3>
         <p className="dashboard-delete-modal-copy">Удалить форму «{form.title}»? Это действие нельзя отменить.</p>
         <div className="dashboard-delete-modal-actions">
-          <button type="button" onClick={onCancel} disabled={isPending}>
+          <button type="button" className="app-button" onClick={onCancel} disabled={isPending}>
             Отмена
           </button>
           <button type="button" className="dashboard-danger-button" onClick={onConfirm} disabled={isPending}>

@@ -40,7 +40,7 @@ export function CreateUserForm({
       </div>
 
       <div className="users-page-toolbar">
-        <button onClick={onCreateUser} disabled={isCreatePending || !isPasswordValid}>
+        <button className="app-button" onClick={onCreateUser} disabled={isCreatePending || !isPasswordValid}>
           {isCreatePending && <InlineSpinner />}
           Создать пользователя
         </button>

@@ -65,13 +65,14 @@ VITE_SUPABASE_STORAGE_BUCKET=survey-files
 
 Они используются в `frontend/src/shared/config/env.ts`.
 
-Для Edge Function `user-admin` дополнительно задайте allowlist origin-ов:
+Для Edge Functions `user-admin` и `form-admin` можно явно задать allowlist origin-ов:
 
 ```env
 USER_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
+FORM_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
 ```
 
-Локально функция по умолчанию разрешает `http://localhost:5173` и `http://127.0.0.1:5173`. Если фронтенд открыт через IP машины или WSL, добавьте этот origin в `USER_ADMIN_ALLOWED_ORIGINS` точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эта переменная задаётся в `supabase/docker/.env` и передаётся в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.
+Локально функции по умолчанию разрешают `http://localhost:5173`, `http://127.0.0.1:5173` и private-network origin-ы на dev-портах `3000`, `4173`, `5173`, `8000` для запуска через IP машины или WSL. Для production или нестандартного порта задайте origin точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эти переменные задаются в `supabase/docker/.env` и передаются в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.
 
 ## Supabase клиент
 

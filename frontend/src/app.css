@@ -61,7 +61,35 @@ textarea {
   font: inherit;
 }
 
-button {
+/* App buttons only. Do not style SurveyJS internal buttons by tag name. */
+.app-button,
+.button-link,
+.button-primary,
+.sidebar-toggle-button,
+.sidebar-open-button,
+.logout-button,
+.dashboard-refresh-button,
+.users-page-retry-button,
+.deadline-clear-button,
+.deadline-save-button,
+.responses-export-button,
+.dashboard-load-more-button,
+.dashboard-danger-button,
+.dashboard-info-button,
+.dashboard-view-button,
+.dashboard-qr-close-button,
+.response-preview-close,
+.template-preview-close,
+.users-yellow-button,
+.users-danger-button,
+.users-neutral-button,
+.users-status-button,
+.form-status-button,
+.deadline-action-cancel-button,
+.deadline-action-clear-button,
+.deadline-action-save-button,
+.templates-use-button,
+.templates-share-button {
   border: 1px solid rgba(133, 149, 178, 0.34);
   border-radius: 12px;
   padding: 7px 11px;
@@ -79,14 +107,68 @@ button {
   box-shadow: 0 6px 18px rgba(148, 163, 184, 0.12);
 }
 
-button:hover {
+.app-button:hover,
+.button-link:hover,
+.button-primary:hover,
+.sidebar-toggle-button:hover,
+.sidebar-open-button:hover,
+.logout-button:hover,
+.dashboard-refresh-button:hover,
+.users-page-retry-button:hover,
+.deadline-clear-button:hover,
+.deadline-save-button:hover,
+.responses-export-button:hover,
+.dashboard-load-more-button:hover,
+.dashboard-danger-button:hover,
+.dashboard-info-button:hover,
+.dashboard-view-button:hover,
+.dashboard-qr-close-button:hover,
+.response-preview-close:hover,
+.template-preview-close:hover,
+.users-yellow-button:hover,
+.users-danger-button:hover,
+.users-neutral-button:hover,
+.users-status-button:hover,
+.form-status-button:hover,
+.deadline-action-cancel-button:hover,
+.deadline-action-clear-button:hover,
+.deadline-action-save-button:hover,
+.templates-use-button:hover,
+.templates-share-button:hover {
   border-color: rgba(37, 99, 235, 0.45);
   background: #f7fbff;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
   transform: translateY(-1px);
 }
 
-button:disabled {
+.app-button:disabled,
+.button-link:disabled,
+.button-primary:disabled,
+.sidebar-toggle-button:disabled,
+.sidebar-open-button:disabled,
+.logout-button:disabled,
+.dashboard-refresh-button:disabled,
+.users-page-retry-button:disabled,
+.deadline-clear-button:disabled,
+.deadline-save-button:disabled,
+.responses-export-button:disabled,
+.dashboard-load-more-button:disabled,
+.dashboard-danger-button:disabled,
+.dashboard-info-button:disabled,
+.dashboard-view-button:disabled,
+.dashboard-qr-close-button:disabled,
+.response-preview-close:disabled,
+.template-preview-close:disabled,
+.users-yellow-button:disabled,
+.users-danger-button:disabled,
+.users-neutral-button:disabled,
+.users-status-button:disabled,
+.form-status-button:disabled,
+.deadline-action-cancel-button:disabled,
+.deadline-action-clear-button:disabled,
+.deadline-action-save-button:disabled,
+.templates-use-button:disabled,
+.templates-share-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
   transform: none;
@@ -351,108 +433,94 @@ textarea:focus {
 }
 
 .builder-creator-shell .svc-creator {
-  --sjs-primary-backcolor: #2563eb;
-  --sjs-primary-backcolor-dark: #1d4ed8;
-  --sjs-primary-backcolor-light: rgba(37, 99, 235, 0.14);
+  --sjs-primary-backcolor: #121212;
+  --sjs-primary-backcolor-dark: #000000;
+  --sjs-primary-backcolor-light: rgba(18, 18, 18, 0.12);
+  --sjs-primary-background-500: #121212;
+  --sjs-primary-background-400: #232323;
+  --sjs-primary-background-10: rgba(18, 18, 18, 0.08);
   --sjs-primary-forecolor: #ffffff;
-  --sjs-primary-background-500: #2563eb;
-  --sjs-primary-background-400: #3b82f6;
-  --sjs-primary-background-10: rgba(37, 99, 235, 0.1);
-  --sjs-general-backcolor: #ffffff;
-  --sjs-general-backcolor-dim: #eef4ff;
-  --sjs-general-backcolor-dim-light: #f7faff;
-  --sjs-general-backcolor-dark: #dbe7ff;
-  --sjs-general-forecolor: #16233d;
-  --sjs-general-forecolor-light: #5e708f;
-  --sjs-layer-1-foreground-100: #16233d;
-  --sjs-layer-1-foreground-50: #5e708f;
-  --sjs-layer-1-background-500: #ffffff;
-  --sjs-layer-3-background-500: #eef4ff;
-  --main-color: #2563eb;
-  --main-hover-color: #1d4ed8;
-  --primary: #2563eb;
-  --primary-light: rgba(37, 99, 235, 0.14);
-  --secondary: #2563eb;
-  --ctr-button-group-item-text-color-selected: #2563eb;
-  --ctr-button-group-item-icon-color-selected: #2563eb;
-  --ctr-button-group-border-color-focused: #2563eb;
-  --ctr-survey-action-button-text-color-positive: #2563eb;
-  --ctr-menu-item-border-color-selected: #2563eb;
-  --ctr-property-grid-header-border-color: #2563eb;
-  --ctr-editor-border-color-focused: #2563eb;
-  --ctr-editor-border-color-highlighted: rgba(37, 99, 235, 0.4);
-  --sjs-shadow-small: 0 10px 24px rgba(37, 99, 235, 0.1);
-  --sjs-shadow-medium: 0 16px 36px rgba(37, 99, 235, 0.12);
-  --sjs-shadow-large: 0 20px 48px rgba(29, 78, 216, 0.16);
+  --sjs-general-backcolor: #fffdf9;
+  --sjs-general-backcolor-dim: #f2eee8;
+  --sjs-general-backcolor-dim-light: #f8f5f0;
+  --sjs-general-backcolor-dark: #dfd9d1;
+  --sjs-general-forecolor: #181818;
+  --sjs-general-forecolor-light: #5f5a54;
+  --sjs-layer-1-foreground-100: #181818;
+  --sjs-layer-1-foreground-50: #5f5a54;
+  --sjs-layer-1-background-500: #fffdf9;
+  --sjs-layer-3-background-500: #f2eee8;
+  --ctr-button-group-item-text-color-selected: #121212;
+  --ctr-button-group-item-icon-color-selected: #121212;
+  --ctr-button-group-border-color-focused: #121212;
+  --ctr-survey-action-button-text-color-positive: #121212;
+  --ctr-menu-item-border-color-selected: #121212;
+  --ctr-property-grid-header-border-color: #121212;
+  --ctr-editor-border-color-focused: #121212;
+  --ctr-editor-border-color-highlighted: rgba(18, 18, 18, 0.3);
   height: 100% !important;
-  border: 1px solid rgba(151, 165, 193, 0.28);
+  min-height: 0;
+  border: 1px solid rgba(20, 20, 20, 0.08);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
   background:
-    radial-gradient(circle at top right, rgba(96, 165, 250, 0.16), transparent 24%),
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.1), transparent 28%),
-    linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.76), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 236, 230, 0.94));
 }
 
 .builder-creator-shell .svc-creator__content-holder,
 .builder-creator-shell .svc-tabbed-menu,
 .builder-creator-shell .svc-side-bar,
-.builder-creator-shell .svc-toolbox,
-.builder-creator-shell .sd-root-modern,
-.builder-creator-shell .sd-root-modern__wrapper {
+.builder-creator-shell .svc-toolbox {
   background: transparent !important;
 }
 
+.builder-creator-shell .svc-creator__area,
+.builder-creator-shell .svc-creator__content-wrapper,
+.builder-creator-shell .svc-creator__content-holder,
+.builder-creator-shell .svc-creator-tab,
+.builder-creator-shell .svc-creator-tab__content {
+  min-height: 0;
+}
+
 .builder-creator-shell .svc-tabbed-menu {
-  border-bottom: 1px solid rgba(147, 197, 253, 0.4);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.56);
+  border-bottom: 1px solid rgba(20, 20, 20, 0.12);
 }
 
 .builder-creator-shell .svc-tabbed-menu-item,
-.builder-creator-shell .svc-tabbed-menu-item__title {
+.builder-creator-shell .svc-tabbed-menu-item__title,
+.builder-creator-shell .svc-toolbox__category-title,
+.builder-creator-shell .svc-toolbox__item-title {
   font-family: "Manrope", "Segoe UI", sans-serif !important;
-  color: #274062;
+  color: #171717 !important;
 }
 
 .builder-creator-shell .svc-tabbed-menu-item--selected {
-  color: #1d4ed8 !important;
+  color: #111111 !important;
 }
 
-.builder-creator-shell .svc-tabbed-menu-item--selected::after {
-  background: linear-gradient(90deg, #3b82f6, #2563eb) !important;
-  border-radius: 999px;
+.builder-creator-shell .svc-tabbed-menu-item--selected::after,
+.builder-creator-shell .sd-header__text::after,
+.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after {
+  background: #111111 !important;
 }
 
 .builder-creator-shell .svc-toolbox {
-  border-right: 1px solid rgba(147, 197, 253, 0.24);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(239, 246, 255, 0.92)) !important;
-}
-
-.builder-creator-shell .svc-toolbox__category-title {
-  color: #16233d;
-  font-weight: 800;
-}
-
-.builder-creator-shell .svc-toolbox__item-title {
-  color: #5e708f;
-  font-weight: 700;
+  border-right: 1px solid rgba(20, 20, 20, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(242, 238, 232, 0.92)) !important;
 }
 
 .builder-creator-shell .svc-toolbox__item:hover,
 .builder-creator-shell .svc-toolbox__item:focus,
 .builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(219, 234, 254, 0.96)) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(239, 236, 230, 0.96)) !important;
 }
 
 .builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
 .builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title,
 .builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item .svc-toolbox__item-title {
-  color: #1e3a8a !important;
-}
-
-.builder-creator-shell .svc-toolbox__item-title {
-  color: #111827;
+  color: #141414 !important;
 }
 
 .builder-creator-shell .svc-toolbox__item-container .sv-svg-icon {
@@ -471,7 +539,7 @@ textarea:focus {
 .builder-creator-shell .sv-action-bar-item__icon use,
 .builder-creator-shell .svc-panel__add-new-question-icon use,
 .builder-creator-shell .spg-button-group__item--selected .spg-button-group__item-icon use {
-  fill: #2563eb;
+  fill: #121212 !important;
 }
 
 .builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
@@ -485,25 +553,18 @@ textarea:focus {
 .builder-creator-shell .svc-creator-tab__content--selected,
 .builder-creator-shell .svc-property-grid__header,
 .builder-creator-shell .svc-side-bar__content-tabs .svc-tabbed-menu-item--selected {
-  color: #2563eb !important;
-}
-
-.builder-creator-shell .spg-button-group__item--selected .spg-button-group__item-icon use,
-.builder-creator-shell .svc-panel__add-new-question-icon use {
-  fill: #2563eb !important;
+  color: #111111 !important;
 }
 
 .builder-creator-shell .svc-panel__add-new-question,
 .builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question {
-  background: linear-gradient(135deg, rgba(219, 234, 254, 0.68), rgba(239, 246, 255, 0.88)) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 232, 226, 0.92)) !important;
 }
 
-.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus {
-  box-shadow: 0px 2px 6px 0px rgba(37, 99, 235, 0.12), 0px 0px 0px calc(0.25 * (var(--sjs-base-unit, var(--base-unit, 8px)))) #2563eb !important;
-}
-
-.builder-creator-shell .svc-page {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 250, 255, 0.96));
+.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
+.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
+  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
+  border-color: rgba(20, 20, 20, 0.24) !important;
 }
 
 .builder-creator-shell .svc-surface-placeholder__text {
@@ -520,12 +581,7 @@ textarea:focus {
 
 .builder-creator-shell .sd-header__text,
 .builder-creator-shell .sd-title.sd-container-modern__title {
-  border-bottom-color: #2563eb !important;
-}
-
-.builder-creator-shell .sd-header__text::after,
-.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after {
-  background: #2563eb !important;
+  border-bottom-color: #111111 !important;
 }
 
 .builder-creator-shell .sd-title,
@@ -533,51 +589,42 @@ textarea:focus {
 .builder-creator-shell .sd-page__description,
 .builder-creator-shell .sd-question__title,
 .builder-creator-shell .sd-question__description {
-  color: #1d3557;
+  color: #181818;
 }
 
 .builder-creator-shell .sd-question .sd-description,
 .builder-creator-shell .sd-question__description {
-  display: inline-block;
-  width: auto;
-  max-width: min(100%, 640px);
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid rgba(96, 165, 250, 0.6);
-  border-radius: 12px;
-  background: rgba(219, 234, 254, 0.75);
-  color: #111827 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  color: #5f5a54;
 }
 
 .builder-creator-shell .sd-btn,
 .builder-creator-shell .sd-navigation__next-btn,
 .builder-creator-shell .sd-navigation__prev-btn,
 .builder-creator-shell .sd-btn--action {
-  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  background: linear-gradient(180deg, #232323, #0f0f0f) !important;
   border-color: transparent !important;
-  color: #fff !important;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18) !important;
+  color: #ffffff !important;
+  box-shadow: 0 18px 34px rgba(20, 20, 20, 0.16) !important;
 }
 
 .builder-creator-shell .sd-btn:hover,
 .builder-creator-shell .sd-navigation__next-btn:hover,
 .builder-creator-shell .sd-navigation__prev-btn:hover,
 .builder-creator-shell .sd-btn--action:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  background: linear-gradient(180deg, #2d2d2d, #111111) !important;
 }
 
 .builder-creator-shell .sd-question--selected,
 .builder-creator-shell .svc-question__content--selected {
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28), 0 16px 32px rgba(37, 99, 235, 0.12) !important;
+  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.16), 0 18px 34px rgba(20, 20, 20, 0.08) !important;
 }
 
 .builder-creator-shell .sd-input:focus,
 .builder-creator-shell .sd-textarea:focus,
 .builder-creator-shell .sd-dropdown:focus,
 .builder-creator-shell .sd-file input:focus + .sd-file__decorator {
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12) !important;
-  border-color: rgba(37, 99, 235, 0.48) !important;
+  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
+  border-color: rgba(20, 20, 20, 0.24) !important;
 }
 
 .builder-toolbar-action-item {
@@ -2339,8 +2386,34 @@ a:hover {
   color: #000000;
 }
 
-button,
-.button-link {
+.app-button,
+.button-link,
+.button-primary,
+.sidebar-toggle-button,
+.sidebar-open-button,
+.logout-button,
+.dashboard-refresh-button,
+.users-page-retry-button,
+.deadline-clear-button,
+.deadline-save-button,
+.responses-export-button,
+.dashboard-load-more-button,
+.dashboard-danger-button,
+.dashboard-info-button,
+.dashboard-view-button,
+.dashboard-qr-close-button,
+.response-preview-close,
+.template-preview-close,
+.users-yellow-button,
+.users-danger-button,
+.users-neutral-button,
+.users-status-button,
+.form-status-button,
+.deadline-action-cancel-button,
+.deadline-action-clear-button,
+.deadline-action-save-button,
+.templates-use-button,
+.templates-share-button {
   border: 1px solid rgba(20, 20, 20, 0.12);
   border-radius: 14px;
   padding: 9px 14px;
@@ -2355,8 +2428,34 @@ button,
     color 180ms ease;
 }
 
-button:hover,
-.button-link:hover {
+.app-button:hover,
+.button-link:hover,
+.button-primary:hover,
+.sidebar-toggle-button:hover,
+.sidebar-open-button:hover,
+.logout-button:hover,
+.dashboard-refresh-button:hover,
+.users-page-retry-button:hover,
+.deadline-clear-button:hover,
+.deadline-save-button:hover,
+.responses-export-button:hover,
+.dashboard-load-more-button:hover,
+.dashboard-danger-button:hover,
+.dashboard-info-button:hover,
+.dashboard-view-button:hover,
+.dashboard-qr-close-button:hover,
+.response-preview-close:hover,
+.template-preview-close:hover,
+.users-yellow-button:hover,
+.users-danger-button:hover,
+.users-neutral-button:hover,
+.users-status-button:hover,
+.form-status-button:hover,
+.deadline-action-cancel-button:hover,
+.deadline-action-clear-button:hover,
+.deadline-action-save-button:hover,
+.templates-use-button:hover,
+.templates-share-button:hover {
   border-color: rgba(20, 20, 20, 0.22);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(235, 231, 226, 0.96));
   box-shadow: 0 16px 30px rgba(20, 20, 20, 0.12), var(--surface-inset);
@@ -2364,11 +2463,37 @@ button:hover,
   text-decoration: none;
 }
 
-button:focus-visible,
-.button-link:focus-visible,
 input:focus,
 select:focus,
-textarea:focus {
+textarea:focus,
+.app-button:focus-visible,
+.button-link:focus-visible,
+.button-primary:focus-visible,
+.sidebar-toggle-button:focus-visible,
+.sidebar-open-button:focus-visible,
+.logout-button:focus-visible,
+.dashboard-refresh-button:focus-visible,
+.users-page-retry-button:focus-visible,
+.deadline-clear-button:focus-visible,
+.deadline-save-button:focus-visible,
+.responses-export-button:focus-visible,
+.dashboard-load-more-button:focus-visible,
+.dashboard-danger-button:focus-visible,
+.dashboard-info-button:focus-visible,
+.dashboard-view-button:focus-visible,
+.dashboard-qr-close-button:focus-visible,
+.response-preview-close:focus-visible,
+.template-preview-close:focus-visible,
+.users-yellow-button:focus-visible,
+.users-danger-button:focus-visible,
+.users-neutral-button:focus-visible,
+.users-status-button:focus-visible,
+.form-status-button:focus-visible,
+.deadline-action-cancel-button:focus-visible,
+.deadline-action-clear-button:focus-visible,
+.deadline-action-save-button:focus-visible,
+.templates-use-button:focus-visible,
+.templates-share-button:focus-visible {
   outline: none;
   border-color: rgba(20, 20, 20, 0.28);
   box-shadow:
@@ -2376,7 +2501,34 @@ textarea:focus {
     0 16px 30px rgba(20, 20, 20, 0.12);
 }
 
-button:disabled {
+.app-button:disabled,
+.button-link:disabled,
+.button-primary:disabled,
+.sidebar-toggle-button:disabled,
+.sidebar-open-button:disabled,
+.logout-button:disabled,
+.dashboard-refresh-button:disabled,
+.users-page-retry-button:disabled,
+.deadline-clear-button:disabled,
+.deadline-save-button:disabled,
+.responses-export-button:disabled,
+.dashboard-load-more-button:disabled,
+.dashboard-danger-button:disabled,
+.dashboard-info-button:disabled,
+.dashboard-view-button:disabled,
+.dashboard-qr-close-button:disabled,
+.response-preview-close:disabled,
+.template-preview-close:disabled,
+.users-yellow-button:disabled,
+.users-danger-button:disabled,
+.users-neutral-button:disabled,
+.users-status-button:disabled,
+.form-status-button:disabled,
+.deadline-action-cancel-button:disabled,
+.deadline-action-clear-button:disabled,
+.deadline-action-save-button:disabled,
+.templates-use-button:disabled,
+.templates-share-button:disabled {
   opacity: 0.55;
   box-shadow: none;
   transform: none;
@@ -3735,95 +3887,6 @@ button.responses-export-button:disabled {
   color: #3f3b37 !important;
 }
 
-.builder-creator-shell .svc-tabbed-menu {
-  border-bottom: 1px solid rgba(20, 20, 20, 0.12);
-}
-
-.builder-creator-shell .svc-tabbed-menu-item--selected::after,
-.builder-creator-shell .sd-header__text::after,
-.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after {
-  background: #111111 !important;
-}
-
-.builder-creator-shell .svc-toolbox {
-  border-right: 1px solid rgba(20, 20, 20, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(242, 238, 232, 0.92)) !important;
-}
-
-.builder-creator-shell .svc-toolbox__item:hover,
-.builder-creator-shell .svc-toolbox__item:focus,
-.builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(239, 236, 230, 0.96)) !important;
-}
-
-.builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
-.builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title,
-.builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item .svc-toolbox__item-title {
-  color: #141414 !important;
-}
-
-.builder-creator-shell .sv-action-bar-item__icon use,
-.builder-creator-shell .svc-panel__add-new-question-icon use,
-.builder-creator-shell .spg-button-group__item--selected .spg-button-group__item-icon use {
-  fill: #121212 !important;
-}
-
-.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
-.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus,
-.builder-creator-shell .svc-panel__add-new-question .svc-add-new-item-button__text,
-.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question .svc-add-new-item-button__text,
-.builder-creator-shell .svc-panel__add-new-question-icon use,
-.builder-creator-shell .svc-tabbed-menu-item--selected,
-.builder-creator-shell .svc-creator-tab__content--selected,
-.builder-creator-shell .svc-property-grid__header,
-.builder-creator-shell .svc-side-bar__content-tabs .svc-tabbed-menu-item--selected {
-  color: #111111 !important;
-}
-
-.builder-creator-shell .spg-button-group__item--selected {
-  color: #111111 !important;
-  border-color: rgba(20, 20, 20, 0.16) !important;
-  background: rgba(20, 20, 20, 0.08) !important;
-}
-
-.builder-creator-shell .svc-panel__add-new-question,
-.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 232, 226, 0.92)) !important;
-}
-
-.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
-.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
-  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
-  border-color: rgba(20, 20, 20, 0.24) !important;
-}
-
-.builder-creator-shell .sd-header__text,
-.builder-creator-shell .sd-title.sd-container-modern__title {
-  border-bottom-color: #111111 !important;
-}
-
-.builder-creator-shell .sd-question .sd-description,
-.builder-creator-shell .sd-question__description {
-  border-color: rgba(20, 20, 20, 0.12);
-  background: rgba(255, 255, 255, 0.72);
-  color: #141414 !important;
-  box-shadow: none;
-}
-
-.builder-creator-shell .sd-question--selected,
-.builder-creator-shell .svc-question__content--selected {
-  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.16), 0 18px 34px rgba(20, 20, 20, 0.08) !important;
-}
-
-.builder-creator-shell .sd-input:focus,
-.builder-creator-shell .sd-textarea:focus,
-.builder-creator-shell .sd-dropdown:focus,
-.builder-creator-shell .sd-file input:focus + .sd-file__decorator {
-  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
-  border-color: rgba(20, 20, 20, 0.24) !important;
-}
-
-.builder-creator-shell .svc-creator,
 .survey-page-shell .survey-page-card .sd-root-modern,
 .survey-page-shell .survey-page-card .sd-root-modern__wrapper,
 .template-preview-body.survey-page-card .sd-root-modern,
@@ -3863,7 +3926,6 @@ button.responses-export-button:disabled {
   --sjs-shadow-large: 0 24px 48px rgba(20, 20, 20, 0.12);
 }
 
-.builder-creator-shell .svc-creator,
 .survey-page-card {
   border-color: rgba(20, 20, 20, 0.08) !important;
   background:
@@ -3871,39 +3933,17 @@ button.responses-export-button:disabled {
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 236, 230, 0.94)) !important;
 }
 
-.builder-creator-shell .svc-tabbed-menu-item,
-.builder-creator-shell .svc-tabbed-menu-item__title,
-.builder-creator-shell .svc-toolbox__category-title,
-.builder-creator-shell .svc-toolbox__item-title {
-  color: #171717 !important;
-}
-
-.builder-creator-shell .svc-tabbed-menu-item--selected,
-.builder-creator-shell .svc-creator-tab__content--selected,
-.builder-creator-shell .svc-property-grid__header {
-  color: #111111 !important;
-}
-
-.builder-creator-shell .svc-tabbed-menu-item--selected::after,
-.builder-creator-shell .sd-header__text::after,
-.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after,
 .survey-page-card .sd-header__text::after,
 .survey-page-card .sd-element--complex > .sd-element__header--location-top::after {
   background: #111111 !important;
 }
 
-.builder-creator-shell .svc-toolbox,
-.builder-creator-shell .svc-page,
 .survey-page-card .sd-completedpage,
 .survey-page-card .sd-completedpage__content,
 .survey-page-card .sd-completedpage .sd-body {
   background: transparent !important;
 }
 
-.builder-creator-shell .sd-btn,
-.builder-creator-shell .sd-navigation__next-btn,
-.builder-creator-shell .sd-navigation__prev-btn,
-.builder-creator-shell .sd-btn--action,
 .survey-page-card .sd-btn,
 .survey-page-card .sd-navigation__next-btn,
 .survey-page-card .sd-navigation__prev-btn,
@@ -3914,10 +3954,6 @@ button.responses-export-button:disabled {
   box-shadow: 0 18px 34px rgba(20, 20, 20, 0.16) !important;
 }
 
-.builder-creator-shell .sd-btn:hover,
-.builder-creator-shell .sd-navigation__next-btn:hover,
-.builder-creator-shell .sd-navigation__prev-btn:hover,
-.builder-creator-shell .sd-btn--action:hover,
 .survey-page-card .sd-btn:hover,
 .survey-page-card .sd-navigation__next-btn:hover,
 .survey-page-card .sd-navigation__prev-btn:hover,
@@ -3925,10 +3961,6 @@ button.responses-export-button:disabled {
   background: linear-gradient(180deg, #2d2d2d, #111111) !important;
 }
 
-.builder-creator-shell .sd-input:focus,
-.builder-creator-shell .sd-textarea:focus,
-.builder-creator-shell .sd-dropdown:focus,
-.builder-creator-shell .sd-file input:focus + .sd-file__decorator,
 .survey-page-card .sd-input:focus,
 .survey-page-card .sd-textarea:focus,
 .survey-page-card .sd-dropdown:focus,
@@ -4025,48 +4057,6 @@ button.responses-export-button:disabled {
   }
 }
 
-/* =========================================================
-   FINAL SurveyJS Builder override
-   Должен находиться В САМОМ КОНЦЕ frontend/src/app.css
-   ========================================================= */
-
-/* 1) Чёрный текст внутри survey-части конструктора и preview */
-.builder-creator-shell .svc-creator .sd-body,
-.builder-creator-shell .svc-creator .sd-page,
-.builder-creator-shell .svc-creator .sd-panel,
-.builder-creator-shell .svc-creator .sd-title,
-.builder-creator-shell .svc-creator .sd-page__title,
-.builder-creator-shell .svc-creator .sd-page__description,
-.builder-creator-shell .svc-creator .sd-question__title,
-.builder-creator-shell .svc-creator .sd-question__content,
-.builder-creator-shell .svc-creator .sd-question__description,
-.builder-creator-shell .svc-creator .sd-input,
-.builder-creator-shell .svc-creator .sd-textarea,
-.builder-creator-shell .svc-creator .sd-dropdown {
-  color: #141414 !important;
-}
-
-.builder-creator-shell .svc-creator .sd-input,
-.builder-creator-shell .svc-creator .sd-textarea,
-.builder-creator-shell .svc-creator .sd-dropdown {
-  caret-color: #141414;
-}
-
-.builder-creator-shell .svc-creator .sd-input::placeholder,
-.builder-creator-shell .svc-creator .sd-textarea::placeholder {
-  color: rgba(20, 20, 20, 0.55) !important;
-}
-
-/* Убираем старый синий акцент у заголовков/описаний в builder */
-.builder-creator-shell .sd-title,
-.builder-creator-shell .sd-page__title,
-.builder-creator-shell .sd-page__description,
-.builder-creator-shell .sd-question__title,
-.builder-creator-shell .sd-question__description {
-  color: #141414 !important;
-}
-
-/* 2) Анимация кнопок для "* обязательный?" в property grid */
 .builder-creator-shell .spg-button-group__item {
   transition:
     transform 140ms ease,
@@ -4106,10 +4096,6 @@ button.responses-export-button:disabled {
   fill: #111111 !important;
 }
 
-/* 3) Описание вопроса: голубая рамка, голубой фон, чёрный текст
-   Применяем и к builder preview, и к публичной странице survey */
-.builder-creator-shell .sd-question .sd-description,
-.builder-creator-shell .sd-question__description,
 .survey-page-card .sd-question .sd-description,
 .survey-page-card .sd-question__description {
   display: inline-block;
@@ -4124,14 +4110,6 @@ button.responses-export-button:disabled {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-/* 4) Перенос длинных title/description без горизонтального скролла */
-.builder-creator-shell .sd-title,
-.builder-creator-shell .sd-header__text,
-.builder-creator-shell .sd-description,
-.builder-creator-shell .sd-page__title,
-.builder-creator-shell .sd-page__description,
-.builder-creator-shell .sd-question__title,
-.builder-creator-shell .sd-question__description,
 .survey-page-card .sd-title,
 .survey-page-card .sd-header__text,
 .survey-page-card .sd-description,
@@ -4145,24 +4123,18 @@ button.responses-export-button:disabled {
   max-width: 100% !important;
 }
 
-.builder-creator-shell .sd-header,
-.builder-creator-shell .sd-header__text,
 .survey-page-card .sd-header,
 .survey-page-card .sd-header__text {
   min-width: 0 !important;
   overflow: visible !important;
 }
 
-/* 5) Типографика вопросов: title чуть крупнее, description меньше */
-.builder-creator-shell .sd-question__title,
 .survey-page-card .sd-question__title {
   font-size: 1.06rem !important;
   line-height: 1.4 !important;
   font-weight: 700 !important;
 }
 
-.builder-creator-shell .sd-question .sd-description,
-.builder-creator-shell .sd-question__description,
 .survey-page-card .sd-question .sd-description,
 .survey-page-card .sd-question__description {
   font-size: 0.88rem !important;

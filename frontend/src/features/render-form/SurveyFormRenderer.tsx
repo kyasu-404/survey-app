@@ -4,6 +4,7 @@ import { Survey } from "survey-react-ui";
 import "survey-core/defaultV2.min.css";
 import "survey-core/i18n/russian";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
+import { DEFAULT_COMPLETED_HTML } from "../../entities/survey/model/surveyModel";
 import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
 import type { SurveySchema } from "../../entities/survey/types";
 import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
@@ -137,7 +138,7 @@ export function SurveyFormRenderer({
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = "Отправить";
-    nextModel.completedHtml = "<div class='survey-complete-message'>Спасибо за Ваш ответ!</div>";
+    nextModel.completedHtml = resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML;
     if (initialData) {
       nextModel.data = initialData;
     } else {

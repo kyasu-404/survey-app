@@ -5,6 +5,7 @@ import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
 import "survey-creator-core/survey-creator-core.min.css";
+import "survey-core/defaultV2.min.css";
 import "survey-core/i18n/russian";
 import "survey-creator-core/i18n/russian";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
@@ -194,9 +195,18 @@ function createCreatorInstance() {
     showLogicTab: true,
     showPreviewTab: true,
     showJSONEditorTab: false,
+    showTranslationTab: false,
+    showThemeTab: false,
     showSaveButton: true,
     isAutoSave: false,
     showAddQuestionButton: false,
+    showSurveyHeader: true,
+    propertyGridNavigationMode: "accordion",
+    showCreatorThemeSettings: false,
+    previewAllowSimulateDevices: false,
+    previewAllowSelectLanguage: false,
+    previewAllowHiddenElements: false,
+    previewAllowSelectPage: false,
   });
 
   creator.locale = "ru";
@@ -215,7 +225,7 @@ function createCreatorInstance() {
   });
   creator.JSON = resolveDefaultSurveyLogo(createEmptyBuilderSchema());
   creator.allowCollapseSidebar = true;
-  creator.showSidebar = false;
+  creator.showSidebar = true;
 
   configureCreatorToolbox(creator);
 
@@ -730,7 +740,12 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
               Все несохранённые вопросы и поля будут очищены. Это действие нельзя отменить.
             </p>
             <div className="deadline-modal-actions">
-              <button type="button" onClick={() => setIsResetConfirmOpen(false)} disabled={isSurveyMutationBusy || isTemplateBusy}>
+              <button
+                type="button"
+                className="app-button"
+                onClick={() => setIsResetConfirmOpen(false)}
+                disabled={isSurveyMutationBusy || isTemplateBusy}
+              >
                 Отмена
               </button>
               <button

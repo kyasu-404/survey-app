@@ -1,0 +1,1682 @@
+{
+  "url": "http://127.0.0.1:4173/builder",
+  "documentTitle": "Формы ИМЦ",
+  "builderHostRect": {
+    "x": 262,
+    "y": 26,
+    "width": 1631,
+    "height": 902
+  },
+  "creatorShellRect": {
+    "x": 262,
+    "y": 26,
+    "width": 1631,
+    "height": 902
+  },
+  "topBarButtons": [
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon sv-dots__item",
+      "text": "Больше",
+      "rect": {
+        "x": 685,
+        "y": 59,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-tabbed-menu-item-container .sv-dots__item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-dots__item",
+          "declarations": {
+            "width": "100%"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "Отменить",
+      "rect": {
+        "x": 863.22,
+        "y": 39.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item:disabled",
+          "declarations": {
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "Повтор",
+      "rect": {
+        "x": 919.22,
+        "y": 39.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item:disabled",
+          "declarations": {
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon builder-toolbar-action-button",
+      "text": "Сохранить опрос",
+      "rect": {
+        "x": 975.22,
+        "y": 39.5,
+        "width": 50,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "1px solid rgba(20, 20, 20, 0.1)",
+        "borderColor": "rgba(20, 20, 20, 0.1)",
+        "borderRadius": "12px",
+        "background": "rgba(0, 0, 0, 0) linear-gradient(rgba(255, 255, 255, 0.96), rgba(236, 232, 226, 0.96)) repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "rgba(20, 20, 20, 0.08) 0px 10px 24px 0px",
+        "padding": "7px 12px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "13.44px",
+        "fontWeight": "700"
+      },
+      "rules": [
+        {
+          "selector": ".builder-toolbar-action-button",
+          "declarations": {
+            "border": "1px solid rgba(96, 165, 250, 0.32)",
+            "border-color": "rgba(96, 165, 250, 0.32)",
+            "border-radius": "12px",
+            "box-shadow": "rgba(59, 130, 246, 0.14) 0px 8px 20px",
+            "background": "linear-gradient(135deg, rgb(239, 246, 255), rgb(219, 234, 254))",
+            "background-color": "initial",
+            "padding": "7px 12px"
+          }
+        },
+        {
+          "selector": ".builder-toolbar-action-button",
+          "declarations": {
+            "border-color": "rgba(20, 20, 20, 0.1)",
+            "box-shadow": "var(--shadow-sm)",
+            "background": "linear-gradient(rgba(255, 255, 255, 0.96), rgba(236, 232, 226, 0.96))",
+            "background-color": "initial"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item:disabled",
+          "declarations": {
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "Toolbox",
+      "rect": {
+        "x": 1050.22,
+        "y": 59.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon sv-action-bar-item--active",
+      "text": "Настройки съемки",
+      "rect": {
+        "x": 1066.22,
+        "y": 39.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item--active",
+          "declarations": {
+            "background": "var(--ctr-menu-toolbar-button-background-color-selected, transparent)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item.sv-action-bar-item--active",
+          "declarations": {
+            "background-color": "var(--ctr-menu-toolbar-button-background-color-selected, var(--sjs-general-backcolor, var(--background, #fff)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "",
+      "rect": {
+        "x": 1106.22,
+        "y": 59.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "",
+      "rect": {
+        "x": 1106.22,
+        "y": 59.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "Показывать скрытые элементы",
+      "rect": {
+        "x": 1123.22,
+        "y": 59.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "",
+      "rect": {
+        "x": 1106.22,
+        "y": 59.5,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "",
+      "rect": {
+        "x": 1106.22,
+        "y": 59.5,
+        "width": 16,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "",
+      "rect": {
+        "x": 1106.22,
+        "y": 59.5,
+        "width": 16,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .svc-toolbar-wrapper .sv-action .sv-action-bar-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 2px)",
+            "background-color": "rgba(0, 0, 0, 0)"
+          }
+        },
+        {
+          "selector": ".svc-top-bar .sv-action-bar-item--icon",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)",
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    }
+  ],
+  "topTabs": [
+    {
+      "tag": "DIV",
+      "className": "svc-tabbed-menu-item svc-tabbed-menu-item--selected",
+      "text": "Конструктор",
+      "rect": {
+        "x": 263,
+        "y": 27,
+        "width": 150,
+        "height": 64
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(17, 17, 17)",
+        "borderColor": "rgb(17, 17, 17)",
+        "borderRadius": "0px",
+        "background": "rgb(255, 253, 249) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgb(255, 253, 249)",
+        "boxShadow": "rgb(18, 18, 18) 0px -2px 0px 0px inset",
+        "padding": "20px 24px",
+        "color": "rgb(17, 17, 17)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-tabbed-menu-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-item-padding-top, 20px) var(--ctr-menu-item-padding-right, 24px) var(--ctr-menu-item-padding-bottom, 20px) var(--ctr-menu-item-padding-left, 24px)",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".svc-tabbed-menu-item--selected",
+          "declarations": {
+            "box-shadow": "inset 0px -2px 0px var(--ctr-menu-item-border-color-selected, var(--sjs-primary-backcolor, var(--primary, #19b394)))",
+            "background": "var(--ctr-menu-item-background-color, var(--sjs-general-backcolor, var(--background, #fff)))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "DIV",
+      "className": "svc-tabbed-menu-item",
+      "text": "Превью",
+      "rect": {
+        "x": 413,
+        "y": 27,
+        "width": 110,
+        "height": 64
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(23, 23, 23)",
+        "borderColor": "rgb(23, 23, 23)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "20px 24px",
+        "color": "rgb(23, 23, 23)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-tabbed-menu-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-item-padding-top, 20px) var(--ctr-menu-item-padding-right, 24px) var(--ctr-menu-item-padding-bottom, 20px) var(--ctr-menu-item-padding-left, 24px)",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "DIV",
+      "className": "svc-tabbed-menu-item",
+      "text": "Логика формы",
+      "rect": {
+        "x": 523,
+        "y": 27,
+        "width": 162,
+        "height": 64
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(23, 23, 23)",
+        "borderColor": "rgb(23, 23, 23)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "20px 24px",
+        "color": "rgb(23, 23, 23)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-tabbed-menu-item",
+          "declarations": {
+            "padding": "var(--ctr-menu-item-padding-top, 20px) var(--ctr-menu-item-padding-right, 24px) var(--ctr-menu-item-padding-bottom, 20px) var(--ctr-menu-item-padding-left, 24px)",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    }
+  ],
+  "rightSidebarButtons": [
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon",
+      "text": "Скрыть панель",
+      "rect": {
+        "x": 1451,
+        "y": 39,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-side-bar__container-actions .sv-action-bar-item:not(.sv-action-bar-item--pressed):enabled",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)"
+          }
+        },
+        {
+          "selector": ".svd-grid-hide .sv-action-bar-item--icon",
+          "declarations": {
+            "padding": "var(--ctr-menu-toolbar-button-padding-top, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-right, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-bottom, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-menu-toolbar-button-padding-left, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item",
+      "text": "Обзор",
+      "rect": {
+        "x": 1810,
+        "y": 39,
+        "width": 66,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-side-bar__container-actions .sv-action-bar-item:not(.sv-action-bar-item--pressed):enabled",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon sv-dots__item",
+      "text": "Больше",
+      "rect": {
+        "x": 1892,
+        "y": 59,
+        "width": 40,
+        "height": 40
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "8px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-side-bar__container-actions .sv-action-bar-item:not(.sv-action-bar-item--pressed):enabled",
+          "declarations": {
+            "border-radius": "var(--ctr-menu-toolbar-button-corner-radius, 0)"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-dots__item",
+          "declarations": {
+            "width": "100%"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon svc-search__bar-item",
+      "text": "Фокусировка предыдущая",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgba(0, 0, 0, 0.91)",
+        "borderColor": "rgba(0, 0, 0, 0.91)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgba(0, 0, 0, 0.91)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-search__toolbar .svc-search__bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-search-button-corner-radius, 100px)",
+            "padding": "var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon svc-search__bar-item",
+      "text": "Сосредоточьтесь на следующем",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgba(0, 0, 0, 0.91)",
+        "borderColor": "rgba(0, 0, 0, 0.91)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgba(0, 0, 0, 0.91)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-search__toolbar .svc-search__bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-search-button-corner-radius, 100px)",
+            "padding": "var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "sv-action-bar-item sv-action-bar-item--icon svc-search__bar-item",
+      "text": "clear",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgba(0, 0, 0, 0.91)",
+        "borderColor": "rgba(0, 0, 0, 0.91)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgba(0, 0, 0, 0.91)",
+        "fontSize": "16px",
+        "fontWeight": "400"
+      },
+      "rules": [
+        {
+          "selector": ".svc-search__toolbar .svc-search__bar-item",
+          "declarations": {
+            "border-radius": "var(--ctr-search-button-corner-radius, 100px)",
+            "padding": "var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-vertical, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-search-button-padding-horizontal, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action-bar--default-size-mode .sv-action-bar-item",
+          "declarations": {
+            "width": "auto"
+          }
+        },
+        {
+          "selector": ".sv-action-bar-item",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "calc(0.5*(var(--sjs-corner-radius, 4px)))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--sjs-base-unit, var(--base-unit, 8px))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "H4",
+      "className": "spg-title spg-panel__title sd-element__title--num-inline spg-panel__title--expandable spg-panel__title--expanded",
+      "text": "Общие",
+      "rect": {
+        "x": 1443,
+        "y": 148,
+        "width": 448,
+        "height": 56
+      },
+      "style": {
+        "display": "block",
+        "border": "0px none rgb(24, 24, 24)",
+        "borderColor": "rgb(24, 24, 24)",
+        "borderRadius": "0px",
+        "background": "rgb(255, 253, 249) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgb(255, 253, 249)",
+        "boxShadow": "rgb(214, 214, 214) 0px -1px 0px 0px inset",
+        "padding": "16px",
+        "color": "rgb(24, 24, 24)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-panel__title",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "box-shadow": "inset 0px -1px 0px var(--ctr-property-grid-chapter-caption-border-color, var(--sjs-border-default, var(--border, #d6d6d6)))",
+            "background-color": "var(--ctr-property-grid-chapter-caption-background-color, var(--sjs-general-backcolor, var(--background, #fff)))",
+            "padding": "calc(2*(var(--sjs-base-unit, var(--base-unit, 8px))))",
+            "width": "100%"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "spg-action-button spg-action-button--icon",
+      "text": "Введите понятный заголовок для отображения.",
+      "rect": {
+        "x": 1831,
+        "y": 228,
+        "width": 24,
+        "height": 24
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(18, 18, 18)",
+        "borderColor": "rgb(18, 18, 18)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-action-button",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "var(--ctr-actionbar-button-corner-radius, calc(12.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".spg-title-toolbar--single-help-action .spg-help-action .spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-right-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-bottom-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-left-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "spg-action-button spg-action-button--icon",
+      "text": "Введите субтитры.",
+      "rect": {
+        "x": 1831,
+        "y": 332,
+        "width": 24,
+        "height": 24
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(18, 18, 18)",
+        "borderColor": "rgb(18, 18, 18)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-action-button",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "var(--ctr-actionbar-button-corner-radius, calc(12.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".spg-title-toolbar--single-help-action .spg-help-action .spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-right-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-bottom-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-left-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "spg-action-button spg-action-button--icon",
+      "text": "Выберите язык, чтобы начать создание опроса. Чтобы добавить перевод, переключитесь на новый язык и переведите исходный текст здесь или во вкладке «Переводы».",
+      "rect": {
+        "x": 1831,
+        "y": 516,
+        "width": 24,
+        "height": 24
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(18, 18, 18)",
+        "borderColor": "rgb(18, 18, 18)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-action-button",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "var(--ctr-actionbar-button-corner-radius, calc(12.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".spg-title-toolbar--single-help-action .spg-help-action .spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-right-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-bottom-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-left-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "spg-action-button spg-action-button--icon",
+      "text": "Выберите один из следующих вариантов: «Редактируемый» - позволяет респондентам заполнять Ваш опрос; \"Только для чтения\" - отключает редактирование формы.",
+      "rect": {
+        "x": 1831,
+        "y": 620,
+        "width": 24,
+        "height": 24
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(18, 18, 18)",
+        "borderColor": "rgb(18, 18, 18)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-action-button",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "var(--ctr-actionbar-button-corner-radius, calc(12.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".spg-title-toolbar--single-help-action .spg-help-action .spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-right-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-bottom-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-left-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "BUTTON",
+      "className": "spg-action-button spg-action-button--icon",
+      "text": "Файлы cookie не позволяют пользователям заполнять один и тот же опрос дважды.",
+      "rect": {
+        "x": 1831,
+        "y": 736,
+        "width": 24,
+        "height": 24
+      },
+      "style": {
+        "display": "flex",
+        "border": "0px none rgb(18, 18, 18)",
+        "borderColor": "rgb(18, 18, 18)",
+        "borderRadius": "100px",
+        "background": "rgba(0, 0, 0, 0) none repeat scroll 0% 0% / auto padding-box border-box",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "boxShadow": "none",
+        "padding": "4px",
+        "color": "rgb(18, 18, 18)",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "rules": [
+        {
+          "selector": ".spg-action-button",
+          "declarations": {
+            "border": "none",
+            "border-color": "initial",
+            "border-radius": "var(--ctr-actionbar-button-corner-radius, calc(12.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))",
+            "background-color": "rgba(0, 0, 0, 0)",
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))",
+            "display": "flex"
+          }
+        },
+        {
+          "selector": ".spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-right-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-bottom-large-icon, var(--sjs-base-unit, var(--base-unit, 8px))) var(--ctr-actionbar-button-padding-left-large-icon, var(--sjs-base-unit, var(--base-unit, 8px)))"
+          }
+        },
+        {
+          "selector": ".spg-title-toolbar--single-help-action .spg-help-action .spg-action-button--icon",
+          "declarations": {
+            "padding": "var(--ctr-actionbar-button-padding-top-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-right-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-bottom-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px))))) var(--ctr-actionbar-button-padding-left-small-icon, calc(0.5 * (var(--sjs-base-unit, var(--base-unit, 8px)))))"
+          }
+        },
+        {
+          "selector": ".sv-action__content > *",
+          "declarations": {
+            "flex": "0 0 auto"
+          }
+        }
+      ]
+    }
+  ]
+}

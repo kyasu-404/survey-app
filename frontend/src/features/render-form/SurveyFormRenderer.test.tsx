@@ -217,6 +217,26 @@ describe("SurveyFormRenderer", () => {
     expect(createdModelSchemas[0]?.logo).not.toBe("__APP_DEFAULT_CARD_LOGO__");
   });
 
+  it("uses completedHtml from schema when provided", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          pages: [],
+          completedHtml: "<div>Мой текст</div>",
+        }}
+      />,
+    );
+
+    expect(createdModels[createdModels.length - 1]?.completedHtml).toBe("<div>Мой текст</div>");
+  });
+
+  it("falls back to the default completedHtml for old schemas", () => {
+    render(<SurveyFormRenderer formId="form-1" schema={{ pages: [] }} />);
+
+    expect(String(createdModels[createdModels.length - 1]?.completedHtml)).toContain("Спасибо за Ваш ответ!");
+  });
+
   it("registers custom SurveyJS question types before creating the public model", () => {
     render(
       <SurveyFormRenderer

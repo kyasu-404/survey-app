@@ -18,6 +18,8 @@ export type SurveySchema = {
   title?: string;
   description?: string;
   questionDescriptionLocation?: string;
+  completedHtml?: string;
+  showCompletePage?: boolean;
   logo?: string;
   logoWidth?: string | number;
   logoHeight?: string | number;

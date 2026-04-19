@@ -44,6 +44,7 @@ type RequestLogContext = {
 };
 
 const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, x-client-release, traceparent",
@@ -78,8 +79,35 @@ function getAllowedOrigins() {
   return new Set(configuredOrigins?.length ? configuredOrigins : defaultAllowedOrigins);
 }
 
+function isPrivateNetworkHostname(hostname: string) {
+  return (
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
+function isDefaultLocalDevelopmentOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return false;
+    }
+
+    const hostname = url.hostname.replace(/^\[|\]$/g, "");
+    const isLoopbackHostname = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+    return (
+      defaultAllowedDevelopmentPorts.has(url.port) &&
+      (isLoopbackHostname || isPrivateNetworkHostname(hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isOriginAllowed(origin: string | null) {
-  return !origin || getAllowedOrigins().has(origin);
+  return !origin || getAllowedOrigins().has(origin) || isDefaultLocalDevelopmentOrigin(origin);
 }
 
 function buildCorsHeaders(req: Request) {

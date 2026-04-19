@@ -21,10 +21,10 @@ export function QrModal({ downloadFormat, onClose, onDownload, qrDialog }: QrMod
           </button>
         </div>
         <div className="dashboard-qr-download-actions">
-          <button type="button" onClick={() => onDownload("png")} disabled={downloadFormat !== null}>
+          <button type="button" className="app-button" onClick={() => onDownload("png")} disabled={downloadFormat !== null}>
             PNG
           </button>
-          <button type="button" onClick={() => onDownload("svg")} disabled={downloadFormat !== null}>
+          <button type="button" className="app-button" onClick={() => onDownload("svg")} disabled={downloadFormat !== null}>
             SVG
           </button>
         </div>

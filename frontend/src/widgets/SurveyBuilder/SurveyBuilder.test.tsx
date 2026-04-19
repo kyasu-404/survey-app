@@ -208,6 +208,10 @@ function readAppCss() {
   return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 }
 
+function readSurveyBuilderSource() {
+  return readFileSync(join(process.cwd(), "src/widgets/SurveyBuilder/SurveyBuilder.tsx"), "utf8");
+}
+
 function createTemplateForm(overrides: Partial<SurveySchema & { id: string; title: string }> = {}) {
   return {
     id: "template-1",
@@ -349,11 +353,26 @@ describe("SurveyBuilder", () => {
     const creator = creatorInstances[0];
 
     expect(creator.allowCollapseSidebar).toBe(true);
-    expect(creator.showSidebar).toBe(false);
+    expect(creator.showSidebar).toBe(true);
+    expect(creator.options).toMatchObject({
+      propertyGridNavigationMode: "accordion",
+      previewAllowHiddenElements: false,
+      previewAllowSelectLanguage: false,
+      previewAllowSelectPage: false,
+      previewAllowSimulateDevices: false,
+      showCreatorThemeSettings: false,
+      showJSONEditorTab: false,
+      showLogicTab: true,
+      showPreviewTab: true,
+      showSurveyHeader: true,
+      showThemeTab: false,
+      showTranslationTab: false,
+    });
     expect(creator.JSON).toMatchObject({
       title: "Новая форма",
       locale: "ru",
       questionDescriptionLocation: "underTitle",
+      completedHtml: expect.stringContaining("Спасибо за Ваш ответ!"),
       logoWidth: "120px",
       logoHeight: "90px",
       logoFit: "contain",
@@ -521,27 +540,46 @@ describe("SurveyBuilder", () => {
     });
   });
 
-  it("keeps the final surveyjs builder override block at the end of app.css", () => {
+  it("keeps SurveyJS builder overrides visual-only so Creator layout stays intact", () => {
     const appCss = readAppCss();
-    const finalOverrideIndex = appCss.lastIndexOf("FINAL SurveyJS Builder override");
 
-    expect(finalOverrideIndex).toBeGreaterThan(appCss.lastIndexOf("@media (max-width: 760px)"));
+    expect(appCss).not.toContain("FINAL SurveyJS Builder override");
+    expect(appCss).not.toMatch(/\nbutton\s*\{[^}]*box-shadow:/s);
+    expect(appCss).not.toMatch(/\nbutton,\s*\n\.button-link\s*\{/s);
+    expect(appCss).not.toMatch(/\nbutton:hover,\s*\n\.button-link:hover\s*\{/s);
+    expect(appCss).not.toMatch(/\nbutton:focus-visible,\s*\n\.button-link:focus-visible/s);
+    expect(appCss).not.toMatch(/\nbutton:disabled\s*\{/s);
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-page\s*\{/);
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-creator\s+\.sd-(body|page|panel)/);
+    expect(appCss).not.toMatch(
+      /\.builder-creator-shell\s+\.sd-question\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-question__description\s*\{[^}]*display:/s,
+    );
+    expect(appCss).not.toMatch(
+      /\.builder-creator-shell\s+\.sd-question\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-question__description\s*\{[^}]*padding:/s,
+    );
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-page__title/s);
 
-    const finalOverride = appCss.slice(finalOverrideIndex);
+    expect(appCss).toContain(".builder-creator-shell .svc-creator {");
+    expect(appCss).toContain("--sjs-primary-backcolor: #121212;");
+    expect(appCss).toContain(".builder-creator-shell .svc-side-bar");
+    expect(appCss).toContain(".builder-creator-shell .spg-button-group__item--selected");
+    expect(appCss).toContain(".app-button,");
+  });
 
-    expect(finalOverride).toContain(".builder-creator-shell .svc-creator .sd-body");
-    expect(finalOverride).toContain(".builder-creator-shell .spg-button-group__item {");
-    expect(finalOverride).toContain("transform 140ms ease");
-    expect(finalOverride).toContain(".survey-page-card .sd-question__description");
-    expect(finalOverride).toContain("background: rgba(219, 234, 254, 0.88) !important;");
-    expect(finalOverride).toContain("color: #141414 !important;");
-    expect(finalOverride).toContain("padding: 4px 8px;");
-    expect(finalOverride).toContain(".builder-creator-shell .sd-description,");
-    expect(finalOverride).toContain("white-space: normal !important;");
-    expect(finalOverride).toContain("font-size: 1.06rem !important;");
-    expect(finalOverride).toContain("font-size: 0.88rem !important;");
-    expect(finalOverride).toContain(".dashboard-status-dropdown");
-    expect(finalOverride).toContain("background: #ffffff !important;");
+  it("lets SurveyJS manage the builder top bar layout without custom flex overrides", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s*\{/s);
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.svc-tabbed-menu-wrapper\s*\{/s);
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.svc-toolbar-wrapper\s*\{/s);
+    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.sv-action-bar-item\s*\{/s);
+  });
+
+  it("imports the SurveyJS base theme so creator actions keep their intended layout", () => {
+    const surveyBuilderSource = readSurveyBuilderSource();
+
+    expect(surveyBuilderSource).toContain('import "survey-core/defaultV2.min.css";');
+    expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.min.css";');
   });
 
   it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {
