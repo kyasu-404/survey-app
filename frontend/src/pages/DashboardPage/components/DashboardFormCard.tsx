@@ -111,7 +111,7 @@ export function DashboardFormCard({
       </div>
 
       <div className="dashboard-form-footer">
-        <DashboardFormMetaLine currentUserId={currentUserId} form={form} onOpenResponses={onOpenResponses} viewMode={viewMode} />
+        <DashboardFormMetaLine form={form} onOpenResponses={onOpenResponses} viewMode={viewMode} />
 
         <DashboardFormActionMenu
           actionMenuOpen={actionMenuOpen}

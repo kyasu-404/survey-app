@@ -143,6 +143,12 @@ describe("UsersPage", () => {
     expect(css).toMatch(/\.users-table-shell\s*\{[^}]*border-radius:\s*0;/);
   });
 
+  it("centers user modal headings", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.dashboard-delete-modal-title,\s*\.users-modal-title\s*\{[^}]*text-align:\s*center;/);
+  });
+
   it("filters users by name, role, and status", async () => {
     getAllUsers.mockResolvedValue([
       {
@@ -276,6 +282,10 @@ describe("UsersPage", () => {
     expect(await screen.findByText("Мария")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Сменить мой пароль" })).toHaveClass("users-yellow-button");
 
+    await userEvent.click(screen.getByRole("button", { name: "Сменить мой пароль" }));
+    expect(screen.getByRole("heading", { name: "Смена моего пароля" })).toHaveClass("users-modal-title");
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+
     const mariaRow = screen.getByText("Мария").closest("tr");
     expect(mariaRow).not.toBeNull();
 
@@ -288,6 +298,7 @@ describe("UsersPage", () => {
 
     await userEvent.click(within(mariaRow).getByRole("button", { name: "Удалить" }));
 
+    expect(screen.getByRole("heading", { name: "Удаление пользователя" })).toHaveClass("users-modal-title");
     expect(screen.getByText(/Внимание:/)).toHaveClass("users-modal-copy-danger");
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
     expect(screen.getByRole("button", { name: "Удалить пользователя" })).toHaveClass("users-danger-button");
@@ -295,6 +306,7 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
     await userEvent.click(within(mariaRow).getByRole("button", { name: "Сменить пароль" }));
 
+    expect(screen.getByRole("heading", { name: "Смена пароля: Мария" })).toHaveClass("users-modal-title");
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
     expect(screen.getByRole("button", { name: "Сохранить" })).toHaveClass("users-yellow-button");
   });

@@ -112,6 +112,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           setOpenedMenu={setOpenedMenu}
           setSearch={filters.setSearch}
           totalFormsCount={stats.totalFormsCount}
+          viewMode={viewMode}
         />
 
         <DashboardFormsList

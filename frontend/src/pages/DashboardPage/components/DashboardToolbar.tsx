@@ -3,7 +3,7 @@ import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entitie
 import infoIcon from "../../../img/info.svg";
 import searchIcon from "../../../img/search.svg";
 import { RefreshButton } from "../../../shared/ui/RefreshButton";
-import type { OpenMenuState } from "../types";
+import type { DashboardViewMode, OpenMenuState } from "../types";
 
 type DashboardToolbarProps = {
   activeFormsCount: number;
@@ -26,6 +26,7 @@ type DashboardToolbarProps = {
   setOpenedMenu: Dispatch<SetStateAction<OpenMenuState>>;
   setSearch: Dispatch<SetStateAction<string>>;
   totalFormsCount: number;
+  viewMode: DashboardViewMode;
 };
 
 export function DashboardToolbar({
@@ -49,7 +50,10 @@ export function DashboardToolbar({
   setOpenedMenu,
   setSearch,
   totalFormsCount,
+  viewMode,
 }: DashboardToolbarProps) {
+  const searchPlaceholder = viewMode === "mine" ? "Поиск по названию" : "Поиск по названию и автору";
+
   return (
     <div className="dashboard-toolbar">
       <div className="dashboard-search-group">
@@ -57,7 +61,7 @@ export function DashboardToolbar({
           <img src={searchIcon} alt="" aria-hidden="true" className="dashboard-search-icon" />
           <input
             className="dashboard-search-input"
-            placeholder="Поиск по названию и автору"
+            placeholder={searchPlaceholder}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />

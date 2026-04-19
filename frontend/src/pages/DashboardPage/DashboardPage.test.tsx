@@ -1195,8 +1195,14 @@ describe("DashboardPage", () => {
 
     expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-clear-button\s*\{[^}]*background:\s*#fee2e2;[^}]*color:\s*#b91c1c;/);
-    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#f8fafc\);[^}]*color:\s*#141414;/);
     expect(css).toMatch(/\.dashboard-qr-close-button\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*#b91c1c;[^}]*font-size:\s*3\.2rem;[^}]*font-weight:\s*800;/);
+  });
+
+  it("centers dashboard delete modal headings", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.dashboard-delete-modal-title,\s*\.users-modal-title\s*\{[^}]*text-align:\s*center;/);
   });
 
   it("opens form action menus to the left of the trigger instead of below the card", () => {
@@ -1278,14 +1284,15 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Обычная форма")).toBeInTheDocument();
     expect(screen.queryByText("Автор 1")).not.toBeInTheDocument();
     expect(screen.queryByText("Шаблон отчёта")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Поиск по названию")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Тип формы" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Основание формы" })).toBeInTheDocument();
   });
 
-  it("marks the current user's author name subtly on the all forms dashboard", async () => {
+  it("renders the current user's author name without special highlighting on the all forms dashboard", async () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.dashboard-meta-item-author-own\s*\{[^}]*color:\s*#2f6f4e;[^}]*font-weight:\s*800;/);
+    expect(css).not.toContain(".dashboard-meta-item-author-own");
 
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
@@ -1305,7 +1312,8 @@ describe("DashboardPage", () => {
     renderPage("all");
 
     expect(await screen.findByText("Своя форма")).toBeInTheDocument();
-    expect(screen.getByText("Автор текущий")).toHaveClass("dashboard-meta-item-author-own");
+    expect(screen.getByText("Автор текущий")).toHaveClass("dashboard-meta-item");
+    expect(screen.getByText("Автор текущий")).not.toHaveClass("dashboard-meta-item-author-own");
     expect(screen.getByText("Автор другой")).not.toHaveClass("dashboard-meta-item-author-own");
   });
 
@@ -1324,6 +1332,7 @@ describe("DashboardPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Удалить" }));
 
+    expect(screen.getByRole("heading", { name: "Удаление формы" })).toHaveClass("dashboard-delete-modal-title");
     expect(container.querySelector(".dashboard-delete-modal-actions")).toBeInTheDocument();
     expect(container.querySelector(".dashboard-delete-modal-actions .dashboard-danger-button")).toBeInTheDocument();
   });

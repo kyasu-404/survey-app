@@ -11,14 +11,12 @@ import {
 import type { DashboardViewMode } from "../types";
 
 type DashboardFormMetaLineProps = {
-  currentUserId?: string;
   form: SurveyFormSummary;
   onOpenResponses: (formId: string) => void;
   viewMode: DashboardViewMode;
 };
 
-export function DashboardFormMetaLine({ currentUserId, form, onOpenResponses, viewMode }: DashboardFormMetaLineProps) {
-  const isOwnForm = form.author_id === currentUserId;
+export function DashboardFormMetaLine({ form, onOpenResponses, viewMode }: DashboardFormMetaLineProps) {
   const isTemplate = isTemplateForm(form);
   const responsesCount = form.responses_count ?? 0;
   const createdAtLabel = new Date(form.created_at).toLocaleString("ru-RU");
@@ -28,7 +26,7 @@ export function DashboardFormMetaLine({ currentUserId, form, onOpenResponses, vi
 
   const metaItems = [
     !isTemplate && viewMode === "all" ? (
-      <span key="author" className={`dashboard-meta-item ${isOwnForm ? "dashboard-meta-item-author-own" : ""}`.trim()}>
+      <span key="author" className="dashboard-meta-item">
         {getAuthorLabel(form)}
       </span>
     ) : null,
