@@ -7,9 +7,11 @@ const distDir = new URL("../dist", import.meta.url);
 const budgets = {
   mainJs: { raw: 4_200_000, gzip: 950_000 },
   asyncJs: { raw: 1_000_000, gzip: 320_000 },
+  lazySurveyCoreJs: { raw: 1_700_000, gzip: 320_000 },
+  lazySurveyCreatorCoreJs: { raw: 1_650_000, gzip: 400_000 },
   css: { raw: 550_000, gzip: 125_000 },
   image: { raw: 250_000 },
-  total: { raw: 6_700_000 },
+  total: { raw: 6_850_000 },
 };
 
 function formatBytes(bytes) {
@@ -33,6 +35,14 @@ function getBudget(filePath) {
   const extension = extname(filePath);
 
   if (extension === ".js") {
+    if (name.startsWith("survey-core-")) {
+      return budgets.lazySurveyCoreJs;
+    }
+
+    if (name.startsWith("survey-creator-core-")) {
+      return budgets.lazySurveyCreatorCoreJs;
+    }
+
     return name.startsWith("index-") ? budgets.mainJs : budgets.asyncJs;
   }
 

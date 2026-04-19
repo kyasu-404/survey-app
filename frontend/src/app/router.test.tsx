@@ -59,7 +59,7 @@ vi.mock("./router/ProtectedRoute", () => ({
 }));
 
 describe("router", () => {
-  it("keeps critical form routes eager and lazy-loads approved secondary route modules", async () => {
+  it("keeps only shell routes eager and lazy-loads form-heavy route modules", async () => {
     const { router } = await import("./router");
     const rootRoute = router.routes[0];
     const childRoutes = rootRoute.children ?? [];
@@ -86,20 +86,20 @@ describe("router", () => {
 
     expect(routeByPath.get(routes.builder)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.builderById)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.formResponsesById)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.formResponsesHtmlById)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.surveyById)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.templates)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
 
-    expect(routeByPath.get(routes.surveyById)?.lazy).toBeUndefined();
-    expect(routeByPath.get(routes.formResponsesById)?.lazy).toBeUndefined();
     expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeUndefined();
     expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeUndefined();
 
     expect(pageLoads.builder).toBe(0);
     expect(pageLoads.dashboard).toBe(1);
-    expect(pageLoads.responses).toBe(1);
+    expect(pageLoads.responses).toBe(0);
     expect(pageLoads.responsesHtml).toBe(0);
-    expect(pageLoads.survey).toBe(1);
+    expect(pageLoads.survey).toBe(0);
     expect(pageLoads.templates).toBe(0);
     expect(pageLoads.users).toBe(0);
   });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -19,7 +19,7 @@ import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
-import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
+import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
 
 type SelectedResponsePreview = {
   label: string;
@@ -400,22 +400,23 @@ export default function FormResponsesPage() {
             <div className="response-preview-header">
               <div>
                 <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
-                <h2 className="response-preview-title">{selectedResponsePreview.label}</h2>
               </div>
               <button type="button" className="response-preview-close" onClick={() => setSelectedResponsePreview(null)}>
                 Закрыть
               </button>
             </div>
             <div className="response-preview-body response-preview-builder-palette survey-page-card">
-              <SurveyRenderer
-                schema={{
-                  ...formQuery.data.schema,
-                  title: formQuery.data.title,
-                }}
-                formId={formQuery.data.id}
-                initialData={selectedResponsePreview.response.data}
-                isPreview
-              />
+              <Suspense fallback={<Skeleton className="response-preview-renderer-skeleton" />}>
+                <LazySurveyRenderer
+                  schema={{
+                    ...formQuery.data.schema,
+                    title: formQuery.data.title,
+                  }}
+                  formId={formQuery.data.id}
+                  initialData={selectedResponsePreview.response.data}
+                  isPreview
+                />
+              </Suspense>
             </div>
           </aside>
         </div>

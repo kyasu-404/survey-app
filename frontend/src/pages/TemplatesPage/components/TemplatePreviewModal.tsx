@@ -16,7 +16,6 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
         <div className="template-preview-header">
           <div>
             <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
-            <h2 className="template-preview-title">{previewTemplateCard.title}</h2>
           </div>
           <button type="button" className="template-preview-close" onClick={onClose}>
             Закрыть

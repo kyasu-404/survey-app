@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -19,6 +20,7 @@ type AuthContextValue = {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  profileLoading: boolean;
   refreshProfile: () => Promise<void>;
 };
 
@@ -26,6 +28,7 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
   loading: true,
+  profileLoading: false,
   refreshProfile: async () => undefined,
 });
 
@@ -33,37 +36,64 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const queryClient = useQueryClient();
   const previousUserIdRef = useRef<string | null>(null);
+  const profileRequestIdRef = useRef(0);
 
-  const loadProfile = async (userId: string) => {
-    const { data, error } = await runRequest(
-      "profiles.load",
-      () =>
-        apiClient
-          .from("profiles")
-          .select("id, name, email, role, is_disabled, created_at")
-          .eq("id", userId)
-          .single(),
-      { context: { userId } },
-    );
+  const clearProfile = useCallback(() => {
+    profileRequestIdRef.current += 1;
+    setProfile(null);
+    setProfileLoading(false);
+  }, []);
 
-    if (error) {
-      setProfile(null);
-      return;
+  const loadProfile = useCallback(async (userId: string) => {
+    const requestId = profileRequestIdRef.current + 1;
+    profileRequestIdRef.current = requestId;
+    setProfileLoading(true);
+
+    try {
+      const { data, error } = await runRequest(
+        "profiles.load",
+        () =>
+          apiClient
+            .from("profiles")
+            .select("id, name, email, role, is_disabled, created_at")
+            .eq("id", userId)
+            .single(),
+        { context: { userId } },
+      );
+
+      if (profileRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      if (error) {
+        setProfile(null);
+        return;
+      }
+
+      setProfile(data as UserProfile);
+    } catch (error) {
+      if (profileRequestIdRef.current === requestId) {
+        console.error(error);
+        setProfile(null);
+      }
+    } finally {
+      if (profileRequestIdRef.current === requestId) {
+        setProfileLoading(false);
+      }
     }
+  }, []);
 
-    setProfile(data as UserProfile);
-  };
-
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (!user?.id) {
-      setProfile(null);
+      clearProfile();
       return;
     }
 
     await loadProfile(user.id);
-  };
+  }, [clearProfile, loadProfile, user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -76,16 +106,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
         previousUserIdRef.current = currentUser?.id ?? null;
         setObservabilityUser(currentUser?.id ?? null);
         setUser(currentUser);
+        setLoading(false);
 
         if (currentUser?.id) {
-          await loadProfile(currentUser.id);
+          void loadProfile(currentUser.id);
           return;
         }
 
-        setProfile(null);
+        clearProfile();
       })
-      .finally(() => {
+      .catch((error) => {
         if (!mounted) return;
+
+        console.error(error);
+        previousUserIdRef.current = null;
+        setObservabilityUser(null);
+        setUser(null);
+        clearProfile();
         setLoading(false);
       });
 
@@ -100,23 +137,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       setObservabilityUser(nextUserId);
       setUser(sessionUser);
+      setLoading(false);
 
       if (sessionUser?.id) {
-        await loadProfile(sessionUser.id);
+        void loadProfile(sessionUser.id);
         return;
       }
 
-      setProfile(null);
+      clearProfile();
     });
 
     return () => {
       mounted = false;
+      profileRequestIdRef.current += 1;
       setObservabilityUser(null);
       listener.subscription.unsubscribe();
     };
-  }, [queryClient]);
+  }, [clearProfile, loadProfile, queryClient]);
 
-  const value = useMemo(() => ({ user, profile, loading, refreshProfile }), [user, profile, loading]);
+  const value = useMemo(
+    () => ({ user, profile, loading, profileLoading, refreshProfile }),
+    [user, profile, loading, profileLoading, refreshProfile],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

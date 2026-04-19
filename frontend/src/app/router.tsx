@@ -1,7 +1,5 @@
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import DashboardPage from "../pages/DashboardPage/DashboardPage";
-import FormResponsesPage from "../pages/FormResponsesPage/FormResponsesPage";
-import SurveyPage from "../pages/SurveyPage/SurveyPage";
 import LoginPage from "../pages/LoginPage/LoginPage";
 import { routes } from "./routes";
 import { AppLayout } from "./layout/AppLayout";
@@ -42,6 +40,28 @@ async function loadFormResponsesHtmlRoute() {
         </ProtectedRoute>
       );
     },
+  };
+}
+
+async function loadFormResponsesRoute() {
+  const { default: FormResponsesPage } = await import("../pages/FormResponsesPage/FormResponsesPage");
+
+  return {
+    Component: function FormResponsesRoute() {
+      return (
+        <ProtectedRoute>
+          <FormResponsesPage />
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
+async function loadSurveyRoute() {
+  const { default: SurveyPage } = await import("../pages/SurveyPage/SurveyPage");
+
+  return {
+    Component: SurveyPage,
   };
 }
 
@@ -105,17 +125,13 @@ export const router = createBrowserRouter([
       },
       {
         path: routes.formResponsesById,
-        element: (
-          <ProtectedRoute>
-            <FormResponsesPage />
-          </ProtectedRoute>
-        ),
+        lazy: loadFormResponsesRoute,
       },
       {
         path: routes.formResponsesHtmlById,
         lazy: loadFormResponsesHtmlRoute,
       },
-      { path: routes.surveyById, element: <SurveyPage /> },
+      { path: routes.surveyById, lazy: loadSurveyRoute },
       { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {
         path: routes.builder,

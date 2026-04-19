@@ -291,6 +291,18 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.response-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
+  it("keeps the response preview controls and question descriptions on the requested styling", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.response-preview-close\s*\{[^}]*border:\s*2px solid #6b7280;/);
+    expect(css).toMatch(
+      /\.response-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.response-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
+    );
+    expect(css).not.toMatch(
+      /\.response-preview-builder-palette\.survey-page-card \.sd-question \.sd-description,\s*\.response-preview-builder-palette\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\)\s*!important;/,
+    );
+  });
+
   it("refreshes responses after a realtime database change", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
@@ -653,8 +665,9 @@ describe("FormResponsesPage", () => {
     await userEvent.click(await screen.findByText("Анна"));
 
     const dialog = await screen.findByRole("dialog", { name: "Ответ Анна" });
+    expect(within(dialog).queryByText("Ответ Анна")).not.toBeInTheDocument();
     expect(dialog.querySelector(".response-preview-body")).toHaveClass("response-preview-builder-palette");
-    const renderer = within(dialog).getByTestId("response-preview-renderer");
+    const renderer = await within(dialog).findByTestId("response-preview-renderer");
     expect(renderer).toHaveAttribute("data-form-id", "form-1");
     expect(renderer).toHaveAttribute("data-preview", "true");
     expect(renderer).toHaveAttribute("data-initial-data", JSON.stringify({ name: "Анна", comment: "Готово" }));

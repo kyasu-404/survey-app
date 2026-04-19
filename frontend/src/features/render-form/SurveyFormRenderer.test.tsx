@@ -64,6 +64,9 @@ vi.mock("survey-core", () => ({
       getCustomQuestionByName: componentCollectionGetByName,
     },
   },
+  surveyLocalization: {
+    defaultLocale: "en",
+  },
   Model: class {
     locale = "ru";
     completeText = "";

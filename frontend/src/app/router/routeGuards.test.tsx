@@ -92,6 +92,26 @@ describe("route guards", () => {
   it("shows the admin access check while the admin route is loading", () => {
     useAuth.mockReturnValue({
       loading: true,
+      profileLoading: false,
+      profile: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={[routes.users]}>
+        <AdminRoute>
+          <div>admin content</div>
+        </AdminRoute>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Проверка прав доступа...")).toBeInTheDocument();
+    expect(screen.queryByText("admin content")).not.toBeInTheDocument();
+  });
+
+  it("keeps the admin route pending while the profile is still loading", () => {
+    useAuth.mockReturnValue({
+      loading: false,
+      profileLoading: true,
       profile: null,
     });
 
@@ -110,6 +130,7 @@ describe("route guards", () => {
   it("redirects a non-admin user back to the dashboard", () => {
     useAuth.mockReturnValue({
       loading: false,
+      profileLoading: false,
       profile: { role: "user" },
     });
 
@@ -135,6 +156,7 @@ describe("route guards", () => {
   it("renders children for admin profiles", () => {
     useAuth.mockReturnValue({
       loading: false,
+      profileLoading: false,
       profile: { role: "admin" },
     });
 

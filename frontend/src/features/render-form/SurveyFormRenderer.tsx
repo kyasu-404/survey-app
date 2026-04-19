@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Model, type OpenDropdownMenuEvent } from "survey-core";
+import { Model, surveyLocalization, type OpenDropdownMenuEvent } from "survey-core";
 import { Survey } from "survey-react-ui";
+import "survey-core/defaultV2.min.css";
+import "survey-core/i18n/russian";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
 import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
 import type { SurveySchema } from "../../entities/survey/types";
@@ -21,6 +23,8 @@ import {
   loadSurveyResponseDraft,
   saveSurveyResponseDraft,
 } from "./responseDraft";
+
+surveyLocalization.defaultLocale = "ru";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;

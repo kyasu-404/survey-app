@@ -5,6 +5,8 @@ import { editorLocalization } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
 import "survey-creator-core/survey-creator-core.min.css";
+import "survey-core/i18n/russian";
+import "survey-creator-core/i18n/russian";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
 import emailIcon from "../../img/constructor/Email.svg?raw";
 import floatIcon from "../../img/constructor/float.svg?raw";

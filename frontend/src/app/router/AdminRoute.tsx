@@ -4,9 +4,9 @@ import { useAuth } from "../providers/AuthProvider";
 import { routes } from "../routes";
 
 export function AdminRoute({ children }: PropsWithChildren) {
-  const { loading, profile } = useAuth();
+  const { loading, profile, profileLoading } = useAuth();
 
-  if (loading) {
+  if (loading || profileLoading) {
     return <p>Проверка прав доступа...</p>;
   }
 

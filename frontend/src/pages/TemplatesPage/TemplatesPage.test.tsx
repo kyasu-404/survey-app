@@ -172,7 +172,9 @@ describe("TemplatesPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Открыть превью шаблона Заявка на конкурс" }));
 
-    expect(await screen.findByRole("dialog", { name: "Превью шаблона Заявка на конкурс" })).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Превью шаблона Заявка на конкурс" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelector(".template-preview-title")).not.toBeInTheDocument();
     expect(getFormById).toHaveBeenCalledWith("template-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(container.querySelector(".template-preview-body")).toHaveClass("survey-page-card");
     expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
@@ -556,6 +558,16 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.template-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
+  it("keeps template preview controls, descriptions, and pinning affordance on the requested styling", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*2px solid #6b7280;/);
+    expect(css).toMatch(
+      /\.template-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.template-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
+    );
+    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*font-size:\s*2\.1rem;/);
+  });
+
   it("uses a gray border for template action menu trigger buttons", () => {
     const css = readAppCss();
 
@@ -581,7 +593,7 @@ describe("TemplatesPage", () => {
   it("renders template pin stars without a framed button background", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*border:\s*none;[^}]*background:\s*transparent;[^}]*font-size:\s*1\.4rem;/);
+    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*border:\s*none;[^}]*background:\s*transparent;[^}]*font-size:\s*2\.1rem;/);
     expect(css).toMatch(/\.templates-pin-button:hover,\s*\.templates-pin-button:focus-visible\s*\{[^}]*background:\s*transparent;/);
     expect(css).toMatch(/\.templates-pin-button-active,[^{]*\{[^}]*background:\s*transparent;/);
   });

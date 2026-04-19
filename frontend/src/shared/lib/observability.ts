@@ -1,6 +1,5 @@
-import * as Sentry from "@sentry/react";
-
 type LogAttributes = Record<string, unknown>;
+type SentryModule = typeof import("@sentry/react");
 
 export type RequestTraceContext = {
   operation: string;
@@ -17,7 +16,10 @@ const SENSITIVE_KEY_PATTERN = /authorization|password|secret|token|apikey|api_ke
 const DEFAULT_RELEASE = "unknown";
 
 let activeRequestTraceContext: RequestTraceContext | null = null;
+let sentryInitStarted = false;
 let sentryInitialized = false;
+let sentryModule: SentryModule | null = null;
+let sentryModulePromise: Promise<SentryModule> | null = null;
 let currentUserId: string | null = null;
 
 function readEnv(name: string) {
@@ -132,8 +134,19 @@ function toError(error: unknown) {
   return new Error("Non-error exception captured");
 }
 
+function loadSentry() {
+  if (!sentryModulePromise) {
+    sentryModulePromise = import("@sentry/react").then((module) => {
+      sentryModule = module;
+      return module;
+    });
+  }
+
+  return sentryModulePromise;
+}
+
 export function initializeObservability() {
-  if (sentryInitialized) {
+  if (sentryInitStarted || sentryInitialized) {
     return;
   }
 
@@ -142,37 +155,48 @@ export function initializeObservability() {
     return;
   }
 
-  const tracesSampleRate = parseSampleRate(readEnv("VITE_SENTRY_TRACES_SAMPLE_RATE"));
-  const integrations = tracesSampleRate && tracesSampleRate > 0 ? [Sentry.browserTracingIntegration()] : undefined;
+  sentryInitStarted = true;
 
-  Sentry.init({
-    dsn,
-    environment: OBSERVABILITY_ENVIRONMENT,
-    release: OBSERVABILITY_RELEASE === DEFAULT_RELEASE ? undefined : OBSERVABILITY_RELEASE,
-    sendDefaultPii: false,
-    ...(typeof tracesSampleRate === "number" ? { tracesSampleRate } : {}),
-    ...(integrations ? { integrations } : {}),
-  });
+  void loadSentry()
+    .then((Sentry) => {
+      const tracesSampleRate = parseSampleRate(readEnv("VITE_SENTRY_TRACES_SAMPLE_RATE"));
+      const integrations = tracesSampleRate && tracesSampleRate > 0 ? [Sentry.browserTracingIntegration()] : undefined;
 
-  sentryInitialized = true;
+      Sentry.init({
+        dsn,
+        environment: OBSERVABILITY_ENVIRONMENT,
+        release: OBSERVABILITY_RELEASE === DEFAULT_RELEASE ? undefined : OBSERVABILITY_RELEASE,
+        sendDefaultPii: false,
+        ...(typeof tracesSampleRate === "number" ? { tracesSampleRate } : {}),
+        ...(integrations ? { integrations } : {}),
+      });
 
-  if (currentUserId) {
-    Sentry.setUser({ id: currentUserId });
-  }
+      sentryInitialized = true;
+
+      if (currentUserId) {
+        Sentry.setUser({ id: currentUserId });
+      }
+    })
+    .catch((error) => {
+      sentryInitStarted = false;
+      console.error("Не удалось инициализировать Sentry", error);
+    });
 }
 
 export function setObservabilityUser(userId: string | null) {
   currentUserId = userId;
 
-  if (!sentryInitialized) {
+  if (!sentryInitialized || !sentryModule) {
     return;
   }
 
-  Sentry.setUser(userId ? { id: userId } : null);
+  sentryModule.setUser(userId ? { id: userId } : null);
 }
 
 export function captureException(error: unknown, attributes: LogAttributes = {}) {
-  if (!sentryInitialized) {
+  const Sentry = sentryModule;
+
+  if (!sentryInitialized || !Sentry) {
     return;
   }
 
@@ -197,7 +221,9 @@ export function captureException(error: unknown, attributes: LogAttributes = {})
 }
 
 export function captureMessage(message: string, attributes: LogAttributes = {}) {
-  if (!sentryInitialized) {
+  const Sentry = sentryModule;
+
+  if (!sentryInitialized || !Sentry) {
     return;
   }
 

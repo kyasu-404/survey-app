@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -9,7 +9,7 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { isAbortError } from "../../shared/lib/error";
 import { Skeleton } from "../../shared/ui/Skeleton";
-import { SurveyRenderer } from "../../widgets/SurveyRenderer/SurveyRenderer";
+import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
 
 function SurveyNotFound() {
   return (
@@ -19,6 +19,19 @@ function SurveyNotFound() {
         <h1 className="survey-not-found-title">404</h1>
         <p className="survey-not-found-copy">Форма не найдена или недоступна.</p>
       </div>
+    </div>
+  );
+}
+
+function SurveyRendererFallback() {
+  return (
+    <div className="survey-page-skeleton-fields" aria-hidden="true">
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={`survey-renderer-skeleton-${index}`} className="survey-page-skeleton-field">
+          <Skeleton className="survey-page-skeleton-label" />
+          <Skeleton className="survey-page-skeleton-input" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -96,13 +109,15 @@ export default function SurveyPage() {
   return (
     <div className="survey-page survey-page-shell">
       <div className="survey-page-card card">
-        <SurveyRenderer
-          schema={form.schema}
-          formId={form.id}
-          respondentId={user?.id}
-          isPreview={isPreview}
-          allowAnonymousUploads={form.is_public}
-        />
+        <Suspense fallback={<SurveyRendererFallback />}>
+          <LazySurveyRenderer
+            schema={form.schema}
+            formId={form.id}
+            respondentId={user?.id}
+            isPreview={isPreview}
+            allowAnonymousUploads={form.is_public}
+          />
+        </Suspense>
       </div>
     </div>
   );

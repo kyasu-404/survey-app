@@ -2931,15 +2931,15 @@ button.dashboard-status-trigger-glossy:focus-visible {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border-radius: 8px;
   border: none;
   background: transparent;
   color: #cbd5e1;
-  font-size: 1.4rem;
-  line-height: 1;
+  font-size: 2.1rem;
+  line-height: 0.9;
   box-shadow: none;
 }
 
@@ -3116,7 +3116,16 @@ button.dashboard-status-trigger-glossy:focus-visible {
 }
 
 .template-preview-close {
+  border: 2px solid #6b7280;
   border-radius: 8px;
+  color: #111111;
+  box-shadow: none;
+}
+
+.template-preview-close:hover,
+.template-preview-close:focus-visible {
+  border-color: #4b5563;
+  color: #000000;
 }
 
 .template-preview-body {
@@ -3635,7 +3644,16 @@ button.responses-export-button:disabled {
 }
 
 .response-preview-close {
+  border: 2px solid #6b7280;
   border-radius: 8px;
+  color: #111111;
+  box-shadow: none;
+}
+
+.response-preview-close:hover,
+.response-preview-close:focus-visible {
+  border-color: #4b5563;
+  color: #000000;
 }
 
 .response-preview-body.survey-page-card {
@@ -4186,12 +4204,20 @@ button.responses-export-button:disabled {
   background: #111111 !important;
 }
 
-.response-preview-builder-palette.survey-page-card .sd-question .sd-description,
-.response-preview-builder-palette.survey-page-card .sd-question__description {
-  border-color: rgba(20, 20, 20, 0.12) !important;
-  background: rgba(255, 255, 255, 0.72) !important;
+.template-preview-body.survey-page-card .sd-question .sd-description,
+.template-preview-body.survey-page-card .sd-question__description {
+  border-color: rgba(96, 165, 250, 0.55) !important;
+  background: rgba(219, 234, 254, 0.88) !important;
   color: #141414 !important;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.response-preview-body.survey-page-card .sd-question .sd-description,
+.response-preview-body.survey-page-card .sd-question__description {
+  border-color: rgba(96, 165, 250, 0.55) !important;
+  background: rgba(219, 234, 254, 0.88) !important;
+  color: #141414 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 /* 6) Dropdown-меню в dashboard: без прозрачности, пункты во всю ширину */
