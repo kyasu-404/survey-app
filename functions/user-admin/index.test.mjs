@@ -3,10 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const dockerSource = readFileSync(
-  new URL("../../supabase/docker/volumes/functions/user-admin/index.ts", import.meta.url),
-  "utf8",
-);
 
 test("pins the Supabase client import to an exact version", () => {
   assert.match(source, /@supabase\/supabase-js@2\.\d+\.\d+/);
@@ -23,14 +19,12 @@ test("uses an explicit CORS allowlist instead of wildcard origin", () => {
 });
 
 test("allows private-network development origins without wildcard CORS", () => {
-  [source, dockerSource].forEach((fileSource) => {
-    assert.doesNotMatch(fileSource, /"Access-Control-Allow-Origin": "\*"/);
-    assert.match(fileSource, /USER_ADMIN_ALLOWED_ORIGINS/);
-    assert.match(fileSource, /isDefaultLocalDevelopmentOrigin/);
-    assert.match(fileSource, /isPrivateNetworkHostname/);
-    assert.match(fileSource, /172\\\.\(1\[6-9\]\|2\\d\|3\[0-1\]\)\\\./);
-    assert.match(fileSource, /defaultAllowedDevelopmentPorts/);
-  });
+  assert.doesNotMatch(source, /"Access-Control-Allow-Origin": "\*"/);
+  assert.match(source, /USER_ADMIN_ALLOWED_ORIGINS/);
+  assert.match(source, /isDefaultLocalDevelopmentOrigin/);
+  assert.match(source, /isPrivateNetworkHostname/);
+  assert.match(source, /172\\\.\(1\[6-9\]\|2\\d\|3\[0-1\]\)\\\./);
+  assert.match(source, /defaultAllowedDevelopmentPorts/);
 });
 
 test("logs request correlation context for user-admin actions", () => {

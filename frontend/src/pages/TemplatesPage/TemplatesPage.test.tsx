@@ -148,6 +148,23 @@ describe("TemplatesPage", () => {
     renameForm.mockResolvedValue(undefined);
   });
 
+  it("renders template card creation time without seconds", async () => {
+    getTemplateFormsPage.mockResolvedValue(
+      createTemplatesPage([
+        createTemplate(1, {
+          title: "Шаблон без секунд",
+          created_at: "2026-04-19T21:51:46",
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Шаблон без секунд")).toBeInTheDocument();
+    expect(screen.getByText("Создан 19.04.2026, 21:51")).toBeInTheDocument();
+    expect(screen.queryByText("Создан 19.04.2026, 21:51:46")).not.toBeInTheDocument();
+  });
+
   it("renders my templates as a two-column gallery and opens a preview drawer from a card", async () => {
     const templates = [
       createTemplate(1, { title: "Заявка на конкурс" }),

@@ -46,6 +46,17 @@ export function getAuthorLabel(form: SurveyFormSummary) {
   return form.author_name || form.author_email || form.author_id;
 }
 
+export function formatDashboardCreatedAt(dateTime: string) {
+  return new Date(dateTime).toLocaleString("ru-RU", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export function formatDashboardDeadlineLabel(dateTime: string) {
   const date = new Date(dateTime);
 

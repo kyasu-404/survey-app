@@ -3,6 +3,7 @@ import { isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import deadlineIcon from "../../../img/deadline.svg";
 import {
+  formatDashboardCreatedAt,
   formatDashboardDeadlineLabel,
   getAuthorLabel,
   getResponsesCounterLabel,
@@ -19,7 +20,7 @@ type DashboardFormMetaLineProps = {
 export function DashboardFormMetaLine({ form, onOpenResponses, viewMode }: DashboardFormMetaLineProps) {
   const isTemplate = isTemplateForm(form);
   const responsesCount = form.responses_count ?? 0;
-  const createdAtLabel = new Date(form.created_at).toLocaleString("ru-RU");
+  const createdAtLabel = formatDashboardCreatedAt(form.created_at);
   const deadlineLabel = form.deadline_at ? formatDashboardDeadlineLabel(form.deadline_at) : null;
   const hasReachedResponseLimit = isResponseLimitReached(responsesCount, form.max_responses);
   const stopCardEvent = (event: ReactMouseEvent) => event.stopPropagation();

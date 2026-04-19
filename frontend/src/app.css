@@ -2918,7 +2918,7 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed {
 
 button.dashboard-status-trigger-glossy.dashboard-status-pill-active:hover,
 button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visible {
-  background: linear-gradient(180deg, rgba(62, 62, 62, 0.98), rgba(24, 24, 24, 1) 55%, rgba(5, 5, 5, 1));
+  background: linear-gradient(180deg, rgba(88, 88, 88, 0.98), rgba(44, 44, 44, 1) 55%, rgba(16, 16, 16, 1));
   border-color: rgba(255, 255, 255, 0.18);
 }
 

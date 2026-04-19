@@ -248,6 +248,23 @@ describe("DashboardPage", () => {
     qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
   });
 
+  it("renders form card creation time without seconds", async () => {
+    getDashboardFormsPage.mockResolvedValue(
+      createDashboardPage([
+        createForm(1, {
+          title: "Форма без секунд",
+          created_at: "2026-04-19T21:51:46",
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("Форма без секунд")).toBeInTheDocument();
+    expect(screen.getByText("19.04.2026, 21:51")).toBeInTheDocument();
+    expect(screen.queryByText("19.04.2026, 21:51:46")).not.toBeInTheDocument();
+  });
+
   it("refreshes forms after a realtime database change", async () => {
     getDashboardFormsPage
       .mockResolvedValueOnce(createDashboardPage([createForm(1, { responses_count: 1 })]))
@@ -1186,7 +1203,7 @@ describe("DashboardPage", () => {
   it("changes the form status trigger color on hover", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(62,\s*62,\s*62,\s*0\.98\),\s*rgba\(24,\s*24,\s*24,\s*1\)\s*55%,\s*rgba\(5,\s*5,\s*5,\s*1\)\);/);
+    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(88,\s*88,\s*88,\s*0\.98\),\s*rgba\(44,\s*44,\s*44,\s*1\)\s*55%,\s*rgba\(16,\s*16,\s*16,\s*1\)\);/);
     expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#d7d7d7\);/);
   });
 
