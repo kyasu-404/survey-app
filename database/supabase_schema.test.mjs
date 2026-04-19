@@ -279,6 +279,7 @@ test("forms and responses are published to realtime", () => {
 test("list and search indexes support stable paginated reads", () => {
   assert.match(schema, /create schema if not exists extensions;/i);
   assert.match(schema, /create extension if not exists "pg_trgm" with schema extensions;/i);
+  assert.match(schema, /alter extension "pg_trgm" set schema extensions;/i);
   assert.doesNotMatch(schema, /create extension if not exists "pg_trgm";/i);
   assert.match(schema, /grant usage on schema extensions to anon, authenticated, service_role;/i);
   assert.match(schema, /create index idx_forms_created_at_id\s+on public\.forms\(created_at desc,\s*id desc\);/i);

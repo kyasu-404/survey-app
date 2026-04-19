@@ -227,6 +227,7 @@ describe("SurveyPage", () => {
     renderSurveyPage({ initialEntries: ["/form/missing"] });
 
     expect(await screen.findByRole("heading", { name: "404" })).toBeInTheDocument();
+    expect(screen.getAllByText("404")).toHaveLength(1);
     expect(screen.getByText("Форма не найдена или недоступна.")).toBeInTheDocument();
   });
 

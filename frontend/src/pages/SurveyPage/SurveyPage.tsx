@@ -15,7 +15,6 @@ function SurveyNotFound() {
   return (
     <div className="survey-not-found-page">
       <div className="survey-not-found-card card">
-        <p className="survey-not-found-code">404</p>
         <h1 className="survey-not-found-title">404</h1>
         <p className="survey-not-found-copy">Форма не найдена или недоступна.</p>
       </div>

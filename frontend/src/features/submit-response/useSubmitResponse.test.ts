@@ -23,7 +23,7 @@ describe("submitResponse", () => {
     expect(createResponse).toHaveBeenCalledWith("form-1", payload);
   });
 
-  it("invalidates dependent queries after successful submit", async () => {
+  it("invalidates dependent admin queries without refetching the active public survey after successful submit", async () => {
     vi.mocked(createResponse).mockResolvedValue({ id: "response-2" } as never);
 
     const queryClient = new QueryClient({
@@ -53,7 +53,7 @@ describe("submitResponse", () => {
     expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: DASHBOARD_FORMS_QUERY_ROOT });
     expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form", "form-1"] });
-    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["survey-form", "form-1"] });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: ["survey-form", "form-1"] });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["form-responses", "form-1"] });
   });
 });
