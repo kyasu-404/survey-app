@@ -568,13 +568,16 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*font-size:\s*2\.1rem;/);
   });
 
-  it("uses a gray border for template action menu trigger buttons", () => {
+  it("uses a gray border and rounded shape for template action menu trigger buttons", () => {
     const css = readAppCss();
 
     expect(css).toContain(".form-menu-trigger {");
     expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
     expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
     expect(css).not.toContain("border: 2px solid rgba(20, 20, 20, 0.72);");
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell\s+\.form-menu-trigger,\s*\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
+    );
   });
 
   it("matches template card border thickness with dashboard form cards", () => {

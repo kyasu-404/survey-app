@@ -629,20 +629,29 @@ textarea:focus {
 
 .builder-toolbar-action-item {
   margin-right: 8px;
+  flex: 0 0 auto;
+}
+
+.builder-toolbar-icon-item {
+  margin-right: 8px;
+  flex: 0 0 auto;
 }
 
 .builder-toolbar-action-button {
   border: 1px solid rgba(96, 165, 250, 0.32) !important;
   border-radius: 12px !important;
-  padding: 7px 12px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 6px 10px !important;
   background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
   color: #1d4ed8 !important;
   font-size: 0.84rem !important;
   font-weight: 700 !important;
   font-family: "Manrope", "Segoe UI", sans-serif !important;
-  line-height: 1.15 !important;
+  line-height: 1 !important;
   letter-spacing: 0.01em !important;
   text-transform: none !important;
+  white-space: nowrap !important;
   box-shadow: 0 8px 20px rgba(59, 130, 246, 0.14) !important;
 }
 
@@ -662,6 +671,22 @@ textarea:focus {
 .builder-toolbar-action-button.builder-toolbar-action-button-secondary {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96)) !important;
   color: #1e3a8a !important;
+}
+
+.builder-toolbar-icon-button {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #121212 !important;
+  box-shadow: none !important;
+  padding: 8px !important;
+}
+
+.builder-toolbar-icon-button:hover,
+.builder-toolbar-icon-button:focus-visible {
+  border-color: transparent !important;
+  background: rgba(20, 20, 20, 0.06) !important;
+  box-shadow: none !important;
 }
 
 .button-link {
@@ -3887,6 +3912,43 @@ button.responses-export-button:disabled {
   color: #3f3b37 !important;
 }
 
+.builder-toolbar-icon-button {
+  color: #121212 !important;
+}
+
+.builder-creator-shell .svc-tabbed-menu .sv-dots.sv-action--hidden,
+.builder-creator-shell .svc-toolbar-wrapper .sv-action.sv-action--hidden {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-action-item,
+.builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-action-item .sv-action__content,
+.builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-icon-item,
+.builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-icon-item .sv-action__content {
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+.builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-action-button {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: max-content !important;
+  flex: 0 0 auto !important;
+  justify-content: center !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  padding: 6px 12px !important;
+}
+
+.builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-action-button .sv-action-bar-item__title {
+  white-space: nowrap !important;
+}
+
 .survey-page-shell .survey-page-card .sd-root-modern,
 .survey-page-shell .survey-page-card .sd-root-modern__wrapper,
 .template-preview-body.survey-page-card .sd-root-modern,
@@ -4210,6 +4272,23 @@ button.responses-export-button:disabled {
 
 .form-menu-item-label {
   flex: 1 1 auto;
+}
+
+.dashboard-actions-menu-shell .form-menu-trigger,
+.templates-actions-menu-shell .form-menu-trigger {
+  width: 54px;
+  min-width: 54px;
+  border-radius: 14px;
+}
+
+.dashboard-actions-menu-shell .form-menu-dropdown,
+.templates-actions-menu-shell .form-menu-dropdown {
+  min-width: 236px;
+}
+
+.dashboard-actions-menu-shell .form-menu-item-label,
+.templates-actions-menu-shell .form-menu-item-label {
+  white-space: nowrap;
 }
 
 .dashboard-status-dropdown .form-menu-item {

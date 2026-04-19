@@ -384,6 +384,14 @@ describe("SurveyBuilder", () => {
       "builder-reset",
       "builder-save-template",
     ]);
+    expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-reset")).toMatchObject({
+      css: "builder-toolbar-action-item",
+      innerCss: "builder-toolbar-action-button",
+    });
+    expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-save-template")).toMatchObject({
+      css: "builder-toolbar-action-item",
+      innerCss: "builder-toolbar-action-button",
+    });
 
     const questionTypes = [
       "text",
@@ -564,6 +572,12 @@ describe("SurveyBuilder", () => {
     expect(appCss).toContain(".builder-creator-shell .svc-side-bar");
     expect(appCss).toContain(".builder-creator-shell .spg-button-group__item--selected");
     expect(appCss).toContain(".app-button,");
+    expect(appCss).toContain(".builder-toolbar-icon-button {");
+    expect(appCss).toContain(".builder-toolbar-icon-item {");
+    expect(appCss).toContain(".builder-creator-shell .svc-tabbed-menu .sv-dots.sv-action--hidden");
+    expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.sv-action--hidden");
+    expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-action-item");
+    expect(appCss).toContain("max-width: max-content !important;");
   });
 
   it("lets SurveyJS manage the builder top bar layout without custom flex overrides", () => {
@@ -580,6 +594,15 @@ describe("SurveyBuilder", () => {
 
     expect(surveyBuilderSource).toContain('import "survey-core/defaultV2.min.css";');
     expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.min.css";');
+  });
+
+  it("keeps the built-in save action icon-only while custom builder actions stay compact text buttons", () => {
+    const surveyBuilderSource = readSurveyBuilderSource();
+
+    expect(surveyBuilderSource).toContain('saveAction.css = "builder-toolbar-icon-item";');
+    expect(surveyBuilderSource).toContain('builder-toolbar-icon-button');
+    expect(surveyBuilderSource).toContain('resetAction.innerCss = "builder-toolbar-action-button";');
+    expect(surveyBuilderSource).toContain('saveTemplateAction.innerCss = `builder-toolbar-action-button ${');
   });
 
   it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {

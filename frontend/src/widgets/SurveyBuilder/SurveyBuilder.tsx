@@ -565,8 +565,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     if (saveAction) {
-      saveAction.css = "builder-toolbar-action-item";
-      saveAction.innerCss = `builder-toolbar-action-button ${isSaving ? "builder-toolbar-action-button-pending" : ""}`.trim();
+      saveAction.css = "builder-toolbar-icon-item";
+      saveAction.innerCss = `builder-toolbar-icon-button ${isSaving ? "builder-toolbar-action-button-pending" : ""}`.trim();
     }
 
     if (saveTemplateAction) {

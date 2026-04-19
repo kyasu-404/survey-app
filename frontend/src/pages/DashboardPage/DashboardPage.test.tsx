@@ -1216,6 +1216,20 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("keeps card action menus wide enough for single-line labels and rounds only their ellipsis triggers", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell\s+\.form-menu-trigger,\s*\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
+    );
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell\s+\.form-menu-dropdown,\s*\.templates-actions-menu-shell\s+\.form-menu-dropdown\s*\{[^}]*min-width:\s*236px;/s,
+    );
+    expect(css).toMatch(
+      /\.dashboard-actions-menu-shell\s+\.form-menu-item-label,\s*\.templates-actions-menu-shell\s+\.form-menu-item-label\s*\{[^}]*white-space:\s*nowrap;/s,
+    );
+  });
+
   it("marks only the first visible form action menu to open downward", async () => {
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
