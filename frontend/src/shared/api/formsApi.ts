@@ -523,12 +523,28 @@ export async function updateFormSchema(id: string, schema: SurveySchema, title: 
 }
 
 export async function updateFormStatus(id: string, isPublic: boolean) {
-  const { error } = await runRequest(
+  const statusPayload = isPublic
+    ? { is_public: true, deadline_at: null }
+    : { is_public: false, deadline_at: null };
+
+  const { data, error } = await runRequest(
     "forms.updateStatus",
-    () => apiClient.from("forms").update({ is_public: isPublic }).eq("id", id),
+    () => apiClient.from("forms").update(statusPayload).eq("id", id).select("*").single(),
     { context: { formId: id, isPublic } },
   );
   if (error) throw error;
+
+  const updatedForm = syncFetchedFormState(mapRawForm(data as RawForm));
+
+  if (updatedForm.is_public !== isPublic) {
+    throw new Error(
+      isPublic
+        ? "Форма осталась закрытой. Проверьте дедлайн или лимит ответов."
+        : "Форма осталась открытой. Попробуйте обновить страницу.",
+    );
+  }
+
+  return updatedForm;
 }
 
 export async function updateFormDeadline(id: string, deadlineAt: string | null) {

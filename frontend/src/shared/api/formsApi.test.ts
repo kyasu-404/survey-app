@@ -6,6 +6,7 @@ import {
   fetchTemplateFormsPage,
   insertForm,
   deleteForm,
+  updateFormStatus,
   updateFormResponseLimit,
 } from "./formsApi";
 import { apiClient } from "./client";
@@ -91,6 +92,17 @@ function createUpdateQuery() {
   const query = {
     update: vi.fn(() => query),
     eq: vi.fn(() => Promise.resolve({ error: null })),
+  };
+
+  return query;
+}
+
+function createStatusUpdateQuery(response: { data?: unknown | null; error: unknown | null }) {
+  const query = {
+    update: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    select: vi.fn(() => query),
+    single: vi.fn(() => Promise.resolve(response)),
   };
 
   return query;
@@ -620,6 +632,62 @@ describe("insertForm", () => {
       }),
     );
     expect(deleteQuery.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateFormStatus", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("clears a stale deadline while reopening a form", async () => {
+    const query = createStatusUpdateQuery({
+      data: {
+        id: "form-1",
+        title: "Form",
+        form_type: "anketa",
+        form_reason: "plan",
+        is_public: true,
+        deadline_at: null,
+        max_responses: 4,
+        author_id: "user-1",
+        schema: { pages: [] },
+        created_at: "2026-04-19T18:00:00.000Z",
+        responses_count: 3,
+      },
+      error: null,
+    });
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await updateFormStatus("form-1", true);
+
+    expect(query.update).toHaveBeenCalledWith({ is_public: true, deadline_at: null });
+    expect(query.eq).toHaveBeenCalledWith("id", "form-1");
+    expect(query.select).toHaveBeenCalledWith("*");
+  });
+
+  it("rejects reopening when the saved form still normalizes to closed", async () => {
+    const query = createStatusUpdateQuery({
+      data: {
+        id: "form-1",
+        title: "Form",
+        form_type: "anketa",
+        form_reason: "plan",
+        is_public: true,
+        deadline_at: "2020-01-01T00:00:00.000Z",
+        max_responses: 4,
+        author_id: "user-1",
+        schema: { pages: [] },
+        created_at: "2026-04-19T18:00:00.000Z",
+        responses_count: 3,
+      },
+      error: null,
+    });
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await expect(updateFormStatus("form-1", true)).rejects.toThrow(
+      "Форма осталась закрытой. Проверьте дедлайн или лимит ответов.",
+    );
   });
 });
 

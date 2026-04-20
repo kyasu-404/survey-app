@@ -64,7 +64,7 @@ export function useTemplateActions(userId: string | undefined) {
     ]);
   };
 
-  const runAction = async (action: () => Promise<void>, options: TemplateActionOptions) => {
+  const runAction = async (action: () => Promise<unknown>, options: TemplateActionOptions) => {
     setActionPending(options.actionKey, true);
     const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
 
