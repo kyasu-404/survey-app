@@ -433,9 +433,15 @@ describe("SurveyBuilder", () => {
       css: "builder-toolbar-action-item",
       innerCss: "builder-toolbar-action-button",
     });
+    expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-reset")).not.toMatchObject({
+      disableShrink: true,
+    });
     expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-save-template")).toMatchObject({
       css: "builder-toolbar-action-item",
       innerCss: "builder-toolbar-action-button",
+    });
+    expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-save-template")).not.toMatchObject({
+      disableShrink: true,
     });
     expect(creator.addPluginTab).toHaveBeenCalledWith(
       "runtime-preview",
@@ -617,7 +623,10 @@ describe("SurveyBuilder", () => {
     expect(appCss).toContain(".builder-creator-shell .svc-tabbed-menu .sv-dots.sv-action--hidden");
     expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.sv-action--hidden");
     expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-action-item");
-    expect(appCss).toContain("max-width: max-content !important;");
+    expect(appCss).toContain(".builder-creator-shell .svc-tab-designer .sd-root-modern .sd-container-modern__title");
+    expect(appCss).toContain("background-color: transparent !important;");
+    expect(appCss).not.toContain("max-width: max-content !important;");
+    expect(appCss).toContain("max-width: none !important;");
   });
 
   it("lets SurveyJS manage the builder top bar layout without custom flex overrides", () => {

@@ -582,7 +582,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         id: "builder-reset",
         title: "Сбросить",
         showTitle: true,
-        disableShrink: true,
         css: "builder-toolbar-action-item",
         innerCss: "builder-toolbar-action-button",
         action: () => {
@@ -597,7 +596,6 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         id: "builder-save-template",
         title: "Сохранить как шаблон",
         showTitle: true,
-        disableShrink: true,
         css: "builder-toolbar-action-item",
         innerCss: "builder-toolbar-action-button",
         action: () => {

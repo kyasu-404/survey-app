@@ -476,6 +476,10 @@ textarea:focus {
   background: transparent !important;
 }
 
+.builder-creator-shell .svc-tab-designer .sd-root-modern .sd-container-modern__title {
+  background-color: transparent !important;
+}
+
 .builder-creator-shell .svc-creator__area,
 .builder-creator-shell .svc-creator__content-wrapper,
 .builder-creator-shell .svc-creator__content-holder,
@@ -654,12 +658,12 @@ textarea:focus {
 
 .builder-toolbar-action-item {
   margin-right: 8px;
-  flex: 0 0 auto;
+  flex: none;
 }
 
 .builder-toolbar-icon-item {
   margin-right: 8px;
-  flex: 0 0 auto;
+  flex: none;
 }
 
 .builder-toolbar-action-button {
@@ -3957,14 +3961,14 @@ button.responses-export-button:disabled {
 .builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-icon-item,
 .builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-icon-item .sv-action__content {
   width: auto !important;
-  flex: 0 0 auto !important;
+  flex: none !important;
 }
 
 .builder-creator-shell .svc-toolbar-wrapper .builder-toolbar-action-button {
   width: auto !important;
   min-width: 0 !important;
-  max-width: max-content !important;
-  flex: 0 0 auto !important;
+  max-width: none !important;
+  flex: none !important;
   justify-content: center !important;
   align-items: center !important;
   white-space: nowrap !important;
