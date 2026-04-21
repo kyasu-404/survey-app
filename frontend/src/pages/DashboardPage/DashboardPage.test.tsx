@@ -970,7 +970,9 @@ describe("DashboardPage", () => {
     navigate.mockClear();
 
     await userEvent.click(previewCard);
-    expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"), { state: { isPreview: true } });
+    expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"), {
+      state: { renderMode: "readonly-navigable" },
+    });
   });
 
   it("shows owner-only actions in the menu and re-enables the trigger after duplication", async () => {

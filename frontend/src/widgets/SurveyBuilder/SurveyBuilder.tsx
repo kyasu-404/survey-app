@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { editorLocalization } from "survey-creator-core";
+import { editorLocalization, type ICreatorPlugin } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
 import "survey-creator-core/survey-creator-core.min.css";
@@ -52,6 +52,12 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import {
+  BUILDER_PREVIEW_COMPONENT_NAME,
+  BUILDER_PREVIEW_TAB_ID,
+  registerBuilderPreviewTabComponent,
+} from "./BuilderPreviewTab";
+import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 
 type SurveyBuilderProps = {
@@ -79,6 +85,8 @@ type PostSaveSettingsState = {
   formTypeValue: string;
   formReasonValue: string;
 };
+
+const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;
 
 const CREATOR_SURVEY_THEME: ITheme = {
   themeName: "defaultV2",
@@ -184,7 +192,7 @@ function configureCreatorQuestionTypes() {
   }
 }
 
-function createCreatorInstance() {
+function createCreatorInstance(formId?: string) {
   configureCreatorLocalization();
   registerCustomIcons();
   configureCreatorQuestionTypes();
@@ -192,8 +200,9 @@ function createCreatorInstance() {
 
   const creator = new SurveyCreator({
     questionTypes: [...QUESTION_TYPES],
+    showDesignerTab: true,
     showLogicTab: true,
-    showPreviewTab: true,
+    showPreviewTab: false,
     showJSONEditorTab: false,
     showTranslationTab: false,
     showThemeTab: false,
@@ -203,10 +212,10 @@ function createCreatorInstance() {
     showSurveyHeader: true,
     propertyGridNavigationMode: "accordion",
     showCreatorThemeSettings: false,
-    previewAllowSimulateDevices: false,
+    previewAllowSimulateDevices: true,
     previewAllowSelectLanguage: false,
     previewAllowHiddenElements: false,
-    previewAllowSelectPage: false,
+    previewAllowSelectPage: true,
   });
 
   creator.locale = "ru";
@@ -228,6 +237,7 @@ function createCreatorInstance() {
   creator.showSidebar = true;
 
   configureCreatorToolbox(creator);
+  registerBuilderPreviewTab(creator, formId);
 
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
@@ -252,6 +262,39 @@ function createCreatorInstance() {
 
 function cloneSchema(schema: SurveySchema): SurveySchema {
   return JSON.parse(JSON.stringify(schema)) as SurveySchema;
+}
+
+function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
+  return cloneSchema(creator.JSON as SurveySchema);
+}
+
+function updateRuntimePreviewBridgeFromCreator(creator: SurveyCreator, formId?: string) {
+  updateBuilderPreviewBridge({
+    previewSchema: getRuntimePreviewSchema(creator),
+    formId,
+  });
+}
+
+function registerBuilderPreviewTab(creator: SurveyCreator, formId?: string) {
+  registerBuilderPreviewTabComponent();
+
+  const syncPreview = () => {
+    updateRuntimePreviewBridgeFromCreator(creator, formId);
+  };
+  const runtimePreviewPlugin: ICreatorPlugin = {
+    model: creator,
+    activate: syncPreview,
+    update: syncPreview,
+    deactivate: () => true,
+  };
+
+  creator.addPluginTab(
+    BUILDER_PREVIEW_TAB_ID,
+    runtimePreviewPlugin,
+    "Превью",
+    BUILDER_PREVIEW_COMPONENT_NAME,
+    1,
+  );
 }
 
 function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
@@ -312,6 +355,22 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const isTemplateBusy = isTemplateActionLoading !== null;
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
+  const runtimePreviewSyncTimeoutRef = useRef<number | null>(null);
+
+  const clearScheduledRuntimePreviewSync = useCallback(() => {
+    if (runtimePreviewSyncTimeoutRef.current) {
+      window.clearTimeout(runtimePreviewSyncTimeoutRef.current);
+      runtimePreviewSyncTimeoutRef.current = null;
+    }
+  }, []);
+
+  const syncRuntimePreviewNow = useCallback(
+    (targetCreator: SurveyCreator) => {
+      clearScheduledRuntimePreviewSync();
+      updateRuntimePreviewBridgeFromCreator(targetCreator, formId);
+    },
+    [clearScheduledRuntimePreviewSync, formId],
+  );
 
   const {
     data: editableForm,
@@ -329,14 +388,20 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   });
 
   useEffect(() => {
-    const nextCreator = createCreatorInstance();
+    const nextCreator = createCreatorInstance(formId);
     setCreator(nextCreator);
     draftHydrationStateRef.current = "idle";
+    updateRuntimePreviewBridgeFromCreator(nextCreator, formId);
 
     return () => {
+      clearScheduledRuntimePreviewSync();
+      updateBuilderPreviewBridge({
+        previewSchema: createEmptySurveySchema(),
+        formId: undefined,
+      });
       nextCreator.dispose();
     };
-  }, []);
+  }, [clearScheduledRuntimePreviewSync, formId]);
 
   useEffect(() => {
     draftHydrationStateRef.current = "idle";
@@ -361,11 +426,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       draftHydrationStateRef.current = "loaded";
       creator.locale = restoredDraft.locale ?? "ru";
       creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft, "Новая форма"));
+      syncRuntimePreviewNow(creator);
       return;
     }
 
     draftHydrationStateRef.current = "empty";
-  }, [creator, formId]);
+    syncRuntimePreviewNow(creator);
+  }, [creator, formId, syncRuntimePreviewNow]);
 
   useEffect(() => {
     if (!creator || !editableForm || draftHydrationStateRef.current === "loaded") {
@@ -382,7 +449,8 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         editableForm.title,
       ),
     );
-  }, [creator, editableForm]);
+    syncRuntimePreviewNow(creator);
+  }, [creator, editableForm, syncRuntimePreviewNow]);
 
   useEffect(() => {
     if (!creator) {
@@ -394,14 +462,21 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         formId,
         serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema)),
       );
+
+      clearScheduledRuntimePreviewSync();
+      runtimePreviewSyncTimeoutRef.current = window.setTimeout(() => {
+        runtimePreviewSyncTimeoutRef.current = null;
+        updateRuntimePreviewBridgeFromCreator(creator, formId);
+      }, BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS);
     };
 
     creator.onModified.add(handleModified);
 
     return () => {
       creator.onModified.remove(handleModified);
+      clearScheduledRuntimePreviewSync();
     };
-  }, [creator, formId]);
+  }, [clearScheduledRuntimePreviewSync, creator, formId]);
 
   const scheduleBuilderQueryRefresh = (affectedFormId?: string) => {
     const targets: Array<{ queryKey: readonly unknown[] }> = [
@@ -439,6 +514,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     creator.locale = emptySchema.locale ?? "ru";
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
     draftHydrationStateRef.current = "empty";
+    syncRuntimePreviewNow(creator);
   };
 
   const handleSaveAsTemplate = async () => {
@@ -491,6 +567,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
     saveSurveyBuilderDraft(formId, emptySchema);
     draftHydrationStateRef.current = "loaded";
+    syncRuntimePreviewNow(creator);
     setIsResetConfirmOpen(false);
     showToast("Конструктор очищен", "success");
   };

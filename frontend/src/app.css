@@ -484,6 +484,12 @@ textarea:focus {
   min-height: 0;
 }
 
+.builder-creator-shell .svc-creator-tab__content,
+.builder-creator-shell .svc-plugin-tab__content {
+  width: 100%;
+  min-width: 0;
+}
+
 .builder-creator-shell .svc-tabbed-menu {
   border-bottom: 1px solid rgba(20, 20, 20, 0.12);
 }
@@ -625,6 +631,25 @@ textarea:focus {
 .builder-creator-shell .sd-file input:focus + .sd-file__decorator {
   box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
   border-color: rgba(20, 20, 20, 0.24) !important;
+}
+
+.builder-preview-tab-shell {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  padding: 24px;
+}
+
+.builder-preview-tab-surface.survey-page-card {
+  width: min(1060px, 100%);
+  max-width: 1060px;
+  min-width: 0;
+  margin: 0 auto;
+  flex: 0 1 1060px;
 }
 
 .builder-toolbar-action-item {
@@ -2587,6 +2612,7 @@ textarea {
 .dashboard-main-card,
 .responses-page-card,
 .users-page-card,
+.survey-runtime-surface,
 .survey-page-card,
 .modal-card {
   border: 1px solid var(--card-border);
@@ -3949,6 +3975,8 @@ button.responses-export-button:disabled {
   white-space: nowrap !important;
 }
 
+.survey-runtime-surface .sd-root-modern,
+.survey-runtime-surface .sd-root-modern__wrapper,
 .survey-page-shell .survey-page-card .sd-root-modern,
 .survey-page-shell .survey-page-card .sd-root-modern__wrapper,
 .template-preview-body.survey-page-card .sd-root-modern,

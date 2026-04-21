@@ -85,19 +85,25 @@ vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
   SurveyRenderer: ({
     formId,
     initialData,
+    initialPageNo,
     isPreview,
+    renderMode,
     schema,
   }: {
     formId: string;
     initialData?: Record<string, unknown>;
+    initialPageNo?: number;
     isPreview?: boolean;
+    renderMode?: string;
     schema: { title?: string };
   }) => (
     <div
       data-testid="response-preview-renderer"
       data-form-id={formId}
       data-initial-data={JSON.stringify(initialData ?? {})}
+      data-initial-page-no={String(initialPageNo ?? "")}
       data-preview={String(Boolean(isPreview))}
+      data-render-mode={renderMode ?? ""}
     >
       {schema.title}
     </div>
@@ -669,9 +675,57 @@ describe("FormResponsesPage", () => {
     expect(dialog.querySelector(".response-preview-body")).toHaveClass("response-preview-builder-palette");
     const renderer = await within(dialog).findByTestId("response-preview-renderer");
     expect(renderer).toHaveAttribute("data-form-id", "form-1");
-    expect(renderer).toHaveAttribute("data-preview", "true");
+    expect(renderer).toHaveAttribute("data-render-mode", "readonly-navigable");
     expect(renderer).toHaveAttribute("data-initial-data", JSON.stringify({ name: "Анна", comment: "Готово" }));
     expect(within(dialog).queryByRole("button", { name: /Завершить|Отправить/i })).not.toBeInTheDocument();
+  });
+
+  it("opens response preview on the first page that contains answer data", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: {
+        title: "Форма обратной связи",
+        pages: [
+          { name: "page1", elements: [{ type: "text", name: "name", title: "Имя" }] },
+          { name: "page2", elements: [{ type: "text", name: "comment", title: "Комментарий" }] },
+        ],
+      },
+    });
+    getResponsesByForm.mockResolvedValue(
+      createResponsesPage([
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-08T11:30:00.000Z",
+          data: {
+            comment: "Ответ со второй страницы",
+          },
+        },
+      ]),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(await screen.findByText("Ответ со второй страницы"));
+
+    const renderer = await screen.findByTestId("response-preview-renderer");
+
+    expect(renderer).toHaveAttribute("data-initial-page-no", "1");
   });
 
   it("disables the refresh button while responses are being updated", async () => {

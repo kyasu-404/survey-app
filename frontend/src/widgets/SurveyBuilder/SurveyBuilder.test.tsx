@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
 import { SurveyBuilder } from "./SurveyBuilder";
+import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
 import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
 
@@ -26,6 +27,8 @@ const {
   setFormDeadline,
   setFormResponseLimit,
   showToast,
+  surveyFormRendererProps,
+  registerElement,
 } = vi.hoisted(() => ({
   componentCollectionAdd: vi.fn(),
   componentCollectionGetByName: vi.fn(),
@@ -40,6 +43,12 @@ const {
   setFormDeadline: vi.fn(),
   setFormResponseLimit: vi.fn(),
   showToast: vi.fn(),
+  surveyFormRendererProps: [] as Array<{
+    formId: string;
+    renderMode?: string;
+    schema: SurveySchema;
+  }>,
+  registerElement: vi.fn(),
 }));
 
 class FakeEvent {
@@ -85,6 +94,22 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   setFormResponseLimit,
 }));
 
+vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
+  SurveyFormRenderer: (props: { formId: string; renderMode?: string; schema: SurveySchema }) => {
+    surveyFormRendererProps.push(props);
+
+    return (
+      <div
+        data-testid="survey-form-renderer"
+        data-form-id={props.formId}
+        data-render-mode={props.renderMode ?? ""}
+      >
+        {props.schema.title}
+      </div>
+    );
+  },
+}));
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
 
@@ -101,6 +126,15 @@ vi.mock("survey-creator-core", () => ({
       ed: {},
       tabs: {},
     }),
+  },
+}));
+
+vi.mock("survey-react-ui", () => ({
+  ReactElementFactory: {
+    Instance: {
+      isElementRegistered: vi.fn(() => false),
+      registerElement,
+    },
   },
 }));
 
@@ -143,6 +177,8 @@ vi.mock("survey-creator-react", () => {
     onModified = new FakeEvent();
     onQuestionAdded = new FakeEvent();
     saveSurveyFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
+    tabs: Array<Record<string, unknown>> = [];
+    plugins: Record<string, unknown> = {};
     toolbox = {
       items: [] as Array<Record<string, unknown>>,
       categories: [
@@ -174,6 +210,12 @@ vi.mock("survey-creator-react", () => {
       creatorInstances.push(this);
     }
 
+    addPluginTab = vi.fn(
+      (name: string, plugin: unknown, title?: string, componentName?: string, index?: number) => {
+        this.tabs.splice(index ?? this.tabs.length, 0, { id: name, plugin, title, componentName, index });
+        this.plugins[name] = plugin;
+      },
+    );
     dispose = vi.fn();
   }
 
@@ -249,6 +291,8 @@ describe("SurveyBuilder", () => {
     setFormDeadline.mockResolvedValue(undefined);
     setFormResponseLimit.mockResolvedValue(undefined);
     createSurveyMutateAsync.mockResolvedValue({ id: "created-form-id" });
+    surveyFormRendererProps.length = 0;
+    registerElement.mockClear();
   });
 
   it("restores a saved draft and persists later changes", async () => {
@@ -358,12 +402,13 @@ describe("SurveyBuilder", () => {
       propertyGridNavigationMode: "accordion",
       previewAllowHiddenElements: false,
       previewAllowSelectLanguage: false,
-      previewAllowSelectPage: false,
-      previewAllowSimulateDevices: false,
+      previewAllowSelectPage: true,
+      previewAllowSimulateDevices: true,
+      showDesignerTab: true,
       showCreatorThemeSettings: false,
       showJSONEditorTab: false,
       showLogicTab: true,
-      showPreviewTab: true,
+      showPreviewTab: false,
       showSurveyHeader: true,
       showThemeTab: false,
       showTranslationTab: false,
@@ -392,6 +437,17 @@ describe("SurveyBuilder", () => {
       css: "builder-toolbar-action-item",
       innerCss: "builder-toolbar-action-button",
     });
+    expect(creator.addPluginTab).toHaveBeenCalledWith(
+      "runtime-preview",
+      expect.objectContaining({
+        activate: expect.any(Function),
+        deactivate: expect.any(Function),
+        model: creator,
+      }),
+      "Превью",
+      "svc-tab-runtime-preview",
+      1,
+    );
 
     const questionTypes = [
       "text",
@@ -477,9 +533,6 @@ describe("SurveyBuilder", () => {
     expect(unsupportedOptions.allowChangeType).toBe(false);
     expect(unsupportedOptions.allowChangeInputType).toBe(false);
 
-    const previewSurvey = {
-      applyTheme: vi.fn(),
-    };
     const designerSurvey = {
       applyTheme: vi.fn(),
       onPageAdded: new FakeEvent(),
@@ -494,25 +547,12 @@ describe("SurveyBuilder", () => {
         survey: designerSurvey,
       });
       creator.onSurveyInstanceCreated.fire(creator, {
-        area: "preview-tab",
-        survey: previewSurvey,
-      });
-      creator.onSurveyInstanceCreated.fire(creator, {
         area: "logic-tab",
         survey: logicSurvey,
       });
     });
 
     expect(designerSurvey.applyTheme).toHaveBeenCalledWith(
-      expect.objectContaining({
-        themeName: "defaultV2",
-        cssVariables: expect.objectContaining({
-          "--sjs-primary-backcolor": "#121212",
-          "--sjs-primary-backcolor-dark": "#000000",
-        }),
-      }),
-    );
-    expect(previewSurvey.applyTheme).toHaveBeenCalledWith(
       expect.objectContaining({
         themeName: "defaultV2",
         cssVariables: expect.objectContaining({
@@ -603,6 +643,60 @@ describe("SurveyBuilder", () => {
     expect(surveyBuilderSource).toContain('builder-toolbar-icon-button');
     expect(surveyBuilderSource).toContain('resetAction.innerCss = "builder-toolbar-action-button";');
     expect(surveyBuilderSource).toContain('saveTemplateAction.innerCss = `builder-toolbar-action-button ${');
+  });
+
+  it("stretches the custom runtime preview tab before centering the form card", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-preview-tab-shell\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*display:\s*flex;[^}]*justify-content:\s*center;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell\s+\.svc-creator-tab__content,\s*\.builder-creator-shell\s+\.svc-plugin-tab__content\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-preview-tab-surface\.survey-page-card\s*\{[^}]*width:\s*min\(1060px,\s*100%\);[^}]*max-width:\s*1060px;[^}]*flex:\s*0 1 1060px;/s,
+    );
+  });
+
+  it("keeps the builder editor full-width and syncs creator JSON into the runtime preview tab bridge", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    expect(screen.queryByTestId("builder-runtime-preview")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("survey-form-renderer")).not.toBeInTheDocument();
+    expect(document.querySelector(".builder-workbench")).not.toBeInTheDocument();
+    expect(document.querySelector(".builder-creator-shell")?.children).toHaveLength(1);
+
+    act(() => {
+      creatorInstances[0].JSON = {
+        title: "Обновлённое превью",
+        locale: "ru",
+        pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      };
+      creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
+    });
+
+    await waitFor(() => {
+      const runtimePreviewPlugin = creatorInstances[0].plugins["runtime-preview"] as { activate: () => void };
+      runtimePreviewPlugin.activate();
+    });
+
+    expect(getBuilderPreviewSnapshot()).toMatchObject({
+      formId: undefined,
+      previewSchema: expect.objectContaining({
+        title: "Обновлённое превью",
+        pages: [
+          {
+            name: "page1",
+            elements: [{ type: "text", name: "q1", title: "Вопрос" }],
+          },
+        ],
+      }),
+    });
   });
 
   it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {

@@ -27,11 +27,15 @@ import {
 
 surveyLocalization.defaultLocale = "ru";
 
+export type SurveyRenderMode = "interactive" | "readonly-navigable" | "readonly-static";
+
 type SurveyFormRendererProps = {
   schema: SurveySchema;
   formId: string;
   respondentId?: string;
   initialData?: Record<string, unknown>;
+  initialPageNo?: number;
+  renderMode?: SurveyRenderMode;
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
 };
@@ -114,11 +118,34 @@ function isAnonymousPublicUploadPathForForm(path: string, formId: string) {
   return path.startsWith(`public/${formId}/`);
 }
 
+function resolveRenderMode(renderMode: SurveyRenderMode | undefined, isPreview: boolean): SurveyRenderMode {
+  return renderMode ?? (isPreview ? "readonly-navigable" : "interactive");
+}
+
+function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
+  if (renderMode === "interactive") {
+    return;
+  }
+
+  model.readOnly = true;
+  model.showCompleteButton = false;
+
+  if (renderMode === "readonly-navigable") {
+    model.showNavigationButtons = true;
+    return;
+  }
+
+  model.showNavigationButtons = false;
+  model.currentPageNo = 0;
+}
+
 export function SurveyFormRenderer({
   schema,
   formId,
   respondentId,
   initialData,
+  initialPageNo,
+  renderMode,
   isPreview = false,
   allowAnonymousUploads = false,
 }: SurveyFormRendererProps) {
@@ -127,9 +154,11 @@ export function SurveyFormRenderer({
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
   const allowProgrammaticCompleteRef = useRef(false);
+  const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
+  const isInteractiveMode = resolvedRenderMode === "interactive";
   const responseDraftStorageKey = useMemo(
-    () => (isPreview ? null : getSurveyResponseDraftStorageKey(formId, respondentId)),
-    [formId, isPreview, respondentId],
+    () => (isInteractiveMode ? getSurveyResponseDraftStorageKey(formId, respondentId) : null),
+    [formId, isInteractiveMode, respondentId],
   );
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
@@ -141,7 +170,10 @@ export function SurveyFormRenderer({
     nextModel.completedHtml = resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML;
     if (initialData) {
       nextModel.data = initialData;
-    } else {
+      if (resolvedRenderMode !== "readonly-static" && typeof initialPageNo === "number") {
+        nextModel.currentPageNo = initialPageNo;
+      }
+    } else if (isInteractiveMode) {
       const savedDraft = loadSurveyResponseDraft(responseDraftStorageKey);
       if (savedDraft) {
         nextModel.data = savedDraft.data;
@@ -153,13 +185,9 @@ export function SurveyFormRenderer({
         }
       }
     }
-    if (isPreview) {
-      nextModel.readOnly = true;
-      nextModel.showCompleteButton = false;
-      nextModel.showNavigationButtons = false;
-    }
+    applyRenderMode(nextModel, resolvedRenderMode);
     return nextModel;
-  }, [initialData, isPreview, responseDraftStorageKey, schema]);
+  }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -188,7 +216,7 @@ export function SurveyFormRenderer({
     model.onOpenDropdownMenu.add(handleOpenDropdownMenu);
     model.onDownloadFile.add(handleDownloadFile);
 
-    if (isPreview) {
+    if (!isInteractiveMode) {
       return () => {
         model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
         model.onDownloadFile.remove(handleDownloadFile);
@@ -303,7 +331,7 @@ export function SurveyFormRenderer({
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
-  }, [allowAnonymousUploads, formId, isPreview, model, responseDraftStorageKey, showToast, submitResponseMutation]);
+  }, [allowAnonymousUploads, formId, isInteractiveMode, model, responseDraftStorageKey, showToast, submitResponseMutation]);
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>

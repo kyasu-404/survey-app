@@ -85,7 +85,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
       return;
     }
 
-    navigate(routes.survey(form.id), { state: { isPreview: true } });
+    navigate(routes.survey(form.id), { state: { renderMode: "readonly-navigable" } });
   };
 
   return (

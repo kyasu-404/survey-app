@@ -25,8 +25,12 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
-  SurveyRenderer: ({ isPreview }: { isPreview?: boolean }) => (
-    <div data-testid="survey-renderer" data-preview={String(Boolean(isPreview))} />
+  SurveyRenderer: ({ isPreview, renderMode }: { isPreview?: boolean; renderMode?: string }) => (
+    <div
+      data-testid="survey-renderer"
+      data-preview={String(Boolean(isPreview))}
+      data-render-mode={renderMode ?? ""}
+    />
   ),
 }));
 
@@ -104,12 +108,28 @@ describe("SurveyPage", () => {
     });
 
     renderSurveyPage({
+      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "readonly-navigable" } }],
+    });
+
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
+    expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
+    expect(getPublicFormById).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy isPreview route state compatible with readonly navigable preview", async () => {
+    authState.user = { id: "user-1" };
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Анкета",
+      is_public: false,
+      schema: { pages: [] },
+    });
+
+    renderSurveyPage({
       initialEntries: [{ pathname: "/form/form-1", state: { isPreview: true } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-preview", "true");
-    expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
-    expect(getPublicFormById).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
   });
 
   it("renders a loading skeleton while the survey is loading", async () => {
@@ -186,10 +206,10 @@ describe("SurveyPage", () => {
 
     renderSurveyPage({
       queryClient,
-      initialEntries: [{ pathname: "/form/form-1", state: { isPreview: true } }],
+      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "readonly-navigable" } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-preview", "true");
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
     await waitFor(() => {
       expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     });

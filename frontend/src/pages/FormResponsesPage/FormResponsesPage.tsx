@@ -8,7 +8,7 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
-import type { SurveyForm } from "../../entities/survey/types";
+import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import useIcon from "../../img/use.svg";
 import { supabaseClient } from "../../shared/api";
@@ -20,6 +20,7 @@ import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/l
 import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
+import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 
 type SelectedResponsePreview = {
   label: string;
@@ -35,6 +36,58 @@ function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   )?.[1];
 
   return primaryValue ? `Ответ ${primaryValue}` : `Ответ ${index + 1}`;
+}
+
+function hasAnswerValue(value: unknown) {
+  if (value === null || typeof value === "undefined") {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (typeof value === "object") {
+    return Object.keys(value).length > 0;
+  }
+
+  return true;
+}
+
+function pageHasAnswer(element: unknown, answeredNames: Set<string>): boolean {
+  if (!element || typeof element !== "object") {
+    return false;
+  }
+
+  const record = element as Record<string, unknown>;
+  if (typeof record.name === "string" && answeredNames.has(record.name)) {
+    return true;
+  }
+
+  return ["elements", "items", "rows", "columns", "panels", "templateElements"].some((key) => {
+    const nested = record[key];
+    return Array.isArray(nested) && nested.some((item) => pageHasAnswer(item, answeredNames));
+  });
+}
+
+function getFirstAnsweredPageNo(schema: SurveySchema, data: Record<string, unknown>) {
+  const answeredNames = new Set(
+    Object.entries(data)
+      .filter(([, value]) => hasAnswerValue(value))
+      .map(([name]) => name),
+  );
+
+  if (answeredNames.size === 0) {
+    return undefined;
+  }
+
+  const pageIndex = schema.pages.findIndex((page) => page.elements.some((element) => pageHasAnswer(element, answeredNames)));
+
+  return pageIndex > 0 ? pageIndex : undefined;
 }
 
 function getDateCellParts(value: string) {
@@ -405,7 +458,7 @@ export default function FormResponsesPage() {
                 Закрыть
               </button>
             </div>
-            <div className="response-preview-body response-preview-builder-palette survey-page-card">
+            <SurveyRuntimeSurface className="response-preview-body response-preview-builder-palette">
               <Suspense fallback={<Skeleton className="response-preview-renderer-skeleton" />}>
                 <LazySurveyRenderer
                   schema={{
@@ -414,10 +467,11 @@ export default function FormResponsesPage() {
                   }}
                   formId={formQuery.data.id}
                   initialData={selectedResponsePreview.response.data}
-                  isPreview
+                  initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, selectedResponsePreview.response.data)}
+                  renderMode="readonly-navigable"
                 />
               </Suspense>
-            </div>
+            </SurveyRuntimeSurface>
           </aside>
         </div>
       )}

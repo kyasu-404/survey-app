@@ -10,6 +10,8 @@ import {
 import { isAbortError } from "../../shared/lib/error";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
+import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
+import type { SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
 
 function SurveyNotFound() {
   return (
@@ -35,16 +37,32 @@ function SurveyRendererFallback() {
   );
 }
 
+function getRouteRenderMode(state: unknown): SurveyRenderMode {
+  if (!state || typeof state !== "object") {
+    return "interactive";
+  }
+
+  if ("renderMode" in state && state.renderMode === "readonly-navigable") {
+    return "readonly-navigable";
+  }
+
+  if ("renderMode" in state && state.renderMode === "readonly-static") {
+    return "readonly-static";
+  }
+
+  if ("isPreview" in state && state.isPreview === true) {
+    return "readonly-navigable";
+  }
+
+  return "interactive";
+}
+
 export default function SurveyPage() {
   const { id } = useParams();
   const location = useLocation();
   const { user, loading: isAuthLoading } = useAuth();
-  const isPreview = Boolean(
-    location.state &&
-      typeof location.state === "object" &&
-      "isPreview" in location.state &&
-      location.state.isPreview === true,
-  );
+  const renderMode = getRouteRenderMode(location.state);
+  const isPreview = renderMode !== "interactive";
 
   const isPrivatePreview = isPreview;
   const surveyQuery = useQuery({
@@ -84,7 +102,7 @@ export default function SurveyPage() {
   if (showInitialSkeleton) {
     return (
       <div className="survey-page survey-page-shell">
-        <div className="survey-page-card card survey-page-skeleton">
+        <SurveyRuntimeSurface className="card survey-page-skeleton">
           <Skeleton className="survey-page-skeleton-title" />
           <Skeleton className="survey-page-skeleton-copy" />
           <Skeleton className="survey-page-skeleton-copy survey-page-skeleton-copy-short" />
@@ -97,7 +115,7 @@ export default function SurveyPage() {
             ))}
           </div>
           <Skeleton className="survey-page-skeleton-button" />
-        </div>
+        </SurveyRuntimeSurface>
       </div>
     );
   }
@@ -107,17 +125,18 @@ export default function SurveyPage() {
 
   return (
     <div className="survey-page survey-page-shell">
-      <div className="survey-page-card card">
+      <SurveyRuntimeSurface className="card">
         <Suspense fallback={<SurveyRendererFallback />}>
           <LazySurveyRenderer
             schema={form.schema}
             formId={form.id}
             respondentId={user?.id}
+            renderMode={renderMode}
             isPreview={isPreview}
             allowAnonymousUploads={form.is_public}
           />
         </Suspense>
-      </div>
+      </SurveyRuntimeSurface>
     </div>
   );
 }

@@ -65,8 +65,23 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
-  SurveyRenderer: ({ schema, formId, isPreview }: { schema: { title?: string }; formId: string; isPreview?: boolean }) => (
-    <div data-testid="template-preview-renderer" data-form-id={formId} data-preview={String(Boolean(isPreview))}>
+  SurveyRenderer: ({
+    schema,
+    formId,
+    isPreview,
+    renderMode,
+  }: {
+    schema: { title?: string };
+    formId: string;
+    isPreview?: boolean;
+    renderMode?: string;
+  }) => (
+    <div
+      data-testid="template-preview-renderer"
+      data-form-id={formId}
+      data-preview={String(Boolean(isPreview))}
+      data-render-mode={renderMode ?? ""}
+    >
       {schema.title}
     </div>
   ),
@@ -194,7 +209,10 @@ describe("TemplatesPage", () => {
     expect(dialog.querySelector(".template-preview-title")).not.toBeInTheDocument();
     expect(getFormById).toHaveBeenCalledWith("template-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(container.querySelector(".template-preview-body")).toHaveClass("survey-page-card");
-    expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute("data-preview", "true");
+    expect(screen.getByTestId("template-preview-renderer")).toHaveAttribute(
+      "data-render-mode",
+      "readonly-navigable",
+    );
   });
 
   it("uses a selected template as a new builder draft without creating a form", async () => {

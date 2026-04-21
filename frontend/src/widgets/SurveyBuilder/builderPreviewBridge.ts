@@ -1,25 +1,22 @@
-import type { SurveyCreator } from "survey-creator-react";
 import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
 import type { SurveySchema } from "../../entities/survey/types";
 
-type SplitPreviewState = {
-  splitCreator: SurveyCreator | null;
+type BuilderPreviewState = {
   previewSchema: SurveySchema;
   formId?: string;
 };
 
 const listeners = new Set<() => void>();
 
-let state: SplitPreviewState = {
-  splitCreator: null,
+let state: BuilderPreviewState = {
   previewSchema: createEmptySurveySchema(),
 };
 
-export function getSplitPreviewSnapshot() {
+export function getBuilderPreviewSnapshot() {
   return state;
 }
 
-export function subscribeSplitPreview(listener: () => void) {
+export function subscribeBuilderPreview(listener: () => void) {
   listeners.add(listener);
 
   return () => {
@@ -27,7 +24,7 @@ export function subscribeSplitPreview(listener: () => void) {
   };
 }
 
-export function updateSplitPreviewBridge(nextState: Partial<SplitPreviewState>) {
+export function updateBuilderPreviewBridge(nextState: Partial<BuilderPreviewState>) {
   state = {
     ...state,
     ...nextState,

@@ -32,6 +32,12 @@ test("frontend exposes production release-gate scripts", () => {
   assert.equal(packageJson.scripts?.["test:e2e"], "playwright test");
 });
 
+test("frontend document declares mobile viewport baseline", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+
+  assert.match(html, /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1"\s*\/?>/);
+});
+
 test("CI workflow gates production releases", () => {
   const workflowPath = new URL("../.github/workflows/ci.yml", import.meta.url);
   const workflow = readFileSync(workflowPath, "utf8");

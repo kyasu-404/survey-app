@@ -73,6 +73,9 @@ vi.mock("survey-core", () => ({
     completedHtml = "";
     data: Record<string, unknown> = {};
     fitToContainer = true;
+    readOnly = false;
+    showCompleteButton = true;
+    showNavigationButtons = true;
     currentPageNo = 0;
     uiState: Record<string, unknown> = {};
     questionNames: string[] = [];
@@ -174,6 +177,151 @@ describe("SurveyFormRenderer", () => {
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(expect.any(String), "error");
     });
+  });
+
+  it("keeps interactive mode editable with submit and draft side effects enabled", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        renderMode="interactive"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      readOnly: boolean;
+      showCompleteButton: boolean;
+      showNavigationButtons: boolean;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+      onCompleting: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+
+    expect(model.readOnly).toBe(false);
+    expect(model.showNavigationButtons).toBe(true);
+    expect(model.showCompleteButton).toBe(true);
+
+    model.data = { email: "draft@example.com" };
+    await model.onValueChanged.fire(model);
+
+    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+      data: { email: "draft@example.com" },
+    });
+
+    await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+
+    expect(mutateAsync).toHaveBeenCalled();
+  });
+
+  it("renders readonly navigable previews without submit or draft side effects", async () => {
+    window.sessionStorage.setItem(
+      "survey-response:draft:user-1:form-1",
+      JSON.stringify({
+        data: { email: "saved@example.com" },
+        currentPageNo: 1,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        respondentId="user-1"
+        renderMode="readonly-navigable"
+        initialData={{ email: "response@example.com" }}
+        initialPageNo={1}
+        schema={{
+          pages: [
+            { name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] },
+            { name: "page2", elements: [{ type: "text", name: "name", title: "Имя" }] },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      readOnly: boolean;
+      showCompleteButton: boolean;
+      showNavigationButtons: boolean;
+      currentPageNo: number;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+      onCompleting: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+
+    expect(model.data).toEqual({ email: "response@example.com" });
+    expect(model.currentPageNo).toBe(1);
+    expect(model.readOnly).toBe(true);
+    expect(model.showNavigationButtons).toBe(true);
+    expect(model.showCompleteButton).toBe(false);
+
+    model.data = { email: "changed@example.com" };
+    await model.onValueChanged.fire(model);
+    await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+
+    expect(window.sessionStorage.getItem("survey-response:draft:user-1:form-1")).toContain("saved@example.com");
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy isPreview compatible with readonly navigable mode", () => {
+    render(<SurveyFormRenderer formId="form-1" schema={{ pages: [] }} isPreview />);
+
+    expect(createdModels[0]).toMatchObject({
+      readOnly: true,
+      showNavigationButtons: true,
+      showCompleteButton: false,
+    });
+  });
+
+  it("renders readonly static previews on the first page without navigation or submit", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        renderMode="readonly-static"
+        initialPageNo={2}
+        schema={{
+          pages: [
+            { name: "page1", elements: [] },
+            { name: "page2", elements: [] },
+            { name: "page3", elements: [] },
+          ],
+        }}
+      />,
+    );
+
+    expect(createdModels[0]).toMatchObject({
+      readOnly: true,
+      showNavigationButtons: false,
+      showCompleteButton: false,
+      currentPageNo: 0,
+    });
+  });
+
+  it("keeps file download callbacks available in readonly navigable previews", async () => {
+    const callback = vi.fn();
+    resolveSurveyFileValueContent.mockResolvedValue("file-content");
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        renderMode="readonly-navigable"
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "file", name: "attachment", title: "Файл" }] }],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      onDownloadFile: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+
+    await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
+
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" });
+    expect(callback).toHaveBeenCalledWith("success", "file-content");
   });
 
   it("adds a submitting hook while the response is being sent", async () => {

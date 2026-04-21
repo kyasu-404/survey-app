@@ -1,5 +1,6 @@
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { SurveyRenderer } from "../../../widgets/SurveyRenderer/SurveyRenderer";
+import { SurveyRuntimeSurface } from "../../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 import type { SurveyForm, SurveyFormSummary } from "../../../entities/survey/types";
 
 type TemplatePreviewModalProps = {
@@ -21,7 +22,7 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
             Закрыть
           </button>
         </div>
-        <div className="template-preview-body survey-page-card">
+        <SurveyRuntimeSurface className="template-preview-body">
           {isLoading && (
             <div className="dashboard-forms-loading" role="status" aria-live="polite">
               <span>Загрузка шаблона</span>
@@ -36,10 +37,10 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
                 title: previewTemplate.title,
               }}
               formId={previewTemplate.id}
-              isPreview
+              renderMode="readonly-navigable"
             />
           )}
-        </div>
+        </SurveyRuntimeSurface>
       </aside>
     </div>
   );
