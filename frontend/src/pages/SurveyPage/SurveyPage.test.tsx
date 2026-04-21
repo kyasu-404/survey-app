@@ -98,17 +98,23 @@ describe("SurveyPage", () => {
     expect(css).toMatch(/\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
   });
 
-  it("keeps the public survey card wider on phone-sized screens", () => {
+  it("fills phone-sized screens with the public survey surface without mobile background layers", () => {
     const css = readAppCss();
 
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s*\{[^}]*padding:\s*78px 4px 10px;/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.app-main-public\s*\{[^}]*padding:\s*0;[^}]*background:\s*#fffdf9;/,
     );
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*padding:\s*18px 4px 24px;/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s*\{[^}]*min-height:\s*100svh;[^}]*padding:\s*0;[^}]*background:\s*#fffdf9;/,
     );
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*--sd-base-padding:\s*calc\(3 \* var\(--sjs-base-unit, var\(--base-unit, 8px\)\)\);/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*none;[^}]*min-height:\s*100svh;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*border-radius:\s*0\s*!important;[^}]*background:\s*#fffdf9\s*!important;[^}]*box-shadow:\s*none;/,
+    );
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*--sjs-general-backcolor-dim:\s*#fffdf9;[^}]*--sjs-general-backcolor-dim-light:\s*#fffdf9;[^}]*background:\s*transparent\s*!important;/,
+    );
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.app-main-public::before,\s*\.survey-page-shell::before\s*\{[^}]*content:\s*none;/,
     );
   });
 

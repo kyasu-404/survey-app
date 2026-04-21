@@ -1692,18 +1692,23 @@ textarea:focus {
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) {
-    padding: 78px 4px 10px;
+    padding: 0;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
     width: 100%;
-    padding: 18px 4px 24px;
+    padding: 0;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
     --sd-base-padding: calc(3 * var(--sjs-base-unit, var(--base-unit, 8px)));
     --sd-page-vertical-padding: calc(2.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
+  }
+
+  .app-main-public::before,
+  .survey-page-shell::before {
+    content: none;
   }
 
   .survey-page-brand {
@@ -4130,6 +4135,51 @@ button.responses-export-button:disabled {
   .survey-page-card,
   .modal-card {
     border-radius: 24px;
+  }
+
+  .app-main-public {
+    display: block;
+    width: 100%;
+    min-height: 100svh;
+    padding: 0;
+    background: #fffdf9;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) {
+    min-height: 100svh;
+    padding: 0;
+    background: #fffdf9;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
+    width: 100%;
+    max-width: none;
+    min-height: 100svh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0 !important;
+    background: #fffdf9 !important;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
+    --sjs-general-backcolor-dim: #fffdf9;
+    --sjs-general-backcolor-dim-light: #fffdf9;
+    --sjs-layer-3-background-500: #fffdf9;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-body,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-page {
+    background: transparent !important;
+    background-color: transparent !important;
   }
 
   .users-create-grid {
