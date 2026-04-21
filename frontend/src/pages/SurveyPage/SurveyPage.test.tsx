@@ -102,13 +102,13 @@ describe("SurveyPage", () => {
     const css = readAppCss();
 
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s*\{[^}]*padding:\s*78px 8px 10px;/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s*\{[^}]*padding:\s*78px 4px 10px;/,
     );
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*padding:\s*18px 8px 24px;/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*padding:\s*18px 4px 24px;/,
     );
     expect(css).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*--sd-base-padding:\s*calc\(3\.5 \* var\(--sjs-base-unit, var\(--base-unit, 8px\)\)\);/,
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*--sd-base-padding:\s*calc\(3 \* var\(--sjs-base-unit, var\(--base-unit, 8px\)\)\);/,
     );
   });
 

@@ -1692,17 +1692,17 @@ textarea:focus {
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) {
-    padding: 78px 8px 10px;
+    padding: 78px 4px 10px;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
     width: 100%;
-    padding: 18px 8px 24px;
+    padding: 18px 4px 24px;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
-    --sd-base-padding: calc(3.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
+    --sd-base-padding: calc(3 * var(--sjs-base-unit, var(--base-unit, 8px)));
     --sd-page-vertical-padding: calc(2.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
   }
 
