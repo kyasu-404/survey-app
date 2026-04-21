@@ -308,9 +308,9 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
     }
 
     .responses-table-date-column {
-      width: 10ch;
-      min-width: 10ch;
-      max-width: 10ch;
+      width: 12ch;
+      min-width: 12ch;
+      max-width: none;
       white-space: normal;
     }
 
@@ -321,7 +321,8 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
 
     .responses-table-date-cell {
       display: grid;
-      width: 10ch;
+      width: max-content;
+      min-width: 10ch;
       line-height: 1.25;
     }
 
@@ -332,7 +333,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
     th,
     td {
       padding: 12px;
-      border-bottom: 1px solid #e5e9f0;
+      border: 1px solid #d8dee8;
       text-align: left;
       vertical-align: top;
       overflow-wrap: anywhere;
@@ -345,7 +346,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
     }
 
     tr:last-child td {
-      border-bottom: none;
+      border-bottom: 1px solid #d8dee8;
     }
 
     .empty-state {

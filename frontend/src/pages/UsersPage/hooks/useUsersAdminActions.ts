@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createUser,
@@ -12,21 +12,27 @@ import { USERS_QUERY_ROOT } from "../../../entities/survey/model/queryKeys";
 import { getErrorMessage } from "../../../shared/lib/error";
 import { scheduleQueryInvalidation } from "../../../shared/lib/queryRefresh";
 import type { DeleteUserModalState, NewUserForm, PasswordModalState } from "../types";
-
-const EMPTY_NEW_USER: NewUserForm = {
-  name: "",
-  email: "",
-  password: "",
-  role: "user",
-};
+import { EMPTY_NEW_USER, getUsersPageSessionState, updateUsersPageSessionState } from "../usersPageSessionState";
 
 export function useUsersAdminActions() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [newUser, setNewUser] = useState<NewUserForm>(EMPTY_NEW_USER);
+  const [newUser, setNewUserState] = useState<NewUserForm>(() => getUsersPageSessionState(queryClient).newUser);
   const [pendingStatusUserId, setPendingStatusUserId] = useState<string | null>(null);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
+
+  const setNewUser = useCallback<Dispatch<SetStateAction<NewUserForm>>>(
+    (value) => {
+      setNewUserState((currentValue) => {
+        const nextValue = typeof value === "function" ? value(currentValue) : value;
+        updateUsersPageSessionState(queryClient, { newUser: nextValue });
+
+        return nextValue;
+      });
+    },
+    [queryClient],
+  );
 
   const createUserMutation = useMutation({
     mutationFn: createUser,

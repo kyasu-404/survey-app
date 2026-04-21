@@ -596,7 +596,8 @@ describe("TemplatesPage", () => {
   it("keeps template preview controls, descriptions, and pinning affordance on the requested styling", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*2px solid #6b7280;/);
+    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*#111111;[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.templates-use-button,\s*\.templates-share-button\s*\{[^}]*padding:\s*7px 10px;/);
     expect(css).toMatch(
       /\.template-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.template-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
     );

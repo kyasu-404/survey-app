@@ -300,7 +300,7 @@ describe("FormResponsesPage", () => {
   it("keeps the response preview controls and question descriptions on the requested styling", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.response-preview-close\s*\{[^}]*border:\s*2px solid #6b7280;/);
+    expect(css).toMatch(/\.response-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*#111111;[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(
       /\.response-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.response-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
     );

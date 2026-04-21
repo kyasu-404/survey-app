@@ -204,6 +204,113 @@ describe("UsersPage", () => {
     expect(screen.queryByText("Мария")).not.toBeInTheDocument();
   });
 
+  it("keeps entered users page data after leaving and returning to the route", async () => {
+    getAllUsers.mockResolvedValue([
+      {
+        id: "user-1",
+        name: "Администратор",
+        email: "admin@example.com",
+        role: "admin",
+        is_disabled: false,
+        created_at: "2026-04-08T09:00:00.000Z",
+      },
+      {
+        id: "user-2",
+        name: "Мария",
+        email: "maria@example.com",
+        role: "user",
+        is_disabled: true,
+        created_at: "2026-04-08T09:10:00.000Z",
+      },
+    ]);
+    const queryClient = createQueryClient();
+
+    const firstRender = render(
+      <QueryClientProvider client={queryClient}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Мария")).toBeInTheDocument();
+
+    const createGrid = firstRender.container.querySelector<HTMLElement>(".users-create-grid");
+    expect(createGrid).not.toBeNull();
+
+    if (!createGrid) {
+      throw new Error("Expected create user controls to be present");
+    }
+
+    await userEvent.type(screen.getByPlaceholderText("Имя"), "Иван");
+    await userEvent.type(screen.getByPlaceholderText("Email"), "ivan@example.com");
+    await userEvent.type(screen.getByPlaceholderText("Пароль (минимум 8 символов)"), "password123");
+    await userEvent.selectOptions(within(createGrid).getByRole("combobox"), "admin");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Поиск по имени" }), "ма");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Фильтр по статусу" }), "disabled");
+
+    firstRender.unmount();
+
+    const secondRender = render(
+      <QueryClientProvider client={queryClient}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Мария")).toBeInTheDocument();
+    expect(screen.queryByText("Администратор")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Имя")).toHaveValue("Иван");
+    expect(screen.getByPlaceholderText("Email")).toHaveValue("ivan@example.com");
+    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("password123");
+    expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("ма");
+    expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("disabled");
+
+    const restoredCreateGrid = secondRender.container.querySelector<HTMLElement>(".users-create-grid");
+    expect(restoredCreateGrid).not.toBeNull();
+
+    if (!restoredCreateGrid) {
+      throw new Error("Expected restored create user controls to be present");
+    }
+
+    expect(within(restoredCreateGrid).getByRole("combobox")).toHaveValue("admin");
+  });
+
+  it("starts users page inputs from defaults with a fresh query client", async () => {
+    getAllUsers.mockResolvedValue([
+      {
+        id: "user-1",
+        name: "Администратор",
+        email: "admin@example.com",
+        role: "admin",
+        is_disabled: false,
+        created_at: "2026-04-08T09:00:00.000Z",
+      },
+    ]);
+
+    const firstRender = render(
+      <QueryClientProvider client={createQueryClient()}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Администратор")).toBeInTheDocument();
+    await userEvent.type(screen.getByPlaceholderText("Имя"), "Иван");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Поиск по имени" }), "ад");
+    firstRender.unmount();
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <UsersPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Администратор")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Имя")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Email")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("");
+    expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Фильтр по роли" })).toHaveValue("all");
+    expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("all");
+  });
+
   it("renders user roles as static labels and toggles status from the status column", async () => {
     getAllUsers.mockResolvedValue([
       {

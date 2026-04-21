@@ -62,7 +62,9 @@ describe("responsesExport", () => {
     });
 
     expect(html).toContain(".responses-table-date-column");
-    expect(html).toContain("width: 10ch;");
+    expect(html).toContain("width: 12ch;");
+    expect(html).toContain("min-width: 12ch;");
+    expect(html).toContain("width: max-content;");
     expect(html).toContain('<th class="responses-table-date-column">Дата ответа</th>');
     expect(html).toContain('<td class="responses-table-date-column"><span class="responses-table-date-cell">');
     expect(html).toContain('<span class="responses-table-date-line">15.04.2026</span>');
@@ -80,5 +82,17 @@ describe("responsesExport", () => {
     const generatedAtMatch = html.match(/<dt>Сформировано<\/dt><dd>(.*?)<\/dd>/);
 
     expect(generatedAtMatch?.[1]).toMatch(/^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
+  });
+
+  it("keeps cell borders in downloaded HTML documents", () => {
+    const html = createResponsesHtmlDocument({
+      title: "Ответы",
+      rows: [{ "Дата ответа": "15.04.2026, 16:11", Имя: "Анна" }],
+      generatedAt: new Date("2026-04-13T09:00:00.000Z"),
+    });
+
+    expect(html).toContain("border: 1px solid #d8dee8;");
+    expect(html).toContain("border-bottom: 1px solid #d8dee8;");
+    expect(html).not.toContain("border-bottom: none;");
   });
 });

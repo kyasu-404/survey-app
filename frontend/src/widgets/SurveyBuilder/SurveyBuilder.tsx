@@ -817,7 +817,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
             <div className="deadline-modal-actions">
               <button
                 type="button"
-                className="app-button"
+                className="deadline-action-cancel-button"
                 onClick={() => setIsResetConfirmOpen(false)}
                 disabled={isSurveyMutationBusy || isTemplateBusy}
               >

@@ -258,10 +258,14 @@ textarea:focus {
 
 .sidebar-toggle-button,
 .sidebar-open-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: 12px;
   padding: 0;
+  line-height: 1;
 }
 
 .sidebar-toggle-button {
@@ -1447,6 +1451,7 @@ textarea:focus {
 .builder-reset-title {
   margin-top: 0;
   margin-bottom: 6px;
+  text-align: center;
 }
 
 .deadline-modal-title {
@@ -1584,19 +1589,26 @@ textarea:focus {
   border-color: rgba(248, 113, 113, 0.4);
 }
 
+.deadline-clear-button:hover,
+.deadline-clear-button:focus-visible {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(254, 202, 202, 0.88);
+  color: #991b1b;
+}
+
 .deadline-save-button {
-  background: linear-gradient(180deg, #22c55e, #15803d);
+  background: linear-gradient(180deg, #27272a, #111111);
   color: #ffffff;
-  border-color: rgba(21, 128, 61, 0.36);
+  border-color: rgba(17, 17, 17, 0.34);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 18px 34px rgba(21, 128, 61, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 18px 34px rgba(20, 20, 20, 0.18);
 }
 
 .deadline-save-button:hover,
 .deadline-save-button:focus-visible {
-  border-color: rgba(21, 128, 61, 0.44);
-  background: linear-gradient(180deg, #22c55e, #166534);
+  border-color: rgba(17, 17, 17, 0.46);
+  background: linear-gradient(180deg, #3f3f46, #18181b);
   color: #ffffff;
 }
 
@@ -3236,8 +3248,9 @@ button.dashboard-status-trigger-glossy:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 38px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
   border-radius: 8px !important;
 }
 
@@ -3325,16 +3338,19 @@ button.dashboard-status-trigger-glossy:focus-visible {
 }
 
 .template-preview-close {
-  border: 2px solid #6b7280;
+  border: 0;
   border-radius: 8px;
-  color: #111111;
+  background: #111111;
+  color: #ffffff;
   box-shadow: none;
 }
 
 .template-preview-close:hover,
 .template-preview-close:focus-visible {
-  border-color: #4b5563;
-  color: #000000;
+  border: 0;
+  background: #000000;
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .template-preview-body {
@@ -3854,16 +3870,19 @@ button.responses-export-button:disabled {
 }
 
 .response-preview-close {
-  border: 2px solid #6b7280;
+  border: 0;
   border-radius: 8px;
-  color: #111111;
+  background: #111111;
+  color: #ffffff;
   box-shadow: none;
 }
 
 .response-preview-close:hover,
 .response-preview-close:focus-visible {
-  border-color: #4b5563;
-  color: #000000;
+  border: 0;
+  background: #000000;
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .response-preview-body.survey-page-card {
@@ -4590,12 +4609,43 @@ button.responses-export-button:disabled {
   box-shadow: none;
 }
 
-.dashboard-settings-modal .deadline-action-cancel-button {
+.deadline-modal .deadline-clear-button {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(254, 226, 226, 0.88);
+  color: #b91c1c;
+}
+
+.deadline-modal .deadline-clear-button:hover,
+.deadline-modal .deadline-clear-button:focus-visible {
+  border-color: rgba(248, 113, 113, 0.56);
+  background: rgba(254, 202, 202, 0.92);
+  color: #991b1b;
+}
+
+.deadline-modal .deadline-save-button {
+  border-color: rgba(17, 17, 17, 0.34);
+  background: linear-gradient(180deg, #27272a, #111111);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 18px 34px rgba(20, 20, 20, 0.18);
+}
+
+.deadline-modal .deadline-save-button:hover,
+.deadline-modal .deadline-save-button:focus-visible {
+  border-color: rgba(17, 17, 17, 0.46);
+  background: linear-gradient(180deg, #3f3f46, #18181b);
+  color: #ffffff;
+}
+
+.deadline-action-cancel-button {
   border-color: rgba(17, 17, 17, 0.34);
   background: linear-gradient(180deg, #27272a, #111111);
   color: #ffffff;
 }
 
+.deadline-action-cancel-button:hover,
+.deadline-action-cancel-button:focus-visible,
 .dashboard-settings-modal .deadline-action-cancel-button:hover,
 .dashboard-settings-modal .deadline-action-cancel-button:focus-visible {
   border-color: rgba(17, 17, 17, 0.46);
@@ -5077,9 +5127,9 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
 }
 
 .responses-html-preview .responses-table-date-column {
-  width: 10ch;
-  min-width: 10ch;
-  max-width: 10ch;
+  width: 12ch;
+  min-width: 12ch;
+  max-width: none;
   white-space: normal;
 }
 
@@ -5090,7 +5140,8 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
 
 .responses-html-preview .responses-table-date-cell {
   display: grid;
-  width: 10ch;
+  width: max-content;
+  min-width: 10ch;
   line-height: 1.25;
 }
 

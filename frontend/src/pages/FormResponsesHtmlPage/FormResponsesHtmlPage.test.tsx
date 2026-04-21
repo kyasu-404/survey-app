@@ -90,6 +90,13 @@ describe("FormResponsesHtmlPage", () => {
     expect(css).toMatch(/\.responses-html-preview table\s*\{[^}]*font-size:\s*13px;/);
   });
 
+  it("keeps the HTML response date column wide enough for bordered cells", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.responses-html-preview \.responses-table-date-column\s*\{[^}]*width:\s*12ch;[^}]*min-width:\s*12ch;/);
+    expect(css).toMatch(/\.responses-html-preview \.responses-table-date-cell\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*10ch;/);
+  });
+
   it("styles the print button as a secondary monochrome action with a matching icon", () => {
     const css = readAppCss();
 

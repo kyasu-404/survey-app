@@ -708,14 +708,27 @@ describe("SurveyBuilder", () => {
     });
   });
 
-  it("uses a two-column metadata grid with green save and red cancel actions in the post-save settings dialog", () => {
+  it("uses a two-column metadata grid with black save and soft red cancel actions in the post-save settings dialog", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(/\.deadline-modal-title\s*\{[^}]*text-align:\s*center;/);
     expect(appCss).toMatch(/\.deadline-modal-subtitle\s*\{[^}]*color:\s*#4f6f91;[^}]*font-weight:\s*700;/);
     expect(appCss).toMatch(/\.deadline-modal-primary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
-    expect(appCss).toMatch(/\.deadline-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#22c55e,\s*#15803d\);[^}]*color:\s*#ffffff;/);
-    expect(appCss).toMatch(/\.deadline-clear-button\s*\{[^}]*background:\s*rgba\(254,\s*226,\s*226,\s*0\.8\);[^}]*color:\s*#b91c1c;/);
+    expect(appCss).toMatch(/\.deadline-modal \.deadline-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(appCss).toMatch(/\.deadline-modal \.deadline-clear-button\s*\{[^}]*background:\s*rgba\(254,\s*226,\s*226,\s*0\.88\);[^}]*color:\s*#b91c1c;/);
+    expect(appCss).toMatch(/\.deadline-modal \.deadline-clear-button:hover,\s*\.deadline-modal \.deadline-clear-button:focus-visible\s*\{[^}]*background:\s*rgba\(254,\s*202,\s*202,\s*0\.92\);[^}]*color:\s*#991b1b;/);
+    expect(appCss.lastIndexOf(".deadline-modal .deadline-save-button")).toBeGreaterThan(
+      appCss.indexOf(".deadline-clear-button,\n.deadline-save-button,\n.responses-export-button"),
+    );
+  });
+
+  it("centers the reset confirmation title and uses a black cancel button", () => {
+    const appCss = readAppCss();
+    const surveyBuilderSource = readSurveyBuilderSource();
+
+    expect(appCss).toMatch(/\.builder-reset-title\s*\{[^}]*text-align:\s*center;/);
+    expect(surveyBuilderSource).toContain('className="deadline-action-cancel-button"');
+    expect(appCss).toMatch(/\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
   });
 
   it("keeps toast notifications above modal backdrops", () => {
