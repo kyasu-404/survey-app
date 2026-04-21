@@ -27,7 +27,7 @@ import {
 
 surveyLocalization.defaultLocale = "ru";
 
-export type SurveyRenderMode = "interactive" | "readonly-navigable" | "readonly-static";
+export type SurveyRenderMode = "interactive" | "preview-navigable" | "readonly-navigable" | "readonly-static";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
@@ -119,7 +119,7 @@ function isAnonymousPublicUploadPathForForm(path: string, formId: string) {
 }
 
 function resolveRenderMode(renderMode: SurveyRenderMode | undefined, isPreview: boolean): SurveyRenderMode {
-  return renderMode ?? (isPreview ? "readonly-navigable" : "interactive");
+  return renderMode ?? (isPreview ? "preview-navigable" : "interactive");
 }
 
 function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
@@ -128,13 +128,20 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   }
 
   model.readOnly = true;
-  model.showCompleteButton = false;
 
-  if (renderMode === "readonly-navigable") {
+  if (renderMode === "preview-navigable") {
     model.showNavigationButtons = true;
+    model.showCompleteButton = true;
     return;
   }
 
+  if (renderMode === "readonly-navigable") {
+    model.showNavigationButtons = true;
+    model.showCompleteButton = false;
+    return;
+  }
+
+  model.showCompleteButton = false;
   model.showNavigationButtons = false;
   model.currentPageNo = 0;
 }
@@ -166,7 +173,7 @@ export function SurveyFormRenderer({
     const nextModel = new Model(resolvedSchema);
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
-    nextModel.completeText = "Отправить";
+    nextModel.completeText = resolvedRenderMode === "preview-navigable" ? "Завершить" : "Отправить";
     nextModel.completedHtml = resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML;
     if (initialData) {
       nextModel.data = initialData;

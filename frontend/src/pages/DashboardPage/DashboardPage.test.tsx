@@ -971,7 +971,7 @@ describe("DashboardPage", () => {
 
     await userEvent.click(previewCard);
     expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"), {
-      state: { renderMode: "readonly-navigable" },
+      state: { renderMode: "preview-navigable" },
     });
   });
 

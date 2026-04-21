@@ -111,21 +111,27 @@ vi.mock("survey-react-ui", () => ({
       completeText: string;
       data: Record<string, unknown>;
       questionNames: string[];
+      showCompleteButton: boolean;
+      showNavigationButtons: boolean;
       onCompleting: { fire: (arg: unknown, options: unknown) => Promise<void> };
     };
   }) => (
     <div>
       <div data-testid="survey-question-names">{model.questionNames.join(",")}</div>
       <div className="sd-body__navigation">
-        <button
-          className="sd-btn sd-btn--action"
-          onClick={async () => {
-            model.data = { email: "a@b.com" };
-            await model.onCompleting.fire(model, { allowComplete: true, allow: true });
-          }}
-        >
-          {model.completeText || "Отправить"}
-        </button>
+        {model.showNavigationButtons && <button className="sd-navigation__prev-btn">Назад</button>}
+        {model.showNavigationButtons && <button className="sd-navigation__next-btn">Далее</button>}
+        {model.showCompleteButton && (
+          <button
+            className="sd-btn sd-btn--action"
+            onClick={async () => {
+              model.data = { email: "a@b.com" };
+              await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+            }}
+          >
+            {model.completeText || "Отправить"}
+          </button>
+        )}
       </div>
     </div>
   ),
@@ -216,7 +222,7 @@ describe("SurveyFormRenderer", () => {
     expect(mutateAsync).toHaveBeenCalled();
   });
 
-  it("renders readonly navigable previews without submit or draft side effects", async () => {
+  it("renders dashboard preview mode with navigation buttons but without submit or draft side effects", async () => {
     window.sessionStorage.setItem(
       "survey-response:draft:user-1:form-1",
       JSON.stringify({
@@ -230,7 +236,7 @@ describe("SurveyFormRenderer", () => {
       <SurveyFormRenderer
         formId="form-1"
         respondentId="user-1"
-        renderMode="readonly-navigable"
+        renderMode="preview-navigable"
         initialData={{ email: "response@example.com" }}
         initialPageNo={1}
         schema={{
@@ -256,24 +262,51 @@ describe("SurveyFormRenderer", () => {
     expect(model.currentPageNo).toBe(1);
     expect(model.readOnly).toBe(true);
     expect(model.showNavigationButtons).toBe(true);
-    expect(model.showCompleteButton).toBe(false);
+    expect(model.showCompleteButton).toBe(true);
+    expect(screen.getByRole("button", { name: "Далее" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Завершить" })).toBeInTheDocument();
 
     model.data = { email: "changed@example.com" };
     await model.onValueChanged.fire(model);
-    await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+    await userEvent.click(screen.getByRole("button", { name: "Завершить" }));
 
     expect(window.sessionStorage.getItem("survey-response:draft:user-1:form-1")).toContain("saved@example.com");
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("keeps legacy isPreview compatible with readonly navigable mode", () => {
-    render(<SurveyFormRenderer formId="form-1" schema={{ pages: [] }} isPreview />);
+  it("keeps readonly navigable previews without a complete button", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        renderMode="readonly-navigable"
+        schema={{
+          pages: [
+            { name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] },
+            { name: "page2", elements: [{ type: "text", name: "name", title: "Имя" }] },
+          ],
+        }}
+      />,
+    );
 
     expect(createdModels[0]).toMatchObject({
       readOnly: true,
       showNavigationButtons: true,
       showCompleteButton: false,
     });
+    expect(screen.getByRole("button", { name: "Далее" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Завершить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить" })).not.toBeInTheDocument();
+  });
+
+  it("keeps legacy isPreview compatible with dashboard preview mode", () => {
+    render(<SurveyFormRenderer formId="form-1" schema={{ pages: [] }} isPreview />);
+
+    expect(createdModels[0]).toMatchObject({
+      readOnly: true,
+      showNavigationButtons: true,
+      showCompleteButton: true,
+    });
+    expect(screen.getByRole("button", { name: "Завершить" })).toBeInTheDocument();
   });
 
   it("renders readonly static previews on the first page without navigation or submit", () => {

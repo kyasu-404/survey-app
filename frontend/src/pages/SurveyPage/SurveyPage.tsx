@@ -46,12 +46,16 @@ function getRouteRenderMode(state: unknown): SurveyRenderMode {
     return "readonly-navigable";
   }
 
+  if ("renderMode" in state && state.renderMode === "preview-navigable") {
+    return "preview-navigable";
+  }
+
   if ("renderMode" in state && state.renderMode === "readonly-static") {
     return "readonly-static";
   }
 
   if ("isPreview" in state && state.isPreview === true) {
-    return "readonly-navigable";
+    return "preview-navigable";
   }
 
   return "interactive";

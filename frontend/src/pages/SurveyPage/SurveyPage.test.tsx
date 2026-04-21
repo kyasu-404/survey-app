@@ -112,7 +112,7 @@ describe("SurveyPage", () => {
     );
   });
 
-  it("opens dashboard card navigation as readonly preview", async () => {
+  it("opens dashboard card navigation as preview mode", async () => {
     authState.user = { id: "user-1" };
     getFormById.mockResolvedValue({
       id: "form-1",
@@ -122,15 +122,15 @@ describe("SurveyPage", () => {
     });
 
     renderSurveyPage({
-      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "readonly-navigable" } }],
+      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "preview-navigable" } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-navigable");
     expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(getPublicFormById).not.toHaveBeenCalled();
   });
 
-  it("keeps legacy isPreview route state compatible with readonly navigable preview", async () => {
+  it("keeps legacy isPreview route state compatible with dashboard preview mode", async () => {
     authState.user = { id: "user-1" };
     getFormById.mockResolvedValue({
       id: "form-1",
@@ -143,7 +143,7 @@ describe("SurveyPage", () => {
       initialEntries: [{ pathname: "/form/form-1", state: { isPreview: true } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-navigable");
   });
 
   it("renders a loading skeleton while the survey is loading", async () => {
@@ -220,10 +220,10 @@ describe("SurveyPage", () => {
 
     renderSurveyPage({
       queryClient,
-      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "readonly-navigable" } }],
+      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "preview-navigable" } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "readonly-navigable");
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-navigable");
     await waitFor(() => {
       expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     });
