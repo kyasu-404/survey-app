@@ -1691,8 +1691,19 @@ textarea:focus {
     padding: 12px;
   }
 
-  .survey-page {
-    padding: 78px 14px 14px;
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) {
+    padding: 78px 8px 10px;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
+    width: 100%;
+    padding: 18px 8px 24px;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
+    --sd-base-padding: calc(3.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
+    --sd-page-vertical-padding: calc(2.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
   }
 
   .survey-page-brand {
