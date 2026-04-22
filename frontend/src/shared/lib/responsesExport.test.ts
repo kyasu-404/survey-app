@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { createResponsesHtmlDocument, formatResponsesForTable } from "./responsesExport";
+import { createResponsesHtmlDocument, formatResponsesForTable, getResponseTableHeaders } from "./responsesExport";
 
 describe("responsesExport", () => {
+  it("orders response columns by the form schema instead of response JSON key order", () => {
+    const rows = formatResponsesForTable(
+      [
+        {
+          id: "response-1",
+          form_id: "form-1",
+          created_at: "2026-04-15T13:11:00.000Z",
+          data: {
+            q3: "Третий",
+            q1: "Первый",
+            q2: "Второй",
+          },
+        },
+      ],
+      {
+        pages: [
+          {
+            elements: [
+              { type: "text", name: "q1", title: "Вопрос 1" },
+              { type: "text", name: "q2", title: "Вопрос 2" },
+              { type: "text", name: "q3", title: "Вопрос 3" },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(Object.keys(rows[0])).toEqual(["Дата ответа", "Вопрос 1", "Вопрос 2", "Вопрос 3"]);
+    expect(getResponseTableHeaders(rows)).toEqual(["Дата ответа", "Вопрос 1", "Вопрос 2", "Вопрос 3"]);
+  });
+
   it("formats response dates without seconds for the table and HTML export", () => {
     const rows = formatResponsesForTable(
       [

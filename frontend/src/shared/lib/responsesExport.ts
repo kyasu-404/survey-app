@@ -12,14 +12,42 @@ type ResponsesHtmlInput = {
 };
 
 const RESPONSE_DATE_HEADER = "Дата ответа";
+const NESTED_QUESTION_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function visitSurveyQuestion(value: unknown, visitor: (question: SurveyQuestion) => void) {
+  if (!isRecord(value)) {
+    return;
+  }
+
+  if (typeof value.name === "string") {
+    visitor(value as SurveyQuestion);
+  }
+
+  NESTED_QUESTION_KEYS.forEach((key) => {
+    const nested = value[key];
+    if (Array.isArray(nested)) {
+      nested.forEach((item) => visitSurveyQuestion(item, visitor));
+    }
+  });
+}
 
 function getQuestionMeta(schema: SurveySchema) {
-  const questions = schema.pages.flatMap((page: SurveyPageSchema) => page.elements ?? []);
   const choiceMap = new Map<string, Map<string, string>>();
   const titleMap = new Map<string, string>();
+  const orderedNames: string[] = [];
+  const seenNames = new Set<string>();
 
-  questions.forEach((question: SurveyQuestion) => {
+  const addQuestionMeta = (question: SurveyQuestion) => {
     if (question.name) {
+      if (!seenNames.has(question.name)) {
+        orderedNames.push(question.name);
+        seenNames.add(question.name);
+      }
+
       titleMap.set(question.name, question.title ?? question.name);
     }
 
@@ -44,9 +72,13 @@ function getQuestionMeta(schema: SurveySchema) {
     if (questionChoiceMap.size > 0) {
       choiceMap.set(question.name, questionChoiceMap);
     }
+  };
+
+  schema.pages.forEach((page: SurveyPageSchema) => {
+    (page.elements ?? []).forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
   });
 
-  return { choiceMap, titleMap };
+  return { choiceMap, orderedNames, titleMap };
 }
 
 function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>) {
@@ -146,14 +178,21 @@ function renderResponseHtmlCell(header: string, value: string) {
 }
 
 export function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
-  const { choiceMap, titleMap } = getQuestionMeta(schema);
+  const { choiceMap, orderedNames, titleMap } = getQuestionMeta(schema);
 
   return responses.map((response) => {
     const base: ResponsesTableRow = {
       [RESPONSE_DATE_HEADER]: formatResponseDate(response.created_at),
     };
+    const answerEntries = new Map(Object.entries(response.data));
 
-    Object.entries(response.data).forEach(([key, value]) => {
+    orderedNames.forEach((key) => {
+      const hasAnswer = answerEntries.has(key);
+      base[titleMap.get(key) ?? key] = hasAnswer ? formatAnswerValue(key, answerEntries.get(key), choiceMap) : "";
+      answerEntries.delete(key);
+    });
+
+    answerEntries.forEach((value, key) => {
       base[titleMap.get(key) ?? key] = formatAnswerValue(key, value, choiceMap);
     });
 
