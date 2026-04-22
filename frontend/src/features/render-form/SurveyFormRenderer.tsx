@@ -49,6 +49,11 @@ type SurveyEventLike = {
   remove: (handler: (sender: Model) => void) => void;
 };
 
+type DownloadFileOptions = {
+  fileValue?: unknown;
+  callback: (status: "success" | "error", data: unknown) => void;
+};
+
 type SurveyModelWithOptionalUIState = Model & {
   onUIStateChanged?: SurveyEventLike;
   uiState?: unknown;
@@ -146,6 +151,16 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
+async function handleDownloadFile(_sender: Model, options: DownloadFileOptions) {
+  try {
+    const fileContent = await resolveSurveyFileValueContent(options.fileValue);
+    options.callback("success", fileContent);
+  } catch (error) {
+    console.error(error);
+    options.callback("error", getSubmitResponseErrorMessage(error));
+  }
+}
+
 export function SurveyFormRenderer({
   schema,
   formId,
@@ -171,6 +186,7 @@ export function SurveyFormRenderer({
     registerCustomSurveyQuestionTypes();
     const resolvedSchema = normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema;
     const nextModel = new Model(resolvedSchema);
+    nextModel.onDownloadFile.add(handleDownloadFile);
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     nextModel.completeText = resolvedRenderMode === "preview-navigable" ? "Завершить" : "Отправить";
@@ -207,21 +223,7 @@ export function SurveyFormRenderer({
       }
     };
 
-    const handleDownloadFile = async (
-      _sender: Model,
-      options: { fileValue?: unknown; callback: (status: "success" | "error", data: unknown) => void }
-    ) => {
-      try {
-        const fileContent = await resolveSurveyFileValueContent(options.fileValue);
-        options.callback("success", fileContent);
-      } catch (error) {
-        console.error(error);
-        options.callback("error", getSubmitResponseErrorMessage(error));
-      }
-    };
-
     model.onOpenDropdownMenu.add(handleOpenDropdownMenu);
-    model.onDownloadFile.add(handleDownloadFile);
 
     if (!isInteractiveMode) {
       return () => {

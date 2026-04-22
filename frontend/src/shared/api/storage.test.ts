@@ -170,11 +170,38 @@ describe("storage api", () => {
     });
 
     vi.mocked(supabaseClient.storage.from).mockReturnValue({ createSignedUrl } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("hello", { headers: { "Content-Type": "text/plain" } })),
+    );
 
     await expect(resolveSurveyFileValueContent({ content: "public/form-1/file-id.txt" })).resolves.toBe(
-      "https://storage.local/object/sign/survey-files/public/form-1/file-id.txt?token=fresh",
+      "data:text/plain;base64,aGVsbG8=",
     );
     expect(createSignedUrl).toHaveBeenCalledWith("public/form-1/file-id.txt", expect.any(Number));
+  });
+
+  it("returns storage files as data URLs so SurveyJS downloads keep binary bytes intact", async () => {
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.local/object/sign/survey-files/public/form-1/file-id.xlsx?token=fresh" },
+      error: null,
+    });
+    const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]);
+
+    vi.mocked(supabaseClient.storage.from).mockReturnValue({ createSignedUrl } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(bytes, {
+          status: 200,
+          headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        }),
+      ),
+    );
+
+    await expect(resolveSurveyFileValueContent({ content: "public/form-1/file-id.xlsx" })).resolves.toBe(
+      "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBAD/",
+    );
   });
 
   it("rejects deletion outside the current user's storage prefix", async () => {

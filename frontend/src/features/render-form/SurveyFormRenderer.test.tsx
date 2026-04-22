@@ -8,6 +8,7 @@ const {
   componentCollectionGetByName,
   createdModels,
   createdModelSchemas,
+  downloadEventsDuringDataAssignment,
   includeUIStateEvent,
   mutateAsync,
   registeredCustomQuestionTypes,
@@ -30,6 +31,7 @@ const {
     componentCollectionGetByName,
     createdModels: [] as Array<Record<string, unknown>>,
     createdModelSchemas: [] as Array<Record<string, unknown>>,
+    downloadEventsDuringDataAssignment: [] as unknown[],
     includeUIStateEvent: { current: true },
     mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
@@ -71,7 +73,7 @@ vi.mock("survey-core", () => ({
     locale = "ru";
     completeText = "";
     completedHtml = "";
-    data: Record<string, unknown> = {};
+    private dataValue: Record<string, unknown> = {};
     fitToContainer = true;
     readOnly = false;
     showCompleteButton = true;
@@ -79,6 +81,7 @@ vi.mock("survey-core", () => ({
     currentPageNo = 0;
     uiState: Record<string, unknown> = {};
     questionNames: string[] = [];
+    schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> };
     onCompleting = new FakeSurveyEvent();
     onUploadFiles = new FakeSurveyEvent();
     onDownloadFile = new FakeSurveyEvent();
@@ -90,6 +93,7 @@ vi.mock("survey-core", () => ({
     doComplete = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
+      this.schema = schema;
       createdModels.push(this as unknown as Record<string, unknown>);
       createdModelSchemas.push(schema);
       const builtInQuestionTypes = new Set(["text", "comment", "radiogroup", "checkbox", "dropdown"]);
@@ -99,6 +103,31 @@ vi.mock("survey-core", () => ({
             .filter((question) => builtInQuestionTypes.has(question.type) || registeredCustomQuestionTypes.has(question.type))
             .map((question) => question.name),
         ) ?? [];
+    }
+
+    get data() {
+      return this.dataValue;
+    }
+
+    set data(nextData: Record<string, unknown>) {
+      this.dataValue = nextData;
+      const fileQuestionNames =
+        this.schema.pages?.flatMap((page) =>
+          (page.elements ?? []).filter((question) => question.type === "file").map((question) => question.name),
+        ) ?? [];
+
+      fileQuestionNames.forEach((questionName) => {
+        const value = nextData[questionName];
+        const fileValues = Array.isArray(value) ? value : value ? [value] : [];
+        fileValues.forEach((fileValue) => {
+          void this.onDownloadFile.fire(this, {
+            fileValue,
+            callback: (_status: string, data: unknown) => {
+              downloadEventsDuringDataAssignment.push(data);
+            },
+          });
+        });
+      });
     }
   },
 }));
@@ -160,6 +189,7 @@ describe("SurveyFormRenderer", () => {
   beforeEach(() => {
     createdModels.length = 0;
     createdModelSchemas.length = 0;
+    downloadEventsDuringDataAssignment.length = 0;
     registeredCustomQuestionTypes.clear();
     showToast.mockClear();
     mutateAsync.mockClear();
@@ -355,6 +385,32 @@ describe("SurveyFormRenderer", () => {
 
     expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" });
     expect(callback).toHaveBeenCalledWith("success", "file-content");
+  });
+
+  it("registers file download callbacks before loading initial response data", async () => {
+    resolveSurveyFileValueContent.mockResolvedValue("data:application/octet-stream;base64,UEsDBA==");
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        renderMode="readonly-navigable"
+        initialData={{
+          attachment: [{ name: "answer.xlsx", type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content: "public/form-1/file.xlsx" }],
+        }}
+        schema={{
+          pages: [{ name: "page1", elements: [{ type: "file", name: "attachment", title: "Файл" }] }],
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({
+        name: "answer.xlsx",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content: "public/form-1/file.xlsx",
+      });
+    });
+    expect(downloadEventsDuringDataAssignment).toEqual(["data:application/octet-stream;base64,UEsDBA=="]);
   });
 
   it("adds a submitting hook while the response is being sent", async () => {

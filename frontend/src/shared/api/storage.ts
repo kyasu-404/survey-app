@@ -186,11 +186,48 @@ async function createSignedUrlForStoragePath(path: string) {
   return data.signedUrl;
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
+async function fetchStorageFileAsDataUrl(path: string) {
+  const signedUrl = await createSignedUrlForStoragePath(path);
+  const response = await runRequest(
+    "storage.downloadSignedFile",
+    (signal) => fetch(signedUrl, { signal }),
+    {
+      context: {
+        bucket: SUPABASE_STORAGE_BUCKET,
+        path,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Не удалось скачать файл: ${response.status} ${response.statusText}`.trim());
+  }
+
+  const blob = await response.blob();
+  const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
+  const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+
+  return `data:${mimeType};base64,${base64}`;
+}
+
 export async function resolveSurveyFileValueContent(value: unknown) {
   const storagePath = getStoragePathFromSurveyFileValue(value);
 
   if (storagePath) {
-    return createSignedUrlForStoragePath(storagePath);
+    return fetchStorageFileAsDataUrl(storagePath);
   }
 
   if (typeof value === "string") {
