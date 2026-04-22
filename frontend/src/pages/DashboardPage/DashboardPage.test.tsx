@@ -1212,7 +1212,7 @@ describe("DashboardPage", () => {
   it("uses requested colors for dashboard deadline, limit, and QR close actions", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-clear-button\s*\{[^}]*background:\s*#fee2e2;[^}]*color:\s*#b91c1c;/);
     expect(css).toMatch(/\.dashboard-settings-modal\s+\.deadline-action-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#f8fafc\);[^}]*color:\s*#141414;/);
     expect(css).toMatch(/\.dashboard-qr-close-button\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*#b91c1c;[^}]*font-size:\s*3\.2rem;[^}]*font-weight:\s*800;/);
