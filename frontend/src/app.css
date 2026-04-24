@@ -4187,18 +4187,34 @@ button.responses-export-button:disabled {
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
-    --sjs-general-backcolor-dim: #fffdf9;
-    --sjs-general-backcolor-dim-light: #fffdf9;
-    --sjs-layer-3-background-500: #fffdf9;
-    background: transparent !important;
-    background-color: transparent !important;
+    --sjs-general-backcolor: #fffdf9;
+    --sjs-general-backcolor-dim: #f2eee8;
+    --sjs-general-backcolor-dim-light: #f8f5f0;
+    --sjs-layer-1-background-500: #fffdf9;
+    --sjs-layer-3-background-500: #f2eee8;
+    min-height: 100svh;
+    background: #f2eee8 !important;
+    background-color: #f2eee8 !important;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-body,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-page {
-    background: transparent !important;
-    background-color: transparent !important;
+    background: #f2eee8 !important;
+    background-color: #f2eee8 !important;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header__content,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern__title {
+    background: #fffdf9 !important;
+    background-color: #fffdf9 !important;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header__overlap,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern__title {
+    border-bottom: 2px solid #111111 !important;
+    box-shadow: none !important;
   }
 
   .users-create-grid {
