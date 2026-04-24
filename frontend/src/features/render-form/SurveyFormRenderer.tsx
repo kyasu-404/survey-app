@@ -4,6 +4,7 @@ import { Survey } from "survey-react-ui";
 import "survey-core/defaultV2.min.css";
 import "survey-core/i18n/russian";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
+import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";
 import { DEFAULT_COMPLETED_HTML } from "../../entities/survey/model/surveyModel";
 import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
 import type { SurveySchema } from "../../entities/survey/types";
@@ -184,11 +185,14 @@ export function SurveyFormRenderer({
   );
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
-    const resolvedSchema = normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema;
+    const resolvedSchema = normalizeSurveyQuestionNumbers(
+      normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema,
+    );
     const nextModel = new Model(resolvedSchema);
     nextModel.onDownloadFile.add(handleDownloadFile);
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
+    (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
     nextModel.completeText = resolvedRenderMode === "preview-navigable" ? "Завершить" : "Отправить";
     nextModel.completedHtml = resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML;
     if (initialData) {

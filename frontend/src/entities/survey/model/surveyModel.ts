@@ -8,6 +8,7 @@ export const DEFAULT_COMPLETED_HTML =
 export function createEmptySurveySchema(title = "Новая форма"): SurveySchema {
   return {
     title,
+    showQuestionNumbers: false,
     completedHtml: DEFAULT_COMPLETED_HTML,
     questionDescriptionLocation: "underTitle",
     logo: DEFAULT_SURVEY_LOGO_TOKEN,

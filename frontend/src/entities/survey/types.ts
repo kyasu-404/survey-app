@@ -3,7 +3,13 @@ export type SurveyQuestion = {
   name: string;
   title?: string;
   isRequired?: boolean;
+  showNumber?: boolean;
+  hideNumber?: boolean;
+  showQuestionNumbers?: string | boolean;
   choices?: Array<string | { value: string; text: string }>;
+  elements?: SurveyQuestion[];
+  templateElements?: SurveyQuestion[];
+  pages?: SurveyPageSchema[];
 };
 
 export type SurveyPageSchema = {
@@ -19,6 +25,7 @@ export type SurveySchema = {
   description?: string;
   questionDescriptionLocation?: string;
   completedHtml?: string;
+  showQuestionNumbers?: boolean | string;
   showCompletePage?: boolean;
   logo?: string;
   logoWidth?: string | number;

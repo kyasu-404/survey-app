@@ -868,4 +868,86 @@ describe("SurveyFormRenderer", () => {
       }),
     );
   });
+
+  it("normalizes numbering flags before creating the SurveyJS runtime model", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          title: "Импортированная форма",
+          locale: "ru",
+          showQuestionNumbers: "on",
+          pages: [
+            {
+              name: "page1",
+              elements: [
+                {
+                  type: "text",
+                  name: "question1",
+                  title: "Первый вопрос",
+                  showNumber: true,
+                  hideNumber: true,
+                },
+                {
+                  type: "panel",
+                  name: "panel1",
+                  title: "Панель",
+                  showNumber: true,
+                  showQuestionNumbers: "on",
+                  elements: [
+                    {
+                      type: "text",
+                      name: "nested",
+                      title: "Вложенный вопрос",
+                      showNumber: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(createdModelSchemas[0]).toMatchObject({
+      title: "Импортированная форма",
+      locale: "ru",
+      showQuestionNumbers: false,
+      pages: [
+        {
+          name: "page1",
+          elements: [
+            {
+              type: "text",
+              name: "question1",
+              title: "Первый вопрос",
+              showNumber: false,
+            },
+            {
+              type: "panel",
+              name: "panel1",
+              title: "Панель",
+              showNumber: false,
+              showQuestionNumbers: "off",
+              elements: [
+                {
+                  type: "text",
+                  name: "nested",
+                  title: "Вложенный вопрос",
+                  showNumber: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const firstQuestion = (createdModelSchemas[0] as {
+      pages?: Array<{ elements?: Array<{ hideNumber?: boolean }> }>;
+    })?.pages?.[0]?.elements?.[0];
+
+    expect(firstQuestion?.hideNumber).toBeUndefined();
+  });
 });

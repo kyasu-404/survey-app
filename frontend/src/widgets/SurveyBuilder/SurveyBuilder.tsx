@@ -30,6 +30,7 @@ import {
   resolveDefaultSurveyLogo,
   serializeDefaultSurveyLogo,
 } from "../../entities/survey/model/defaultSurveyLogo";
+import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";
 import { TEMPLATE_FORM_TYPE, createEmptySurveySchema, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import {
   QUESTION_TYPE_DEFINITIONS,
@@ -186,10 +187,23 @@ function registerCustomIcons() {
 
 function configureCreatorQuestionTypes() {
   registerCustomSurveyQuestionTypes();
-  const inputTypeProperty = Serializer.getProperty("text", "inputType");
-  if (inputTypeProperty) {
-    inputTypeProperty.visible = false;
-  }
+  [
+    ["text", "inputType"],
+    ["survey", "showQuestionNumbers"],
+    ["survey", "questionStartIndex"],
+    ["survey", "questionTitlePattern"],
+    ["question", "showNumber"],
+    ["question", "hideNumber"],
+    ["panel", "showNumber"],
+    ["panel", "showQuestionNumbers"],
+    ["paneldynamic", "showNumber"],
+    ["paneldynamic", "showQuestionNumbers"],
+  ].forEach(([typeName, propertyName]) => {
+    const property = Serializer.getProperty(typeName, propertyName);
+    if (property) {
+      property.visible = false;
+    }
+  });
 }
 
 function createCreatorInstance(formId?: string) {
@@ -243,6 +257,11 @@ function createCreatorInstance(formId?: string) {
     if (options.question) {
       options.question.isRequired = true;
       options.question.descriptionLocation = "underTitle";
+      (options.question as { showNumber?: boolean }).showNumber = false;
+      const questionType = (options.question as { getType?: () => string }).getType?.();
+      if (questionType === "panel" || questionType === "paneldynamic") {
+        (options.question as { showQuestionNumbers?: string }).showQuestionNumbers = "off";
+      }
     }
   });
 
@@ -265,7 +284,7 @@ function cloneSchema(schema: SurveySchema): SurveySchema {
 }
 
 function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
-  return cloneSchema(creator.JSON as SurveySchema);
+  return normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema));
 }
 
 function updateRuntimePreviewBridgeFromCreator(creator: SurveyCreator, formId?: string) {
@@ -303,7 +322,7 @@ function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
 }
 
 function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSchema {
-  const builderSchema = cloneSchema(schema) as BuilderSchema;
+  const builderSchema = normalizeSurveyQuestionNumbers(cloneSchema(schema)) as BuilderSchema;
 
   return {
     ...builderSchema,
@@ -460,7 +479,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     const handleModified = () => {
       saveSurveyBuilderDraft(
         formId,
-        serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema)),
+        serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
       );
 
       clearScheduledRuntimePreviewSync();
@@ -526,7 +545,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder save template");
 
     try {
-      const schema = serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema));
+      const schema = serializeDefaultSurveyLogo(
+        normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema)),
+      );
       if (!validateSurveySchema(schema)) {
         throw new Error("Некорректная JSON-схема формы");
       }
@@ -730,7 +751,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 
       try {
-        const schema = serializeDefaultSurveyLogo(cloneSchema(creator.JSON as SurveySchema));
+        const schema = serializeDefaultSurveyLogo(
+          normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema)),
+        );
         if (!validateSurveySchema(schema)) {
           throw new Error("Некорректная JSON-схема формы");
         }

@@ -24,6 +24,7 @@ const {
   saveSurveySchema,
   serializerGetProperty,
   serializerInputTypeProp,
+  serializerProperties,
   setFormDeadline,
   setFormResponseLimit,
   showToast,
@@ -40,6 +41,7 @@ const {
   saveSurveySchema: vi.fn(),
   serializerGetProperty: vi.fn(),
   serializerInputTypeProp: { visible: true },
+  serializerProperties: {} as Record<string, { visible: boolean }>,
   setFormDeadline: vi.fn(),
   setFormResponseLimit: vi.fn(),
   showToast: vi.fn(),
@@ -254,7 +256,7 @@ function readSurveyBuilderSource() {
   return readFileSync(join(process.cwd(), "src/widgets/SurveyBuilder/SurveyBuilder.tsx"), "utf8");
 }
 
-function createTemplateForm(overrides: Partial<SurveySchema & { id: string; title: string }> = {}) {
+function createTemplateForm(overrides: Partial<SurveySchema & { id: string; title: string; schema: SurveySchema }> = {}) {
   return {
     id: "template-1",
     title: "Редактируемый шаблон",
@@ -283,7 +285,17 @@ describe("SurveyBuilder", () => {
     vi.clearAllMocks();
     creatorInstances.length = 0;
     componentCollectionGetByName.mockReturnValue(undefined);
-    serializerGetProperty.mockReturnValue(serializerInputTypeProp);
+    Object.keys(serializerProperties).forEach((key) => {
+      delete serializerProperties[key];
+    });
+    serializerGetProperty.mockImplementation((type: string, name: string) => {
+      const key = `${type}:${name}`;
+      if (!serializerProperties[key]) {
+        serializerProperties[key] = { visible: true };
+      }
+
+      return name === "inputType" ? serializerInputTypeProp : serializerProperties[key];
+    });
     serializerInputTypeProp.visible = true;
     getFormById.mockResolvedValue(null);
     getForms.mockResolvedValue([]);
@@ -298,8 +310,36 @@ describe("SurveyBuilder", () => {
   it("restores a saved draft and persists later changes", async () => {
     const initialDraft: SurveySchema = {
       title: "Черновик",
+      showQuestionNumbers: true,
       locale: "ru",
-      pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      pages: [
+        {
+          name: "page1",
+          elements: [
+            {
+              type: "text",
+              name: "q1",
+              title: "Вопрос",
+              showNumber: true,
+              hideNumber: true,
+            },
+            {
+              type: "panel",
+              name: "panel1",
+              title: "Панель",
+              showQuestionNumbers: "on",
+              elements: [
+                {
+                  type: "text",
+                  name: "nested",
+                  title: "Вложенный вопрос",
+                  showNumber: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
     };
 
     localStorage.setItem(
@@ -316,12 +356,61 @@ describe("SurveyBuilder", () => {
       expect(creatorInstances).toHaveLength(1);
     });
 
-    expect(creatorInstances[0].JSON).toMatchObject(initialDraft);
+    expect(creatorInstances[0].JSON).toMatchObject({
+      title: "Черновик",
+      locale: "ru",
+      showQuestionNumbers: false,
+      pages: [
+        {
+          name: "page1",
+          elements: [
+            {
+              type: "text",
+              name: "q1",
+              title: "Вопрос",
+              showNumber: false,
+            },
+            {
+              type: "panel",
+              name: "panel1",
+              title: "Панель",
+              showNumber: false,
+              showQuestionNumbers: "off",
+              elements: [
+                {
+                  type: "text",
+                  name: "nested",
+                  title: "Вложенный вопрос",
+                  showNumber: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(
+      ((creatorInstances[0].JSON.pages?.[0]?.elements?.[0] ?? {}) as { hideNumber?: boolean }).hideNumber,
+    ).toBeUndefined();
 
     const updatedDraft: SurveySchema = {
       title: "Обновлённый черновик",
+      showQuestionNumbers: true,
       locale: "ru",
-      pages: [{ name: "page1", elements: [{ type: "text", name: "q2", title: "Новый вопрос" }] }],
+      pages: [
+        {
+          name: "page1",
+          elements: [
+            {
+              type: "text",
+              name: "q2",
+              title: "Новый вопрос",
+              showNumber: true,
+              hideNumber: true,
+            },
+          ],
+        },
+      ],
     };
 
     act(() => {
@@ -330,7 +419,24 @@ describe("SurveyBuilder", () => {
     });
 
     expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
-      schema: updatedDraft,
+      schema: {
+        title: "Обновлённый черновик",
+        locale: "ru",
+        showQuestionNumbers: false,
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "text",
+                name: "q2",
+                title: "Новый вопрос",
+                showNumber: false,
+              },
+            ],
+          },
+        ],
+      },
     });
   });
 
@@ -416,6 +522,7 @@ describe("SurveyBuilder", () => {
     expect(creator.JSON).toMatchObject({
       title: "Новая форма",
       locale: "ru",
+      showQuestionNumbers: false,
       questionDescriptionLocation: "underTitle",
       completedHtml: expect.stringContaining("Спасибо за Ваш ответ!"),
       logoWidth: "120px",
@@ -490,7 +597,25 @@ describe("SurveyBuilder", () => {
     expect(creator.toolbox.items.map((item: { name: string }) => item.name)).toEqual(questionTypes);
     expect(creator.toolbox.getItemByName("text")?.items).toEqual([]);
     expect(serializerGetProperty).toHaveBeenCalledWith("text", "inputType");
+    expect(serializerGetProperty).toHaveBeenCalledWith("survey", "showQuestionNumbers");
+    expect(serializerGetProperty).toHaveBeenCalledWith("survey", "questionStartIndex");
+    expect(serializerGetProperty).toHaveBeenCalledWith("survey", "questionTitlePattern");
+    expect(serializerGetProperty).toHaveBeenCalledWith("question", "showNumber");
+    expect(serializerGetProperty).toHaveBeenCalledWith("question", "hideNumber");
+    expect(serializerGetProperty).toHaveBeenCalledWith("panel", "showNumber");
+    expect(serializerGetProperty).toHaveBeenCalledWith("panel", "showQuestionNumbers");
+    expect(serializerGetProperty).toHaveBeenCalledWith("paneldynamic", "showNumber");
+    expect(serializerGetProperty).toHaveBeenCalledWith("paneldynamic", "showQuestionNumbers");
     expect(serializerInputTypeProp.visible).toBe(false);
+    expect(serializerProperties["survey:showQuestionNumbers"]?.visible).toBe(false);
+    expect(serializerProperties["survey:questionStartIndex"]?.visible).toBe(false);
+    expect(serializerProperties["survey:questionTitlePattern"]?.visible).toBe(false);
+    expect(serializerProperties["question:showNumber"]?.visible).toBe(false);
+    expect(serializerProperties["question:hideNumber"]?.visible).toBe(false);
+    expect(serializerProperties["panel:showNumber"]?.visible).toBe(false);
+    expect(serializerProperties["panel:showQuestionNumbers"]?.visible).toBe(false);
+    expect(serializerProperties["paneldynamic:showNumber"]?.visible).toBe(false);
+    expect(serializerProperties["paneldynamic:showQuestionNumbers"]?.visible).toBe(false);
     expect(componentCollectionAdd).toHaveBeenCalledTimes(7);
     expect(componentCollectionAdd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -668,6 +793,17 @@ describe("SurveyBuilder", () => {
     );
   });
 
+  it("keeps required stars attached to SurveyJS question titles in runtime and builder wrappers", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.survey-page-card\s+\.sd-question__title,\s*\.builder-creator-shell\s+\.sd-question__title\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/s,
+    );
+    expect(appCss).toMatch(
+      /\.survey-page-card\s+\.sd-question__required-text,\s*\.builder-creator-shell\s+\.sd-question__required-text\s*\{[^}]*white-space:\s*nowrap/s,
+    );
+  });
+
   it("keeps the builder editor full-width and syncs creator JSON into the runtime preview tab bridge", async () => {
     renderBuilder();
 
@@ -696,15 +832,17 @@ describe("SurveyBuilder", () => {
 
     expect(getBuilderPreviewSnapshot()).toMatchObject({
       formId: undefined,
-      previewSchema: expect.objectContaining({
+      previewSchema: {
         title: "Обновлённое превью",
+        locale: "ru",
+        showQuestionNumbers: false,
         pages: [
           {
             name: "page1",
-            elements: [{ type: "text", name: "q1", title: "Вопрос" }],
+            elements: [{ type: "text", name: "q1", title: "Вопрос", showNumber: false }],
           },
         ],
-      }),
+      },
     });
   });
 
@@ -893,6 +1031,131 @@ describe("SurveyBuilder", () => {
       "Шаблон для правки",
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
+  });
+
+  it("normalizes old numbering flags before loading an existing form and before saving it", async () => {
+    getFormById.mockResolvedValue(
+      createTemplateForm({
+        id: "template-9",
+        title: "Старая форма",
+        schema: {
+          title: "Старая форма",
+          locale: "ru",
+          showQuestionNumbers: "on",
+          pages: [
+            {
+              name: "page1",
+              elements: [
+                {
+                  type: "text",
+                  name: "q1",
+                  title: "Вопрос",
+                  showNumber: true,
+                  hideNumber: true,
+                },
+                {
+                  type: "paneldynamic",
+                  name: "group1",
+                  title: "Группа",
+                  showNumber: true,
+                  showQuestionNumbers: "onSurvey",
+                  templateElements: [
+                    {
+                      type: "text",
+                      name: "nested",
+                      title: "Вложенный вопрос",
+                      showNumber: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        } as SurveySchema,
+      }) as never,
+    );
+
+    renderBuilder("template-9");
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+      expect(getFormById).toHaveBeenCalledWith("template-9", expect.objectContaining({ signal: expect.any(Object) }));
+    });
+
+    await waitFor(() => {
+      expect(creatorInstances[0].JSON).toMatchObject({
+        title: "Старая форма",
+        showQuestionNumbers: false,
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "text",
+                name: "q1",
+                showNumber: false,
+              },
+              {
+                type: "paneldynamic",
+                name: "group1",
+                showNumber: false,
+                showQuestionNumbers: "off",
+                templateElements: [
+                  {
+                    type: "text",
+                    name: "nested",
+                    showNumber: false,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    expect(callback).toHaveBeenCalledWith(1, true);
+    expect(saveSurveySchema).toHaveBeenCalledWith(
+      "template-9",
+      expect.objectContaining({
+        showQuestionNumbers: false,
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              expect.objectContaining({
+                type: "text",
+                name: "q1",
+                showNumber: false,
+              }),
+              expect.objectContaining({
+                type: "paneldynamic",
+                name: "group1",
+                showNumber: false,
+                showQuestionNumbers: "off",
+                templateElements: [
+                  expect.objectContaining({
+                    type: "text",
+                    name: "nested",
+                    showNumber: false,
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+      }),
+      "Старая форма",
+    );
+
+    const savedSchema = saveSurveySchema.mock.calls[0]?.[1] as SurveySchema;
+    expect(((savedSchema.pages?.[0]?.elements?.[0] ?? {}) as { hideNumber?: boolean }).hideNumber).toBeUndefined();
   });
 
   it("saves the current builder draft as a template, clears it, and opens the templates page", async () => {
