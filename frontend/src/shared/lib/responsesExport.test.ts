@@ -103,6 +103,23 @@ describe("responsesExport", () => {
     expect(html).not.toContain("16:11:00");
   });
 
+  it("wraps long response headers and cell values in generated HTML documents", () => {
+    const html = createResponsesHtmlDocument({
+      title: "Ответы",
+      rows: [
+        {
+          "Очень длинный заголовок столбца для проверки переноса текста": "Очень длинное значение без потери читаемости",
+        },
+      ],
+      generatedAt: new Date("2026-04-13T09:00:00.000Z"),
+    });
+
+    expect(html).toContain("white-space: normal;");
+    expect(html).toContain("overflow-wrap: anywhere;");
+    expect(html).toContain("word-break: break-word;");
+    expect(html).toContain("max-width: min(28rem, 40vw);");
+  });
+
   it("renders generated-at metadata without seconds in generated HTML", () => {
     const html = createResponsesHtmlDocument({
       title: "Ответы",

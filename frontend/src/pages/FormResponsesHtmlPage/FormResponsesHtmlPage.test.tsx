@@ -97,6 +97,14 @@ describe("FormResponsesHtmlPage", () => {
     expect(css).toMatch(/\.responses-html-preview \.responses-table-date-cell\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*10ch;/);
   });
 
+  it("wraps long HTML response headers and cell values inside the preview table", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(
+      /\.responses-html-preview th,\s*\.responses-html-preview td\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;[^}]*max-width:\s*min\(28rem,\s*40vw\);/s,
+    );
+  });
+
   it("styles the print button as a secondary monochrome action with a matching icon", () => {
     const css = readAppCss();
 

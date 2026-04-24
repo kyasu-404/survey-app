@@ -183,6 +183,14 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.responses-table\s*\{[^}]*border-radius:\s*0;[^}]*overflow:\s*visible;/);
   });
 
+  it("wraps long response headers and cell values inside the responses table", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(
+      /\.responses-table th,\s*\.responses-table td\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;[^}]*max-width:\s*min\(28rem,\s*40vw\);/s,
+    );
+  });
+
   it("renders the form title, type and reason metadata, responses table, and export action", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",

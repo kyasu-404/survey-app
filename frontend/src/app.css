@@ -3719,7 +3719,15 @@ button.responses-export-button:disabled {
   min-width: 100%;
 }
 
-.responses-table-date-column {
+.responses-table th,
+.responses-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: min(28rem, 40vw);
+}
+
+.responses-table .responses-table-date-column {
   width: 10ch;
   min-width: 10ch;
   max-width: 10ch;
@@ -5171,7 +5179,10 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   border: 1px solid #d8dee8;
   text-align: left;
   vertical-align: top;
+  white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: min(28rem, 40vw);
 }
 
 .responses-html-preview th {

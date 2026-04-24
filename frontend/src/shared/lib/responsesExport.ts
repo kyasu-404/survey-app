@@ -375,7 +375,10 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       border: 1px solid #d8dee8;
       text-align: left;
       vertical-align: top;
+      white-space: normal;
       overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: min(28rem, 40vw);
     }
 
     th {
