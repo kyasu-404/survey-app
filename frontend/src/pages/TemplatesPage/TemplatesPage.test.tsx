@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -566,23 +566,25 @@ describe("TemplatesPage", () => {
     expect(await screen.findByText("Новый шаблон после открытия")).toBeInTheDocument();
   });
 
-  it("refreshes templates when the browser tab becomes focused again", async () => {
-    getTemplateFormsPage
-      .mockResolvedValueOnce(createTemplatesPage([createTemplate(1, { title: "Шаблон до фокуса" })]))
-      .mockResolvedValueOnce(createTemplatesPage([createTemplate(2, { title: "Шаблон после фокуса" })]));
+  it("does not refresh templates when the browser tab becomes focused again", async () => {
+    getTemplateFormsPage.mockResolvedValueOnce(createTemplatesPage([createTemplate(1, { title: "Шаблон до фокуса" })]));
 
     renderPage();
 
     expect(await screen.findByText("Шаблон до фокуса")).toBeInTheDocument();
 
-    focusManager.setFocused(false);
-    focusManager.setFocused(true);
-
     await waitFor(() => {
-      expect(getTemplateFormsPage).toHaveBeenCalledTimes(2);
+      expect(getTemplateFormsPage).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText("Шаблон после фокуса")).toBeInTheDocument();
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => {
+      expect(getTemplateFormsPage).toHaveBeenCalledTimes(1);
+    }, { timeout: 100 });
   });
 
   it("keeps the template preview drawer wide enough for the survey page layout", () => {
@@ -598,6 +600,10 @@ describe("TemplatesPage", () => {
 
     expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*#111111;[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.templates-use-button,\s*\.templates-share-button\s*\{[^}]*padding:\s*7px 10px;/);
+    expect(css).toMatch(/\.templates-use-button\s*\{[^}]*background:\s*hsl\(0 0% 0% \/ 0\.8\);[^}]*border-color:\s*hsl\(0 0% 0% \/ 0\.8\);[^}]*box-shadow:\s*none;/);
+    expect(css).toMatch(
+      /\.templates-use-button:hover,\s*\.templates-use-button:focus-visible\s*\{[^}]*background:\s*hsl\(0 0% 0% \/ 0\.5\);[^}]*border-color:\s*hsl\(0 0% 0% \/ 0\.5\);[^}]*box-shadow:\s*0 16px 30px rgba\(20,\s*20,\s*20,\s*0\.12\),\s*var\(--surface-inset\);[^}]*transform:\s*translateY\(-2px\);/,
+    );
     expect(css).toMatch(
       /\.template-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.template-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
     );

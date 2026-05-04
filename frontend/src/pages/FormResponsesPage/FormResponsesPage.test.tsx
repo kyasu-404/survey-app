@@ -1,5 +1,5 @@
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -523,7 +523,7 @@ describe("FormResponsesPage", () => {
     expect(await screen.findByText("Борис")).toBeInTheDocument();
   });
 
-  it("refreshes responses when the browser tab becomes focused again", async () => {
+  it("does not refresh responses when the browser tab becomes focused again", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -542,29 +542,14 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getResponsesByForm
-      .mockResolvedValueOnce(createResponsesPage([
-        {
-          id: "response-1",
-          form_id: "form-1",
-          created_at: "2026-04-08T11:30:00.000Z",
-          data: { name: "Анна" },
-        },
-      ]))
-      .mockResolvedValueOnce(createResponsesPage([
-        {
-          id: "response-2",
-          form_id: "form-1",
-          created_at: "2026-04-08T11:31:00.000Z",
-          data: { name: "Борис" },
-        },
-        {
-          id: "response-1",
-          form_id: "form-1",
-          created_at: "2026-04-08T11:30:00.000Z",
-          data: { name: "Анна" },
-        },
-      ], { count: 2 }));
+    getResponsesByForm.mockResolvedValueOnce(createResponsesPage([
+      {
+        id: "response-1",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { name: "Анна" },
+      },
+    ]));
 
     render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -578,14 +563,20 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
 
-    focusManager.setFocused(false);
-    focusManager.setFocused(true);
-
     await waitFor(() => {
-      expect(getResponsesByForm).toHaveBeenCalledTimes(2);
+      expect(getFormById).toHaveBeenCalledTimes(1);
+      expect(getResponsesByForm).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText("Борис")).toBeInTheDocument();
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => {
+      expect(getFormById).toHaveBeenCalledTimes(1);
+      expect(getResponsesByForm).toHaveBeenCalledTimes(1);
+    }, { timeout: 100 });
   });
 
   it("opens the generated HTML responses page", async () => {

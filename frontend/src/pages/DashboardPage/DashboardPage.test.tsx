@@ -451,23 +451,29 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("Новая форма после открытия")).toBeInTheDocument();
   });
 
-  it("refreshes forms when the browser tab becomes focused again", async () => {
-    getDashboardFormsPage
-      .mockResolvedValueOnce(createDashboardPage([createForm(1, { title: "Форма до фокуса" })]))
-      .mockResolvedValueOnce(createDashboardPage([createForm(2, { title: "Форма после фокуса" })]));
+  it("does not refresh forms when the browser tab becomes focused again", async () => {
+    getDashboardFormsPage.mockResolvedValueOnce(createDashboardPage([createForm(1, { title: "Форма до фокуса" })]));
 
     renderPage();
 
     expect(await screen.findByText("Форма до фокуса")).toBeInTheDocument();
 
-    focusManager.setFocused(false);
-    focusManager.setFocused(true);
-
     await waitFor(() => {
-      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
     });
 
-    expect(await screen.findByText("Форма после фокуса")).toBeInTheDocument();
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(1);
+      expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
+    }, { timeout: 100 });
   });
 
   it("shows form stats inside the info popover and paginates the list", async () => {
@@ -1202,10 +1208,11 @@ describe("DashboardPage", () => {
     expect(css).not.toContain("border-width: 3px;");
   });
 
-  it("changes the form status trigger color on hover", () => {
+  it("keeps the active form status trigger flat with lighter hover feedback", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(88,\s*88,\s*88,\s*0\.98\),\s*rgba\(44,\s*44,\s*44,\s*1\)\s*55%,\s*rgba\(16,\s*16,\s*16,\s*1\)\);/);
+    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active\s*\{[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.8\);[^}]*border:\s*1px solid rgba\(0,\s*0,\s*0,\s*0\.8\);[^}]*box-shadow:\s*none;/);
+    expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.5\);[^}]*border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.5\);[^}]*box-shadow:\s*none;[^}]*transform:\s*none;/);
     expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#d7d7d7\);/);
   });
 

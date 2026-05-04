@@ -505,9 +505,22 @@ export async function createFormFromTemplate(templateForm: SurveyForm, authorId:
 }
 
 export async function updateFormTitle(id: string, title: string) {
+  const { data: form, error: fetchError } = await runRequest(
+    "forms.fetchSchemaForTitleUpdate",
+    () => apiClient.from("forms").select("schema").eq("id", id).single(),
+    { context: { formId: id } },
+  );
+  if (fetchError) throw fetchError;
+
+  const currentSchema = ((form as { schema?: SurveySchema | null } | null)?.schema ?? { pages: [] }) as SurveySchema;
+  const schema: SurveySchema = {
+    ...currentSchema,
+    title,
+  };
+
   const { error } = await runRequest(
     "forms.updateTitle",
-    () => apiClient.from("forms").update({ title }).eq("id", id),
+    () => apiClient.from("forms").update({ title, schema }).eq("id", id),
     { context: { formId: id } },
   );
   if (error) throw error;

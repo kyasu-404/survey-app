@@ -8,6 +8,7 @@ import {
   deleteForm,
   updateFormStatus,
   updateFormResponseLimit,
+  updateFormTitle,
 } from "./formsApi";
 import { apiClient } from "./client";
 
@@ -92,6 +93,16 @@ function createUpdateQuery() {
   const query = {
     update: vi.fn(() => query),
     eq: vi.fn(() => Promise.resolve({ error: null })),
+  };
+
+  return query;
+}
+
+function createSchemaReadQuery(response: { data?: unknown | null; error: unknown | null }) {
+  const query = {
+    select: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    single: vi.fn(() => Promise.resolve(response)),
   };
 
   return query;
@@ -714,5 +725,40 @@ describe("updateFormResponseLimit", () => {
 
     expect(query.update).toHaveBeenCalledWith({ max_responses: null });
     expect(query.eq).toHaveBeenCalledWith("id", "form-1");
+  });
+});
+
+describe("updateFormTitle", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("keeps the persisted survey schema title in sync with the form title", async () => {
+    const schemaReadQuery = createSchemaReadQuery({
+      data: {
+        schema: {
+          title: "Старое название",
+          pages: [{ name: "page1", elements: [] }],
+        },
+      },
+      error: null,
+    });
+    const updateQuery = createUpdateQuery();
+    vi.mocked(apiClient.from)
+      .mockReturnValueOnce(schemaReadQuery as never)
+      .mockReturnValueOnce(updateQuery as never);
+
+    await updateFormTitle("form-1", "Новое название");
+
+    expect(schemaReadQuery.select).toHaveBeenCalledWith("schema");
+    expect(schemaReadQuery.eq).toHaveBeenCalledWith("id", "form-1");
+    expect(updateQuery.update).toHaveBeenCalledWith({
+      title: "Новое название",
+      schema: {
+        title: "Новое название",
+        pages: [{ name: "page1", elements: [] }],
+      },
+    });
+    expect(updateQuery.eq).toHaveBeenCalledWith("id", "form-1");
   });
 });
