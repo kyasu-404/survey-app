@@ -390,14 +390,7 @@ create policy "forms_select"
 on public.forms
 for select
 to authenticated
-using (
-  (
-    is_public = true
-    and (deadline_at is null or deadline_at > now())
-  )
-  OR author_id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
-);
+using (true);
 
 create policy "forms_select_anon"
 on public.forms

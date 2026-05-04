@@ -2897,8 +2897,9 @@ textarea {
 }
 
 .dashboard-status-pill-closed {
-  background: rgba(20, 20, 20, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(232, 232, 232, 0.98));
   color: #141414;
+  border-color: rgba(20, 20, 20, 0.12);
 }
 
 .dashboard-status-pill-template {

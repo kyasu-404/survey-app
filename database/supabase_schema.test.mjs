@@ -166,6 +166,20 @@ test("form rows cannot be deleted directly by authenticated clients", () => {
   assert.match(restrictedClientFormDeletesMigration, /drop policy if exists "forms_delete" on public\.forms;/i);
 });
 
+test("authenticated users can read closed forms owned by other users", () => {
+  const selectPolicy = getPolicyDefinition("forms_select");
+  const anonSelectPolicy = getPolicyDefinition("forms_select_anon");
+
+  assert.match(selectPolicy, /for select\s+to authenticated/i);
+  assert.match(selectPolicy, /using\s*\(\s*true\s*\)/i);
+  assert.doesNotMatch(selectPolicy, /is_public = true/i);
+  assert.doesNotMatch(selectPolicy, /deadline_at is null or deadline_at > now\(\)/i);
+
+  assert.match(anonSelectPolicy, /for select\s+to anon/i);
+  assert.match(anonSelectPolicy, /is_public = true/i);
+  assert.match(anonSelectPolicy, /deadline_at is null or deadline_at > now\(\)/i);
+});
+
 test("api role grants migration restricts form updates to client-editable columns", () => {
   assert.match(apiRoleGrantsMigration, /grant select on table public\.forms to anon;/i);
   assert.match(

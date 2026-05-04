@@ -1212,6 +1212,7 @@ describe("DashboardPage", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.dashboard-status-pill-active\s*\{[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.8\);[^}]*color:\s*#ffffff;[^}]*border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.8\);/);
+    expect(css).toMatch(/\.dashboard-status-pill-closed\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(255,\s*255,\s*255,\s*0\.98\),\s*rgba\(232,\s*232,\s*232,\s*0\.98\)\);[^}]*color:\s*#141414;[^}]*border-color:\s*rgba\(20,\s*20,\s*20,\s*0\.12\);/);
     expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active\s*\{[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.8\);[^}]*border:\s*1px solid rgba\(0,\s*0,\s*0,\s*0\.8\);[^}]*box-shadow:\s*none;/);
     expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-active:focus-visible\s*\{[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.5\);[^}]*border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.5\);[^}]*box-shadow:\s*none;[^}]*transform:\s*translateY\(-1px\);/);
     expect(css).toMatch(/button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:hover,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#ffffff,\s*#d7d7d7\);/);
