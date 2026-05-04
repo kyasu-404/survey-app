@@ -2891,9 +2891,9 @@ textarea {
 }
 
 .dashboard-status-pill-active {
-  background: linear-gradient(180deg, rgba(22, 22, 22, 0.98), rgba(7, 7, 7, 1));
+  background: rgba(0, 0, 0, 0.8);
   color: #ffffff;
-  border-color: transparent;
+  border-color: rgba(0, 0, 0, 0.8);
 }
 
 .dashboard-status-pill-closed {
@@ -2976,7 +2976,7 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visibl
   background: rgba(0, 0, 0, 0.5);
   border-color: rgba(0, 0, 0, 0.5);
   box-shadow: none;
-  transform: none;
+  transform: translateY(-1px);
 }
 
 button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:hover,
@@ -3280,16 +3280,21 @@ button.dashboard-status-trigger-glossy:focus-visible {
   color: #4f4b47;
 }
 
-.templates-share-button:hover {
-  background: rgba(167, 139, 250, 0.2);
-  border-color: rgba(167, 139, 250, 0.34);
+.templates-share-button:hover,
+.templates-share-button:focus-visible {
+  background: rgba(167, 139, 250, 0.28);
+  border-color: rgba(167, 139, 250, 0.48);
+  box-shadow: 0 16px 30px rgba(109, 40, 217, 0.18), var(--surface-inset);
+  transform: translateY(-2px);
 }
 
 .templates-share-button.templates-share-button-muted:hover,
 .templates-share-button.templates-share-button-muted:focus-visible {
-  background: rgba(20, 20, 20, 0.12);
-  border-color: rgba(20, 20, 20, 0.18);
+  background: rgba(20, 20, 20, 0.18);
+  border-color: rgba(20, 20, 20, 0.3);
   color: #141414;
+  box-shadow: 0 16px 30px rgba(20, 20, 20, 0.16), var(--surface-inset);
+  transform: translateY(-2px);
 }
 
 .templates-action-icon {

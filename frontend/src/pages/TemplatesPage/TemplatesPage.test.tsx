@@ -605,6 +605,12 @@ describe("TemplatesPage", () => {
       /\.templates-use-button:hover,\s*\.templates-use-button:focus-visible\s*\{[^}]*background:\s*hsl\(0 0% 0% \/ 0\.5\);[^}]*border-color:\s*hsl\(0 0% 0% \/ 0\.5\);[^}]*box-shadow:\s*0 16px 30px rgba\(20,\s*20,\s*20,\s*0\.12\),\s*var\(--surface-inset\);[^}]*transform:\s*translateY\(-2px\);/,
     );
     expect(css).toMatch(
+      /\.templates-share-button:hover,\s*\.templates-share-button:focus-visible\s*\{[^}]*background:\s*rgba\(167,\s*139,\s*250,\s*0\.28\);[^}]*border-color:\s*rgba\(167,\s*139,\s*250,\s*0\.48\);[^}]*box-shadow:\s*0 16px 30px rgba\(109,\s*40,\s*217,\s*0\.18\),\s*var\(--surface-inset\);[^}]*transform:\s*translateY\(-2px\);/,
+    );
+    expect(css).toMatch(
+      /\.templates-share-button\.templates-share-button-muted:hover,\s*\.templates-share-button\.templates-share-button-muted:focus-visible\s*\{[^}]*background:\s*rgba\(20,\s*20,\s*20,\s*0\.18\);[^}]*border-color:\s*rgba\(20,\s*20,\s*20,\s*0\.3\);[^}]*box-shadow:\s*0 16px 30px rgba\(20,\s*20,\s*20,\s*0\.16\),\s*var\(--surface-inset\);[^}]*transform:\s*translateY\(-2px\);/,
+    );
+    expect(css).toMatch(
       /\.template-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.template-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
     );
     expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*font-size:\s*2\.1rem;/);
