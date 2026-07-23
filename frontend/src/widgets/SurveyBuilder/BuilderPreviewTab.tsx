@@ -8,7 +8,7 @@ export const BUILDER_PREVIEW_TAB_ID = "runtime-preview";
 export const BUILDER_PREVIEW_COMPONENT_NAME = "svc-tab-runtime-preview";
 
 export function BuilderPreviewTab() {
-  const { formId, previewSchema } = useSyncExternalStore(
+  const { formId, previewSchema, previewTheme } = useSyncExternalStore(
     subscribeBuilderPreview,
     getBuilderPreviewSnapshot,
     getBuilderPreviewSnapshot,
@@ -19,6 +19,7 @@ export function BuilderPreviewTab() {
       <SurveyRuntimeSurface className="card builder-preview-tab-surface">
         <SurveyFormRenderer
           schema={previewSchema}
+          theme={previewTheme}
           formId={formId ?? "__builder_preview__"}
           renderMode="readonly-navigable"
         />

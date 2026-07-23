@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { editorLocalization, type ICreatorPlugin } from "survey-creator-core";
+import {
+  editorLocalization,
+  type ICreatorPlugin,
+  type UploadFileEvent,
+} from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
 import "survey-creator-core/survey-creator-core.min.css";
@@ -31,6 +35,12 @@ import {
   serializeDefaultSurveyLogo,
 } from "../../entities/survey/model/defaultSurveyLogo";
 import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";
+import {
+  DEFAULT_SURVEY_THEME,
+  resolveSurveyTheme,
+  sanitizeSurveyTheme,
+  withSurveyBackground,
+} from "../../entities/survey/model/surveyTheme";
 import { TEMPLATE_FORM_TYPE, createEmptySurveySchema, isTemplateForm } from "../../entities/survey/model/surveyModel";
 import {
   QUESTION_TYPE_DEFINITIONS,
@@ -39,6 +49,7 @@ import {
   type SurveyQuestionType,
 } from "../../entities/survey/model/surveyQuestionTypes";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
+import { sanitizeSurveySchema } from "../../entities/survey/model/surveySchemaSecurity";
 import type { SurveySchema } from "../../entities/survey/types";
 import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
@@ -53,6 +64,7 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { createSurveyAssetFormId, uploadSurveyBackground } from "../../shared/api/themeAssets";
 import {
   BUILDER_PREVIEW_COMPONENT_NAME,
   BUILDER_PREVIEW_TAB_ID,
@@ -60,9 +72,12 @@ import {
 } from "./BuilderPreviewTab";
 import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
+import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
 
 type SurveyBuilderProps = {
+  canAdministerAllForms?: boolean;
   formId?: string;
+  userId: string;
 };
 
 type BuilderSchema = SurveySchema & {
@@ -81,6 +96,8 @@ type CreatorToolboxItem = {
 type PostSaveSettingsState = {
   title: string;
   schema: SurveySchema;
+  theme: ITheme;
+  assetFormId: string;
   deadlineValue: string;
   responseLimitValue: string;
   formTypeValue: string;
@@ -88,30 +105,6 @@ type PostSaveSettingsState = {
 };
 
 const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;
-
-const CREATOR_SURVEY_THEME: ITheme = {
-  themeName: "defaultV2",
-  cssVariables: {
-    "--sjs-primary-backcolor": "#121212",
-    "--sjs-primary-backcolor-dark": "#000000",
-    "--sjs-primary-backcolor-light": "rgba(18, 18, 18, 0.12)",
-    "--sjs-primary-background-500": "#121212",
-    "--sjs-primary-background-400": "#232323",
-    "--sjs-primary-background-10": "rgba(18, 18, 18, 0.08)",
-    "--sjs-primary-forecolor": "#ffffff",
-    "--sjs-header-backcolor": "#121212",
-    "--sjs-general-backcolor": "#fffdf9",
-    "--sjs-general-backcolor-dim": "#f2eee8",
-    "--sjs-general-backcolor-dim-light": "#f8f5f0",
-    "--sjs-general-backcolor-dark": "#dfd9d1",
-    "--sjs-general-forecolor": "#181818",
-    "--sjs-general-forecolor-light": "#5f5a54",
-    "--sjs-layer-1-foreground-100": "#181818",
-    "--sjs-layer-1-foreground-50": "#5f5a54",
-    "--sjs-layer-1-background-500": "#fffdf9",
-    "--sjs-layer-3-background-500": "#f2eee8",
-  },
-};
 
 function configureCreatorLocalization() {
   surveyLocalization.defaultLocale = "ru";
@@ -127,6 +120,7 @@ function configureCreatorLocalization() {
     ruEditorStrings.tabs.designer = "\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440";
     ruEditorStrings.tabs.preview = "\u041f\u0440\u0435\u0432\u044c\u044e";
     ruEditorStrings.tabs.logic = "\u041b\u043e\u0433\u0438\u043a\u0430 \u0444\u043e\u0440\u043c\u044b";
+    ruEditorStrings.tabs.theme = "\u0422\u0435\u043c\u044b";
   }
 }
 
@@ -219,7 +213,7 @@ function createCreatorInstance(formId?: string) {
     showPreviewTab: false,
     showJSONEditorTab: false,
     showTranslationTab: false,
-    showThemeTab: false,
+    showThemeTab: true,
     showSaveButton: true,
     isAutoSave: false,
     showAddQuestionButton: false,
@@ -234,10 +228,6 @@ function createCreatorInstance(formId?: string) {
 
   creator.locale = "ru";
   creator.onSurveyInstanceCreated.add((_sender, options) => {
-    if (options.area === "preview-tab" || options.area === "designer-tab") {
-      options.survey.applyTheme(CREATOR_SURVEY_THEME);
-    }
-
     if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
       patchedDesignerSurveys.add(options.survey);
 
@@ -246,6 +236,7 @@ function createCreatorInstance(formId?: string) {
       });
     }
   });
+  creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
   creator.JSON = resolveDefaultSurveyLogo(createEmptyBuilderSchema());
   creator.allowCollapseSidebar = true;
   creator.showSidebar = true;
@@ -280,7 +271,7 @@ function createCreatorInstance(formId?: string) {
 }
 
 function cloneSchema(schema: SurveySchema): SurveySchema {
-  return JSON.parse(JSON.stringify(schema)) as SurveySchema;
+  return sanitizeSurveySchema(schema);
 }
 
 function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
@@ -290,6 +281,7 @@ function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
 function updateRuntimePreviewBridgeFromCreator(creator: SurveyCreator, formId?: string) {
   updateBuilderPreviewBridge({
     previewSchema: getRuntimePreviewSchema(creator),
+    previewTheme: sanitizeSurveyTheme(creator.theme),
     formId,
   });
 }
@@ -354,18 +346,20 @@ function clearAutoPageTitle(page?: { title?: string; name?: string }) {
   }
 }
 
-export function SurveyBuilder({ formId }: SurveyBuilderProps) {
+export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
   const [isTemplateActionLoading, setIsTemplateActionLoading] = useState<"save" | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [postSaveSettings, setPostSaveSettings] = useState<PostSaveSettingsState | null>(null);
   const [isPostSaveSettingsSaving, setIsPostSaveSettingsSaving] = useState(false);
+  const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
+  const [galleryBackground, setGalleryBackground] = useState("");
   const { showToast } = useToast();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
-    mutationFn: ({ id, schema, title }: { id: string; schema: SurveySchema; title: string }) =>
-      saveSurveySchema(id, schema, title),
+    mutationFn: ({ id, schema, theme, title }: { id: string; schema: SurveySchema; theme: ITheme; title: string }) =>
+      saveSurveySchema(id, schema, theme, title),
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -375,6 +369,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
   const runtimePreviewSyncTimeoutRef = useRef<number | null>(null);
+  const assetFormIdRef = useRef(formId ?? createSurveyAssetFormId());
 
   const clearScheduledRuntimePreviewSync = useCallback(() => {
     if (runtimePreviewSyncTimeoutRef.current) {
@@ -397,9 +392,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     error: editableFormError,
   } = useQuery({
     queryKey: getFormQueryKey(formId),
-    queryFn: ({ signal }) => getFormById(formId ?? "", { signal }),
+    queryFn: async ({ signal }) => {
+      const form = await getFormById(formId ?? "", { signal });
+      if (form && form.author_id !== userId && !canAdministerAllForms) {
+        throw new Error("У вас нет прав на редактирование этой формы");
+      }
+      return form;
+    },
     enabled: isEditMode,
-    retry: 1,
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === "У вас нет прав на редактирование этой формы") &&
+      failureCount < 1,
     staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
@@ -407,6 +410,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   });
 
   useEffect(() => {
+    assetFormIdRef.current = formId ?? createSurveyAssetFormId();
     const nextCreator = createCreatorInstance(formId);
     setCreator(nextCreator);
     draftHydrationStateRef.current = "idle";
@@ -416,6 +420,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       clearScheduledRuntimePreviewSync();
       updateBuilderPreviewBridge({
         previewSchema: createEmptySurveySchema(),
+        previewTheme: DEFAULT_SURVEY_THEME,
         formId: undefined,
       });
       nextCreator.dispose();
@@ -439,19 +444,21 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
-    const restoredDraft = loadSurveyBuilderDraft(formId);
+    const restoredDraft = loadSurveyBuilderDraft(userId, formId);
 
     if (restoredDraft) {
       draftHydrationStateRef.current = "loaded";
-      creator.locale = restoredDraft.locale ?? "ru";
-      creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft, "Новая форма"));
+      if (!formId && restoredDraft.assetFormId) assetFormIdRef.current = restoredDraft.assetFormId;
+      creator.locale = restoredDraft.schema.locale ?? "ru";
+      creator.theme = resolveSurveyTheme(restoredDraft.theme);
+      creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft.schema, "Новая форма"));
       syncRuntimePreviewNow(creator);
       return;
     }
 
     draftHydrationStateRef.current = "empty";
     syncRuntimePreviewNow(creator);
-  }, [creator, formId, syncRuntimePreviewNow]);
+  }, [creator, formId, syncRuntimePreviewNow, userId]);
 
   useEffect(() => {
     if (!creator || !editableForm || draftHydrationStateRef.current === "loaded") {
@@ -459,6 +466,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     creator.locale = editableForm.schema.locale ?? "ru";
+    creator.theme = resolveSurveyTheme(editableForm.theme);
     creator.JSON = resolveDefaultSurveyLogo(
       toBuilderSchema(
         {
@@ -478,8 +486,11 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     const handleModified = () => {
       saveSurveyBuilderDraft(
+        userId,
         formId,
         serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
+        sanitizeSurveyTheme(creator.theme),
+        assetFormIdRef.current,
       );
 
       clearScheduledRuntimePreviewSync();
@@ -490,12 +501,44 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     };
 
     creator.onModified.add(handleModified);
+    creator.themeEditor.onThemePropertyChanged.add(handleModified);
+    creator.themeEditor.onThemeSelected.add(handleModified);
 
     return () => {
       creator.onModified.remove(handleModified);
+      creator.themeEditor.onThemePropertyChanged.remove(handleModified);
+      creator.themeEditor.onThemeSelected.remove(handleModified);
       clearScheduledRuntimePreviewSync();
     };
-  }, [clearScheduledRuntimePreviewSync, creator, formId]);
+  }, [clearScheduledRuntimePreviewSync, creator, formId, userId]);
+
+  useEffect(() => {
+    if (!creator) return;
+
+    const handleUploadFile = async (_sender: unknown, options: UploadFileEvent) => {
+      const file = options.files?.[0];
+      if (!file) {
+        options.callback("error");
+        return;
+      }
+
+      try {
+        const uploaded = await uploadSurveyBackground(
+          assetFormIdRef.current,
+          editableForm?.author_id ?? userId,
+          file,
+        );
+        options.callback("success", uploaded.url);
+      } catch (error) {
+        console.error(error);
+        showToast(getErrorMessage(error, "Не удалось загрузить изображение"), "error");
+        options.callback("error");
+      }
+    };
+
+    creator.onUploadFile.add(handleUploadFile);
+    return () => creator.onUploadFile.remove(handleUploadFile);
+  }, [creator, editableForm?.author_id, showToast, userId]);
 
   const scheduleBuilderQueryRefresh = (affectedFormId?: string) => {
     const targets: Array<{ queryKey: readonly unknown[] }> = [
@@ -523,14 +566,16 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
   };
 
   const clearCurrentBuilderState = () => {
-    clearSurveyBuilderDraft(formId);
+    clearSurveyBuilderDraft(userId, formId);
 
     if (!creator) {
       return;
     }
 
     const emptySchema = createEmptyBuilderSchema();
+    if (!formId) assetFormIdRef.current = createSurveyAssetFormId();
     creator.locale = emptySchema.locale ?? "ru";
+    creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
     draftHydrationStateRef.current = "empty";
     syncRuntimePreviewNow(creator);
@@ -553,9 +598,13 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       }
 
       const title = getSchemaTitle(schema, editableForm?.title ?? "Новый шаблон");
+      const theme = sanitizeSurveyTheme(creator.theme);
+      const templateId = formId ? createSurveyAssetFormId() : assetFormIdRef.current;
 
       await createSurveyMutation.mutateAsync({
+        id: templateId,
         schema,
+        theme,
         title,
         formType: TEMPLATE_FORM_TYPE,
         isPublic: false,
@@ -584,9 +633,11 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     const emptySchema = createEmptyBuilderSchema();
+    if (!formId) assetFormIdRef.current = createSurveyAssetFormId();
     creator.locale = emptySchema.locale ?? "ru";
+    creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
-    saveSurveyBuilderDraft(formId, emptySchema);
+    saveSurveyBuilderDraft(userId, formId, emptySchema, creator.theme, assetFormIdRef.current);
     draftHydrationStateRef.current = "loaded";
     syncRuntimePreviewNow(creator);
     setIsResetConfirmOpen(false);
@@ -597,6 +648,27 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     if (!creator) {
       return;
     }
+
+    const syncGalleryActionVisibility = (_sender?: unknown, options?: { tabName?: string }) => {
+      const galleryAction = creator.toolbar.getActionById("builder-background-gallery");
+      if (galleryAction) galleryAction.visible = (options?.tabName ?? creator.activeTab) === "theme";
+    };
+
+    creator.toolbar.addAction(
+      {
+        id: "builder-background-gallery",
+        title: "Галерея фонов",
+        showTitle: true,
+        visible: creator.activeTab === "theme",
+        css: "builder-toolbar-action-item",
+        innerCss: "builder-toolbar-action-button builder-toolbar-action-button-secondary",
+        action: () => {
+          setGalleryBackground(creator.theme.backgroundImage ?? "");
+          setIsBackgroundGalleryOpen(true);
+        },
+      },
+      true,
+    );
 
     creator.toolbar.addAction(
       {
@@ -627,19 +699,26 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     );
 
     const resetAction = creator.toolbar.getActionById("builder-reset");
+    const galleryAction = creator.toolbar.getActionById("builder-background-gallery");
     const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
 
     if (resetAction) {
       resetAction.visibleIndex = 9;
     }
 
+    if (galleryAction) galleryAction.visibleIndex = 8;
+
     if (saveTemplateAction) {
       saveTemplateAction.visibleIndex = 10;
     }
 
+    creator.onActiveTabChanged.add(syncGalleryActionVisibility);
+
     return () => {
+      creator.onActiveTabChanged.remove(syncGalleryActionVisibility);
       creator.toolbar.actions = creator.toolbar.actions.filter(
         (action) =>
+          action.id !== "builder-background-gallery" &&
           action.id !== "builder-reset" &&
           action.id !== "builder-save-template",
       );
@@ -652,12 +731,18 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
     }
 
     const resetAction = creator.toolbar.actions.find((action) => action.id === "builder-reset");
+    const galleryAction = creator.toolbar.actions.find((action) => action.id === "builder-background-gallery");
     const saveAction = creator.toolbar.actions.find((action) => action.id === "svd-save");
     const saveTemplateAction = creator.toolbar.actions.find((action) => action.id === "builder-save-template");
 
     if (resetAction) {
       resetAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
       resetAction.innerCss = "builder-toolbar-action-button";
+    }
+
+    if (galleryAction) {
+      galleryAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
+      galleryAction.innerCss = "builder-toolbar-action-button builder-toolbar-action-button-secondary";
     }
 
     if (saveAction) {
@@ -718,7 +803,9 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
     try {
       const createdForm = await createSurveyMutation.mutateAsync({
+        id: postSaveSettings.assetFormId,
         schema: postSaveSettings.schema,
+        theme: postSaveSettings.theme,
         title: postSaveSettings.title,
         formType: normalizedFormType,
         formReason: normalizedFormReason,
@@ -727,7 +814,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         isPublic: true,
       });
 
-      clearSurveyBuilderDraft(formId);
+      clearSurveyBuilderDraft(userId, formId);
       scheduleBuilderQueryRefresh(createdForm.id);
       setPostSaveSettings(null);
       showToast("Форма сохранена", "success");
@@ -746,7 +833,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       return;
     }
 
-    creator.saveSurveyFunc = async (saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => {
+    const saveBuilder = async (saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => {
       setIsSaving(true);
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 
@@ -759,6 +846,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
         }
 
         const title = getSchemaTitle(schema, editableForm?.title ?? "Новая форма");
+        const theme = sanitizeSurveyTheme(creator.theme);
 
         const savedFormId = formId;
         const isTemplate = Boolean(editableForm && isTemplateForm(editableForm));
@@ -767,12 +855,15 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
           await saveSurveyMutation.mutateAsync({
             id: formId,
             schema,
+            theme,
             title,
           });
         } else {
           setPostSaveSettings({
             title,
             schema,
+            theme,
+            assetFormId: assetFormIdRef.current,
             deadlineValue: "",
             responseLimitValue: "",
             formTypeValue: "",
@@ -784,7 +875,7 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
 
         scheduleBuilderQueryRefresh(savedFormId);
         showToast(isTemplate ? "Шаблон обновлён" : "Форма обновлена", "success");
-        clearSurveyBuilderDraft(formId);
+        clearSurveyBuilderDraft(userId, formId);
 
         if (isTemplate) {
           clearCurrentBuilderState();
@@ -809,10 +900,32 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       }
     };
 
+    creator.saveSurveyFunc = saveBuilder;
+    creator.saveThemeFunc = saveBuilder;
+
     return () => {
       creator.saveSurveyFunc = undefined;
+      creator.saveThemeFunc = undefined;
     };
-  }, [creator, createSurveyMutation, editableForm, formId, navigate, queryClient, saveSurveyMutation, showToast]);
+  }, [creator, createSurveyMutation, editableForm, formId, navigate, queryClient, saveSurveyMutation, showToast, userId]);
+
+  const handleApplyBackground = useCallback((backgroundUrl: string) => {
+    if (!creator) return;
+    creator.theme = withSurveyBackground(creator.theme, backgroundUrl);
+    setGalleryBackground(backgroundUrl);
+    saveSurveyBuilderDraft(
+      userId,
+      formId,
+      serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
+      creator.theme,
+      assetFormIdRef.current,
+    );
+    syncRuntimePreviewNow(creator);
+  }, [creator, formId, syncRuntimePreviewNow, userId]);
+
+  const handleBackgroundGalleryError = useCallback((message: string) => {
+    showToast(message, "error");
+  }, [showToast]);
 
   return (
     <div className="builder-host">
@@ -829,6 +942,17 @@ export function SurveyBuilder({ formId }: SurveyBuilderProps) {
       <div className="builder-creator-shell">
         {creator && <SurveyCreatorComponent creator={creator} />}
       </div>
+
+      {isBackgroundGalleryOpen && creator && (
+        <ThemeBackgroundGallery
+          currentBackground={galleryBackground}
+          formId={assetFormIdRef.current}
+          ownerId={editableForm?.author_id ?? userId}
+          onApply={handleApplyBackground}
+          onClose={() => setIsBackgroundGalleryOpen(false)}
+          onError={handleBackgroundGalleryError}
+        />
+      )}
 
       {isResetConfirmOpen && (
         <div className="modal-backdrop">

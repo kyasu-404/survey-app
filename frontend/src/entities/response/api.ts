@@ -5,8 +5,8 @@ import {
   type PaginatedResponses,
 } from "../../shared/api";
 
-export async function createResponse(formId: string, data: Record<string, unknown>) {
-  return insertResponse(formId, data);
+export async function createResponse(formId: string, data: Record<string, unknown>, submissionId: string) {
+  return insertResponse(formId, data, submissionId);
 }
 
 export async function getResponsesByForm(

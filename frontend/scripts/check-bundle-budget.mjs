@@ -1,8 +1,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-const distDir = new URL("../dist", import.meta.url);
+const distDir = fileURLToPath(new URL("../dist", import.meta.url));
 
 const budgets = {
   mainJs: { raw: 4_200_000, gzip: 950_000 },
@@ -63,7 +64,7 @@ if (!existsSync(distDir)) {
 }
 
 const failures = [];
-const files = listFiles(distDir.pathname);
+const files = listFiles(distDir);
 let totalBytes = 0;
 
 for (const filePath of files) {

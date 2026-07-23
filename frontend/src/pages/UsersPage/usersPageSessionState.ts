@@ -25,7 +25,10 @@ const DEFAULT_USERS_PAGE_SESSION_STATE: UsersPageSessionState = {
 const usersPageSessionStateByClient = new WeakMap<QueryClient, UsersPageSessionState>();
 
 function cloneNewUser(newUser: NewUserForm): NewUserForm {
-  return { ...newUser };
+  // Passwords are short-lived credentials, not navigation state.  Keeping one
+  // in the module-level cache would expose it to the next authenticated user
+  // when a shared browser session changes accounts.
+  return { ...newUser, password: "" };
 }
 
 function cloneUsersPageSessionState(state: UsersPageSessionState): UsersPageSessionState {
@@ -57,4 +60,8 @@ export function updateUsersPageSessionState(queryClient: QueryClient, updates: P
   };
 
   usersPageSessionStateByClient.set(queryClient, nextState);
+}
+
+export function clearUsersPageSessionState(queryClient: QueryClient) {
+  usersPageSessionStateByClient.delete(queryClient);
 }

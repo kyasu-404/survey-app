@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+const productionProxy = readFileSync(new URL("../nginx.conf", import.meta.url), "utf8");
 
 test("frontend exposes a TypeScript typecheck script", () => {
   assert.equal(packageJson.scripts?.typecheck, "tsc --noEmit");
@@ -49,5 +50,13 @@ test("CI workflow gates production releases", () => {
   assert.match(workflow, /npm run build:budget/);
   assert.match(workflow, /npx playwright install --with-deps chromium/);
   assert.match(workflow, /npm run test:e2e/);
-  assert.match(workflow, /aquasecurity\/trivy-action@v\d+\.\d+\.\d+/);
+  assert.match(workflow, /aquasecurity\/trivy-action@[a-f0-9]{40}/);
+  assert.doesNotMatch(workflow, /uses:\s+[^\s]+@v\d/i);
+});
+
+test("production proxy applies a dedicated anonymous upload rate limit", () => {
+  assert.match(productionProxy, /limit_req_zone\s+\$binary_remote_addr\s+zone=survey_uploads:\d+m\s+rate=1r\/s;/);
+  assert.match(productionProxy, /location\s+\^~\s+\/api\/storage\/v1\/object\/survey-files\//);
+  assert.match(productionProxy, /limit_req\s+zone=survey_uploads\s+burst=5\s+nodelay;/);
+  assert.match(productionProxy, /Do not expose Kong directly in production/i);
 });

@@ -49,6 +49,7 @@ const {
     formId: string;
     renderMode?: string;
     schema: SurveySchema;
+    theme?: Record<string, unknown>;
   }>,
   registerElement: vi.fn(),
 }));
@@ -97,7 +98,7 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
-  SurveyFormRenderer: (props: { formId: string; renderMode?: string; schema: SurveySchema }) => {
+  SurveyFormRenderer: (props: { formId: string; renderMode?: string; schema: SurveySchema; theme?: Record<string, unknown> }) => {
     surveyFormRendererProps.push(props);
 
     return (
@@ -163,6 +164,8 @@ vi.mock("survey-creator-react", () => {
     allowCollapseSidebar = false;
     showSidebar = true;
     locale = "ru";
+    activeTab = "designer";
+    theme: Record<string, unknown> = {};
     JSON: SurveySchema & { questionDescriptionLocation?: string } = {
       title: "Новая форма",
       locale: "ru",
@@ -177,8 +180,15 @@ vi.mock("survey-creator-react", () => {
     onElementAllowOperations = new FakeEvent();
     onSurveyInstanceCreated = new FakeEvent();
     onModified = new FakeEvent();
+    onActiveTabChanged = new FakeEvent();
+    onUploadFile = new FakeEvent();
     onQuestionAdded = new FakeEvent();
+    themeEditor = {
+      onThemePropertyChanged: new FakeEvent(),
+      onThemeSelected: new FakeEvent(),
+    };
     saveSurveyFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
+    saveThemeFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
     tabs: Array<Record<string, unknown>> = [];
     plugins: Record<string, unknown> = {};
     toolbox = {
@@ -242,7 +252,7 @@ function renderBuilder(formId?: string) {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={createQueryClient()}>
-        <SurveyBuilder formId={formId} />
+        <SurveyBuilder formId={formId} userId="user-1" />
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -275,6 +285,7 @@ function createTemplateForm(overrides: Partial<SurveySchema & { id: string; titl
       locale: "ru",
       pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
     },
+    theme: {},
     ...overrides,
   };
 }
@@ -343,10 +354,11 @@ describe("SurveyBuilder", () => {
     };
 
     localStorage.setItem(
-      getSurveyBuilderDraftStorageKey(),
+      getSurveyBuilderDraftStorageKey("user-1"),
       JSON.stringify({
         schema: initialDraft,
-        updatedAt: "2026-04-09T10:00:00.000Z",
+        ownerId: "user-1",
+        updatedAt: new Date().toISOString(),
       }),
     );
 
@@ -418,7 +430,7 @@ describe("SurveyBuilder", () => {
       creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
     });
 
-    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}")).toMatchObject({
       schema: {
         title: "Обновлённый черновик",
         locale: "ru",
@@ -448,10 +460,11 @@ describe("SurveyBuilder", () => {
     };
 
     localStorage.setItem(
-      getSurveyBuilderDraftStorageKey(),
+      getSurveyBuilderDraftStorageKey("user-1"),
       JSON.stringify({
         schema: initialDraft,
-        updatedAt: "2026-04-09T10:00:00.000Z",
+        ownerId: "user-1",
+        updatedAt: new Date().toISOString(),
       }),
     );
 
@@ -481,7 +494,7 @@ describe("SurveyBuilder", () => {
       expect(creatorInstances[0].JSON.logo).not.toBe(DEFAULT_SURVEY_LOGO_TOKEN);
     });
 
-    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
         title: "Новая форма",
         logo: DEFAULT_SURVEY_LOGO_TOKEN,
@@ -516,7 +529,7 @@ describe("SurveyBuilder", () => {
       showLogicTab: true,
       showPreviewTab: false,
       showSurveyHeader: true,
-      showThemeTab: false,
+      showThemeTab: true,
       showTranslationTab: false,
     });
     expect(creator.JSON).toMatchObject({
@@ -533,6 +546,7 @@ describe("SurveyBuilder", () => {
     expect(creator.JSON.logo).not.toBe(DEFAULT_SURVEY_LOGO_TOKEN);
     expect(screen.queryByRole("button", { name: "Сбросить конструктор" })).not.toBeInTheDocument();
     expect(creator.toolbar.actions.map((action: { id: string }) => action.id)).toEqual([
+      "builder-background-gallery",
       "builder-reset",
       "builder-save-template",
     ]);
@@ -683,15 +697,7 @@ describe("SurveyBuilder", () => {
       });
     });
 
-    expect(designerSurvey.applyTheme).toHaveBeenCalledWith(
-      expect.objectContaining({
-        themeName: "defaultV2",
-        cssVariables: expect.objectContaining({
-          "--sjs-primary-backcolor": "#121212",
-          "--sjs-primary-backcolor-dark": "#000000",
-        }),
-      }),
-    );
+    expect(designerSurvey.applyTheme).not.toHaveBeenCalled();
     expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
 
     const autoNamedPage = {
@@ -968,7 +974,7 @@ describe("SurveyBuilder", () => {
       creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
     });
 
-    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
         title: "Черновая форма",
       }),
@@ -993,7 +999,7 @@ describe("SurveyBuilder", () => {
       title: "Черновая форма",
       pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
     });
-    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
         title: "Черновая форма",
       }),
@@ -1028,9 +1034,27 @@ describe("SurveyBuilder", () => {
       expect.objectContaining({
         title: "Шаблон для правки",
       }),
+      expect.objectContaining({ themeName: "defaultV2" }),
       "Шаблон для правки",
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
+  });
+
+  it("does not hydrate the editor with a form owned by another non-admin user", async () => {
+    getFormById.mockResolvedValue(
+      createTemplateForm({
+        id: "victim-form",
+        title: "Приватная форма другого автора",
+        author_id: "victim-user",
+      } as never) as never,
+    );
+
+    renderBuilder("victim-form");
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith("У вас нет прав на редактирование этой формы", "error");
+    });
+    expect(creatorInstances[0].JSON.title).not.toBe("Приватная форма другого автора");
   });
 
   it("normalizes old numbering flags before loading an existing form and before saving it", async () => {
@@ -1151,6 +1175,7 @@ describe("SurveyBuilder", () => {
           },
         ],
       }),
+      expect.objectContaining({ themeName: "defaultV2" }),
       "Старая форма",
     );
 
@@ -1174,7 +1199,7 @@ describe("SurveyBuilder", () => {
       creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
     });
 
-    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey())).not.toBeNull();
+    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1"))).not.toBeNull();
 
     await act(async () => {
       const saveTemplateAction = creatorInstances[0].toolbar.getActionById("builder-save-template") as { action: () => void };
@@ -1191,7 +1216,7 @@ describe("SurveyBuilder", () => {
       );
     });
 
-    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey())).toBeNull();
+    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1"))).toBeNull();
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
   });
 });

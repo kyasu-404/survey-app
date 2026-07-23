@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Model, surveyLocalization, type OpenDropdownMenuEvent } from "survey-core";
+import {
+  Model,
+  surveyLocalization,
+  type ITheme,
+  type NavigateToUrlEvent,
+  type OpenDropdownMenuEvent,
+  type ProcessHtmlEvent,
+} from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/defaultV2.min.css";
 import "survey-core/i18n/russian";
@@ -7,7 +14,13 @@ import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSur
 import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";
 import { DEFAULT_COMPLETED_HTML } from "../../entities/survey/model/surveyModel";
 import { registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
+import { resolveSurveyTheme } from "../../entities/survey/model/surveyTheme";
 import type { SurveySchema } from "../../entities/survey/types";
+import {
+  isSafeSurveyNavigationUrl,
+  sanitizeSurveyHtml,
+  sanitizeSurveySchema,
+} from "../../entities/survey/model/surveySchemaSecurity";
 import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -32,6 +45,7 @@ export type SurveyRenderMode = "interactive" | "preview-navigable" | "readonly-n
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
+  theme?: ITheme;
   formId: string;
   respondentId?: string;
   initialData?: Record<string, unknown>;
@@ -120,8 +134,16 @@ function restoreSurveyUIState(model: Model, uiState: Record<string, unknown>) {
   }
 }
 
-function isAnonymousPublicUploadPathForForm(path: string, formId: string) {
-  return path.startsWith(`public/${formId}/`);
+function createSubmissionId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
 
 function resolveRenderMode(renderMode: SurveyRenderMode | undefined, isPreview: boolean): SurveyRenderMode {
@@ -164,6 +186,7 @@ async function handleDownloadFile(_sender: Model, options: DownloadFileOptions) 
 
 export function SurveyFormRenderer({
   schema,
+  theme,
   formId,
   respondentId,
   initialData,
@@ -177,6 +200,7 @@ export function SurveyFormRenderer({
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
   const allowProgrammaticCompleteRef = useRef(false);
+  const submissionIdRef = useRef<string>(createSubmissionId());
   const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
   const isInteractiveMode = resolvedRenderMode === "interactive";
   const responseDraftStorageKey = useMemo(
@@ -185,16 +209,24 @@ export function SurveyFormRenderer({
   );
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
+    const safeSchema = sanitizeSurveySchema(schema);
     const resolvedSchema = normalizeSurveyQuestionNumbers(
-      normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(schema)) as SurveySchema,
+      normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(safeSchema)) as SurveySchema,
     );
     const nextModel = new Model(resolvedSchema);
+    nextModel.applyTheme(resolveSurveyTheme(theme));
+    nextModel.onProcessHtml.add((_sender: Model, options: ProcessHtmlEvent) => {
+      options.html = sanitizeSurveyHtml(options.html);
+    });
+    nextModel.onNavigateToUrl.add((_sender: Model, options: NavigateToUrlEvent) => {
+      options.allow = isSafeSurveyNavigationUrl(options.url);
+    });
     nextModel.onDownloadFile.add(handleDownloadFile);
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
     nextModel.completeText = resolvedRenderMode === "preview-navigable" ? "Завершить" : "Отправить";
-    nextModel.completedHtml = resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML;
+    nextModel.completedHtml = sanitizeSurveyHtml(resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML);
     if (initialData) {
       nextModel.data = initialData;
       if (resolvedRenderMode !== "readonly-static" && typeof initialPageNo === "number") {
@@ -203,6 +235,7 @@ export function SurveyFormRenderer({
     } else if (isInteractiveMode) {
       const savedDraft = loadSurveyResponseDraft(responseDraftStorageKey);
       if (savedDraft) {
+        submissionIdRef.current = savedDraft.submissionId ?? createSubmissionId();
         nextModel.data = savedDraft.data;
         if (typeof savedDraft.currentPageNo === "number") {
           nextModel.currentPageNo = savedDraft.currentPageNo;
@@ -214,7 +247,7 @@ export function SurveyFormRenderer({
     }
     applyRenderMode(nextModel, resolvedRenderMode);
     return nextModel;
-  }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema]);
+  }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -243,6 +276,7 @@ export function SurveyFormRenderer({
         data: sender.data as Record<string, unknown>,
         uiState: getSurveyUIState(sender),
         currentPageNo: sender.currentPageNo,
+        submissionId: submissionIdRef.current,
       });
     };
     const uiStateChangedEvent = (model as SurveyModelWithOptionalUIState).onUIStateChanged;
@@ -251,10 +285,11 @@ export function SurveyFormRenderer({
       _sender: Model,
       options: { files: File[]; callback: (data: unknown, errors?: unknown) => void }
     ) => {
+      const uploaded: Awaited<ReturnType<typeof uploadFileToStorage>>[] = [];
       try {
-        const uploaded = await Promise.all(
-          options.files.map((file) => uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads })),
-        );
+        for (const file of options.files) {
+          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads }));
+        }
 
         options.callback(
           uploaded.map((item) => ({
@@ -263,6 +298,11 @@ export function SurveyFormRenderer({
           })),
         );
       } catch (error) {
+        await Promise.allSettled(
+          uploaded.map((item) =>
+            removeFileFromStorage(item.path, { allowAnonymous: allowAnonymousUploads, formId }),
+          ),
+        );
         console.error(error);
         showToast(getSubmitResponseErrorMessage(error), "error");
         options.callback([], ["Не удалось загрузить файл"]);
@@ -278,13 +318,9 @@ export function SurveyFormRenderer({
         const paths = values
           .map((value) => getStoragePathFromSurveyFileValue(value))
           .filter((path): path is string => Boolean(path));
-        const removablePaths = paths.filter(
-          (path) => !(allowAnonymousUploads && isAnonymousPublicUploadPathForForm(path, formId)),
-        );
-
-        if (removablePaths.length > 0) {
+        if (paths.length > 0) {
           await Promise.all(
-            removablePaths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
+            paths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
           );
         }
 
@@ -311,7 +347,11 @@ export function SurveyFormRenderer({
 
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
-        await submitResponseMutation.mutateAsync({ formId: payload.formId, data: payload.answers });
+        await submitResponseMutation.mutateAsync({
+          formId: payload.formId,
+          data: payload.answers,
+          submissionId: submissionIdRef.current,
+        });
         clearSurveyResponseDraft(responseDraftStorageKey);
         allowProgrammaticCompleteRef.current = true;
         sender.doComplete();

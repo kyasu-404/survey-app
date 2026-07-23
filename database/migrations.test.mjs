@@ -44,6 +44,10 @@ test("database migrations avoid destructive table and data operations", () => {
 
   for (const fileName of migrationFiles) {
     const sql = readFileSync(new URL(fileName, migrationsDir), "utf8");
-    assert.doesNotMatch(sql, destructiveStatement, `${fileName} contains a destructive operation`);
+    const allowlistedTriggerMaintenance = sql.replace(
+      /^\s*delete\s+from\s+public\.response_file_references\s+where\s+response_id\s*=\s*new\.id;\s*$/gim,
+      "",
+    );
+    assert.doesNotMatch(allowlistedTriggerMaintenance, destructiveStatement, `${fileName} contains a destructive operation`);
   }
 });

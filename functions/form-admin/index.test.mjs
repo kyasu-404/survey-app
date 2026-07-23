@@ -40,14 +40,43 @@ test("authorizes form deletion by requester ownership or admin role", () => {
   assert.match(source, /authClient\.auth\.getUser\(jwt\)/);
   assert.match(source, /\.from\("forms"\)\s*[\s\S]*?\.select\("id, author_id"\)/);
   assert.match(source, /form\.author_id !== requester\.id/);
-  assert.match(source, /requesterProfile\?\.role !== "admin"/);
+  assert.match(source, /requesterProfile\.role !== "admin"/);
+});
+
+test("rejects disabled owners and administrators", () => {
+  assert.match(source, /\.select\("role, is_disabled"\)/);
+  assert.match(source, /requesterProfile\?\.is_disabled/);
 });
 
 test("removes storage objects before deleting the form row", () => {
   const removeIndex = source.indexOf("removeStorageObjectsForForm");
+  const removeAssetsIndex = source.indexOf("removeSurveyAssetsForForm");
   const deleteMatch = source.match(/\.from\("forms"\)\s*\.delete\(\)/);
 
   assert.notEqual(removeIndex, -1);
+  assert.notEqual(removeAssetsIndex, -1);
   assert.ok(deleteMatch);
   assert.ok(removeIndex < deleteMatch.index);
+  assert.ok(removeAssetsIndex < deleteMatch.index);
+  assert.match(source, /SURVEY_ASSETS_BUCKET/);
+  assert.match(source, /`forms\/\$\{formId\}\//);
+});
+
+test("offers an admin-only cleanup for stale unreferenced public uploads", () => {
+  assert.match(source, /action: "cleanup-orphans"/);
+  assert.match(source, /requesterProfile\.role !== "admin"/);
+  assert.match(source, /\.rpc\("list_orphan_survey_files"/);
+  assert.match(source, /olderThanHours/);
+  assert.match(source, /removeStaleDraftSurveyAssets/);
+  assert.match(source, /\.eq\("bucket_id", surveyAssetsBucket\)/);
+  assert.match(source, /\.like\("name", "forms\/%"\)/);
+  assert.match(source, /removedAssets/);
+});
+
+test("deletes only an exact unreferenced anonymous upload capability", () => {
+  assert.match(source, /action: "delete-upload"/);
+  assert.match(source, /isAnonymousUploadPath/);
+  assert.match(source, /\.rpc\("is_survey_file_referenced"/);
+  assert.match(source, /isReferenced !== false/);
+  assert.match(source, /\.remove\(\[payload\.path\]\)/);
 });

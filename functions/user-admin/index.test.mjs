@@ -41,6 +41,11 @@ test("does not mirror authorization roles into user metadata", () => {
   assert.doesNotMatch(source, /getUserMetadataWithRole/);
 });
 
+test("rejects administrators whose profile is disabled", () => {
+  assert.match(source, /\.select\("role, is_disabled"\)/);
+  assert.match(source, /requesterProfile\?\.is_disabled/);
+});
+
 test("rolls back a newly created auth user when profile persistence fails", () => {
   const createCase = source.match(/case "create":[\s\S]*?case "delete":/);
 

@@ -53,7 +53,7 @@ function createSummaryQuery(response: { data?: unknown[] | null; count?: number 
   const query = {
     select: vi.fn(() => query),
     order: vi.fn(() => query),
-    abortSignal: vi.fn(() => query),
+    abortSignal: vi.fn((_signal: AbortSignal) => query),
     ilike: vi.fn(() => query),
     gte: vi.fn(() => query),
     lte: vi.fn(() => query),
@@ -262,7 +262,8 @@ describe("fetchDashboardFormsPage", () => {
       signal,
     });
 
-    expect(listQuery.abortSignal).toHaveBeenCalledWith(signal);
+    expect(listQuery.abortSignal).toHaveBeenCalledOnce();
+    expect(listQuery.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
   });
 
   it("fetches lightweight dashboard cards with planned count and server range", async () => {

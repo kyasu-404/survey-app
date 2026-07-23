@@ -12,6 +12,7 @@ function createForm(overrides: Partial<SurveyForm> = {}): SurveyForm {
     deadline_at: null,
     author_id: "user-1",
     schema: { pages: [] },
+    theme: {},
     created_at: "2026-04-09T10:00:00.000Z",
     ...overrides,
   };

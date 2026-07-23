@@ -70,10 +70,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (error) {
         setProfile(null);
+        if ((error as { code?: string }).code === "PGRST116") {
+          const { error: logoutError } = await apiClient.auth.logout();
+          if (logoutError) {
+            console.error(logoutError);
+          }
+        }
         return;
       }
 
-      setProfile(data as UserProfile);
+      const nextProfile = data as UserProfile;
+      if (nextProfile.is_disabled) {
+        setProfile(null);
+        const { error: logoutError } = await apiClient.auth.logout();
+        if (logoutError) {
+          console.error(logoutError);
+        }
+        return;
+      }
+
+      setProfile(nextProfile);
     } catch (error) {
       if (profileRequestIdRef.current === requestId) {
         console.error(error);

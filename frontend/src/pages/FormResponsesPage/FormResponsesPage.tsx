@@ -59,19 +59,34 @@ function hasAnswerValue(value: unknown) {
 }
 
 function pageHasAnswer(element: unknown, answeredNames: Set<string>): boolean {
-  if (!element || typeof element !== "object") {
-    return false;
+  const pending: Array<{ value: unknown; depth: number }> = [{ value: element, depth: 0 }];
+  let visitedNodes = 0;
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || !current.value || typeof current.value !== "object") {
+      continue;
+    }
+
+    visitedNodes += 1;
+    if (current.depth > 32 || visitedNodes > 10_000) {
+      return false;
+    }
+
+    const record = current.value as Record<string, unknown>;
+    if (typeof record.name === "string" && answeredNames.has(record.name)) {
+      return true;
+    }
+
+    ["elements", "items", "rows", "columns", "panels", "templateElements"].forEach((key) => {
+      const nested = record[key];
+      if (Array.isArray(nested)) {
+        nested.forEach((item) => pending.push({ value: item, depth: current.depth + 1 }));
+      }
+    });
   }
 
-  const record = element as Record<string, unknown>;
-  if (typeof record.name === "string" && answeredNames.has(record.name)) {
-    return true;
-  }
-
-  return ["elements", "items", "rows", "columns", "panels", "templateElements"].some((key) => {
-    const nested = record[key];
-    return Array.isArray(nested) && nested.some((item) => pageHasAnswer(item, answeredNames));
-  });
+  return false;
 }
 
 function getFirstAnsweredPageNo(schema: SurveySchema, data: Record<string, unknown>) {
@@ -85,7 +100,11 @@ function getFirstAnsweredPageNo(schema: SurveySchema, data: Record<string, unkno
     return undefined;
   }
 
-  const pageIndex = schema.pages.findIndex((page) => page.elements.some((element) => pageHasAnswer(element, answeredNames)));
+  const pages = Array.isArray(schema.pages) ? schema.pages : [];
+  const pageIndex = pages.findIndex((page) => {
+    const elements = Array.isArray(page?.elements) ? page.elements : [];
+    return elements.some((element) => pageHasAnswer(element, answeredNames));
+  });
 
   return pageIndex > 0 ? pageIndex : undefined;
 }
@@ -465,6 +484,7 @@ export default function FormResponsesPage() {
                     ...formQuery.data.schema,
                     title: formQuery.data.title,
                   }}
+                  theme={formQuery.data.theme}
                   formId={formQuery.data.id}
                   initialData={selectedResponsePreview.response.data}
                   initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, selectedResponsePreview.response.data)}

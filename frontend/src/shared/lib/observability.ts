@@ -13,6 +13,9 @@ export type RequestTraceContext = {
 };
 
 const SENSITIVE_KEY_PATTERN = /authorization|password|secret|token|apikey|api_key|anonkey|access.?token|refresh.?token/i;
+const SENSITIVE_TEXT_PATTERN = /(bearer\s+)[a-z0-9._~-]+|((?:password|secret|token|api[_-]?key)\s*[:=]\s*)[^\s,;]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/gi;
+const URL_KEY_PATTERN = /(?:^|_)(?:url|uri|href)(?:$|_)/i;
+const QUERY_KEY_PATTERN = /(?:^|_)(?:query|query_string|fragment|hash)(?:$|_)/i;
 const DEFAULT_RELEASE = "unknown";
 
 let activeRequestTraceContext: RequestTraceContext | null = null;
@@ -82,7 +85,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   if (value instanceof Error) {
     return {
       name: value.name,
-      message: value.message,
+      message: sanitizeText(value.message),
     };
   }
 
@@ -105,6 +108,64 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   return value;
 }
 
+function sanitizeText(value: string) {
+  return value.slice(0, 1000).replace(SENSITIVE_TEXT_PATTERN, (_match, bearerPrefix, keyPrefix) => {
+    return `${bearerPrefix ?? keyPrefix ?? ""}[redacted]`;
+  });
+}
+
+export function scrubTelemetryUrl(value: string) {
+  const withoutSecrets = value.split(/[?#]/, 1)[0];
+
+  try {
+    const parsed = new URL(value);
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString();
+  } catch {
+    return withoutSecrets;
+  }
+}
+
+export function scrubTelemetryEventForTransport<T extends object>(event: T): T {
+  const pending: object[] = [event];
+  const visited = new WeakSet<object>();
+  let visitedNodes = 0;
+
+  while (pending.length > 0 && visitedNodes < 10_000) {
+    const current = pending.pop();
+    if (!current || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    visitedNodes += 1;
+
+    for (const [key, value] of Object.entries(current)) {
+      const mutable = current as Record<string, unknown>;
+
+      if (SENSITIVE_KEY_PATTERN.test(key) || QUERY_KEY_PATTERN.test(key)) {
+        mutable[key] = "[redacted]";
+        continue;
+      }
+
+      if (typeof value === "string") {
+        mutable[key] = URL_KEY_PATTERN.test(key) || key === "transaction"
+          ? scrubTelemetryUrl(value)
+          : sanitizeText(value);
+        continue;
+      }
+
+      if (value && typeof value === "object") {
+        pending.push(value);
+      }
+    }
+  }
+
+  return event;
+}
+
 function sanitizeAttributes(attributes: LogAttributes = {}, depth = 0): LogAttributes {
   return Object.fromEntries(
     Object.entries(attributes).map(([key, value]) => [
@@ -124,11 +185,13 @@ function buildLogAttributes(attributes: LogAttributes = {}) {
 
 function toError(error: unknown) {
   if (error instanceof Error) {
-    return error;
+    const safeError = new Error(sanitizeText(error.message));
+    safeError.name = error.name;
+    return safeError;
   }
 
   if (typeof error === "string") {
-    return new Error(error);
+    return new Error(sanitizeText(error));
   }
 
   return new Error("Non-error exception captured");
@@ -167,6 +230,8 @@ export function initializeObservability() {
         environment: OBSERVABILITY_ENVIRONMENT,
         release: OBSERVABILITY_RELEASE === DEFAULT_RELEASE ? undefined : OBSERVABILITY_RELEASE,
         sendDefaultPii: false,
+        beforeSend: (event) => scrubTelemetryEventForTransport(event),
+        beforeSendTransaction: (event) => scrubTelemetryEventForTransport(event),
         ...(typeof tracesSampleRate === "number" ? { tracesSampleRate } : {}),
         ...(integrations ? { integrations } : {}),
       });
@@ -254,7 +319,7 @@ export function logWarning(message: string, attributes: LogAttributes = {}, opti
 
 export function logError(message: string, error: unknown, attributes: LogAttributes = {}) {
   const safeAttributes = buildLogAttributes(attributes);
-  console.error(message, safeAttributes, error);
+  console.error(message, safeAttributes, sanitizeValue(error));
   captureException(error, safeAttributes);
 }
 

@@ -46,18 +46,40 @@ function applyAbortSignal<TQuery>(query: TQuery, signal?: AbortSignal): TQuery {
   return typeof abortableQuery.abortSignal === "function" ? abortableQuery.abortSignal(signal) : query;
 }
 
-export async function insertResponse(formId: string, data: Record<string, unknown>) {
-  const { error } = await runRequest(
-    "responses.insert",
-    () =>
-      apiClient.from("responses").insert({
-        form_id: formId,
-        data,
-      }),
-    { context: { formId } },
-  );
+function isDuplicateSubmissionError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
 
-  if (error) throw error;
+  const candidate = error as { code?: string; message?: string; details?: string };
+  return candidate.code === "23505"
+    && `${candidate.message ?? ""} ${candidate.details ?? ""}`.includes("submission");
+}
+
+export async function insertResponse(
+  formId: string,
+  data: Record<string, unknown>,
+  submissionId: string,
+  signal?: AbortSignal,
+) {
+  await runRequest(
+    "responses.insert",
+    async (requestSignal) => {
+      const result = await applyAbortSignal(
+        apiClient.from("responses").insert({
+          form_id: formId,
+          submission_id: submissionId,
+          data,
+        }),
+        requestSignal,
+      );
+
+      if (result.error && !isDuplicateSubmissionError(result.error)) {
+        throw result.error;
+      }
+    },
+    { signal, context: { formId, submissionId } },
+  );
 }
 
 export async function fetchResponsesByForm(

@@ -259,7 +259,7 @@ describe("UsersPage", () => {
     expect(screen.queryByText("Администратор")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("Имя")).toHaveValue("Иван");
     expect(screen.getByPlaceholderText("Email")).toHaveValue("ivan@example.com");
-    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("password123");
+    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("");
     expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("ма");
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("disabled");
 

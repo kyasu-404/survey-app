@@ -208,11 +208,11 @@ Deno.serve(async (req) => {
 
   const { data: requesterProfile, error: requesterProfileError } = await adminClient
     .from("profiles")
-    .select("role")
+    .select("role, is_disabled")
     .eq("id", requester.id)
     .single();
 
-  if (requesterProfileError || requesterProfile?.role !== "admin") {
+  if (requesterProfileError || requesterProfile?.role !== "admin" || requesterProfile?.is_disabled === true) {
     return errorResponse(req, 403, "Forbidden", { ...requestLogContext, userId: requester.id });
   }
 

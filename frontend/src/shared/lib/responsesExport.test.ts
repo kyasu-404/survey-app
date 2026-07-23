@@ -143,4 +143,54 @@ describe("responsesExport", () => {
     expect(html).toContain("border-bottom: 1px solid #d8dee8;");
     expect(html).not.toContain("border-bottom: none;");
   });
+
+  it("bounds deeply nested response values instead of overflowing the export stack", () => {
+    const deeplyNested: Record<string, unknown> = {};
+    let cursor = deeplyNested;
+    for (let depth = 0; depth < 100; depth += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+
+    const rows = formatResponsesForTable(
+      [
+        {
+          id: "response-deep",
+          form_id: "form-1",
+          created_at: "2026-04-15T13:11:00.000Z",
+          data: { answer: deeplyNested },
+        },
+      ],
+      { pages: [] },
+    );
+
+    expect(rows[0].answer).toBe("[Значение превышает допустимую сложность]");
+  });
+
+  it("bounds deeply nested question containers and tolerates malformed page collections", () => {
+    const root: Record<string, unknown> = { type: "panel", name: "root" };
+    let cursor = root;
+    for (let depth = 0; depth < 100; depth += 1) {
+      const next: Record<string, unknown> = { type: "panel", name: `panel-${depth}` };
+      cursor.elements = [next];
+      cursor = next;
+    }
+
+    expect(() =>
+      formatResponsesForTable(
+        [
+          {
+            id: "response-1",
+            form_id: "form-1",
+            created_at: "2026-04-15T13:11:00.000Z",
+            data: {},
+          },
+        ],
+        { pages: [{ elements: [root] }] } as never,
+      ),
+    ).not.toThrow();
+
+    expect(() => formatResponsesForTable([], { pages: null } as never)).not.toThrow();
+  });
 });

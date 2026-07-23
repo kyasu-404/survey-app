@@ -2,11 +2,15 @@ import { useMutation } from "@tanstack/react-query";
 import { createSurvey } from "../../entities/survey/api/surveysApi";
 import { DEFAULT_FORM_REASON, DEFAULT_FORM_TYPE } from "../../entities/survey/model/formOptions";
 import type { SurveySchema } from "../../entities/survey/types";
+import type { ITheme } from "survey-core";
+import { DEFAULT_SURVEY_THEME } from "../../entities/survey/model/surveyTheme";
 import { apiClient } from "../../shared/api";
 import { runRequest } from "../../shared/api/request";
 
 type CreateSurveyForCurrentUserParams = {
+  id?: string;
   schema: SurveySchema;
+  theme?: ITheme;
   title: string;
   formType?: string;
   formReason?: string;
@@ -16,7 +20,9 @@ type CreateSurveyForCurrentUserParams = {
 };
 
 export async function createSurveyForCurrentUser({
+  id,
   schema,
+  theme = DEFAULT_SURVEY_THEME,
   title,
   formType = DEFAULT_FORM_TYPE,
   formReason = DEFAULT_FORM_REASON,
@@ -32,10 +38,12 @@ export async function createSurveyForCurrentUser({
   }
 
   const createSurveyPayload = {
+    ...(id ? { id } : {}),
     title,
     formType,
     formReason,
     schema,
+    theme,
     authorId: userId,
     ...(deadlineAt !== undefined ? { deadlineAt } : {}),
     ...(maxResponses !== undefined ? { maxResponses } : {}),
@@ -55,7 +63,7 @@ export async function createSurveyForCurrentUser({
 
 export function useCreateSurveyMutation() {
   return useMutation({
-    mutationFn: ({ schema, title, formType, formReason, deadlineAt, maxResponses, isPublic }: CreateSurveyForCurrentUserParams) =>
-      createSurveyForCurrentUser({ schema, title, formType, formReason, deadlineAt, maxResponses, isPublic }),
+    mutationFn: ({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, isPublic }: CreateSurveyForCurrentUserParams) =>
+      createSurveyForCurrentUser({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, isPublic }),
   });
 }

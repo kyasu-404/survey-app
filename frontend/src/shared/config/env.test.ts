@@ -33,10 +33,10 @@ describe("required Supabase env", () => {
 });
 
 describe("resolveSupabaseUrl", () => {
-  it("rewrites localhost Supabase URL to the current dev host for remote Vite sessions", async () => {
+  it("rewrites localhost Supabase URL to the current page host", async () => {
     const { resolveSupabaseUrl } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);
 
-    expect(resolveSupabaseUrl("http://localhost:8000", "http://172.17.104.13:5173/form/abc", true)).toBe(
+    expect(resolveSupabaseUrl("http://localhost:8000", "http://172.17.104.13:5173/form/abc")).toBe(
       "http://172.17.104.13:8000",
     );
   });
@@ -44,7 +44,7 @@ describe("resolveSupabaseUrl", () => {
   it("keeps localhost when the page itself is opened on localhost", async () => {
     const { resolveSupabaseUrl } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);
 
-    expect(resolveSupabaseUrl("http://localhost:8000", "http://localhost:5173/form/abc", true)).toBe(
+    expect(resolveSupabaseUrl("http://localhost:8000", "http://localhost:5173/form/abc")).toBe(
       "http://localhost:8000",
     );
   });
@@ -52,16 +52,16 @@ describe("resolveSupabaseUrl", () => {
   it("does not rewrite non-localhost configured URLs", async () => {
     const { resolveSupabaseUrl } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);
 
-    expect(resolveSupabaseUrl("https://supabase.example.com", "http://172.17.104.13:5173/form/abc", true)).toBe(
+    expect(resolveSupabaseUrl("https://supabase.example.com", "http://172.17.104.13:5173/form/abc")).toBe(
       "https://supabase.example.com",
     );
   });
 
-  it("does not rewrite in production mode", async () => {
+  it("rewrites remote production sessions as well as development sessions", async () => {
     const { resolveSupabaseUrl } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);
 
-    expect(resolveSupabaseUrl("http://localhost:8000", "http://172.17.104.13:5173/form/abc", false)).toBe(
-      "http://localhost:8000",
+    expect(resolveSupabaseUrl("http://localhost:8000", "http://172.30.248.146:3000/login")).toBe(
+      "http://172.30.248.146:8000",
     );
   });
 });

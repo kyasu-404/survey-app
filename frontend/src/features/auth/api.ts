@@ -11,5 +11,6 @@ export async function register(email: string, password: string) {
 }
 
 export async function logout() {
-  await apiClient.auth.logout();
+  const { error } = await apiClient.auth.logout();
+  if (error) throw error;
 }

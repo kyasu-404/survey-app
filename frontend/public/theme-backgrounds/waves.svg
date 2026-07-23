@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs><linearGradient id="ocean" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef9ff"/><stop offset=".48" stop-color="#bfdceb"/><stop offset="1" stop-color="#8fb8c9"/></linearGradient></defs>
+  <rect width="1920" height="1080" fill="url(#ocean)"/>
+  <path d="M0 550c330-190 610 210 980 20 390-200 620 120 940-20v530H0Z" fill="#f8fdff" opacity=".62"/>
+  <path d="M0 700c300-150 570 170 910 20 430-190 690 100 1010-20v380H0Z" fill="#6fa5ba" opacity=".25"/>
+  <path d="M0 820c360-120 620 130 970 15 410-135 650 90 950-10v255H0Z" fill="#315f75" opacity=".2"/>
+</svg>

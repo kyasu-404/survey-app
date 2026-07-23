@@ -10,9 +10,14 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { refreshAuthDependentQueries } from "./authCache";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { clearUsersPageSessionState } from "../../pages/UsersPage/usersPageSessionState";
 
 vi.mock("../../shared/lib/queryRefresh", () => ({
   scheduleQueryInvalidation: vi.fn(),
+}));
+
+vi.mock("../../pages/UsersPage/usersPageSessionState", () => ({
+  clearUsersPageSessionState: vi.fn(),
 }));
 
 describe("refreshAuthDependentQueries", () => {
@@ -26,12 +31,13 @@ describe("refreshAuthDependentQueries", () => {
     expect(queryClient.removeQueries).toHaveBeenCalledWith({ queryKey: ["builder-templates"] });
     expect(queryClient.removeQueries).toHaveBeenCalledWith({ queryKey: ["users"] });
     expect(queryClient.removeQueries).toHaveBeenCalledWith({ queryKey: FORM_RESPONSES_QUERY_ROOT });
+    expect(queryClient.removeQueries).toHaveBeenCalledWith({ queryKey: FORM_QUERY_ROOT });
+    expect(queryClient.removeQueries).toHaveBeenCalledWith({ queryKey: SURVEY_FORM_QUERY_ROOT });
+    expect(clearUsersPageSessionState).toHaveBeenCalledWith(queryClient);
     expect(scheduleQueryInvalidation).toHaveBeenCalledWith(queryClient, "auth state changed", [
       { queryKey: DASHBOARD_FORMS_QUERY_ROOT },
       { queryKey: DASHBOARD_FORM_STATS_QUERY_ROOT },
       { queryKey: TEMPLATE_FORMS_QUERY_ROOT },
-      { queryKey: FORM_QUERY_ROOT },
-      { queryKey: SURVEY_FORM_QUERY_ROOT },
     ]);
   });
 });

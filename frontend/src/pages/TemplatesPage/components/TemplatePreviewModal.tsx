@@ -36,6 +36,7 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
                 ...previewTemplate.schema,
                 title: previewTemplate.title,
               }}
+              theme={previewTemplate.theme}
               formId={previewTemplate.id}
               renderMode="readonly-navigable"
             />

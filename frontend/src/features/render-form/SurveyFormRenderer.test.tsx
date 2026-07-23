@@ -87,10 +87,13 @@ vi.mock("survey-core", () => ({
     onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
     onOpenDropdownMenu = new FakeSurveyEvent();
+    onProcessHtml = new FakeSurveyEvent();
+    onNavigateToUrl = new FakeSurveyEvent();
     onValueChanged = new FakeSurveyEvent();
     onCurrentPageChanged = new FakeSurveyEvent();
     onUIStateChanged = includeUIStateEvent.current ? new FakeSurveyEvent() : undefined;
     doComplete = vi.fn();
+    applyTheme = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
       this.schema = schema;
@@ -245,11 +248,15 @@ describe("SurveyFormRenderer", () => {
 
     expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
       data: { email: "draft@example.com" },
+      submissionId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
     });
 
     await model.onCompleting.fire(model, { allowComplete: true, allow: true });
 
-    expect(mutateAsync).toHaveBeenCalled();
+    expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      formId: "form-1",
+      submissionId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    }));
   });
 
   it("renders dashboard preview mode with navigation buttons but without submit or draft side effects", async () => {
@@ -811,7 +818,7 @@ describe("SurveyFormRenderer", () => {
     ]);
   });
 
-  it("treats anonymous public file clears as successful UI-only cleanup", async () => {
+  it("deletes an anonymous public upload when the respondent clears it", async () => {
     const callback = vi.fn();
     getStoragePathFromSurveyFileValue.mockReturnValue("public/form-1/file-id.txt");
 
@@ -836,7 +843,10 @@ describe("SurveyFormRenderer", () => {
 
     await model.onClearFiles.fire(model, { value: { content: "public/form-1/file-id.txt" }, callback });
 
-    expect(removeFileFromStorage).not.toHaveBeenCalled();
+    expect(removeFileFromStorage).toHaveBeenCalledWith(
+      "public/form-1/file-id.txt",
+      { allowAnonymous: true, formId: "form-1" },
+    );
     expect(callback).toHaveBeenCalledWith("success");
   });
 

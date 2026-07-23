@@ -160,10 +160,11 @@ function createForm(index: number, overrides: Partial<SurveyForm> = {}): SurveyF
     author_email: `author${index}@example.com`,
     form_type: "anketa",
     form_reason: "plan",
-    deadline_at: index % 2 === 0 ? `2026-05-${String((index % 28) + 1).padStart(2, "0")}T12:00:00.000Z` : null,
+    deadline_at: index % 2 === 0 ? `2099-05-${String((index % 28) + 1).padStart(2, "0")}T12:00:00.000Z` : null,
     max_responses: null,
     responses_count: index,
     schema: { pages: [] },
+    theme: {},
     ...overrides,
   };
 }
@@ -917,7 +918,7 @@ describe("DashboardPage", () => {
         title: "Опрос по запросу",
         form_type: "survey",
         form_reason: "request",
-        deadline_at: "2026-05-10T12:00:00.000Z",
+        deadline_at: "2099-05-10T12:00:00.000Z",
       }),
       old: createForm(1, {
         title: "Опрос по запросу",
@@ -1046,7 +1047,7 @@ describe("DashboardPage", () => {
         createForm(1, {
           title: "Моя форма",
           author_id: "user-1",
-          deadline_at: "2026-05-10T12:00:00.000Z",
+          deadline_at: "2099-05-10T12:00:00.000Z",
         }),
       ]),
     );
@@ -1386,7 +1387,7 @@ describe("DashboardPage", () => {
           title: "Публичная форма",
           author_id: "user-1",
           is_public: true,
-          deadline_at: "2026-05-10T12:00:00.000Z",
+          deadline_at: "2099-05-10T12:00:00.000Z",
         }),
       ]),
     );
@@ -1418,7 +1419,7 @@ describe("DashboardPage", () => {
           title: "Публичная форма",
           author_id: "user-1",
           is_public: true,
-          deadline_at: "2026-05-10T12:00:00.000Z",
+          deadline_at: "2099-05-10T12:00:00.000Z",
         }),
       ]),
     );

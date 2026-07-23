@@ -6,6 +6,7 @@ export type SurveyResponseDraft = {
   data: Record<string, unknown>;
   uiState?: Record<string, unknown>;
   currentPageNo?: number;
+  submissionId?: string;
 };
 
 type StoredSurveyResponseDraft = SurveyResponseDraft & {
@@ -77,6 +78,7 @@ function parseStoredDraft(rawDraft: string): StoredSurveyResponseDraft | null {
     data: parsedDraft.data,
     uiState: isRecord(parsedDraft.uiState) ? parsedDraft.uiState : undefined,
     currentPageNo: typeof parsedDraft.currentPageNo === "number" ? parsedDraft.currentPageNo : undefined,
+    submissionId: typeof parsedDraft.submissionId === "string" ? parsedDraft.submissionId : undefined,
     updatedAt: parsedDraft.updatedAt,
   };
 }
@@ -190,6 +192,7 @@ export function loadSurveyResponseDraft(storageKey: string | null): SurveyRespon
       data: parsedDraft.data,
       uiState: parsedDraft.uiState,
       currentPageNo: parsedDraft.currentPageNo,
+      submissionId: parsedDraft.submissionId,
     };
   } catch (error) {
     console.warn("Не удалось восстановить черновик ответа", error);
@@ -208,6 +211,7 @@ export function saveSurveyResponseDraft(storageKey: string | null, draft: Survey
     data: sanitizeDraftData(draft.data),
     uiState: draft.uiState,
     currentPageNo: typeof draft.currentPageNo === "number" ? draft.currentPageNo : undefined,
+    submissionId: draft.submissionId,
     updatedAt: new Date().toISOString(),
   };
 

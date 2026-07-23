@@ -27,7 +27,7 @@ describe("insertResponse", () => {
     } as never);
 
     const mutationStatePromise = Promise.race([
-      insertResponse("form-1", { q1: "yes" }).then(
+      insertResponse("form-1", { q1: "yes" }, "123e4567-e89b-42d3-a456-426614174000").then(
         () => "resolved",
         () => "rejected",
       ),
@@ -39,6 +39,31 @@ describe("insertResponse", () => {
     await vi.advanceTimersByTimeAsync(20_000);
 
     await expect(mutationStatePromise).resolves.toBe("rejected");
+  });
+
+  it("treats a repeated idempotency key as success and forwards cancellation", async () => {
+    const signal = new AbortController().signal;
+    const query = {
+      abortSignal: vi.fn(() => Promise.resolve({
+        data: null,
+        error: {
+          code: "23505",
+          message: 'duplicate key value violates unique constraint "idx_responses_form_submission_id"',
+        },
+      })),
+    };
+    const insert = vi.fn(() => query);
+    vi.mocked(apiClient.from).mockReturnValue({ insert } as never);
+
+    await expect(
+      insertResponse("form-1", { q1: "yes" }, "123e4567-e89b-42d3-a456-426614174000", signal),
+    ).resolves.toBeUndefined();
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      form_id: "form-1",
+      submission_id: "123e4567-e89b-42d3-a456-426614174000",
+    }));
+    expect(query.abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
   });
 });
 
@@ -58,7 +83,7 @@ describe("fetchResponsesByForm", () => {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
       order: vi.fn(() => query),
-      abortSignal: vi.fn(() => query),
+      abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [response], count: 72, error: null })),
     };
     vi.mocked(apiClient.from).mockReturnValue(query as never);
@@ -84,13 +109,14 @@ describe("fetchResponsesByForm", () => {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
       order: vi.fn(() => query),
-      abortSignal: vi.fn(() => query),
+      abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
     };
     vi.mocked(apiClient.from).mockReturnValue(query as never);
 
     await fetchResponsesByForm("form-1", { page: 1, pageSize: 25, signal });
 
-    expect(query.abortSignal).toHaveBeenCalledWith(signal);
+    expect(query.abortSignal).toHaveBeenCalledOnce();
+    expect(query.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
   });
 });

@@ -1,7 +1,5 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
-
 :root {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color: #172033;
   background:
     radial-gradient(circle at top left, rgba(96, 165, 250, 0.14), transparent 30%),
@@ -593,52 +591,9 @@ textarea:focus {
   content: none;
 }
 
-.builder-creator-shell .sd-header__text,
-.builder-creator-shell .sd-title.sd-container-modern__title {
-  border-bottom-color: #111111 !important;
-}
-
-.builder-creator-shell .sd-title,
-.builder-creator-shell .sd-page__title,
-.builder-creator-shell .sd-page__description,
-.builder-creator-shell .sd-question__title,
-.builder-creator-shell .sd-question__description {
-  color: #181818;
-}
-
-.builder-creator-shell .sd-question .sd-description,
-.builder-creator-shell .sd-question__description {
-  color: #5f5a54;
-}
-
-.builder-creator-shell .sd-btn,
-.builder-creator-shell .sd-navigation__next-btn,
-.builder-creator-shell .sd-navigation__prev-btn,
-.builder-creator-shell .sd-btn--action {
-  background: linear-gradient(180deg, #232323, #0f0f0f) !important;
-  border-color: transparent !important;
-  color: #ffffff !important;
-  box-shadow: 0 18px 34px rgba(20, 20, 20, 0.16) !important;
-}
-
-.builder-creator-shell .sd-btn:hover,
-.builder-creator-shell .sd-navigation__next-btn:hover,
-.builder-creator-shell .sd-navigation__prev-btn:hover,
-.builder-creator-shell .sd-btn--action:hover {
-  background: linear-gradient(180deg, #2d2d2d, #111111) !important;
-}
-
 .builder-creator-shell .sd-question--selected,
 .builder-creator-shell .svc-question__content--selected {
   box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.16), 0 18px 34px rgba(20, 20, 20, 0.08) !important;
-}
-
-.builder-creator-shell .sd-input:focus,
-.builder-creator-shell .sd-textarea:focus,
-.builder-creator-shell .sd-dropdown:focus,
-.builder-creator-shell .sd-file input:focus + .sd-file__decorator {
-  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
-  border-color: rgba(20, 20, 20, 0.24) !important;
 }
 
 .builder-preview-tab-shell {
@@ -720,6 +675,189 @@ textarea:focus {
   border-color: transparent !important;
   background: rgba(20, 20, 20, 0.06) !important;
   box-shadow: none !important;
+}
+
+.theme-background-modal-backdrop {
+  z-index: 1200;
+  padding: 24px;
+}
+
+.theme-background-modal {
+  width: min(1040px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 24px;
+}
+
+.theme-background-modal-header,
+.theme-background-section-title,
+.theme-background-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.theme-background-modal-header {
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(20, 20, 20, 0.1);
+}
+
+.theme-background-modal-header h3,
+.theme-background-section-title h4 {
+  margin: 0;
+  color: #171717;
+}
+
+.theme-background-modal-header p,
+.theme-background-section-title p,
+.theme-background-empty {
+  margin: 6px 0 0;
+  color: #625e58;
+  line-height: 1.5;
+}
+
+.theme-background-close,
+.theme-background-none,
+.theme-background-upload,
+.theme-background-delete {
+  border: 1px solid rgba(20, 20, 20, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #26231f;
+  padding: 9px 13px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.theme-background-upload {
+  background: #171717;
+  color: #fff;
+}
+
+.theme-background-loading {
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #625e58;
+}
+
+.theme-background-sections {
+  display: grid;
+  gap: 28px;
+  padding-top: 24px;
+}
+
+.theme-background-section-title {
+  margin-bottom: 14px;
+}
+
+.theme-background-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.theme-background-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(20, 20, 20, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.theme-background-card-selected {
+  border-color: #171717;
+  box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.12);
+}
+
+.theme-background-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: #e7e1d9;
+  cursor: pointer;
+}
+
+.theme-background-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.theme-background-selected-badge {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.86);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.theme-background-card-meta {
+  min-height: 48px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.theme-background-card-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-background-delete {
+  flex: none;
+  border: 0;
+  padding: 5px;
+  background: transparent;
+  color: #9f2929;
+  font-size: 0.72rem;
+}
+
+.theme-background-file-input {
+  display: none;
+}
+
+@media (max-width: 820px) {
+  .theme-background-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .theme-background-modal-backdrop {
+    padding: 10px;
+  }
+
+  .theme-background-modal {
+    max-height: calc(100vh - 20px);
+    padding: 18px;
+  }
+
+  .theme-background-modal-header,
+  .theme-background-section-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .theme-background-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .button-link {
@@ -1237,53 +1375,6 @@ textarea:focus {
 .survey-page-card .sd-root-modern__wrapper {
   min-width: 0;
   overflow: visible;
-  --sjs-primary-backcolor: #2563eb;
-  --sjs-primary-backcolor-dark: #1d4ed8;
-  --sjs-primary-backcolor-light: rgba(37, 99, 235, 0.14);
-  --sjs-primary-forecolor: #ffffff;
-  --sjs-primary-background-500: #2563eb;
-  --sjs-primary-background-400: #3b82f6;
-  --sjs-primary-background-10: rgba(37, 99, 235, 0.1);
-  --sjs-general-backcolor-dim: #eef4ff;
-  --sjs-general-backcolor-dim-light: #f7faff;
-  --sjs-general-backcolor-dark: #dbe7ff;
-  --sjs-general-forecolor: #16233d;
-  --sjs-general-forecolor-light: #5e708f;
-}
-
-.survey-page-card .sd-title.sd-container-modern__title,
-.survey-page-card .sd-header__text {
-  border-bottom-color: #2563eb !important;
-}
-
-.survey-page-card .sd-header__text::after,
-.survey-page-card .sd-element--complex > .sd-element__header--location-top::after {
-  background: #2563eb !important;
-}
-
-.survey-page-card .sd-btn,
-.survey-page-card .sd-navigation__next-btn,
-.survey-page-card .sd-navigation__prev-btn,
-.survey-page-card .sd-btn--action {
-  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-  border-color: transparent !important;
-  color: #fff !important;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18) !important;
-}
-
-.survey-page-card .sd-btn:hover,
-.survey-page-card .sd-navigation__next-btn:hover,
-.survey-page-card .sd-navigation__prev-btn:hover,
-.survey-page-card .sd-btn--action:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-}
-
-.survey-page-card .sd-input:focus,
-.survey-page-card .sd-textarea:focus,
-.survey-page-card .sd-dropdown:focus,
-.survey-page-card .sd-file input:focus + .sd-file__decorator {
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12) !important;
-  border-color: rgba(37, 99, 235, 0.48) !important;
 }
 
 .survey-page-card .sd-completedpage,
@@ -2158,7 +2249,6 @@ textarea:focus {
   z-index: 130;
   transform-origin: top right;
   animation: form-menu-dropdown-enter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, opacity;
 }
 
 .form-menu-dropdown-inline {
@@ -4031,47 +4121,6 @@ button.responses-export-button:disabled {
   white-space: nowrap !important;
 }
 
-.survey-runtime-surface .sd-root-modern,
-.survey-runtime-surface .sd-root-modern__wrapper,
-.survey-page-shell .survey-page-card .sd-root-modern,
-.survey-page-shell .survey-page-card .sd-root-modern__wrapper,
-.template-preview-body.survey-page-card .sd-root-modern,
-.template-preview-body.survey-page-card .sd-root-modern__wrapper {
-  --sjs-primary-backcolor: #121212;
-  --sjs-primary-backcolor-dark: #000000;
-  --sjs-primary-backcolor-light: rgba(18, 18, 18, 0.12);
-  --sjs-primary-forecolor: #ffffff;
-  --sjs-primary-background-500: #121212;
-  --sjs-primary-background-400: #232323;
-  --sjs-primary-background-10: rgba(18, 18, 18, 0.08);
-  --sjs-general-backcolor: #fffdf9;
-  --sjs-general-backcolor-dim: #f2eee8;
-  --sjs-general-backcolor-dim-light: #f8f5f0;
-  --sjs-general-backcolor-dark: #dfd9d1;
-  --sjs-general-forecolor: #181818;
-  --sjs-general-forecolor-light: #5f5a54;
-  --sjs-layer-1-foreground-100: #181818;
-  --sjs-layer-1-foreground-50: #5f5a54;
-  --sjs-layer-1-background-500: #fffdf9;
-  --sjs-layer-3-background-500: #f2eee8;
-  --main-color: #121212;
-  --main-hover-color: #000000;
-  --primary: #121212;
-  --primary-light: rgba(18, 18, 18, 0.12);
-  --secondary: #121212;
-  --ctr-button-group-item-text-color-selected: #121212;
-  --ctr-button-group-item-icon-color-selected: #121212;
-  --ctr-button-group-border-color-focused: #121212;
-  --ctr-survey-action-button-text-color-positive: #121212;
-  --ctr-menu-item-border-color-selected: #121212;
-  --ctr-property-grid-header-border-color: #121212;
-  --ctr-editor-border-color-focused: #121212;
-  --ctr-editor-border-color-highlighted: rgba(18, 18, 18, 0.3);
-  --sjs-shadow-small: 0 12px 24px rgba(20, 20, 20, 0.08);
-  --sjs-shadow-medium: 0 18px 36px rgba(20, 20, 20, 0.1);
-  --sjs-shadow-large: 0 24px 48px rgba(20, 20, 20, 0.12);
-}
-
 .survey-page-card {
   border-color: rgba(20, 20, 20, 0.08) !important;
   background:
@@ -4079,40 +4128,10 @@ button.responses-export-button:disabled {
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 236, 230, 0.94)) !important;
 }
 
-.survey-page-card .sd-header__text::after,
-.survey-page-card .sd-element--complex > .sd-element__header--location-top::after {
-  background: #111111 !important;
-}
-
 .survey-page-card .sd-completedpage,
 .survey-page-card .sd-completedpage__content,
 .survey-page-card .sd-completedpage .sd-body {
   background: transparent !important;
-}
-
-.survey-page-card .sd-btn,
-.survey-page-card .sd-navigation__next-btn,
-.survey-page-card .sd-navigation__prev-btn,
-.survey-page-card .sd-btn--action {
-  background: linear-gradient(180deg, #232323, #0f0f0f) !important;
-  color: #ffffff !important;
-  border-color: transparent !important;
-  box-shadow: 0 18px 34px rgba(20, 20, 20, 0.16) !important;
-}
-
-.survey-page-card .sd-btn:hover,
-.survey-page-card .sd-navigation__next-btn:hover,
-.survey-page-card .sd-navigation__prev-btn:hover,
-.survey-page-card .sd-btn--action:hover {
-  background: linear-gradient(180deg, #2d2d2d, #111111) !important;
-}
-
-.survey-page-card .sd-input:focus,
-.survey-page-card .sd-textarea:focus,
-.survey-page-card .sd-dropdown:focus,
-.survey-page-card .sd-file input:focus + .sd-file__decorator {
-  box-shadow: 0 0 0 4px rgba(20, 20, 20, 0.08) !important;
-  border-color: rgba(20, 20, 20, 0.24) !important;
 }
 
 .survey-page-shell {
@@ -4271,7 +4290,6 @@ button.responses-export-button:disabled {
     background-color 140ms ease,
     border-color 140ms ease,
     color 140ms ease;
-  will-change: transform;
 }
 
 .builder-creator-shell .spg-button-group__item:hover {
@@ -4310,10 +4328,10 @@ button.responses-export-button:disabled {
   max-width: min(100%, 640px);
   margin-top: 10px;
   padding: 4px 8px;
-  border: 1px solid rgba(96, 165, 250, 0.55) !important;
+  border: 1px solid var(--sjs-primary-backcolor-light);
   border-radius: 12px;
-  background: rgba(219, 234, 254, 0.88) !important;
-  color: #141414 !important;
+  background: var(--sjs-primary-backcolor-light);
+  color: var(--sjs-general-forecolor);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 

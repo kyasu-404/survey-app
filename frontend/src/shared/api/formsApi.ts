@@ -1,6 +1,8 @@
 import { apiClient, publicApiClient, supabaseClient } from "./client";
 import { applyDeadlineStatePatch, buildDeadlineUpdatePayload, getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
 import { TEMPLATE_FORM_TYPE } from "../../entities/survey/model/surveyModel";
+import { resolveSurveyTheme, sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
+import type { ITheme } from "survey-core";
 import type {
   DashboardFormsStats,
   PaginatedSurveyFormSummaries,
@@ -9,6 +11,12 @@ import type {
   SurveySchema,
 } from "../../entities/survey/types";
 import { runRequest } from "./request";
+import {
+  createSurveyAssetFormId,
+  getSurveyThemeAssetPaths,
+  materializeSurveyThemeAssets,
+  removeSurveyAssetPaths,
+} from "./themeAssets";
 
 export type FormsFilters = {
   search?: string;
@@ -155,6 +163,7 @@ function syncFetchedFormState<
 function mapRawForm(form: RawForm): SurveyForm {
   return {
     ...form,
+    theme: resolveSurveyTheme(form.theme),
     author_email: null,
     author_name: form.author_name ?? null,
     responses_count: form.responses_count ?? 0,
@@ -407,7 +416,7 @@ export async function fetchFormById(id: string, options: RequestSignalOptions = 
     { signal: options.signal, context: { formId: id } },
   );
   if (error) throw error;
-  return syncFetchedFormState(data as SurveyForm);
+  return syncFetchedFormState(mapRawForm(data as RawForm));
 }
 
 export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
@@ -422,14 +431,16 @@ export async function fetchPublicFormById(id: string, options: RequestSignalOpti
     return null;
   }
 
-  return syncFetchedFormState(data as SurveyForm);
+  return syncFetchedFormState(mapRawForm(data as RawForm));
 }
 
 export async function insertForm(payload: {
+  id?: string;
   title: string;
   formType: string;
   formReason: string;
   schema: SurveySchema;
+  theme?: ITheme;
   authorId: string;
   deadlineAt?: string | null;
   maxResponses?: number | null;
@@ -445,6 +456,8 @@ export async function insertForm(payload: {
   const deadlinePayload = buildDeadlineUpdatePayload(payload.deadlineAt ?? null);
   const initialPublicationState = resolveInitialPublicationState(payload.formType, payload.isPublic);
   const resolvedPublicationState = initialPublicationState && deadlinePayload.is_public !== false;
+  const targetFormId = payload.id ?? createSurveyAssetFormId();
+  const materialized = await materializeSurveyThemeAssets(resolveSurveyTheme(payload.theme), targetFormId, currentUserId);
 
   const { data, error } = await runRequest(
     "forms.insert",
@@ -452,10 +465,12 @@ export async function insertForm(payload: {
       apiClient
         .from("forms")
         .insert({
+          id: targetFormId,
           title: payload.title,
           form_type: payload.formType,
           form_reason: payload.formReason,
           schema: payload.schema,
+          theme: materialized.theme,
           deadline_at: deadlinePayload.deadline_at ?? null,
           max_responses: normalizedMaxResponses,
           author_id: currentUserId,
@@ -463,10 +478,13 @@ export async function insertForm(payload: {
         })
         .select("id")
         .single(),
-    { context: { authorId: currentUserId, formType: payload.formType } },
+    { context: { formId: targetFormId, authorId: currentUserId, formType: payload.formType } },
   );
 
-  if (error) throw error;
+  if (error) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw error;
+  }
   return data;
 }
 
@@ -482,26 +500,16 @@ export async function createFormFromTemplate(templateForm: SurveyForm, authorId:
     title: templateForm.title,
   };
 
-  const { data, error } = await runRequest(
-    "forms.createFromTemplate",
-    () =>
-      apiClient
-        .from("forms")
-        .insert({
-          title: templateForm.title,
-          form_type: "anketa",
-          form_reason: "plan",
-          schema,
-          author_id: currentUserId,
-          is_public: true,
-        })
-        .select("id")
-        .single(),
-    { context: { sourceTemplateId: templateForm.id, authorId: currentUserId } },
-  );
-
-  if (error) throw error;
-  return data;
+  return insertForm({
+    id: createSurveyAssetFormId(),
+    title: templateForm.title,
+    formType: "anketa",
+    formReason: "plan",
+    schema,
+    theme: templateForm.theme,
+    authorId: currentUserId,
+    isPublic: true,
+  });
 }
 
 export async function updateFormTitle(id: string, title: string) {
@@ -526,13 +534,29 @@ export async function updateFormTitle(id: string, title: string) {
   if (error) throw error;
 }
 
-export async function updateFormSchema(id: string, schema: SurveySchema, title: string) {
+export async function updateFormSchema(id: string, schema: SurveySchema, theme: ITheme, title: string) {
+  const currentUserId = await getAuthenticatedUserId();
+  const { data: currentForm, error: fetchError } = await runRequest(
+    "forms.fetchThemeForUpdate",
+    () => apiClient.from("forms").select("theme").eq("id", id).single(),
+    { context: { formId: id } },
+  );
+  if (fetchError) throw fetchError;
+
+  const previousAssetPaths = getSurveyThemeAssetPaths((currentForm as { theme?: unknown } | null)?.theme);
+  const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
   const { error } = await runRequest(
     "forms.updateSchema",
-    () => apiClient.from("forms").update({ schema, title }).eq("id", id),
+    () => apiClient.from("forms").update({ schema, theme: materialized.theme, title }).eq("id", id),
     { context: { formId: id, pageCount: schema.pages.length } },
   );
-  if (error) throw error;
+  if (error) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw error;
+  }
+
+  const nextAssetPaths = new Set(getSurveyThemeAssetPaths(materialized.theme));
+  await removeSurveyAssetPaths(previousAssetPaths.filter((path) => !nextAssetPaths.has(path)));
 }
 
 export async function updateFormStatus(id: string, isPublic: boolean) {
@@ -629,24 +653,14 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
 
   const title = `${form.title} (копия)`;
 
-  const { data, error } = await runRequest(
-    "forms.duplicate",
-    () =>
-      apiClient
-        .from("forms")
-        .insert({
-          title,
-          form_type: form.form_type,
-          form_reason: form.form_reason,
-          schema: form.schema,
-          max_responses: form.max_responses ?? null,
-          author_id: currentUserId,
-        })
-        .select("id")
-        .single(),
-    { context: { sourceFormId: form.id, authorId: currentUserId } },
-  );
-
-  if (error) throw error;
-  return data;
+  return insertForm({
+    id: createSurveyAssetFormId(),
+    title,
+    formType: form.form_type,
+    formReason: form.form_reason,
+    schema: form.schema,
+    theme: sanitizeSurveyTheme(form.theme),
+    maxResponses: form.max_responses ?? null,
+    authorId: currentUserId,
+  });
 }

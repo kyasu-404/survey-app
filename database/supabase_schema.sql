@@ -30,6 +30,7 @@ create table public.forms (
   form_type text not null,
   form_reason text not null,
   schema jsonb not null,
+  theme jsonb not null default '{}'::jsonb,
   is_public boolean not null default true,
   deadline_at timestamptz,
   max_responses integer,
@@ -43,8 +44,16 @@ create table public.responses (
   id uuid primary key default gen_random_uuid(),
   form_id uuid not null references public.forms(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete set null,
+  submission_id uuid not null default gen_random_uuid(),
   data jsonb not null,
   created_at timestamptz not null default now()
+);
+
+create table public.response_file_references (
+  response_id uuid not null references public.responses(id) on delete cascade,
+  form_id uuid not null references public.forms(id) on delete cascade,
+  object_path text not null check (length(object_path) between 3 and 1024),
+  primary key (response_id, object_path)
 );
 
 -- =========================
@@ -55,13 +64,115 @@ alter table public.forms
 add constraint forms_schema_is_object check (jsonb_typeof(schema) = 'object');
 
 alter table public.forms
+add constraint forms_schema_size check (pg_column_size(schema) <= 262144);
+
+alter table public.forms
+add constraint forms_schema_no_active_urls check (
+  not jsonb_path_exists(schema, '$.**.navigateToUrl')
+  and not jsonb_path_exists(schema, '$.**.navigateToUrlOnCondition')
+  and not jsonb_path_exists(schema, '$.**.choicesByUrl')
+);
+
+create or replace function public.survey_schema_has_unsafe_network_assets(value jsonb)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from (
+      select jsonb_path_query(value, '$.**.logo', '{}'::jsonb, true) as asset
+      union all select jsonb_path_query(value, '$.**.backgroundImage', '{}'::jsonb, true)
+      union all select jsonb_path_query(value, '$.**.imageLink', '{}'::jsonb, true)
+      union all select jsonb_path_query(value, '$.**.imageUrl', '{}'::jsonb, true)
+      union all select jsonb_path_query(value, '$.**.videoLink', '{}'::jsonb, true)
+      union all select jsonb_path_query(value, '$.**.source', '{}'::jsonb, true)
+      union all select jsonb_path_query(value, '$.**.poster', '{}'::jsonb, true)
+    ) assets
+    where jsonb_typeof(asset) <> 'string'
+      or not (
+        btrim(asset #>> '{}') = '__APP_DEFAULT_CARD_LOGO__'
+        or btrim(asset #>> '{}') ~* '^data:image/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$'
+        or btrim(asset #>> '{}') !~* '^([a-z][a-z0-9+.-]*:|//|\\)'
+      )
+  ) or jsonb_path_exists(value, '$.**.contentMode ? (@ != "image")', '{}'::jsonb, true);
+$$;
+
+revoke all on function public.survey_schema_has_unsafe_network_assets(jsonb) from public;
+grant execute on function public.survey_schema_has_unsafe_network_assets(jsonb) to authenticated, service_role;
+
+alter table public.forms
+add constraint forms_schema_no_unsafe_network_assets check (
+  not public.survey_schema_has_unsafe_network_assets(schema)
+);
+
+create or replace function public.survey_theme_is_safe(value jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_typeof(value) = 'object'
+    and pg_column_size(value) <= 131072
+    and (
+      not (value ? 'cssVariables')
+      or (
+        jsonb_typeof(value -> 'cssVariables') = 'object'
+        and not exists (
+          select 1
+          from jsonb_each_text(
+            case when jsonb_typeof(value -> 'cssVariables') = 'object'
+              then value -> 'cssVariables'
+              else '{}'::jsonb
+            end
+          ) css(name, setting)
+          where name !~ '^--[a-zA-Z0-9_-]{1,120}$'
+            or length(setting) > 512
+            or setting ~ '[[:cntrl:]]'
+            or setting ~* '(url[[:space:]]*\(|expression[[:space:]]*\(|@import|javascript:)'
+        )
+      )
+    )
+    and not exists (
+      select 1
+      from (
+        select value -> 'backgroundImage' as asset where value ? 'backgroundImage'
+        union all
+        select value -> 'header' -> 'backgroundImage' as asset
+        where jsonb_typeof(value -> 'header') = 'object' and (value -> 'header') ? 'backgroundImage'
+      ) assets
+      where jsonb_typeof(asset) <> 'string'
+        or not (
+          btrim(asset #>> '{}') = ''
+          or btrim(asset #>> '{}') ~ '^/[^/\\]'
+          or btrim(asset #>> '{}') ~* '^https://[^[:space:]]+$'
+          or btrim(asset #>> '{}') ~* '^http://(localhost|127\.0\.0\.1|10\.[0-9.]+|192\.168\.[0-9.]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9.]+|\[::1\])(:[0-9]+)?/[^[:space:]]*$'
+        )
+    );
+$$;
+
+revoke all on function public.survey_theme_is_safe(jsonb) from public;
+grant execute on function public.survey_theme_is_safe(jsonb) to authenticated, service_role;
+
+alter table public.forms
+add constraint forms_theme_is_safe check (public.survey_theme_is_safe(theme));
+
+alter table public.forms
 add constraint forms_max_responses_positive check (max_responses is null or max_responses > 0);
+
+alter table public.forms
+add constraint forms_max_responses_hard_cap check (max_responses is null or max_responses <= 100000);
 
 alter table public.forms
 add constraint forms_responses_count_nonnegative check (responses_count >= 0);
 
 alter table public.responses
 add constraint responses_data_is_object check (jsonb_typeof(data) = 'object');
+
+alter table public.responses
+add constraint responses_data_size check (pg_column_size(data) <= 262144);
 
 -- =========================
 -- TRIGGER (profiles)
@@ -89,24 +200,79 @@ begin
 end;
 $$;
 
-create or replace function public.request_role()
-returns text
-language plpgsql
+create or replace function public.request_is_enabled()
+returns boolean
+language sql
 stable
 security definer
 set search_path = ''
 as $$
-declare
-  profile_role text;
-begin
-  select p.role
-  into profile_role
-  from public.profiles p
-  where p.id = auth.uid();
-
-  return coalesce(profile_role, 'user');
-end;
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_disabled = false
+  );
 $$;
+
+revoke all on function public.request_is_enabled() from public;
+grant execute on function public.request_is_enabled() to authenticated, service_role;
+
+create or replace function public.request_role()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.role
+  from public.profiles p
+  where p.id = auth.uid() and p.is_disabled = false;
+$$;
+
+revoke all on function public.request_role() from public;
+grant execute on function public.request_role() to authenticated, service_role;
+
+create or replace function public.is_existing_response_submission(
+  target_form_id uuid,
+  target_submission_id uuid,
+  target_user_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.responses r
+    where r.form_id = target_form_id
+      and r.submission_id = target_submission_id
+      and r.user_id is not distinct from target_user_id
+  );
+$$;
+
+revoke all on function public.is_existing_response_submission(uuid, uuid, uuid) from public;
+grant execute on function public.is_existing_response_submission(uuid, uuid, uuid) to anon, authenticated, service_role;
+
+create or replace function public.is_public_active_form(target_form_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.forms f
+    join public.profiles p on p.id = f.author_id
+    where f.id = target_form_id
+      and f.is_public = true
+      and (f.deadline_at is null or f.deadline_at > now())
+      and p.is_disabled = false
+  );
+$$;
+
+revoke all on function public.is_public_active_form(uuid) from public;
+grant execute on function public.is_public_active_form(uuid) to anon, authenticated, service_role;
 
 create or replace trigger on_auth_user_created
 after insert on auth.users
@@ -161,12 +327,14 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  effective_limit integer := least(coalesce(new.max_responses, 100000), 100000);
 begin
   if new.max_responses is not null and new.max_responses < new.responses_count then
     raise exception 'Лимит ответов не может быть меньше количества уже полученных ответов' using errcode = '23514';
   end if;
 
-  if new.max_responses is not null and new.responses_count >= new.max_responses then
+  if new.responses_count >= effective_limit then
     if tg_op = 'UPDATE' then
       if old.is_public = false and new.is_public = true then
         raise exception 'Сначала уберите или повысьте лимит ответов' using errcode = '23514';
@@ -190,37 +358,26 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  form_exists boolean;
 begin
+  if exists (
+    select 1 from public.responses r
+    where r.form_id = new.form_id and r.submission_id = new.submission_id
+  ) then
+    return new;
+  end if;
+
   update public.forms f
-  set responses_count = f.responses_count + 1,
-      is_public = case
-        when f.max_responses is not null and f.responses_count + 1 >= f.max_responses then false
-        else f.is_public
-      end
+  set responses_count = f.responses_count + 1
   where f.id = new.form_id
-    and (
-      f.max_responses is null
-      or f.responses_count < f.max_responses
-    );
+    and f.responses_count < least(coalesce(f.max_responses, 100000), 100000);
 
   if found then
     return new;
   end if;
 
-  select exists (
-    select 1
-    from public.forms f
-    where f.id = new.form_id
-  )
-  into form_exists;
-
-  if not form_exists then
-    return new;
+  if exists (select 1 from public.forms f where f.id = new.form_id) then
+    raise exception 'Достигнут лимит ответов для формы' using errcode = '23514';
   end if;
-
-  raise exception 'Достигнут лимит ответов для формы' using errcode = '23514';
 
   return new;
 end;
@@ -229,6 +386,26 @@ $$;
 create or replace trigger responses_form_limit
 before insert on public.responses
 for each row execute procedure public.ensure_form_response_limit();
+
+create or replace function public.increment_form_response_count()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.forms f
+  set is_public = false
+  where f.id = new.form_id
+    and f.responses_count >= least(coalesce(f.max_responses, 100000), 100000);
+
+  return new;
+end;
+$$;
+
+create or replace trigger responses_form_count_increment
+after insert on public.responses
+for each row execute procedure public.increment_form_response_count();
 
 create or replace function public.decrement_form_response_count()
 returns trigger
@@ -265,6 +442,41 @@ create or replace trigger responses_set_user_id
 before insert on public.responses
 for each row execute procedure public.set_response_user_id();
 
+create or replace function public.sync_response_file_references()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  candidate_path text;
+begin
+  if tg_op = 'UPDATE' then
+    delete from public.response_file_references where response_id = new.id;
+  end if;
+
+  for candidate_path in
+    select distinct scalar #>> '{}'
+    from jsonb_path_query(new.data, '$.** ? (@.type() == "string")', '{}'::jsonb, true) scalar
+  loop
+    if length(candidate_path) <= 1024
+      and split_part(candidate_path, '/', 2) = new.form_id::text
+      and candidate_path ~* '^(public|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[^/]+$'
+    then
+      insert into public.response_file_references (response_id, form_id, object_path)
+      values (new.id, new.form_id, candidate_path)
+      on conflict do nothing;
+    end if;
+  end loop;
+
+  return new;
+end;
+$$;
+
+create trigger responses_sync_file_references
+after insert or update of data, form_id on public.responses
+for each row execute procedure public.sync_response_file_references();
+
 create or replace function public.is_public_active_admin_authored_form(target_form_id uuid)
 returns boolean
 language sql
@@ -280,6 +492,7 @@ as $$
       and f.is_public = true
       and (f.deadline_at is null or f.deadline_at > now())
       and p.role = 'admin'
+      and p.is_disabled = false
   );
 $$;
 
@@ -344,13 +557,18 @@ grant usage on schema extensions to anon, authenticated, service_role;
 
 grant select on table public.profiles to authenticated;
 grant select on table public.forms to anon;
-grant select, insert on table public.forms to authenticated;
+grant select on table public.forms to authenticated;
+grant insert (id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, author_id)
+  on table public.forms to authenticated;
 revoke delete on table public.forms from authenticated;
 revoke update on table public.forms from authenticated;
-grant update (title, schema, form_type, form_reason, is_public, deadline_at, max_responses) on table public.forms to authenticated;
-grant insert on table public.responses to anon;
-grant select, insert on table public.responses to authenticated;
+grant update (title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses) on table public.forms to authenticated;
+grant insert (form_id, submission_id, data) on table public.responses to anon;
+grant select on table public.responses to authenticated;
+grant insert (form_id, submission_id, data) on table public.responses to authenticated;
 grant select, insert, update, delete on table public.profiles, public.forms, public.responses to service_role;
+revoke all on table public.response_file_references from anon, authenticated;
+grant select, insert, update, delete on table public.response_file_references to service_role;
 
 -- =========================
 -- PROFILES (БЕЗ RECURSION)
@@ -361,8 +579,8 @@ on public.profiles
 for select
 to authenticated
 using (
-  id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
+  (select public.request_is_enabled())
+  and (id = (select auth.uid()) OR (select public.request_role()) = 'admin')
 );
 
 create policy "profiles_update_own_or_admin"
@@ -370,13 +588,12 @@ on public.profiles
 for update
 to authenticated
 using (
-  id = (select auth.uid())
-  or (select public.request_role()) = 'admin'
+  (select public.request_is_enabled())
+  and (id = (select auth.uid()) or (select public.request_role()) = 'admin')
 )
 with check (
-  id = (select auth.uid())
-  or
-  (select public.request_role()) = 'admin'
+  (select public.request_is_enabled())
+  and (id = (select auth.uid()) or (select public.request_role()) = 'admin')
 );
 
 revoke update on table public.profiles from authenticated;
@@ -390,34 +607,40 @@ create policy "forms_select"
 on public.forms
 for select
 to authenticated
-using (true);
+using (
+  (select public.request_is_enabled())
+  and (
+    author_id = (select auth.uid())
+    or (select public.request_role()) = 'admin'
+    or public.is_public_active_form(id)
+  )
+);
 
 create policy "forms_select_anon"
 on public.forms
 for select
 to anon
 using (
-  is_public = true
-  and (deadline_at is null or deadline_at > now())
+  public.is_public_active_form(id)
 );
 
 create policy "forms_insert"
 on public.forms
 for insert
 to authenticated
-with check (author_id = (select auth.uid()));
+with check ((select public.request_is_enabled()) and author_id = (select auth.uid()));
 
 create policy "forms_update"
 on public.forms
 for update
 to authenticated
 using (
-  author_id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
+  (select public.request_is_enabled())
+  and (author_id = (select auth.uid()) OR (select public.request_role()) = 'admin')
 )
 with check (
-  author_id = (select auth.uid())
-  OR (select public.request_role()) = 'admin'
+  (select public.request_is_enabled())
+  and (author_id = (select auth.uid()) OR (select public.request_role()) = 'admin')
 );
 
 -- =========================
@@ -429,14 +652,17 @@ on public.responses
 for select
 to authenticated
 using (
-  (select public.request_role()) = 'admin'
-  OR exists (
-    select 1
-    from public.forms f
-    where f.id = form_id
-      and f.author_id = (select auth.uid())
+  (select public.request_is_enabled())
+  and (
+    (select public.request_role()) = 'admin'
+    OR exists (
+      select 1
+      from public.forms f
+      where f.id = form_id
+        and f.author_id = (select auth.uid())
+    )
+    OR public.is_public_active_admin_authored_form(form_id)
   )
-  OR public.is_public_active_admin_authored_form(form_id)
 );
 
 create policy "responses_insert"
@@ -444,18 +670,306 @@ on public.responses
 for insert
 to authenticated, anon
 with check (
-  (
+  ((select auth.uid()) is null or (select public.request_is_enabled()))
+  and (
     user_id is null
     or user_id = (select auth.uid())
   )
-  and exists (
-    select 1
-    from public.forms f
-    where f.id = form_id
-      and f.is_public = true
-      and (f.deadline_at is null or f.deadline_at > now())
+  and (
+    public.is_public_active_form(form_id)
+    or public.is_existing_response_submission(form_id, submission_id, (select auth.uid()))
   )
 );
+
+-- =========================
+-- PRIVATE SURVEY FILES
+-- =========================
+
+create or replace function public.can_upload_survey_file(
+  object_name text,
+  anonymous_request boolean,
+  object_size bigint
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  path_parts text[] := string_to_array(object_name, '/');
+  target_form_id uuid;
+  existing_count bigint;
+  existing_bytes bigint;
+begin
+  if array_length(path_parts, 1) <> 3
+    or length(path_parts[3]) > 512
+    or object_size < 0
+    or object_size > 10485760
+  then
+    return false;
+  end if;
+
+  if anonymous_request then
+    if auth.uid() is not null or path_parts[1] <> 'public' then return false; end if;
+  else
+    if not public.request_is_enabled() or path_parts[1] <> auth.uid()::text then return false; end if;
+  end if;
+
+  begin
+    target_form_id := path_parts[2]::uuid;
+  exception when invalid_text_representation then
+    return false;
+  end;
+
+  if not exists (
+    select 1 from public.forms f
+    where f.id = target_form_id
+      and (
+        public.is_public_active_form(f.id)
+        or (not anonymous_request and (f.author_id = auth.uid() or public.request_role() = 'admin'))
+      )
+  ) then
+    return false;
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('survey-files/' || target_form_id::text, 0));
+
+  select count(*), coalesce(sum(
+    case
+      when coalesce(o.metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
+        then least((o.metadata ->> 'size')::numeric, 10485760)::bigint
+      else 10485760
+    end
+  ), 0)
+  into existing_count, existing_bytes
+  from storage.objects o
+  where o.bucket_id = 'survey-files'
+    and split_part(o.name, '/', 2) = target_form_id::text;
+
+  return existing_count < 2000
+    and existing_bytes + object_size <= 2147483648;
+end;
+$$;
+
+create or replace function public.can_read_survey_file(object_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  path_parts text[] := string_to_array(object_name, '/');
+  target_form_id uuid;
+begin
+  if not public.request_is_enabled() or array_length(path_parts, 1) <> 3 then return false; end if;
+  if path_parts[1] = auth.uid()::text then return true; end if;
+
+  begin
+    target_form_id := path_parts[2]::uuid;
+  exception when invalid_text_representation then
+    return false;
+  end;
+
+  return exists (
+    select 1 from public.forms f
+    where f.id = target_form_id
+      and (
+        f.author_id = auth.uid()
+        or public.request_role() = 'admin'
+        or (
+          public.is_public_active_admin_authored_form(f.id)
+          and exists (
+            select 1 from public.response_file_references rf
+            where rf.form_id = f.id and rf.object_path = object_name
+          )
+        )
+      )
+  );
+end;
+$$;
+
+create or replace function public.can_delete_survey_file(object_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  path_parts text[] := string_to_array(object_name, '/');
+begin
+  if not public.request_is_enabled()
+    or array_length(path_parts, 1) <> 3
+    or path_parts[1] <> auth.uid()::text
+  then
+    return false;
+  end if;
+
+  return not exists (
+    select 1 from public.response_file_references rf
+    where rf.object_path = object_name
+  );
+end;
+$$;
+
+create or replace function public.is_survey_file_referenced(object_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.response_file_references rf
+    where rf.object_path = object_name
+  );
+$$;
+
+revoke all on function public.is_survey_file_referenced(text) from public;
+grant execute on function public.is_survey_file_referenced(text) to service_role;
+
+create or replace function public.list_orphan_survey_files(
+  cutoff timestamptz default (now() - interval '24 hours'),
+  batch_limit integer default 500
+)
+returns table (name text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select o.name
+  from storage.objects o
+  where o.bucket_id = 'survey-files'
+    and o.name like 'public/%'
+    and o.created_at < cutoff
+    and not exists (
+      select 1 from public.response_file_references rf
+      where rf.object_path = o.name
+    )
+  order by o.created_at, o.id
+  limit least(greatest(batch_limit, 1), 1000);
+$$;
+
+revoke all on function public.can_upload_survey_file(text, boolean, bigint) from public;
+revoke all on function public.can_read_survey_file(text) from public;
+revoke all on function public.can_delete_survey_file(text) from public;
+revoke all on function public.is_survey_file_referenced(text) from public;
+revoke all on function public.list_orphan_survey_files(timestamptz, integer) from public;
+grant execute on function public.can_upload_survey_file(text, boolean, bigint) to anon, authenticated, service_role;
+grant execute on function public.can_read_survey_file(text) to authenticated, service_role;
+grant execute on function public.can_delete_survey_file(text) to authenticated, service_role;
+grant execute on function public.is_survey_file_referenced(text) to service_role;
+grant execute on function public.list_orphan_survey_files(timestamptz, integer) to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('survey-files', 'survey-files', false, 10485760)
+on conflict (id) do update
+set public = excluded.public, file_size_limit = excluded.file_size_limit;
+
+create policy "survey_files_authenticated_upload" on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'survey-files'
+  and public.can_upload_survey_file(
+    name,
+    false,
+    case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
+      then least((metadata ->> 'size')::numeric, 10485760)::bigint
+      else 0
+    end
+  )
+);
+
+create policy "survey_files_public_upload" on storage.objects
+for insert to anon
+with check (
+  bucket_id = 'survey-files'
+  and public.can_upload_survey_file(
+    name,
+    true,
+    case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
+      then least((metadata ->> 'size')::numeric, 10485760)::bigint
+      else 0
+    end
+  )
+);
+
+create policy "survey_files_authenticated_read" on storage.objects
+for select to authenticated
+using (bucket_id = 'survey-files' and public.can_read_survey_file(name));
+
+create policy "survey_files_authenticated_delete" on storage.objects
+for delete to authenticated
+using (bucket_id = 'survey-files' and public.can_delete_survey_file(name));
+
+create or replace function public.can_manage_survey_asset(object_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  path_parts text[] := string_to_array(object_name, '/');
+  target_form_id uuid;
+begin
+  if not public.request_is_enabled()
+    or array_length(path_parts, 1) <> 4
+    or path_parts[1] <> 'forms'
+    or (path_parts[3] <> auth.uid()::text and public.request_role() <> 'admin')
+    or path_parts[4] !~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$'
+  then
+    return false;
+  end if;
+
+  begin
+    target_form_id := path_parts[2]::uuid;
+  exception when invalid_text_representation then
+    return false;
+  end;
+
+  return path_parts[3] = auth.uid()::text
+    or public.request_role() = 'admin'
+    or exists (
+      select 1 from public.forms f
+      where f.id = target_form_id and f.author_id = auth.uid()
+    );
+end;
+$$;
+
+revoke all on function public.can_manage_survey_asset(text) from public;
+grant execute on function public.can_manage_survey_asset(text) to authenticated, service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'survey-assets',
+  'survey-assets',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "survey_assets_authenticated_read" on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'survey-assets'
+  and (name like 'gallery/%' or public.can_manage_survey_asset(name))
+);
+
+create policy "survey_assets_authenticated_upload" on storage.objects
+for insert to authenticated
+with check (bucket_id = 'survey-assets' and public.can_manage_survey_asset(name));
+
+create policy "survey_assets_authenticated_delete" on storage.objects
+for delete to authenticated
+using (bucket_id = 'survey-assets' and public.can_manage_survey_asset(name));
 
 -- =========================
 -- INDEXES
@@ -466,6 +980,8 @@ create index idx_forms_created_at_id on public.forms(created_at desc, id desc);
 create index idx_forms_author_created_at_id on public.forms(author_id, created_at desc, id desc);
 create index idx_responses_form_id on public.responses(form_id);
 create index idx_responses_form_created_at_id on public.responses(form_id, created_at desc, id desc);
+create unique index idx_responses_form_submission_id on public.responses(form_id, submission_id);
+create index idx_response_file_references_object_form on public.response_file_references(object_path, form_id);
 create index idx_forms_title_trgm on public.forms using gin (title extensions.gin_trgm_ops);
 create index idx_forms_author_name_trgm on public.forms using gin (author_name extensions.gin_trgm_ops);
 

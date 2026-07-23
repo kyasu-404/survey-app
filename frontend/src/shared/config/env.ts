@@ -15,11 +15,10 @@ function readRequiredEnv(value: string | undefined, name: string) {
 export function resolveSupabaseUrl(
   configuredUrl: string,
   currentLocationHref?: string,
-  isDev = import.meta.env.DEV,
 ) {
   const normalizedConfiguredUrl = trimTrailingSlash(configuredUrl);
 
-  if (!isDev || !currentLocationHref) {
+  if (!currentLocationHref) {
     return normalizedConfiguredUrl;
   }
 

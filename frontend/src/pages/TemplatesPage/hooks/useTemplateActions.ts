@@ -121,10 +121,15 @@ export function useTemplateActions(userId: string | undefined) {
     try {
       const fullTemplate = await ensureTemplateDetails(template.id);
 
-      saveSurveyBuilderDraft(undefined, {
-        ...fullTemplate.schema,
-        title: fullTemplate.title,
-      });
+      saveSurveyBuilderDraft(
+        userId,
+        undefined,
+        {
+          ...fullTemplate.schema,
+          title: fullTemplate.title,
+        },
+        fullTemplate.theme,
+      );
       showToast("Шаблон загружен в конструктор", "success");
       navigate(routes.builder);
     } catch (error) {

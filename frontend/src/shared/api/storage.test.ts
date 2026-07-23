@@ -18,6 +18,9 @@ vi.mock("./client", () => ({
     },
   },
   publicSupabaseClient: {
+    functions: {
+      invoke: vi.fn(),
+    },
     storage: {
       from: vi.fn(),
     },
@@ -137,29 +140,39 @@ describe("storage api", () => {
     );
   });
 
-  it("rejects client-side deletion of anonymous public-form files", async () => {
-    const remove = vi.fn().mockResolvedValue({ error: null });
-
+  it("allows deletion of a known anonymous upload only within the same form prefix", async () => {
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
       data: { user: null },
       error: new AuthApiError("Invalid Refresh Token: Refresh Token Not Found", 400, "invalid_refresh_token"),
     } as never);
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ remove } as never);
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { success: true }, error: null } as never);
+
+    await removeFileFromStorage("public/form-1/file-id.txt", {
+      allowAnonymous: true,
+      formId: "form-1",
+    });
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", {
+      body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt" },
+    });
 
     await expect(
-      removeFileFromStorage("public/form-1/file-id.txt", {
-        allowAnonymous: true,
-        formId: "form-1",
-      }),
-    ).rejects.toThrow("Публичные файлы удаляются только сервером");
-
-    expect(remove).not.toHaveBeenCalled();
+      removeFileFromStorage("public/form-2/file-id.txt", { allowAnonymous: true, formId: "form-1" }),
+    ).rejects.toThrow("Нельзя удалить публичный файл другой формы");
   });
 
   it("extracts raw storage paths from file values stored in responses", () => {
-    expect(getStoragePathFromSurveyFileValue("public/form-1/file-id.txt")).toBe("public/form-1/file-id.txt");
-    expect(getStoragePathFromSurveyFileValue({ content: "public/form-1/file-id.txt" })).toBe(
-      "public/form-1/file-id.txt",
+    const formId = "10000000-0000-4000-8000-000000000000";
+    expect(getStoragePathFromSurveyFileValue(`public/${formId}/file-id.txt`)).toBe(`public/${formId}/file-id.txt`);
+    expect(getStoragePathFromSurveyFileValue({ content: `public/${formId}/file-id.txt` })).toBe(
+      `public/${formId}/file-id.txt`,
+    );
+  });
+
+  it("rejects external URLs and malformed paths from stored response data", async () => {
+    expect(getStoragePathFromSurveyFileValue("https://attacker.test/object/sign/survey-files/public/form/file.txt")).toBeNull();
+    expect(getStoragePathFromSurveyFileValue({ storagePath: "../private/file.txt" })).toBeNull();
+    await expect(resolveSurveyFileValueContent({ content: "https://attacker.test/tracker" })).rejects.toThrow(
+      "Не удалось определить содержимое файла",
     );
   });
 
@@ -175,10 +188,10 @@ describe("storage api", () => {
       vi.fn().mockResolvedValue(new Response("hello", { headers: { "Content-Type": "text/plain" } })),
     );
 
-    await expect(resolveSurveyFileValueContent({ content: "public/form-1/file-id.txt" })).resolves.toBe(
+    await expect(resolveSurveyFileValueContent({ content: "public/10000000-0000-4000-8000-000000000000/file-id.txt" })).resolves.toBe(
       "data:text/plain;base64,aGVsbG8=",
     );
-    expect(createSignedUrl).toHaveBeenCalledWith("public/form-1/file-id.txt", expect.any(Number));
+    expect(createSignedUrl).toHaveBeenCalledWith("public/10000000-0000-4000-8000-000000000000/file-id.txt", expect.any(Number));
   });
 
   it("returns storage files as data URLs so SurveyJS downloads keep binary bytes intact", async () => {
@@ -199,7 +212,7 @@ describe("storage api", () => {
       ),
     );
 
-    await expect(resolveSurveyFileValueContent({ content: "public/form-1/file-id.xlsx" })).resolves.toBe(
+    await expect(resolveSurveyFileValueContent({ content: "public/10000000-0000-4000-8000-000000000000/file-id.xlsx" })).resolves.toBe(
       "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBAD/",
     );
   });

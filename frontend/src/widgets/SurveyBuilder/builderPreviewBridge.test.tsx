@@ -1,7 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptySurveySchema } from "../../entities/survey/model/surveyModel";
+import { DEFAULT_SURVEY_THEME } from "../../entities/survey/model/surveyTheme";
 import type { SurveySchema } from "../../entities/survey/types";
+import type { ITheme } from "survey-core";
 import {
   BUILDER_PREVIEW_COMPONENT_NAME,
   BuilderPreviewTab,
@@ -32,13 +34,15 @@ vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
     formId,
     renderMode,
     schema,
+    theme,
   }: {
     formId: string;
     renderMode?: string;
     schema: SurveySchema;
+    theme?: ITheme;
   }) => (
     <div data-testid="builder-preview-renderer">
-      {formId}|{renderMode}|{schema.pages.length}
+      {formId}|{renderMode}|{schema.pages.length}|{theme?.themeName}
     </div>
   ),
 }));
@@ -46,6 +50,7 @@ vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
 function resetBuilderPreviewBridge() {
   updateBuilderPreviewBridge({
     previewSchema: createEmptySurveySchema(),
+    previewTheme: DEFAULT_SURVEY_THEME,
     formId: undefined,
   });
 }
@@ -92,6 +97,7 @@ describe("builder preview bridge", () => {
     expect(getBuilderPreviewSnapshot()).toEqual({
       formId: "form-1",
       previewSchema,
+      previewTheme: DEFAULT_SURVEY_THEME,
     });
     expect(getBuilderPreviewSnapshot()).not.toHaveProperty("splitCreator");
   });
@@ -105,7 +111,7 @@ describe("builder preview bridge", () => {
     expect(previewTab).toHaveClass("builder-preview-tab-shell", "survey-page", "survey-page-shell");
     expect(previewSurface).toHaveClass("survey-page-card", "card", "builder-preview-tab-surface");
     expect(screen.getByTestId("builder-preview-renderer")).toHaveTextContent(
-      "__builder_preview__|readonly-navigable|1",
+      "__builder_preview__|readonly-navigable|1|defaultV2",
     );
     expect(screen.queryByLabelText("Редактор формы")).not.toBeInTheDocument();
     expect(screen.queryByText("Редактор загружается")).not.toBeInTheDocument();
@@ -134,7 +140,9 @@ describe("builder preview bridge", () => {
       });
     });
 
-    expect(screen.getByTestId("builder-preview-renderer")).toHaveTextContent("form-9|readonly-navigable|2");
+    expect(screen.getByTestId("builder-preview-renderer")).toHaveTextContent(
+      "form-9|readonly-navigable|2|defaultV2",
+    );
   });
 
   it("registers the runtime preview tab only once", () => {

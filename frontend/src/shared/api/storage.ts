@@ -1,10 +1,11 @@
 import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { publicSupabaseClient, supabaseClient } from "./client";
 import { runRequest } from "./request";
-import { SUPABASE_STORAGE_BUCKET } from "../config/env";
+import { SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const PUBLIC_STORAGE_PREFIX = "public";
+const MAX_STORAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 type StorageAuthOptions = {
   allowAnonymous?: boolean;
@@ -91,13 +92,23 @@ function looksLikeStoragePath(value: string) {
     new URL(value);
     return false;
   } catch {
-    return value.split("/").filter(Boolean).length >= 3;
+    const parts = value.split("/");
+    return (
+      parts.length === 3
+      && parts.every((part) => part.length > 0)
+      && parts[2].length <= 512
+      && (parts[0] === PUBLIC_STORAGE_PREFIX || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[0]))
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[1])
+    );
   }
 }
 
 function assertDeletablePath(path: string, userId: string | null, options: RemoveFileFromStorageOptions) {
   if (path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
-    throw new Error("Публичные файлы удаляются только сервером");
+    if (options.allowAnonymous && options.formId && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/${options.formId}/`)) {
+      return;
+    }
+    throw new Error("Нельзя удалить публичный файл другой формы");
   }
 
   if (userId && path.startsWith(`${userId}/`)) {
@@ -120,6 +131,9 @@ function assertDeletablePath(path: string, userId: string | null, options: Remov
 function getStoragePathByUrl(url: string) {
   try {
     const parsedUrl = new URL(url);
+    if (parsedUrl.origin !== new URL(SUPABASE_URL).origin || parsedUrl.username || parsedUrl.password) {
+      return null;
+    }
     const marker = parsedUrl.pathname.includes("/object/sign/") ? "/object/sign/" : "/object/public/";
     const markerIndex = parsedUrl.pathname.indexOf(marker);
 
@@ -134,7 +148,9 @@ function getStoragePathByUrl(url: string) {
       return null;
     }
 
-    return decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
+    const bucket = decodeURIComponent(pathWithBucket.slice(0, firstSlash));
+    const path = decodeURIComponent(pathWithBucket.slice(firstSlash + 1));
+    return bucket === SUPABASE_STORAGE_BUCKET && looksLikeStoragePath(path) ? path : null;
   } catch {
     return null;
   }
@@ -152,11 +168,11 @@ export function getStoragePathFromSurveyFileValue(value: unknown) {
   const fileValue = value as { content?: unknown; path?: unknown; storagePath?: unknown };
 
   if (typeof fileValue.storagePath === "string") {
-    return fileValue.storagePath;
+    return looksLikeStoragePath(fileValue.storagePath) ? fileValue.storagePath : null;
   }
 
   if (typeof fileValue.path === "string") {
-    return fileValue.path;
+    return looksLikeStoragePath(fileValue.path) ? fileValue.path : null;
   }
 
   if (typeof fileValue.content === "string") {
@@ -230,18 +246,14 @@ export async function resolveSurveyFileValueContent(value: unknown) {
     return fetchStorageFileAsDataUrl(storagePath);
   }
 
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (value && typeof value === "object" && "content" in value && typeof value.content === "string") {
-    return value.content;
-  }
-
   throw new Error("Не удалось определить содержимое файла");
 }
 
 export async function uploadFileToStorage(formId: string, file: File, options: UploadFileToStorageOptions = {}) {
+  if (file.size > MAX_STORAGE_FILE_SIZE_BYTES) {
+    throw new Error("Размер файла превышает допустимые 10 МБ");
+  }
+
   const currentUserId = await getCurrentUserId(options);
 
   if (!currentUserId && !options.allowAnonymous) {
@@ -284,6 +296,20 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
 export async function removeFileFromStorage(path: string, options: RemoveFileFromStorageOptions = {}) {
   const currentUserId = await getCurrentUserId(options);
   assertDeletablePath(path, currentUserId, options);
+
+  if (path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
+    const { error } = await runRequest(
+      "storage.removeAnonymousUpload",
+      () => publicSupabaseClient.functions.invoke("form-admin", {
+        body: { action: "delete-upload", formId: options.formId, path },
+      }),
+      { context: { bucket: SUPABASE_STORAGE_BUCKET, formId: options.formId ?? null } },
+    );
+    if (error) {
+      throw new Error(`Не удалось удалить файл: ${error.message}`);
+    }
+    return;
+  }
 
   const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
   const { error } = await runRequest(

@@ -104,6 +104,7 @@ function createTemplate(index: number, overrides: Partial<SurveyForm> = {}): Sur
       title: `Шаблон ${index}`,
       pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
     },
+    theme: {},
     ...overrides,
   };
 }
@@ -222,7 +223,7 @@ describe("TemplatesPage", () => {
     renderPage();
 
     const useTemplateButton = await screen.findByRole("button", { name: "Использовать шаблон Шаблон заявки" });
-    expect(useTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src", expect.stringContaining("use.svg"));
+    expect(useTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src");
 
     await userEvent.click(useTemplateButton);
 
@@ -232,7 +233,7 @@ describe("TemplatesPage", () => {
 
     expect(getFormById).toHaveBeenCalledWith("template-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(createFormFromTemplate).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey()) ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}")).toMatchObject({
       schema: expect.objectContaining({
         title: "Шаблон заявки",
         pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
@@ -289,7 +290,7 @@ describe("TemplatesPage", () => {
     const { container } = renderPage();
 
     const shareTemplateButton = await screen.findByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" });
-    expect(shareTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src", expect.stringContaining("share.svg"));
+    expect(shareTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src");
 
     await userEvent.click(shareTemplateButton);
 

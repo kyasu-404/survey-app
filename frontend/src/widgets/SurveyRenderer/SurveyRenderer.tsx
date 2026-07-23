@@ -1,8 +1,10 @@
 import type { SurveySchema } from "../../entities/survey/types";
+import type { ITheme } from "survey-core";
 import { SurveyFormRenderer, type SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
 
 type SurveyRendererProps = {
   schema: SurveySchema;
+  theme?: ITheme;
   formId: string;
   respondentId?: string;
   initialData?: Record<string, unknown>;
@@ -14,6 +16,7 @@ type SurveyRendererProps = {
 
 export function SurveyRenderer({
   schema,
+  theme,
   formId,
   respondentId,
   initialData,
@@ -25,6 +28,7 @@ export function SurveyRenderer({
   return (
     <SurveyFormRenderer
       schema={schema}
+      theme={theme}
       formId={formId}
       respondentId={respondentId}
       initialData={initialData}

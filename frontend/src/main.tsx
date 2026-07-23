@@ -11,13 +11,13 @@ import './app.css'
 initializeObservability();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <QueryProvider>
-    <AuthProvider>
-      <ToastProvider>
-        <AppErrorBoundary>
+  <AppErrorBoundary>
+    <QueryProvider>
+      <AuthProvider>
+        <ToastProvider>
           <RouterProvider router={router} />
-        </AppErrorBoundary>
-      </ToastProvider>
-    </AuthProvider>
-  </QueryProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </QueryProvider>
+  </AppErrorBoundary>
 );

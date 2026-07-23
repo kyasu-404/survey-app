@@ -30,11 +30,16 @@ function assertCspDirectiveIncludes(directives, name, ...requiredValues) {
   }
 }
 
-test("Dockerfile builds a production image on Node 20 and serves static assets", () => {
-  assert.match(dockerfile, /FROM node:20(?:\.\d+)?-alpine AS build/i);
+test("Dockerfile builds a production image on supported Node 22 and serves static assets", () => {
+  assert.match(dockerfile, /FROM node:22(?:\.\d+)?-alpine@sha256:[a-f0-9]{64} AS build/i);
   assert.match(dockerfile, /RUN npm ci/);
-  assert.match(dockerfile, /RUN npm run build/);
-  assert.match(dockerfile, /FROM nginx:/i);
+  assert.match(dockerfile, /ARG VITE_SUPABASE_URL/);
+  assert.match(dockerfile, /test -n "\$VITE_SUPABASE_URL"/);
+  assert.doesNotMatch(dockerfile, /^(?:ARG|ENV)\s+VITE_SUPABASE_ANON_KEY/im);
+  assert.doesNotMatch(dockerfile, /^(?:ARG|ENV)\s+VITE_PUBLIC_SUPABASE_ANON_KEY/im);
+  assert.match(dockerfile, /--mount=type=secret,id=supabase_anon_key,required=true/);
+  assert.match(dockerfile, /VITE_SUPABASE_ANON_KEY="\$\(cat \/run\/secrets\/supabase_anon_key\)" npm run build/);
+  assert.match(dockerfile, /FROM nginx:[^\s]+@sha256:[a-f0-9]{64}/i);
   assert.doesNotMatch(dockerfile, /npm run dev/);
 });
 
@@ -56,10 +61,19 @@ test("production nginx sends browser hardening security headers", () => {
   assertCspDirectiveIncludes(directives, "object-src", "'none'");
   assertCspDirectiveIncludes(directives, "frame-ancestors", "'none'");
   assertCspDirectiveIncludes(directives, "script-src", "'self'");
-  assertCspDirectiveIncludes(directives, "style-src", "'self'", "https://fonts.googleapis.com");
-  assertCspDirectiveIncludes(directives, "font-src", "'self'", "https://fonts.gstatic.com");
+  assertCspDirectiveIncludes(directives, "style-src", "'self'");
+  assertCspDirectiveIncludes(directives, "font-src", "'self'", "data:", "https://fonts.gstatic.com");
+  assert.ok(!directives.get("style-src")?.includes("https://fonts.googleapis.com"));
   assertCspDirectiveIncludes(directives, "img-src", "'self'", "data:", "blob:");
-  assertCspDirectiveIncludes(directives, "connect-src", "'self'", "https:", "wss:");
+  assertCspDirectiveIncludes(
+    directives,
+    "connect-src",
+    "'self'",
+    "http://$host:8000",
+    "ws://$host:8000",
+    "https:",
+    "wss:",
+  );
 
   assert.equal(readHeader(nginxConfig, "X-Frame-Options"), "DENY");
   assert.equal(readHeader(nginxConfig, "X-Content-Type-Options"), "nosniff");

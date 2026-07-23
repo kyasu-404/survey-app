@@ -133,6 +133,7 @@ export default function SurveyPage() {
         <Suspense fallback={<SurveyRendererFallback />}>
           <LazySurveyRenderer
             schema={form.schema}
+            theme={form.theme}
             formId={form.id}
             respondentId={user?.id}
             renderMode={renderMode}

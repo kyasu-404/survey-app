@@ -40,17 +40,13 @@ describe("defaultSurveyLogo", () => {
     });
   });
 
-  it("keeps custom logos untouched", () => {
+  it("removes remote custom logos before SurveyJS can load them", () => {
     const schema = {
       logo: "https://example.com/custom-logo.png",
       pages: [],
     } satisfies SurveySchema;
 
-    expect(resolveDefaultSurveyLogo(schema)).toMatchObject({
-      logo: "https://example.com/custom-logo.png",
-    });
-    expect(serializeDefaultSurveyLogo(schema)).toMatchObject({
-      logo: "https://example.com/custom-logo.png",
-    });
+    expect(resolveDefaultSurveyLogo(schema)).toEqual({ pages: [] });
+    expect(serializeDefaultSurveyLogo(schema)).toEqual({ pages: [] });
   });
 });

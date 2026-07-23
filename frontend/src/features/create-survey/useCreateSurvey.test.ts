@@ -34,6 +34,7 @@ describe("createSurveyForCurrentUser", () => {
       formType: "anketa",
       formReason: "plan",
       schema: { pages: [] },
+      theme: expect.any(Object),
       authorId: "user-1",
     });
   });
@@ -57,6 +58,7 @@ describe("createSurveyForCurrentUser", () => {
       formType: "template",
       formReason: "plan",
       schema: { pages: [] },
+      theme: expect.any(Object),
       authorId: "user-1",
       isPublic: false,
     });
@@ -90,6 +92,7 @@ describe("createSurveyForCurrentUser", () => {
       formType: "anketa",
       formReason: "plan",
       schema: { pages: [] },
+      theme: expect.any(Object),
       authorId: "user-1",
       isPublic: false,
     });

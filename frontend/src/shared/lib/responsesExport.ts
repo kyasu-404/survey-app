@@ -13,26 +13,42 @@ type ResponsesHtmlInput = {
 
 const RESPONSE_DATE_HEADER = "Дата ответа";
 const NESTED_QUESTION_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
+const MAX_EXPORT_VALUE_DEPTH = 32;
+const MAX_EXPORT_VALUE_NODES = 10_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
 function visitSurveyQuestion(value: unknown, visitor: (question: SurveyQuestion) => void) {
-  if (!isRecord(value)) {
-    return;
-  }
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+  let visitedNodes = 0;
 
-  if (typeof value.name === "string") {
-    visitor(value as SurveyQuestion);
-  }
-
-  NESTED_QUESTION_KEYS.forEach((key) => {
-    const nested = value[key];
-    if (Array.isArray(nested)) {
-      nested.forEach((item) => visitSurveyQuestion(item, visitor));
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || !isRecord(current.value)) {
+      continue;
     }
-  });
+
+    visitedNodes += 1;
+    if (current.depth > MAX_EXPORT_VALUE_DEPTH || visitedNodes > MAX_EXPORT_VALUE_NODES) {
+      return;
+    }
+
+    if (typeof current.value.name === "string") {
+      visitor(current.value as SurveyQuestion);
+    }
+
+    const currentValue = current.value;
+    NESTED_QUESTION_KEYS.forEach((key) => {
+      const nested = currentValue[key];
+      if (Array.isArray(nested)) {
+        for (let index = nested.length - 1; index >= 0; index -= 1) {
+          pending.push({ value: nested[index], depth: current.depth + 1 });
+        }
+      }
+    });
+  }
 }
 
 function getQuestionMeta(schema: SurveySchema) {
@@ -74,11 +90,53 @@ function getQuestionMeta(schema: SurveySchema) {
     }
   };
 
-  schema.pages.forEach((page: SurveyPageSchema) => {
-    (page.elements ?? []).forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
+  const pages = Array.isArray(schema.pages) ? schema.pages : [];
+  pages.forEach((page: SurveyPageSchema) => {
+    const elements = Array.isArray(page?.elements) ? page.elements : [];
+    elements.forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
   });
 
   return { choiceMap, orderedNames, titleMap };
+}
+
+function isSafeExportValue(value: unknown) {
+  if (!isRecord(value)) {
+    return true;
+  }
+
+  const pending: Array<{ value: Record<string, unknown> | unknown[]; depth: number }> = [
+    { value: value as Record<string, unknown> | unknown[], depth: 0 },
+  ];
+  const visited = new WeakSet<object>();
+  let visitedNodes = 0;
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) {
+      continue;
+    }
+
+    if (visited.has(current.value)) {
+      return false;
+    }
+    visited.add(current.value);
+
+    visitedNodes += 1;
+    if (current.depth > MAX_EXPORT_VALUE_DEPTH || visitedNodes > MAX_EXPORT_VALUE_NODES) {
+      return false;
+    }
+
+    Object.values(current.value).forEach((nested) => {
+      if (isRecord(nested)) {
+        pending.push({
+          value: nested as Record<string, unknown> | unknown[],
+          depth: current.depth + 1,
+        });
+      }
+    });
+  }
+
+  return true;
 }
 
 function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>) {
@@ -114,7 +172,15 @@ function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<
       return value.name;
     }
 
-    return JSON.stringify(value);
+    if (!isSafeExportValue(value)) {
+      return "[Значение превышает допустимую сложность]";
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[Не удалось отобразить значение]";
+    }
   }
 
   return String(value);

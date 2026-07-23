@@ -1,3 +1,5 @@
+import type { ITheme } from "survey-core";
+
 export type SurveyQuestion = {
   type: string;
   name: string;
@@ -45,13 +47,14 @@ export type SurveyForm = {
   max_responses?: number | null;
   author_id: string;
   schema: SurveySchema;
+  theme: ITheme;
   created_at: string;
   author_email?: string | null;
   author_name?: string | null;
   responses_count?: number;
 };
 
-export type SurveyFormSummary = Omit<SurveyForm, "schema">;
+export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme">;
 
 export type PaginatedSurveyFormSummaries = {
   items: SurveyFormSummary[];

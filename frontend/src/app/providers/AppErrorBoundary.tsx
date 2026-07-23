@@ -26,12 +26,17 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     });
   }
 
+  private reloadPage = () => {
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="card" style={{ padding: 20, margin: 20 }}>
           <h2 style={{ marginTop: 0 }}>Что-то пошло не так</h2>
           <p>Произошла непредвиденная ошибка интерфейса. Обновите страницу и попробуйте снова.</p>
+          <button type="button" onClick={this.reloadPage}>Перезагрузить приложение</button>
         </div>
       );
     }

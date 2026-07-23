@@ -1,4 +1,5 @@
 import type { SurveySchema } from "../types";
+import { sanitizeSurveySchema } from "./surveySchemaSecurity";
 
 type JsonObject = Record<string, unknown>;
 
@@ -58,7 +59,7 @@ function visitElements(elements: unknown[]) {
 }
 
 export function normalizeSurveyQuestionNumbers<T extends SurveySchema>(schema: T): T {
-  const normalizedSchema = JSON.parse(JSON.stringify(schema)) as T & SurveySchemaWithNumbering;
+  const normalizedSchema = sanitizeSurveySchema(schema) as T & SurveySchemaWithNumbering;
 
   normalizedSchema.showQuestionNumbers = false;
 

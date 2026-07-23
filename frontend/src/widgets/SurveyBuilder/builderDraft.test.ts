@@ -8,52 +8,46 @@ import {
 } from "./builderDraft";
 
 const schema: SurveySchema = {
-  pages: [
-    {
-      name: "page-1",
-      elements: [],
-    },
-  ],
+  pages: [{ name: "page-1", elements: [] }],
 };
 
 describe("builderDraft", () => {
   afterEach(() => {
     window.localStorage.clear();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("builds distinct localStorage keys for new and existing forms", () => {
-    expect(getSurveyBuilderDraftStorageKey()).toBe("survey-builder:draft:new");
-    expect(getSurveyBuilderDraftStorageKey("form-42")).toBe("survey-builder:draft:form-42");
+  it("scopes keys by user and form", () => {
+    expect(getSurveyBuilderDraftStorageKey("user-1")).toBe("survey-builder:draft:user-1:new");
+    expect(getSurveyBuilderDraftStorageKey("user-2", "form-42")).toBe("survey-builder:draft:user-2:form-42");
   });
 
-  it("saves and restores the current draft payload for a new form", () => {
-    saveSurveyBuilderDraft(undefined, schema);
-
-    expect(loadSurveyBuilderDraft()).toEqual(schema);
+  it("does not expose a draft to another account", () => {
+    saveSurveyBuilderDraft("user-1", undefined, schema);
+    expect(loadSurveyBuilderDraft("user-1")).toMatchObject({ schema, theme: expect.any(Object) });
+    expect(loadSurveyBuilderDraft("user-2")).toBeNull();
   });
 
-  it("restores legacy drafts that stored the schema directly", () => {
-    window.localStorage.setItem(getSurveyBuilderDraftStorageKey("form-9"), JSON.stringify(schema));
-
-    expect(loadSurveyBuilderDraft("form-9")).toEqual(schema);
+  it("deletes rather than restores a legacy unscoped draft", () => {
+    window.localStorage.setItem("survey-builder:draft:form-9", JSON.stringify(schema));
+    expect(loadSurveyBuilderDraft("user-1", "form-9")).toBeNull();
+    expect(window.localStorage.getItem("survey-builder:draft:form-9")).toBeNull();
   });
 
-  it("returns null and warns when draft JSON is corrupted", () => {
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    window.localStorage.setItem(getSurveyBuilderDraftStorageKey(), "{broken");
-
-    expect(loadSurveyBuilderDraft()).toBeNull();
-    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+  it("removes expired drafts", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    saveSurveyBuilderDraft("user-1", undefined, schema);
+    vi.setSystemTime(new Date("2026-01-09T00:00:00.000Z"));
+    expect(loadSurveyBuilderDraft("user-1")).toBeNull();
   });
 
-  it("clears only the requested draft key", () => {
-    saveSurveyBuilderDraft(undefined, schema);
-    saveSurveyBuilderDraft("form-7", schema);
-
-    clearSurveyBuilderDraft("form-7");
-
-    expect(loadSurveyBuilderDraft("form-7")).toBeNull();
-    expect(loadSurveyBuilderDraft()).toEqual(schema);
+  it("clears only the requested owner draft", () => {
+    saveSurveyBuilderDraft("user-1", "form-7", schema);
+    saveSurveyBuilderDraft("user-2", "form-7", schema);
+    clearSurveyBuilderDraft("user-1", "form-7");
+    expect(loadSurveyBuilderDraft("user-1", "form-7")).toBeNull();
+    expect(loadSurveyBuilderDraft("user-2", "form-7")).toMatchObject({ schema, theme: expect.any(Object) });
   });
 });

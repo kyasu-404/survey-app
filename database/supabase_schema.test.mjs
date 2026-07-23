@@ -7,14 +7,6 @@ const apiRoleGrantsMigration = readFileSync(
   new URL("./migrations/202604141147_api_role_grants.sql", import.meta.url),
   "utf8",
 );
-const publicStoragePoliciesMigration = readFileSync(
-  new URL("./migrations/202604141430_storage_policies_for_public_uploads.sql", import.meta.url),
-  "utf8",
-);
-const restrictedStorageDeletesMigration = readFileSync(
-  new URL("./migrations/202604170130_restrict_public_storage_deletes.sql", import.meta.url),
-  "utf8",
-);
 const restrictedClientFormDeletesMigration = readFileSync(
   new URL("./migrations/202604180900_restrict_client_form_deletes.sql", import.meta.url),
   "utf8",
@@ -23,8 +15,22 @@ const supabaseLintMigration = readFileSync(
   new URL("./migrations/202604181200_resolve_supabase_lints.sql", import.meta.url),
   "utf8",
 );
+const securityHardeningMigration = readFileSync(
+  new URL("./migrations/202607161200_security_hardening.sql", import.meta.url),
+  "utf8",
+);
+const securityFollowupMigration = readFileSync(
+  new URL("./migrations/202607161900_security_followup.sql", import.meta.url),
+  "utf8",
+);
+const formThemesMigration = readFileSync(
+  new URL("./migrations/202607171200_add_form_themes_and_assets.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
+  "title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses";
+const legacySafeFormsUpdateColumns =
   "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
 
 function getFunctionDefinition(functionName) {
@@ -46,14 +52,6 @@ function getPolicyDefinition(policyName) {
   return match[0];
 }
 
-function getMigrationPolicyDefinition(migration, policyName) {
-  const pattern = new RegExp(`create policy "${policyName}"[\\s\\S]*?;`, "i");
-  const match = migration.match(pattern);
-
-  assert.ok(match, `Policy ${policyName} should exist in migration`);
-  return match[0];
-}
-
 test("new profiles always start with user role and do not copy metadata roles", () => {
   const handleNewUser = getFunctionDefinition("handle_new_user");
 
@@ -64,12 +62,17 @@ test("new profiles always start with user role and do not copy metadata roles", 
 });
 
 test("schema baseline avoids destructive reset statements", () => {
+  const allowlistedTriggerMaintenance = schema.replace(
+    /^\s*delete\s+from\s+public\.response_file_references\s+where\s+response_id\s*=\s*new\.id;\s*$/gim,
+    "",
+  );
+
   assert.match(schema, /^\s*(?:--[^\n]*\n\s*)*begin;/i);
   assert.match(schema, /\bcommit;\s*$/i);
 
-  assert.doesNotMatch(schema, /^\s*drop\s+/im);
-  assert.doesNotMatch(schema, /^\s*truncate\s+/im);
-  assert.doesNotMatch(schema, /^\s*delete\s+from\s+/im);
+  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*drop\s+/im);
+  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*truncate\s+/im);
+  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*delete\s+from\s+/im);
 });
 
 test("request_role only trusts the profiles table", () => {
@@ -100,8 +103,9 @@ test("authenticated users can update only safe profile columns", () => {
   const profileUpdate = getPolicyDefinition("profiles_update_own_or_admin");
 
   assert.match(profileUpdate, /for update\s+to authenticated/i);
-  assert.match(profileUpdate, /using\s*\(\s*id = \(select auth\.uid\(\)\)\s+or\s+\(select public\.request_role\(\)\) = 'admin'\s*\)/i);
-  assert.match(profileUpdate, /with check\s*\(\s*id = \(select auth\.uid\(\)\)\s+or\s+\(select public\.request_role\(\)\) = 'admin'\s*\)/i);
+  assert.match(profileUpdate, /select public\.request_is_enabled\(\)/i);
+  assert.match(profileUpdate, /id = \(select auth\.uid\(\)\) or \(select public\.request_role\(\)\) = 'admin'/i);
+  assert.match(profileUpdate, /with check/i);
 
   assert.match(schema, /revoke update on table public\.profiles from authenticated;/i);
   assert.match(schema, /grant update \(name\) on table public\.profiles to authenticated;/i);
@@ -137,7 +141,9 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
   assert.match(schema, /grant select on table public\.forms to anon;/i);
-  assert.match(schema, /grant select, insert on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant select on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant insert \(id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, author_id\)\s+on table public\.forms to authenticated;/i);
+  assert.doesNotMatch(schema, /grant insert \([^)]*responses_count/i);
   assert.match(schema, /revoke delete on table public\.forms from authenticated;/i);
   assert.match(schema, /revoke update on table public\.forms from authenticated;/i);
   assert.match(
@@ -152,8 +158,9 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
     schema,
     /grant select, insert, delete on table public\.forms to authenticated;/i,
   );
-  assert.match(schema, /grant insert on table public\.responses to anon;/i);
-  assert.match(schema, /grant select, insert on table public\.responses to authenticated;/i);
+  assert.match(schema, /grant insert \(form_id, submission_id, data\) on table public\.responses to anon;/i);
+  assert.match(schema, /grant select on table public\.responses to authenticated;/i);
+  assert.match(schema, /grant insert \(form_id, submission_id, data\) on table public\.responses to authenticated;/i);
   assert.match(
     schema,
     /grant select, insert, update, delete on table public\.profiles, public\.forms, public\.responses to service_role;/i,
@@ -166,18 +173,18 @@ test("form rows cannot be deleted directly by authenticated clients", () => {
   assert.match(restrictedClientFormDeletesMigration, /drop policy if exists "forms_delete" on public\.forms;/i);
 });
 
-test("authenticated users can read closed forms owned by other users", () => {
+test("authenticated users see own, admin-visible, or active public forms only", () => {
   const selectPolicy = getPolicyDefinition("forms_select");
   const anonSelectPolicy = getPolicyDefinition("forms_select_anon");
 
   assert.match(selectPolicy, /for select\s+to authenticated/i);
-  assert.match(selectPolicy, /using\s*\(\s*true\s*\)/i);
-  assert.doesNotMatch(selectPolicy, /is_public = true/i);
-  assert.doesNotMatch(selectPolicy, /deadline_at is null or deadline_at > now\(\)/i);
+  assert.match(selectPolicy, /select public\.request_is_enabled\(\)/i);
+  assert.match(selectPolicy, /author_id = \(select auth\.uid\(\)\)/i);
+  assert.match(selectPolicy, /select public\.request_role\(\).*?= 'admin'/is);
+  assert.match(selectPolicy, /public\.is_public_active_form\(id\)/i);
 
   assert.match(anonSelectPolicy, /for select\s+to anon/i);
-  assert.match(anonSelectPolicy, /is_public = true/i);
-  assert.match(anonSelectPolicy, /deadline_at is null or deadline_at > now\(\)/i);
+  assert.match(anonSelectPolicy, /public\.is_public_active_form\(id\)/i);
 });
 
 test("api role grants migration restricts form updates to client-editable columns", () => {
@@ -189,7 +196,7 @@ test("api role grants migration restricts form updates to client-editable column
   assert.match(apiRoleGrantsMigration, /revoke update on table public\.forms from authenticated;/i);
   assert.match(
     apiRoleGrantsMigration,
-    new RegExp(`grant update \\(${safeFormsUpdateColumns}\\) on table public\\.forms to authenticated;`, "i"),
+    new RegExp(`grant update \\(${legacySafeFormsUpdateColumns}\\) on table public\\.forms to authenticated;`, "i"),
   );
   assert.doesNotMatch(
     apiRoleGrantsMigration,
@@ -197,29 +204,43 @@ test("api role grants migration restricts form updates to client-editable column
   );
 });
 
-test("public storage uploads cannot be deleted from anonymous clients", () => {
-  assert.doesNotMatch(publicStoragePoliciesMigration, /for delete\s+to anon/i);
-  assert.match(restrictedStorageDeletesMigration, /drop policy if exists "survey files delete anon"/i);
-  assert.doesNotMatch(restrictedStorageDeletesMigration, /create policy "survey files delete anon"/i);
+test("form themes are stored separately and constrained to safe compact JSON", () => {
+  assert.match(schema, /theme jsonb not null default '\{\}'::jsonb/i);
+  assert.match(schema, /create or replace function public\.survey_theme_is_safe\(value jsonb\)/i);
+  assert.match(schema, /pg_column_size\(value\) <= 131072/i);
+  assert.match(schema, /forms_theme_is_safe check \(public\.survey_theme_is_safe\(theme\)\)/i);
+  assert.match(formThemesMigration, /add column if not exists theme jsonb not null default '\{\}'::jsonb/i);
+  assert.match(formThemesMigration, /grant update \(title, schema, theme,/i);
 });
 
-test("storage delete policies are limited to owners, form authors, and admins", () => {
-  const initialDeletePolicy = getMigrationPolicyDefinition(
-    publicStoragePoliciesMigration,
-    "survey files delete authenticated",
-  );
-  const restrictedDeletePolicy = getMigrationPolicyDefinition(
-    restrictedStorageDeletesMigration,
-    "survey files delete authenticated",
-  );
+test("survey assets separate common gallery objects from per-form uploads", () => {
+  assert.match(schema, /values \(\s*'survey-assets',\s*'survey-assets',\s*true,\s*5242880/is);
+  assert.match(schema, /name like 'gallery\/%' or public\.can_manage_survey_asset\(name\)/i);
+  assert.match(schema, /path_parts\[1\] <> 'forms'/i);
+  assert.match(schema, /path_parts\[3\] <> auth\.uid\(\)::text/i);
+  assert.match(schema, /\(jpg\|jpeg\|png\|webp\)/i);
+  assert.match(formThemesMigration, /survey_assets_authenticated_upload/i);
+  assert.match(formThemesMigration, /survey_assets_authenticated_delete/i);
+});
 
-  for (const policy of [initialDeletePolicy, restrictedDeletePolicy]) {
-    assert.match(policy, /for delete\s+to authenticated/i);
-    assert.match(policy, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/i);
-    assert.match(policy, /f\.author_id = \(select auth\.uid\(\)\)/i);
-    assert.match(policy, /\(select public\.request_role\(\)\) = 'admin'/i);
-    assert.doesNotMatch(policy, /f\.is_public = true/i);
-  }
+test("final storage policies prevent anonymous reads and keep cleanup server-side", () => {
+  assert.doesNotMatch(schema, /create policy "survey_files_public_read"/i);
+  assert.doesNotMatch(schema, /create policy "survey_files_public_delete"/i);
+  assert.match(schema, /create or replace function public\.is_survey_file_referenced/i);
+  assert.match(schema, /grant execute on function public\.is_survey_file_referenced\(text\) to service_role/i);
+  assert.match(securityHardeningMigration, /values \('survey-files', 'survey-files', false, 10485760\)/i);
+  assert.match(securityFollowupMigration, /drop policy if exists "survey files read anon" on storage\.objects/i);
+  assert.match(securityFollowupMigration, /drop policy if exists "survey files upload authenticated" on storage\.objects/i);
+});
+
+test("storage deletes are limited to the uploader's unreferenced object", () => {
+  const deleteHelper = getFunctionDefinition("can_delete_survey_file");
+  const deletePolicy = getPolicyDefinition("survey_files_authenticated_delete");
+
+  assert.match(deleteHelper, /path_parts\[1\] <> auth\.uid\(\)::text/i);
+  assert.match(deleteHelper, /not exists[\s\S]*public\.response_file_references/i);
+  assert.match(deletePolicy, /public\.can_delete_survey_file\(name\)/i);
+  assert.doesNotMatch(deletePolicy, /can_read_survey_file/i);
 });
 
 test("response inserts are attributed to the current auth user", () => {
@@ -274,15 +295,29 @@ test("response limits use an atomic form counter instead of counting response ro
   const ensureLimit = getFunctionDefinition("ensure_form_response_limit");
 
   assert.doesNotMatch(ensureLimit, /count\s*\(\s*\*\s*\)/i);
-  assert.match(ensureLimit, /update public\.forms f\s+set responses_count = f\.responses_count \+ 1/i);
-  assert.match(ensureLimit, /is_public = case/i);
-  assert.match(ensureLimit, /f\.responses_count \+ 1 >= f\.max_responses/i);
-  assert.match(ensureLimit, /then false/i);
-  assert.match(ensureLimit, /f\.max_responses is null\s+or f\.responses_count < f\.max_responses/i);
+  assert.match(ensureLimit, /update public\.forms f[\s\S]*?set responses_count = f\.responses_count \+ 1/i);
+  assert.match(ensureLimit, /f\.responses_count < least\(coalesce\(f\.max_responses, 100000\), 100000\)/i);
+
+  const incrementCount = getFunctionDefinition("increment_form_response_count");
+  assert.doesNotMatch(incrementCount, /set responses_count/i);
+  assert.match(incrementCount, /set is_public = false/i);
+  assert.match(incrementCount, /coalesce\(f\.max_responses, 100000\)/i);
+  assert.match(schema, /responses_form_count_increment\s+after insert on public\.responses/i);
   assert.match(
     schema,
     /create or replace trigger responses_form_count_decrement\s+after delete on public\.responses\s+for each row execute procedure public\.decrement_form_response_count\(\);/i,
   );
+});
+
+test("response retries are idempotent even after the form closes", () => {
+  assert.match(schema, /submission_id uuid not null default gen_random_uuid\(\)/i);
+  assert.match(schema, /create unique index idx_responses_form_submission_id on public\.responses\(form_id, submission_id\)/i);
+  const duplicateHelper = getFunctionDefinition("is_existing_response_submission");
+  assert.match(duplicateHelper, /r\.user_id is not distinct from target_user_id/i);
+  const insertPolicy = getPolicyDefinition("responses_insert");
+  assert.match(insertPolicy, /public\.is_existing_response_submission\(form_id, submission_id, \(select auth\.uid\(\)\)\)/i);
+  const ensureLimit = getFunctionDefinition("ensure_form_response_limit");
+  assert.match(ensureLimit, /r\.submission_id = new\.submission_id[\s\S]*?return new/i);
 });
 
 test("forms and responses are published to realtime", () => {
