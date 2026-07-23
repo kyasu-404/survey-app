@@ -23,10 +23,10 @@
     "react": "^18",
     "react-dom": "^18",
     "react-router-dom": "6.30.4",
-    "survey-core": "1.12.61",
-    "survey-creator-core": "1.12.61",
-    "survey-creator-react": "1.12.61",
-    "survey-react-ui": "1.12.61"
+    "survey-core": "2.5.35",
+    "survey-creator-core": "2.5.35",
+    "survey-creator-react": "2.5.35",
+    "survey-react-ui": "2.5.35"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

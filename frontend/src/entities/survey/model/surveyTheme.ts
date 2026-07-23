@@ -1,7 +1,7 @@
 import type { IHeader, ITheme } from "survey-core";
 
 export const DEFAULT_SURVEY_THEME: ITheme = {
-  themeName: "defaultV2",
+  themeName: "default",
   colorPalette: "light",
   backgroundImageFit: "cover",
   backgroundImageAttachment: "scroll",
@@ -118,7 +118,7 @@ export function sanitizeSurveyTheme(value: unknown): ITheme {
   const backgroundImage = readString(value.backgroundImage, 2048);
   const backgroundOpacity = readNumber(value.backgroundOpacity, 0, 1);
 
-  if (themeName) theme.themeName = themeName;
+  if (themeName) theme.themeName = themeName === "defaultV2" ? "default" : themeName;
   if (colorPalette) theme.colorPalette = colorPalette;
   if (typeof value.isPanelless === "boolean") theme.isPanelless = value.isPanelless;
   if (backgroundImage !== undefined && isSafeImageUrl(backgroundImage)) theme.backgroundImage = backgroundImage.trim();

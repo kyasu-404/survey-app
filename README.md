@@ -20,7 +20,13 @@ npm ci
 Корневые policy/smoke-тесты, которые запускаются в CI, выполняются из корня репозитория:
 
 ```bash
-node --test database/supabase_schema.test.mjs functions/user-admin/index.test.mjs frontend/tooling.test.mjs frontend/Dockerfile.test.mjs
+node --test \
+  database/supabase_schema.test.mjs \
+  database/migrations.test.mjs \
+  functions/user-admin/index.test.mjs \
+  functions/form-admin/index.test.mjs \
+  frontend/tooling.test.mjs \
+  frontend/Dockerfile.test.mjs
 ```
 
 Основной frontend suite запускается из `frontend/`:
@@ -80,6 +86,53 @@ FORM_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://17
 
 - клиент создаётся в `frontend/src/shared/api/client.ts`;
 - все остальные места берут его через реэкспорт (`frontend/src/shared/api/supabase.ts` и `frontend/src/lib/supabase.ts`).
+
+## Фоны редактора тем: bucket `survey-assets`
+
+Редактор тем использует отдельный публичный Supabase Storage bucket `survey-assets`. Это не тот же bucket, что `survey-files`: первый хранит фоновые изображения темы, второй — файлы, загруженные респондентами в вопросы формы.
+
+Имя `survey-assets` сейчас задано в коде и не зависит от `VITE_SUPABASE_STORAGE_BUCKET`. Если при загрузке своего фона интерфейс сообщает `Bucket not found`, значит миграция редактора тем ещё не применена к текущему Supabase-проекту.
+
+Для существующего проекта примените миграцию:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/202607171200_add_form_themes_and_assets.sql
+```
+
+Для нового пустого проекта достаточно применить `database/supabase_schema.sql`: создание bucket и необходимые политики уже включены в baseline.
+
+Миграция:
+
+- добавляет `forms.theme`;
+- создаёт публичный bucket `survey-assets`;
+- задаёт лимит 5 МБ и разрешает только `image/jpeg`, `image/png`, `image/webp`;
+- создаёт RLS-политики для просмотра, загрузки и удаления фонов;
+- разрешает пользователю управлять только фонами своей формы, а администратору — всеми пользовательскими фонами.
+
+Пути объектов имеют фиксированную структуру:
+
+- `gallery/<имя-файла>` — общие фоны, доступные всем пользователям конструктора;
+- `forms/<form-id>/<user-id>/<uuid>.jpg|png|webp` — пользовательские фоны конкретной формы.
+
+Общие изображения можно загружать в папку `gallery/` через Supabase Dashboard/Studio с административными правами или через доверенный backend с `service_role`. Клиентское приложение намеренно не разрешает пользователям добавлять и удалять общие фоны.
+
+Проверить настройку можно в SQL Editor:
+
+```sql
+select id, public, file_size_limit, allowed_mime_types
+from storage.buckets
+where id = 'survey-assets';
+
+select policyname
+from pg_policies
+where schemaname = 'storage'
+  and tablename = 'objects'
+  and policyname like 'survey_assets_%'
+order by policyname;
+```
+
+Первый запрос должен вернуть публичный bucket `survey-assets`, второй — политики `survey_assets_authenticated_read`, `survey_assets_authenticated_upload` и `survey_assets_authenticated_delete`. Простого создания bucket через UI недостаточно: без функций и RLS-политик из миграции загрузка пользовательских фонов будет отклонена.
 
 ## Хранение файлов в Supabase Storage (S3)
 

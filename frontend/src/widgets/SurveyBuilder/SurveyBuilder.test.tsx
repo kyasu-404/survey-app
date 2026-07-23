@@ -130,6 +130,11 @@ vi.mock("survey-creator-core", () => ({
       tabs: {},
     }),
   },
+  registerSurveyTheme: vi.fn(),
+}));
+
+vi.mock("survey-core/themes", () => ({
+  default: {},
 }));
 
 vi.mock("survey-react-ui", () => ({
@@ -772,8 +777,9 @@ describe("SurveyBuilder", () => {
   it("imports the SurveyJS base theme so creator actions keep their intended layout", () => {
     const surveyBuilderSource = readSurveyBuilderSource();
 
-    expect(surveyBuilderSource).toContain('import "survey-core/defaultV2.min.css";');
-    expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.min.css";');
+    expect(surveyBuilderSource).toContain('import "survey-core/survey-core.css";');
+    expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.css";');
+    expect(surveyBuilderSource).toContain('registerSurveyTheme(SurveyTheme);');
   });
 
   it("keeps the built-in save action icon-only while custom builder actions stay compact text buttons", () => {
@@ -1034,7 +1040,7 @@ describe("SurveyBuilder", () => {
       expect.objectContaining({
         title: "Шаблон для правки",
       }),
-      expect.objectContaining({ themeName: "defaultV2" }),
+      expect.objectContaining({ themeName: "default" }),
       "Шаблон для правки",
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
@@ -1175,7 +1181,7 @@ describe("SurveyBuilder", () => {
           },
         ],
       }),
-      expect.objectContaining({ themeName: "defaultV2" }),
+      expect.objectContaining({ themeName: "default" }),
       "Старая форма",
     );
 

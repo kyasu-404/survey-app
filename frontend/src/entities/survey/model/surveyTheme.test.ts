@@ -11,6 +11,16 @@ describe("survey theme", () => {
     expect(resolveSurveyTheme(null)).toEqual(DEFAULT_SURVEY_THEME);
   });
 
+  it("maps the SurveyJS v1 default theme name to its v2 equivalent", () => {
+    expect(sanitizeSurveyTheme({
+      themeName: "defaultV2",
+      colorPalette: "light",
+    })).toEqual({
+      themeName: "default",
+      colorPalette: "light",
+    });
+  });
+
   it("keeps supported SurveyJS theme properties", () => {
     expect(sanitizeSurveyTheme({
       themeName: "sharp",

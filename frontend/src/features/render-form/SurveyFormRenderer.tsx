@@ -8,7 +8,7 @@ import {
   type ProcessHtmlEvent,
 } from "survey-core";
 import { Survey } from "survey-react-ui";
-import "survey-core/defaultV2.min.css";
+import "survey-core/survey-core.css";
 import "survey-core/i18n/russian";
 import { resolveDefaultSurveyLogo } from "../../entities/survey/model/defaultSurveyLogo";
 import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";

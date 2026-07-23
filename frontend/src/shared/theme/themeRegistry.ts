@@ -81,7 +81,7 @@ function rgba(hex: string, alpha: number) {
 
 function createSurveyTheme(app: AppThemeTokens): ITheme {
   return {
-    themeName: "defaultV2",
+    themeName: "default",
     colorPalette: "light",
     cssVariables: {
       "--sjs-primary-backcolor": app.accent,

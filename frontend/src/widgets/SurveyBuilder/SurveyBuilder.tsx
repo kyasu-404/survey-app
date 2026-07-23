@@ -3,13 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   editorLocalization,
+  registerSurveyTheme,
   type ICreatorPlugin,
   type UploadFileEvent,
 } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
 import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
-import "survey-creator-core/survey-creator-core.min.css";
-import "survey-core/defaultV2.min.css";
+import SurveyTheme from "survey-core/themes";
+import "survey-creator-core/survey-creator-core.css";
+import "survey-core/survey-core.css";
 import "survey-core/i18n/russian";
 import "survey-creator-core/i18n/russian";
 import phoneIcon from "../../img/constructor/Phone.svg?raw";
@@ -73,6 +75,8 @@ import {
 import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
+
+registerSurveyTheme(SurveyTheme);
 
 type SurveyBuilderProps = {
   canAdministerAllForms?: boolean;
