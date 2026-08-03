@@ -3,6 +3,7 @@ import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { logout } from "../../features/auth/api";
 import blackLogo from "../../img/black_logo.png";
+import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
 
 type SidebarProps = {
@@ -74,6 +75,7 @@ export function Sidebar({ onToggle }: SidebarProps) {
       {!loading && user && (
         <div className="sidebar-footer">
           <button className="logout-button" onClick={onLogout}>Выйти</button>
+          <ThemeCycleButton className="sidebar-theme-button" menuPlacement="top-right" />
         </div>
       )}
     </aside>

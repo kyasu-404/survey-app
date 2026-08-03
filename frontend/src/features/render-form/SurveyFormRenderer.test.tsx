@@ -311,6 +311,44 @@ describe("SurveyFormRenderer", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it("renders builder preview like an editable respondent form without submit or draft side effects", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="__builder_preview__"
+        renderMode="preview-interactive"
+        schema={{
+          pages: [
+            { name: "page1", elements: [{ type: "text", name: "email", title: "Email" }] },
+            { name: "page2", elements: [{ type: "text", name: "name", title: "Имя" }] },
+          ],
+        }}
+      />,
+    );
+
+    const model = createdModels[0] as {
+      data: Record<string, unknown>;
+      readOnly: boolean;
+      showCompleteButton: boolean;
+      showNavigationButtons: boolean;
+      onValueChanged: { fire: (sender: unknown, options?: unknown) => Promise<void> };
+    };
+
+    expect(model).toMatchObject({
+      readOnly: false,
+      showNavigationButtons: true,
+      showCompleteButton: true,
+    });
+    expect(screen.getByRole("button", { name: "Далее" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить" })).toBeInTheDocument();
+
+    model.data = { email: "preview@example.com" };
+    await model.onValueChanged.fire(model);
+    await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
   it("keeps readonly navigable previews without a complete button", () => {
     render(
       <SurveyFormRenderer

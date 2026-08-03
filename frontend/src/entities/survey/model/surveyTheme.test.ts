@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SURVEY_THEME,
+  resolveBuilderDesignerTheme,
   resolveSurveyTheme,
   sanitizeSurveyTheme,
   withSurveyBackground,
+  withUploadedSurveyThemeImage,
 } from "./surveyTheme";
 
 describe("survey theme", () => {
@@ -84,13 +86,76 @@ describe("survey theme", () => {
       themeName: "sharp",
       colorPalette: "dark",
       backgroundImage: "/background.png",
-      backgroundOpacity: 0.35,
+      backgroundOpacity: 1,
     });
 
     expect(withSurveyBackground(themed, "")).toMatchObject({
       themeName: "sharp",
       backgroundImage: "",
       backgroundOpacity: 1,
+    });
+  });
+
+  it("keeps the complete theme in Designer while subduing only its background image", () => {
+    expect(resolveBuilderDesignerTheme({
+      themeName: "sharp",
+      colorPalette: "dark",
+      isPanelless: true,
+      backgroundImage: "/background.png",
+      backgroundImageAttachment: "fixed",
+      backgroundOpacity: 0.9,
+      headerView: "advanced",
+      header: { height: 280 },
+      cssVariables: {
+        "--sjs-font-family": "Georgia, serif",
+        "--sjs-corner-radius": "20px",
+      },
+    })).toMatchObject({
+      themeName: "sharp",
+      colorPalette: "dark",
+      isPanelless: true,
+      backgroundImage: "/background.png",
+      backgroundImageAttachment: "scroll",
+      backgroundOpacity: 0.18,
+      headerView: "advanced",
+      header: { height: 280 },
+      cssVariables: {
+        "--sjs-font-family": "Georgia, serif",
+        "--sjs-corner-radius": "20px",
+      },
+    });
+  });
+
+  it("places uploaded Theme Editor images into the requested theme background", () => {
+    const theme = {
+      themeName: "sharp",
+      backgroundOpacity: 0.72,
+      header: { height: 240 },
+    };
+
+    expect(withUploadedSurveyThemeImage(
+      theme,
+      "theme",
+      "backgroundImage",
+      "https://cdn.example.com/uploaded-background.png",
+    )).toMatchObject({
+      themeName: "sharp",
+      backgroundOpacity: 0.72,
+      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      header: { height: 240 },
+    });
+
+    expect(withUploadedSurveyThemeImage(
+      theme,
+      "header",
+      "backgroundImage",
+      "https://cdn.example.com/uploaded-header.png",
+    )).toMatchObject({
+      themeName: "sharp",
+      header: {
+        height: 240,
+        backgroundImage: "https://cdn.example.com/uploaded-header.png",
+      },
     });
   });
 });

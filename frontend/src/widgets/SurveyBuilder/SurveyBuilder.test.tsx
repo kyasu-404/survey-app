@@ -30,6 +30,8 @@ const {
   showToast,
   surveyFormRendererProps,
   registerElement,
+  createSurveyAssetFormId,
+  uploadSurveyBackground,
 } = vi.hoisted(() => ({
   componentCollectionAdd: vi.fn(),
   componentCollectionGetByName: vi.fn(),
@@ -52,6 +54,8 @@ const {
     theme?: Record<string, unknown>;
   }>,
   registerElement: vi.fn(),
+  createSurveyAssetFormId: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
+  uploadSurveyBackground: vi.fn(),
 }));
 
 class FakeEvent {
@@ -95,6 +99,15 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   saveSurveySchema,
   setFormDeadline,
   setFormResponseLimit,
+}));
+
+vi.mock("../../shared/api/themeAssets", () => ({
+  SURVEY_BACKGROUND_ACCEPT: "image/jpeg,image/png,image/webp",
+  createSurveyAssetFormId,
+  listCommonSurveyBackgrounds: vi.fn().mockResolvedValue([]),
+  listCustomSurveyBackgrounds: vi.fn().mockResolvedValue([]),
+  removeSurveyBackground: vi.fn().mockResolvedValue(undefined),
+  uploadSurveyBackground,
 }));
 
 vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
@@ -171,6 +184,8 @@ vi.mock("survey-creator-react", () => {
     locale = "ru";
     activeTab = "designer";
     theme: Record<string, unknown> = {};
+    applyCreatorTheme = vi.fn();
+    pageTitleFontEditor = { readOnly: true };
     JSON: SurveySchema & { questionDescriptionLocation?: string } = {
       title: "Новая форма",
       locale: "ru",
@@ -191,6 +206,14 @@ vi.mock("survey-creator-react", () => {
     themeEditor = {
       onThemePropertyChanged: new FakeEvent(),
       onThemeSelected: new FakeEvent(),
+      propertyGrid: {
+        survey: {
+          getQuestionByName: vi.fn((name: string) => name === "pageTitle" ? this.pageTitleFontEditor : undefined),
+        },
+      },
+      themeModel: {
+        setTheme: vi.fn(),
+      },
     };
     saveSurveyFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
     saveThemeFunc: ((saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => void) | undefined;
@@ -319,8 +342,31 @@ describe("SurveyBuilder", () => {
     setFormDeadline.mockResolvedValue(undefined);
     setFormResponseLimit.mockResolvedValue(undefined);
     createSurveyMutateAsync.mockResolvedValue({ id: "created-form-id" });
+    uploadSurveyBackground.mockResolvedValue({
+      path: "forms/draft/user-1/uploaded-background.png",
+      url: "https://cdn.example.com/uploaded-background.png",
+    });
     surveyFormRendererProps.length = 0;
     registerElement.mockClear();
+  });
+
+  it("applies the application palette through the Survey Creator UI theme API", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+      expect(creatorInstances[0].applyCreatorTheme).toHaveBeenCalledWith(
+        expect.objectContaining({
+          themeName: "survey-app-sand",
+          iconSet: "v2",
+          isLight: true,
+          cssVariables: expect.objectContaining({
+            "--sjs-special-background": "#f7f1e8",
+            "--sjs2-color-utility-surface-designer": "#f7f1e8",
+          }),
+        }),
+      );
+    });
   });
 
   it("restores a saved draft and persists later changes", async () => {
@@ -457,6 +503,91 @@ describe("SurveyBuilder", () => {
     });
   });
 
+  it("applies a locally uploaded Theme Editor background immediately", async () => {
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    const creator = creatorInstances[0];
+    const callback = vi.fn();
+    const file = new File(["image"], "background.png", { type: "image/png" });
+
+    act(() => {
+      creator.onUploadFile.fire(creator, {
+        elementType: "theme",
+        propertyName: "backgroundImage",
+        files: [file],
+        callback,
+      });
+    });
+
+    await waitFor(() => {
+      expect(callback).toHaveBeenCalledWith(
+        "success",
+        "https://cdn.example.com/uploaded-background.png",
+      );
+    });
+
+    expect(creator.theme).toMatchObject({
+      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+    });
+    expect(creator.themeEditor.themeModel.setTheme).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      }),
+    );
+    expect(getBuilderPreviewSnapshot().previewTheme).toMatchObject({
+      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+    });
+    expect(JSON.parse(
+      localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}",
+    )).toMatchObject({
+      theme: {
+        backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      },
+    });
+  });
+
+  it("keeps a custom gallery upload in the active Theme Editor model", async () => {
+    const { container } = renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    const creator = creatorInstances[0];
+    const galleryAction = creator.toolbar.getActionById("builder-background-gallery");
+
+    act(() => {
+      galleryAction.action();
+    });
+
+    expect(await screen.findByRole("dialog", { name: "Галерея фонов" })).toBeInTheDocument();
+
+    const fileInput = container.querySelector(".theme-background-file-input") as HTMLInputElement;
+    const file = new File(["image"], "my-background.png", { type: "image/png" });
+    await userEvent.upload(fileInput, file);
+
+    await waitFor(() => {
+      expect(creator.themeEditor.themeModel.setTheme).toHaveBeenCalledWith(
+        expect.objectContaining({
+          backgroundImage: "https://cdn.example.com/uploaded-background.png",
+          backgroundOpacity: 1,
+        }),
+      );
+    });
+
+    expect(creator.theme).toMatchObject({
+      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundOpacity: 1,
+    });
+    expect(getBuilderPreviewSnapshot().previewTheme).toMatchObject({
+      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+    });
+  });
+
   it("opens reset confirmation and clears the builder to an empty draft", async () => {
     const initialDraft: SurveySchema = {
       title: "Черновик",
@@ -569,6 +700,33 @@ describe("SurveyBuilder", () => {
     expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-save-template")).not.toMatchObject({
       disableShrink: true,
     });
+
+    const galleryAction = creator.toolbar.getActionById("builder-background-gallery");
+    const resetAction = creator.toolbar.getActionById("builder-reset");
+    const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
+
+    expect(galleryAction).toMatchObject({ visible: false, innerCss: "builder-toolbar-action-button" });
+    expect(resetAction).toMatchObject({ visible: true, innerCss: "builder-toolbar-action-button" });
+    expect(saveTemplateAction).toMatchObject({ visible: true, innerCss: "builder-toolbar-action-button" });
+
+    act(() => {
+      creator.activeTab = "theme";
+      creator.onActiveTabChanged.fire(creator, { tabName: "theme" });
+    });
+
+    expect(galleryAction.visible).toBe(true);
+    expect(resetAction.visible).toBe(false);
+    expect(saveTemplateAction.visible).toBe(false);
+    expect(creator.pageTitleFontEditor.readOnly).toBe(false);
+
+    act(() => {
+      creator.activeTab = "designer";
+      creator.onActiveTabChanged.fire(creator, { tabName: "designer" });
+    });
+
+    expect(galleryAction.visible).toBe(false);
+    expect(resetAction.visible).toBe(true);
+    expect(saveTemplateAction.visible).toBe(true);
     expect(creator.addPluginTab).toHaveBeenCalledWith(
       "runtime-preview",
       expect.objectContaining({
@@ -702,7 +860,50 @@ describe("SurveyBuilder", () => {
       });
     });
 
-    expect(designerSurvey.applyTheme).not.toHaveBeenCalled();
+    expect(designerSurvey.applyTheme).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeName: "default",
+        colorPalette: "light",
+      }),
+    );
+    expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
+
+    creator.theme = {
+      themeName: "sharp",
+      colorPalette: "dark",
+      isPanelless: true,
+      backgroundImage: "/theme-background.png",
+      backgroundOpacity: 0.85,
+      headerView: "advanced",
+      header: { height: 260 },
+      cssVariables: {
+        "--sjs-font-family": "Georgia, serif",
+        "--sjs-corner-radius": "20px",
+      },
+    };
+
+    act(() => {
+      creator.themeEditor.onThemePropertyChanged.fire(creator.themeEditor, {
+        name: "--sjs-corner-radius",
+        value: "20px",
+      });
+    });
+
+    expect(designerSurvey.applyTheme).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        themeName: "sharp",
+        colorPalette: "dark",
+        isPanelless: true,
+        backgroundImage: "/theme-background.png",
+        backgroundOpacity: 0.18,
+        headerView: "advanced",
+        header: { height: 260 },
+        cssVariables: expect.objectContaining({
+          "--sjs-font-family": "Georgia, serif",
+          "--sjs-corner-radius": "20px",
+        }),
+      }),
+    );
     expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
 
     const autoNamedPage = {
@@ -759,8 +960,8 @@ describe("SurveyBuilder", () => {
     expect(appCss).toContain(".builder-creator-shell .svc-tabbed-menu .sv-dots.sv-action--hidden");
     expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.sv-action--hidden");
     expect(appCss).toContain(".builder-creator-shell .svc-toolbar-wrapper .sv-action.builder-toolbar-action-item");
-    expect(appCss).toContain(".builder-creator-shell .svc-tab-designer .sd-root-modern .sd-container-modern__title");
-    expect(appCss).toContain("background-color: transparent !important;");
+    expect(appCss).not.toContain(".builder-creator-shell .svc-tab-designer .sd-root-modern .sd-container-modern__title");
+    expect(appCss).not.toContain(".builder-creator-shell .sd-header__text::after");
     expect(appCss).not.toContain("max-width: max-content !important;");
     expect(appCss).toContain("max-width: none !important;");
   });
@@ -791,29 +992,41 @@ describe("SurveyBuilder", () => {
     expect(surveyBuilderSource).toContain('saveTemplateAction.innerCss = `builder-toolbar-action-button ${');
   });
 
-  it("stretches the custom runtime preview tab before centering the form card", () => {
+  it("keeps all custom text actions neutral white in every application theme", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-preview-tab-shell\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*display:\s*flex;[^}]*justify-content:\s*center;/s,
+      /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color:\s*#242424\s*!important;/s,
+    );
+  });
+
+  it("uses the public runtime page spacing in the custom preview tab", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-preview-tab-shell\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*height:\s*100%;[^}]*min-height:\s*100%;[^}]*overflow:\s*auto;/s,
     );
     expect(appCss).toMatch(
       /\.builder-creator-shell\s+\.svc-creator-tab__content,\s*\.builder-creator-shell\s+\.svc-plugin-tab__content\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;/s,
     );
+    expect(appCss).not.toMatch(/\.builder-preview-tab-shell\s*\{[^}]*padding:/s);
+    expect(appCss).not.toContain(".builder-preview-tab-surface.survey-page-card");
     expect(appCss).toMatch(
-      /\.builder-preview-tab-surface\.survey-page-card\s*\{[^}]*width:\s*min\(1060px,\s*100%\);[^}]*max-width:\s*1060px;[^}]*flex:\s*0 1 1060px;/s,
+      /\.survey-runtime-surface\.survey-page-card\s*\{[^}]*padding:\s*0;[^}]*border:\s*1px\s+solid\s+rgba\(78,\s*57,\s*39,\s*0\.12\);[^}]*border-radius:\s*28px;[^}]*background:\s*transparent\s*!important;[^}]*box-shadow:\s*0\s+22px\s+48px/s,
     );
   });
 
-  it("keeps required stars attached to SurveyJS question titles in runtime and builder wrappers", () => {
+  it("keeps required stars attached while leaving runtime typography to the selected theme", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.survey-page-card\s+\.sd-question__title,\s*\.builder-creator-shell\s+\.sd-question__title\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/s,
+      /\.builder-creator-shell\s+\.sd-question__title\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/s,
     );
     expect(appCss).toMatch(
-      /\.survey-page-card\s+\.sd-question__required-text,\s*\.builder-creator-shell\s+\.sd-question__required-text\s*\{[^}]*white-space:\s*nowrap/s,
+      /\.builder-creator-shell\s+\.sd-question__required-text\s*\{[^}]*white-space:\s*nowrap/s,
     );
+    expect(appCss).not.toMatch(/\.survey-page-card\s+\.sd-question__title\s*\{[^}]*font-(?:size|weight):/s);
+    expect(appCss).not.toMatch(/\.survey-page-card\s+\.sd-question__description\s*\{[^}]*border-radius:/s);
   });
 
   it("keeps the builder editor full-width and syncs creator JSON into the runtime preview tab bridge", async () => {
@@ -833,6 +1046,16 @@ describe("SurveyBuilder", () => {
         title: "Обновлённое превью",
         locale: "ru",
         pages: [{ name: "page1", elements: [{ type: "text", name: "q1", title: "Вопрос" }] }],
+      };
+      creatorInstances[0].theme = {
+        themeName: "sharp",
+        colorPalette: "dark",
+        isPanelless: true,
+        backgroundImage: "/preview-background.png",
+        backgroundOpacity: 0.82,
+        headerView: "advanced",
+        header: { height: 280 },
+        cssVariables: { "--sjs-corner-radius": "24px" },
       };
       creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
     });
@@ -854,6 +1077,16 @@ describe("SurveyBuilder", () => {
             elements: [{ type: "text", name: "q1", title: "Вопрос", showNumber: false }],
           },
         ],
+      },
+      previewTheme: {
+        themeName: "sharp",
+        colorPalette: "dark",
+        isPanelless: true,
+        backgroundImage: "/preview-background.png",
+        backgroundOpacity: 0.82,
+        headerView: "advanced",
+        header: { height: 280 },
+        cssVariables: { "--sjs-corner-radius": "24px" },
       },
     });
   });

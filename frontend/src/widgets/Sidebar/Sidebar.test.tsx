@@ -43,6 +43,9 @@ describe("Sidebar", () => {
     const footerLogoutButton = container.querySelector(".sidebar-footer .logout-button");
 
     expect(footerLogoutButton).toBe(screen.getByRole("button", { name: "Выйти" }));
+    expect(container.querySelector(".sidebar-footer .sidebar-theme-button")).toBe(
+      screen.getByRole("button", { name: /Сменить тему/i }),
+    );
     expect(container.querySelector(".sidebar-nav .logout-button")).not.toBeInTheDocument();
   });
 
@@ -52,5 +55,12 @@ describe("Sidebar", () => {
     expect(css).toMatch(
       /\.sidebar-toggle-button,\s*\.sidebar-open-button\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*line-height:\s*1;/,
     );
+  });
+
+  it("lets the theme menu render above and outside the sidebar", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.sidebar\s*\{[^}]*overflow:\s*visible;[^}]*z-index:\s*500;/s);
+    expect(css).toMatch(/\.theme-cycle-menu\s*\{[^}]*z-index:\s*520;/s);
   });
 });

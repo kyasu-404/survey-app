@@ -7,13 +7,13 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import switchThemeIcon from "../../img/switch_theme.svg";
+import settingsIcon from "../../img/Settings.svg";
 import { themes } from "./themeRegistry";
 import { useTheme } from "./ThemeProvider";
 
 type ThemeCycleButtonProps = {
   className?: string;
-  menuPlacement?: "bottom-end" | "top-left";
+  menuPlacement?: "bottom-end" | "top-right";
 };
 
 export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: ThemeCycleButtonProps) {
@@ -67,7 +67,7 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
         data-theme-id={themeId}
         data-menu-open={isOpen}
       >
-        <img src={switchThemeIcon} alt="" aria-hidden="true" className="theme-cycle-button-icon" />
+        <img src={settingsIcon} alt="" aria-hidden="true" className="theme-cycle-button-icon" />
       </button>
 
       {isOpen && (

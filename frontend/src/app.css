@@ -478,10 +478,6 @@ textarea:focus {
   background: transparent !important;
 }
 
-.builder-creator-shell .svc-tab-designer .sd-root-modern .sd-container-modern__title {
-  background-color: transparent !important;
-}
-
 .builder-creator-shell .svc-creator__area,
 .builder-creator-shell .svc-creator__content-wrapper,
 .builder-creator-shell .svc-creator__content-holder,
@@ -512,9 +508,7 @@ textarea:focus {
   color: #111111 !important;
 }
 
-.builder-creator-shell .svc-tabbed-menu-item--selected::after,
-.builder-creator-shell .sd-header__text::after,
-.builder-creator-shell .sd-element--complex > .sd-element__header--location-top::after {
+.builder-creator-shell .svc-tabbed-menu-item--selected::after {
   background: #111111 !important;
 }
 
@@ -600,19 +594,8 @@ textarea:focus {
   width: 100%;
   min-width: 0;
   height: 100%;
-  min-height: 0;
-  display: flex;
-  justify-content: center;
+  min-height: 100%;
   overflow: auto;
-  padding: 24px;
-}
-
-.builder-preview-tab-surface.survey-page-card {
-  width: min(1060px, 100%);
-  max-width: 1060px;
-  min-width: 0;
-  margin: 0 auto;
-  flex: 0 1 1060px;
 }
 
 .builder-toolbar-action-item {
@@ -1380,9 +1363,7 @@ textarea:focus {
 .survey-page-card .sd-completedpage,
 .survey-page-card .sd-completedpage__content,
 .survey-page-card .sd-completedpage .sd-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  min-width: 0;
 }
 
 .survey-page-brand {
@@ -1801,12 +1782,6 @@ textarea:focus {
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
     width: 100%;
     padding: 0;
-  }
-
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
-    --sd-base-padding: calc(3 * var(--sjs-base-unit, var(--base-unit, 8px)));
-    --sd-page-vertical-padding: calc(2.5 * var(--sjs-base-unit, var(--base-unit, 8px)));
   }
 
   .app-main-public::before,
@@ -4128,10 +4103,12 @@ button.responses-export-button:disabled {
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 236, 230, 0.94)) !important;
 }
 
-.survey-page-card .sd-completedpage,
-.survey-page-card .sd-completedpage__content,
-.survey-page-card .sd-completedpage .sd-body {
+.survey-runtime-surface.survey-page-card {
+  padding: 0;
+  border: 0;
   background: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .survey-page-shell {
@@ -4216,41 +4193,14 @@ button.responses-export-button:disabled {
     padding: 0;
     border: 0;
     border-radius: 0 !important;
-    background: #fffdf9 !important;
+    background: transparent !important;
     box-shadow: none;
     backdrop-filter: none;
   }
 
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
-    --sjs-general-backcolor: #fffdf9;
-    --sjs-general-backcolor-dim: #f2eee8;
-    --sjs-general-backcolor-dim-light: #f8f5f0;
-    --sjs-layer-1-background-500: #fffdf9;
-    --sjs-layer-3-background-500: #f2eee8;
     min-height: 100svh;
-    background: #f2eee8 !important;
-    background-color: #f2eee8 !important;
-  }
-
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-body,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-page {
-    background: #f2eee8 !important;
-    background-color: #f2eee8 !important;
-  }
-
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header__content,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern__title {
-    background: #fffdf9 !important;
-    background-color: #fffdf9 !important;
-  }
-
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sv-header__overlap,
-  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern__title {
-    border-bottom: 2px solid #111111 !important;
-    box-shadow: none !important;
   }
 
   .users-create-grid {
@@ -4321,61 +4271,14 @@ button.responses-export-button:disabled {
   fill: #111111 !important;
 }
 
-.survey-page-card .sd-question .sd-description,
-.survey-page-card .sd-question__description {
-  display: inline-block;
-  width: auto;
-  max-width: min(100%, 640px);
-  margin-top: 10px;
-  padding: 4px 8px;
-  border: 1px solid var(--sjs-primary-backcolor-light);
-  border-radius: 12px;
-  background: var(--sjs-primary-backcolor-light);
-  color: var(--sjs-general-forecolor);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-.survey-page-card .sd-title,
-.survey-page-card .sd-header__text,
-.survey-page-card .sd-description,
-.survey-page-card .sd-page__title,
-.survey-page-card .sd-page__description,
-.survey-page-card .sd-question__title,
-.survey-page-card .sd-question__description {
-  white-space: normal !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
-  max-width: 100% !important;
-}
-
-.survey-page-card .sd-header,
-.survey-page-card .sd-header__text {
-  min-width: 0 !important;
-  overflow: visible !important;
-}
-
-.survey-page-card .sd-question__title {
-  font-size: 1.06rem !important;
-  line-height: 1.4 !important;
-  font-weight: 700 !important;
-}
-
-.survey-page-card .sd-question__title,
 .builder-creator-shell .sd-question__title {
   white-space: normal !important;
   overflow-wrap: break-word !important;
   word-break: normal !important;
 }
 
-.survey-page-card .sd-question__required-text,
 .builder-creator-shell .sd-question__required-text {
   white-space: nowrap !important;
-}
-
-.survey-page-card .sd-question .sd-description,
-.survey-page-card .sd-question__description {
-  font-size: 0.88rem !important;
-  line-height: 1.45 !important;
 }
 
 .response-preview-builder-palette.survey-page-card .sd-root-modern,
@@ -5294,6 +5197,346 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
     padding: 0;
     border: none;
     box-shadow: none;
+  }
+}
+
+/* Application color schemes. Form themes remain owned by SurveyJS and are not
+   replaced by these interface-only tokens. */
+:root,
+:root[data-theme="sand"] {
+  --app-bg:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.92), transparent 30%),
+    radial-gradient(circle at 92% 2%, rgba(133, 96, 61, 0.1), transparent 27%),
+    linear-gradient(180deg, #f7f2ea 0%, #eee6da 56%, #e5dbcd 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(253, 250, 245, 0.95), rgba(238, 229, 217, 0.94));
+  --theme-card-background: linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(241, 233, 222, 0.95));
+  --theme-panel-background: linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(236, 226, 212, 0.96));
+  --theme-surface: #eadfce;
+  --theme-surface-light: #f8f2e9;
+  --theme-border: rgba(78, 57, 39, 0.13);
+  --theme-text: #2d241d;
+  --theme-muted: #75685d;
+  --theme-accent: #6f5137;
+  --theme-accent-strong: #563d2a;
+  --theme-accent-soft: rgba(111, 81, 55, 0.12);
+  --theme-accent-gradient: linear-gradient(180deg, #795a40, #563d2a);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+}
+
+:root[data-theme="sky"] {
+  --app-bg:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.88), transparent 30%),
+    radial-gradient(circle at 92% 2%, rgba(57, 127, 189, 0.17), transparent 28%),
+    linear-gradient(180deg, #f2f8fd 0%, #e3f0fa 56%, #d5e7f5 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(247, 252, 255, 0.96), rgba(216, 235, 248, 0.94));
+  --theme-card-background: linear-gradient(180deg, rgba(252, 254, 255, 0.97), rgba(226, 240, 250, 0.95));
+  --theme-panel-background: linear-gradient(180deg, rgba(250, 253, 255, 0.97), rgba(215, 234, 248, 0.96));
+  --theme-surface: #d9eaf7;
+  --theme-surface-light: #f1f8fd;
+  --theme-border: rgba(38, 93, 142, 0.16);
+  --theme-text: #183047;
+  --theme-muted: #607487;
+  --theme-accent: #397fbd;
+  --theme-accent-strong: #2c6599;
+  --theme-accent-soft: rgba(57, 127, 189, 0.13);
+  --theme-accent-gradient: linear-gradient(180deg, #468dca, #2c6599);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+}
+
+:root[data-theme="teal"] {
+  --app-bg:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.88), transparent 30%),
+    radial-gradient(circle at 92% 2%, rgba(60, 128, 91, 0.16), transparent 28%),
+    linear-gradient(180deg, #f1f8f3 0%, #e1efe5 56%, #d4e7da 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(249, 253, 250, 0.96), rgba(218, 236, 223, 0.94));
+  --theme-card-background: linear-gradient(180deg, rgba(252, 255, 253, 0.97), rgba(228, 241, 232, 0.95));
+  --theme-panel-background: linear-gradient(180deg, rgba(250, 254, 251, 0.97), rgba(216, 235, 222, 0.96));
+  --theme-surface: #d9ebdd;
+  --theme-surface-light: #f1f8f3;
+  --theme-border: rgba(40, 101, 68, 0.16);
+  --theme-text: #20372a;
+  --theme-muted: #64766b;
+  --theme-accent: #3c805b;
+  --theme-accent-strong: #2f6748;
+  --theme-accent-soft: rgba(60, 128, 91, 0.13);
+  --theme-accent-gradient: linear-gradient(180deg, #4a9069, #2f6748);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+}
+
+body,
+.app-shell,
+.app-shell-monochrome {
+  color: var(--theme-text);
+  background: var(--app-bg);
+}
+
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right-color: var(--theme-border);
+}
+
+.dashboard-main-card,
+.responses-page-card,
+.users-page-card,
+.login-card,
+.modal-card {
+  border-color: var(--theme-border);
+  background: var(--theme-card-background);
+}
+
+.nav-link {
+  color: var(--theme-text);
+}
+
+.nav-link:hover {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-accent-soft);
+}
+
+.nav-link-active,
+.nav-link-active:hover,
+.button-primary,
+.button-primary:hover {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+}
+
+.builder-creator-shell .svc-creator {
+  --sjs-primary-backcolor: var(--theme-accent);
+  --sjs-primary-backcolor-dark: var(--theme-accent-strong);
+  --sjs-primary-backcolor-light: var(--theme-accent-soft);
+  --sjs-primary-background-500: var(--theme-accent);
+  --sjs-primary-background-400: var(--theme-accent-strong);
+  --sjs-primary-background-10: var(--theme-accent-soft);
+  --sjs-general-backcolor: var(--theme-surface-light);
+  --sjs-general-backcolor-dim: var(--theme-surface);
+  --sjs-general-backcolor-dim-light: var(--theme-surface-light);
+  --sjs-general-backcolor-dark: var(--theme-border);
+  --sjs-general-forecolor: var(--theme-text);
+  --sjs-general-forecolor-light: var(--theme-muted);
+  --sjs-layer-1-foreground-100: var(--theme-text);
+  --sjs-layer-1-foreground-50: var(--theme-muted);
+  --sjs-layer-1-background-500: var(--theme-surface-light);
+  --sjs-layer-3-background-500: var(--theme-surface);
+  --ctr-button-group-item-text-color-selected: var(--theme-accent);
+  --ctr-button-group-item-icon-color-selected: var(--theme-accent);
+  --ctr-button-group-border-color-focused: var(--theme-accent);
+  --ctr-survey-action-button-text-color-positive: var(--theme-accent);
+  --ctr-menu-item-border-color-selected: var(--theme-accent);
+  --ctr-property-grid-header-border-color: var(--theme-accent);
+  --ctr-editor-border-color-focused: var(--theme-accent);
+  --ctr-editor-border-color-highlighted: var(--theme-accent-soft);
+  border-color: var(--theme-border);
+  background: var(--theme-card-background);
+}
+
+.builder-creator-shell .svc-toolbox,
+.builder-creator-shell .svc-side-bar,
+.builder-creator-shell .spg-root-modern {
+  border-color: var(--theme-border) !important;
+  background: var(--theme-panel-background) !important;
+}
+
+.builder-creator-shell .svc-tabbed-menu-item--selected::after,
+.builder-creator-shell .spg-button-group__item--selected {
+  border-color: var(--theme-accent) !important;
+}
+
+.sidebar-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-cycle-button-shell {
+  position: relative;
+  z-index: 180;
+}
+
+.theme-cycle-button,
+.theme-cycle-button:hover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 13px;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 10px 22px var(--theme-accent-soft);
+}
+
+.theme-cycle-button:hover {
+  filter: brightness(1.06);
+}
+
+.theme-cycle-button-icon {
+  display: block;
+  width: 21px;
+  height: 21px;
+  transform: rotate(0deg);
+  transition: transform 220ms ease;
+}
+
+.theme-cycle-button[data-menu-open="true"] .theme-cycle-button-icon {
+  transform: rotate(180deg);
+}
+
+.theme-cycle-button-shell[data-menu-placement="top-right"] .theme-cycle-menu {
+  inset: auto auto calc(100% + 10px) 0;
+}
+
+.theme-cycle-menu {
+  width: 190px;
+  padding: 7px;
+  border-color: var(--theme-border) !important;
+  background: var(--theme-card-background) !important;
+}
+
+.theme-cycle-menu-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  color: var(--theme-option-text);
+}
+
+.theme-cycle-menu-item:hover,
+.theme-cycle-menu-item-active {
+  background: var(--theme-option-surface) !important;
+}
+
+.theme-cycle-menu-item-swatch {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--theme-option-accent), var(--theme-option-accent-hover));
+  box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.1);
+}
+
+.theme-cycle-menu-item-label {
+  font-weight: 700;
+}
+
+.theme-cycle-menu-item-state {
+  color: var(--theme-option-accent);
+  text-align: center;
+}
+
+/* Let the footer popup leave the sidebar stacking context and render above the
+   Builder surface. The navigation list keeps its own independent scrolling. */
+.sidebar {
+  overflow: visible;
+  z-index: 500;
+}
+
+.theme-cycle-button-shell {
+  z-index: 510;
+}
+
+.theme-cycle-menu {
+  z-index: 520;
+}
+
+/* These three custom Builder actions are interface controls, not form-theme
+   samples, so they intentionally stay the same neutral white in every scheme. */
+.builder-creator-shell .builder-toolbar-action-button,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary {
+  border-color: rgba(20, 20, 20, 0.14) !important;
+  background: #ffffff !important;
+  color: #242424 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 18px rgba(20, 20, 20, 0.08) !important;
+}
+
+.builder-creator-shell .builder-toolbar-action-button:hover,
+.builder-creator-shell .builder-toolbar-action-button:focus-visible,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:hover,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:focus-visible {
+  border-color: rgba(20, 20, 20, 0.24) !important;
+  background: #f7f7f7 !important;
+  color: #111111 !important;
+  box-shadow: 0 10px 22px rgba(20, 20, 20, 0.11) !important;
+}
+
+/* Public runtime and the Builder preview share the same neutral backdrop. */
+.app-main-public,
+.builder-preview-tab-shell {
+  background:
+    radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.8), transparent 26%),
+    linear-gradient(180deg, #f7f2ea 0%, #ebe2d6 100%);
+}
+
+.survey-runtime-surface.survey-page-card {
+  padding: 0;
+  border: 1px solid rgba(78, 57, 39, 0.12);
+  border-radius: 28px;
+  background: transparent !important;
+  box-shadow: 0 22px 48px rgba(73, 53, 36, 0.13);
+}
+
+.survey-runtime-surface.survey-page-card .sd-root-modern,
+.survey-runtime-surface.survey-page-card .sd-root-modern__wrapper,
+.survey-runtime-surface.survey-page-card .sd-container-modern,
+.survey-runtime-surface.survey-page-card .sd-root_background-image {
+  border-radius: 27px;
+  background-clip: padding-box;
+}
+
+/* Survey Creator owns these canvases. The official creator theme supplies the
+   same values; this fallback also prevents the built-in aqua default flashing
+   before the Creator model applies it. */
+.builder-creator-shell svc-tab-designer,
+.builder-creator-shell .svc-tab-designer {
+  background: var(--theme-surface-light) !important;
+}
+
+.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visible {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 8px 18px var(--theme-accent-soft);
+}
+
+.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visible {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: linear-gradient(180deg, var(--theme-surface-light), var(--theme-surface));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 8px 18px var(--theme-accent-soft);
+}
+
+@media (max-width: 760px) {
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
+    border-radius: 20px !important;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root_background-image {
+    border-radius: 20px;
   }
 }
 

@@ -1,10 +1,5 @@
 import type { ITheme } from "survey-core";
-
-type CreatorUiTheme = {
-  themeName?: string;
-  iconsSet?: string;
-  cssVariables?: Record<string, string>;
-};
+import type { ICreatorTheme } from "survey-creator-core";
 
 export type ThemeId = "sand" | "sky" | "teal";
 
@@ -21,7 +16,7 @@ export type AppThemeTokens = {
 export type SurveyThemeBundle = {
   app: AppThemeTokens;
   survey: ITheme;
-  creatorUi: CreatorUiTheme;
+  creatorUi: ICreatorTheme;
 };
 
 export const THEME_STORAGE_KEY = "survey-app:theme";
@@ -31,31 +26,31 @@ const themeIds = ["sand", "sky", "teal"] as const satisfies readonly ThemeId[];
 
 const palettes: Record<ThemeId, AppThemeTokens> = {
   sand: {
-    label: "Графит",
-    accent: "#2b2f36",
-    accentHover: "#1f2329",
-    bg: "#f6f7f9",
-    surface: "#eceff3",
-    text: "#1a1d21",
-    muted: "#6b7280",
+    label: "Бежевая",
+    accent: "#6f5137",
+    accentHover: "#563d2a",
+    bg: "#f7f1e8",
+    surface: "#eadfce",
+    text: "#2d241d",
+    muted: "#75685d",
   },
   sky: {
-    label: "Небо",
-    accent: "#2563eb",
-    accentHover: "#1d4ed8",
-    bg: "#f4f7fb",
-    surface: "#e9eff7",
-    text: "#17253d",
-    muted: "#66758b",
+    label: "Голубая",
+    accent: "#397fbd",
+    accentHover: "#2c6599",
+    bg: "#eef6fc",
+    surface: "#d9eaf7",
+    text: "#183047",
+    muted: "#607487",
   },
   teal: {
-    label: "Бирюза",
-    accent: "#207a53",
-    accentHover: "#185f40",
-    bg: "#f4f8f5",
-    surface: "#e9f0eb",
-    text: "#163126",
-    muted: "#66756c",
+    label: "Зелёная",
+    accent: "#3c805b",
+    accentHover: "#2f6748",
+    bg: "#eef7f0",
+    surface: "#d9ebdd",
+    text: "#20372a",
+    muted: "#64766b",
   },
 };
 
@@ -109,9 +104,11 @@ function createSurveyTheme(app: AppThemeTokens): ITheme {
   };
 }
 
-function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): CreatorUiTheme {
+function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): ICreatorTheme {
   return {
     themeName: `survey-app-${themeId}`,
+    iconSet: "v2",
+    isLight: true,
     cssVariables: {
       "--sjs-primary-backcolor": app.accent,
       "--sjs-primary-backcolor-dark": app.accentHover,
@@ -130,6 +127,8 @@ function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): CreatorUiThe
       "--sjs-layer-1-foreground-50": app.muted,
       "--sjs-layer-1-background-500": app.bg,
       "--sjs-layer-3-background-500": app.surface,
+      "--sjs-special-background": app.bg,
+      "--sjs2-color-utility-surface-designer": app.bg,
       "--ctr-button-group-item-text-color-selected": app.accent,
       "--ctr-button-group-item-icon-color-selected": app.accent,
       "--ctr-button-group-border-color-focused": app.accent,

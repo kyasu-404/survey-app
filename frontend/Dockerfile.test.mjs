@@ -64,7 +64,7 @@ test("production nginx sends browser hardening security headers", () => {
   assertCspDirectiveIncludes(directives, "style-src", "'self'");
   assertCspDirectiveIncludes(directives, "font-src", "'self'", "data:", "https://fonts.gstatic.com");
   assert.ok(!directives.get("style-src")?.includes("https://fonts.googleapis.com"));
-  assertCspDirectiveIncludes(directives, "img-src", "'self'", "data:", "blob:");
+  assertCspDirectiveIncludes(directives, "img-src", "'self'", "data:", "blob:", "http://$host:8000");
   assertCspDirectiveIncludes(
     directives,
     "connect-src",

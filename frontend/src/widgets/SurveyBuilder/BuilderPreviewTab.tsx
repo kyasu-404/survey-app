@@ -21,7 +21,7 @@ export function BuilderPreviewTab() {
           schema={previewSchema}
           theme={previewTheme}
           formId={formId ?? "__builder_preview__"}
-          renderMode="readonly-navigable"
+          renderMode="preview-interactive"
         />
       </SurveyRuntimeSurface>
     </div>

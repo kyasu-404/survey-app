@@ -158,12 +158,65 @@ export function resolveSurveyTheme(value: unknown): ITheme {
   return Object.keys(theme).length > 0 ? theme : sanitizeSurveyTheme(DEFAULT_SURVEY_THEME);
 }
 
+const BUILDER_BACKGROUND_OPACITY_LIMIT = 0.18;
+
+/**
+ * The Designer must reflect the respondent theme without letting a large
+ * background image compete with drag-and-drop affordances. Theme Editor and
+ * runtime preview continue to use the unmodified theme.
+ */
+export function resolveBuilderDesignerTheme(value: unknown): ITheme {
+  const theme = resolveSurveyTheme(value);
+
+  if (!theme.backgroundImage) {
+    return theme;
+  }
+
+  return sanitizeSurveyTheme({
+    ...theme,
+    backgroundImageAttachment: "scroll",
+    backgroundOpacity: Math.min(theme.backgroundOpacity ?? 1, BUILDER_BACKGROUND_OPACITY_LIMIT),
+  });
+}
+
 export function withSurveyBackground(theme: unknown, backgroundImage: string): ITheme {
   return sanitizeSurveyTheme({
     ...resolveSurveyTheme(theme),
     backgroundImage,
     backgroundImageFit: "cover",
     backgroundImageAttachment: "scroll",
-    backgroundOpacity: backgroundImage ? 0.35 : 1,
+    backgroundOpacity: 1,
   });
+}
+
+export function withUploadedSurveyThemeImage(
+  theme: unknown,
+  elementType: string | undefined,
+  propertyName: string | undefined,
+  imageUrl: string,
+): ITheme {
+  const resolvedTheme = resolveSurveyTheme(theme);
+
+  if (propertyName !== "backgroundImage") {
+    return resolvedTheme;
+  }
+
+  if (elementType === "header") {
+    return sanitizeSurveyTheme({
+      ...resolvedTheme,
+      header: {
+        ...(resolvedTheme.header ?? {}),
+        backgroundImage: imageUrl,
+      },
+    });
+  }
+
+  if (elementType === "theme") {
+    return sanitizeSurveyTheme({
+      ...resolvedTheme,
+      backgroundImage: imageUrl,
+    });
+  }
+
+  return resolvedTheme;
 }

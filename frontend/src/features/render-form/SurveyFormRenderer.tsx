@@ -41,7 +41,12 @@ import {
 
 surveyLocalization.defaultLocale = "ru";
 
-export type SurveyRenderMode = "interactive" | "preview-navigable" | "readonly-navigable" | "readonly-static";
+export type SurveyRenderMode =
+  | "interactive"
+  | "preview-interactive"
+  | "preview-navigable"
+  | "readonly-navigable"
+  | "readonly-static";
 
 type SurveyFormRendererProps = {
   schema: SurveySchema;
@@ -151,7 +156,7 @@ function resolveRenderMode(renderMode: SurveyRenderMode | undefined, isPreview: 
 }
 
 function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
-  if (renderMode === "interactive") {
+  if (renderMode === "interactive" || renderMode === "preview-interactive") {
     return;
   }
 

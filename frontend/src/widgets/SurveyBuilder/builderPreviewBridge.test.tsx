@@ -111,7 +111,7 @@ describe("builder preview bridge", () => {
     expect(previewTab).toHaveClass("builder-preview-tab-shell", "survey-page", "survey-page-shell");
     expect(previewSurface).toHaveClass("survey-page-card", "card", "builder-preview-tab-surface");
     expect(screen.getByTestId("builder-preview-renderer")).toHaveTextContent(
-      "__builder_preview__|readonly-navigable|1|default",
+      "__builder_preview__|preview-interactive|1|default",
     );
     expect(screen.queryByLabelText("Редактор формы")).not.toBeInTheDocument();
     expect(screen.queryByText("Редактор загружается")).not.toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("builder preview bridge", () => {
     });
 
     expect(screen.getByTestId("builder-preview-renderer")).toHaveTextContent(
-      "form-9|readonly-navigable|2|default",
+      "form-9|preview-interactive|2|default",
     );
   });
 
