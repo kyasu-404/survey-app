@@ -139,6 +139,7 @@ export default function SurveyPage() {
             renderMode={renderMode}
             isPreview={isPreview}
             allowAnonymousUploads={form.is_public}
+            allowResponseEditing={form.allow_response_editing ?? false}
           />
         </Suspense>
       </SurveyRuntimeSurface>

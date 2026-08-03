@@ -1,5 +1,9 @@
-import { apiClient } from "./client";
-import type { SurveyResponse } from "../../entities/response/types";
+import type {
+  SubmitResponseResult,
+  SurveyResponse,
+  UpdateResponseResult,
+} from "../../entities/response/types";
+import { apiClient, supabaseClient } from "./client";
 import { runRequest } from "./request";
 
 export const RESPONSES_PAGE_SIZE = 50;
@@ -10,6 +14,8 @@ const PAGINATED_COUNT_MODE = "planned";
 export type FetchResponsesByFormOptions = {
   page?: number;
   pageSize?: number;
+  dateFrom?: string;
+  dateToExclusive?: string;
   signal?: AbortSignal;
 };
 
@@ -19,6 +25,18 @@ export type PaginatedResponses = {
   page: number;
   pageSize: number;
   totalPages: number;
+};
+
+type SubmitResponseRpcRow = {
+  status?: unknown;
+  response_id?: unknown;
+  response_data?: unknown;
+  response_editable?: unknown;
+};
+
+type UpdateResponseRpcRow = {
+  response_id?: unknown;
+  response_data?: unknown;
 };
 
 function normalizePositiveInteger(value: number | undefined, fallback: number) {
@@ -46,40 +64,135 @@ function applyAbortSignal<TQuery>(query: TQuery, signal?: AbortSignal): TQuery {
   return typeof abortableQuery.abortSignal === "function" ? abortableQuery.abortSignal(signal) : query;
 }
 
-function isDuplicateSubmissionError(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return false;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getFirstRpcRow(value: unknown) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function mapSubmitResponseResult(value: unknown): SubmitResponseResult {
+  const row = getFirstRpcRow(value) as SubmitResponseRpcRow | null;
+  const status = row?.status;
+
+  if (
+    (status !== "submitted" && status !== "already_submitted")
+    || typeof row?.response_id !== "string"
+    || !isRecord(row.response_data)
+  ) {
+    throw new Error("Сервер вернул некорректный результат сохранения ответа");
   }
 
-  const candidate = error as { code?: string; message?: string; details?: string };
-  return candidate.code === "23505"
-    && `${candidate.message ?? ""} ${candidate.details ?? ""}`.includes("submission");
+  return {
+    status,
+    responseId: row.response_id,
+    data: row.response_data,
+    editable: row.response_editable === true,
+  };
+}
+
+function mapUpdateResponseResult(value: unknown): UpdateResponseResult {
+  const row = getFirstRpcRow(value) as UpdateResponseRpcRow | null;
+
+  if (typeof row?.response_id !== "string" || !isRecord(row.response_data)) {
+    throw new Error("Сервер вернул некорректный результат редактирования ответа");
+  }
+
+  return {
+    responseId: row.response_id,
+    data: row.response_data,
+  };
+}
+
+async function getFunctionErrorMessage(error: unknown, response?: Response) {
+  const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
+
+  if (errorResponse instanceof Response) {
+    const payload: unknown = await errorResponse.clone().json().catch(() => null);
+    if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  }
+
+  return error instanceof Error && error.message.trim() ? error.message : "Не удалось удалить ответы";
 }
 
 export async function insertResponse(
   formId: string,
   data: Record<string, unknown>,
   submissionId: string,
+  browserId: string,
   signal?: AbortSignal,
-) {
-  await runRequest(
-    "responses.insert",
-    async (requestSignal) => {
-      const result = await applyAbortSignal(
-        apiClient.from("responses").insert({
-          form_id: formId,
-          submission_id: submissionId,
-          data,
-        }),
-        requestSignal,
-      );
-
-      if (result.error && !isDuplicateSubmissionError(result.error)) {
-        throw result.error;
-      }
-    },
+): Promise<SubmitResponseResult> {
+  const { data: result, error } = await runRequest(
+    "responses.submit",
+    (requestSignal) => applyAbortSignal(
+      apiClient.rpc("submit_form_response", {
+        p_form_id: formId,
+        p_browser_id: browserId,
+        p_submission_id: submissionId,
+        p_data: data,
+      }),
+      requestSignal,
+    ),
     { signal, context: { formId, submissionId } },
   );
+
+  if (error) throw error;
+  return mapSubmitResponseResult(result);
+}
+
+export async function updateResponse(
+  formId: string,
+  responseId: string,
+  data: Record<string, unknown>,
+  browserId: string,
+  signal?: AbortSignal,
+): Promise<UpdateResponseResult> {
+  const { data: result, error } = await runRequest(
+    "responses.update",
+    (requestSignal) => applyAbortSignal(
+      apiClient.rpc("update_form_response", {
+        p_form_id: formId,
+        p_browser_id: browserId,
+        p_response_id: responseId,
+        p_data: data,
+      }),
+      requestSignal,
+    ),
+    { signal, context: { formId, responseId } },
+  );
+
+  if (error) throw error;
+  return mapUpdateResponseResult(result);
+}
+
+export async function deleteResponses(formId: string, responseIds: string[]) {
+  const {
+    data: { session },
+  } = await runRequest("auth.getSession", () => apiClient.auth.getCurrentSession(), { context: { formId } });
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
+  const { error, response } = await runRequest(
+    "functions.form-admin.deleteResponses",
+    (_signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
+      body: { action: "delete-responses", formId, responseIds },
+      headers: {
+        ...traceContext.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }),
+    { context: { formId, responseCount: responseIds.length } },
+  );
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error, response));
+  }
 }
 
 export async function fetchResponsesByForm(
@@ -93,17 +206,35 @@ export async function fetchResponsesByForm(
 
   const { data, error, count } = await runRequest(
     "responses.fetchByForm",
-    (signal) =>
-      applyAbortSignal(
-        apiClient
-          .from("responses")
-          .select("*", { count: PAGINATED_COUNT_MODE })
-          .eq("form_id", formId)
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false }),
-        signal,
-      ).range(from, to),
-    { signal: options.signal, context: { formId, page, pageSize } },
+    (signal) => {
+      let query = apiClient
+        .from("responses")
+        .select("*", { count: PAGINATED_COUNT_MODE })
+        .eq("form_id", formId);
+
+      if (options.dateFrom) {
+        query = query.gte("created_at", options.dateFrom);
+      }
+      if (options.dateToExclusive) {
+        query = query.lt("created_at", options.dateToExclusive);
+      }
+
+      const orderedQuery = query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+
+      return applyAbortSignal(orderedQuery, signal).range(from, to);
+    },
+    {
+      signal: options.signal,
+      context: {
+        formId,
+        page,
+        pageSize,
+        dateFrom: options.dateFrom ?? null,
+        dateToExclusive: options.dateToExclusive ?? null,
+      },
+    },
   );
 
   if (error) throw error;

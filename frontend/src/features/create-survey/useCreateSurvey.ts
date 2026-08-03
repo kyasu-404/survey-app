@@ -6,6 +6,7 @@ import type { ITheme } from "survey-core";
 import { DEFAULT_SURVEY_THEME } from "../../entities/survey/model/surveyTheme";
 import { apiClient } from "../../shared/api";
 import { runRequest } from "../../shared/api/request";
+import type { OrganizationType } from "../../entities/organization/types";
 
 type CreateSurveyForCurrentUserParams = {
   id?: string;
@@ -16,6 +17,8 @@ type CreateSurveyForCurrentUserParams = {
   formReason?: string;
   deadlineAt?: string | null;
   maxResponses?: number | null;
+  allowResponseEditing?: boolean;
+  organizationTypes?: OrganizationType[];
   isPublic?: boolean;
 };
 
@@ -28,6 +31,8 @@ export async function createSurveyForCurrentUser({
   formReason = DEFAULT_FORM_REASON,
   deadlineAt,
   maxResponses,
+  allowResponseEditing,
+  organizationTypes,
   isPublic,
 }: CreateSurveyForCurrentUserParams) {
   const { data } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
@@ -47,6 +52,8 @@ export async function createSurveyForCurrentUser({
     authorId: userId,
     ...(deadlineAt !== undefined ? { deadlineAt } : {}),
     ...(maxResponses !== undefined ? { maxResponses } : {}),
+    ...(allowResponseEditing !== undefined ? { allowResponseEditing } : {}),
+    ...(organizationTypes !== undefined ? { organizationTypes } : {}),
   };
   const resolvedIsPublic =
     typeof isPublic === "boolean" ? isPublic : formType === "template" ? false : undefined;
@@ -63,7 +70,7 @@ export async function createSurveyForCurrentUser({
 
 export function useCreateSurveyMutation() {
   return useMutation({
-    mutationFn: ({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, isPublic }: CreateSurveyForCurrentUserParams) =>
-      createSurveyForCurrentUser({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, isPublic }),
+    mutationFn: ({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, allowResponseEditing, organizationTypes, isPublic }: CreateSurveyForCurrentUserParams) =>
+      createSurveyForCurrentUser({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, allowResponseEditing, organizationTypes, isPublic }),
   });
 }

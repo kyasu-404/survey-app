@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchResponsesByForm, insertResponse } from "./responsesApi";
+import { fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
 import { apiClient } from "./client";
 
 vi.mock("./client", () => ({
   apiClient: {
     from: vi.fn(),
+    rpc: vi.fn(),
+    auth: { getCurrentSession: vi.fn() },
   },
+  supabaseClient: { functions: { invoke: vi.fn() } },
 }));
 
 function createHangingInsert() {
@@ -22,12 +25,15 @@ describe("insertResponse", () => {
 
   it("fails with timeout instead of leaving submit pending forever", async () => {
     vi.useFakeTimers();
-    vi.mocked(apiClient.from).mockReturnValue({
-      insert: vi.fn(() => createHangingInsert()),
-    } as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(createHangingInsert() as never);
 
     const mutationStatePromise = Promise.race([
-      insertResponse("form-1", { q1: "yes" }, "123e4567-e89b-42d3-a456-426614174000").then(
+      insertResponse(
+        "form-1",
+        { q1: "yes" },
+        "123e4567-e89b-42d3-a456-426614174000",
+        "223e4567-e89b-42d3-a456-426614174000",
+      ).then(
         () => "resolved",
         () => "rejected",
       ),
@@ -41,29 +47,62 @@ describe("insertResponse", () => {
     await expect(mutationStatePromise).resolves.toBe("rejected");
   });
 
-  it("treats a repeated idempotency key as success and forwards cancellation", async () => {
+  it("submits with a persistent browser id and forwards cancellation", async () => {
     const signal = new AbortController().signal;
     const query = {
       abortSignal: vi.fn(() => Promise.resolve({
-        data: null,
-        error: {
-          code: "23505",
-          message: 'duplicate key value violates unique constraint "idx_responses_form_submission_id"',
-        },
+        data: [{
+          status: "already_submitted",
+          response_id: "response-1",
+          response_data: { q1: "first answer" },
+          response_editable: true,
+        }],
+        error: null,
       })),
     };
-    const insert = vi.fn(() => query);
-    vi.mocked(apiClient.from).mockReturnValue({ insert } as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(query as never);
 
     await expect(
-      insertResponse("form-1", { q1: "yes" }, "123e4567-e89b-42d3-a456-426614174000", signal),
-    ).resolves.toBeUndefined();
+      insertResponse(
+        "form-1",
+        { q1: "yes" },
+        "123e4567-e89b-42d3-a456-426614174000",
+        "223e4567-e89b-42d3-a456-426614174000",
+        signal,
+      ),
+    ).resolves.toEqual({
+      status: "already_submitted",
+      responseId: "response-1",
+      data: { q1: "first answer" },
+      editable: true,
+    });
 
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
-      form_id: "form-1",
-      submission_id: "123e4567-e89b-42d3-a456-426614174000",
-    }));
+    expect(apiClient.rpc).toHaveBeenCalledWith("submit_form_response", {
+      p_form_id: "form-1",
+      p_browser_id: "223e4567-e89b-42d3-a456-426614174000",
+      p_submission_id: "123e4567-e89b-42d3-a456-426614174000",
+      p_data: { q1: "yes" },
+    });
     expect(query.abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
+
+  it("updates only the response that matches the browser capability", async () => {
+    vi.mocked(apiClient.rpc).mockResolvedValue({
+      data: [{ response_id: "response-1", response_data: { q1: "updated" } }],
+      error: null,
+    } as never);
+
+    await expect(updateResponse(
+      "form-1",
+      "response-1",
+      { q1: "updated" },
+      "223e4567-e89b-42d3-a456-426614174000",
+    )).resolves.toEqual({ responseId: "response-1", data: { q1: "updated" } });
+
+    expect(apiClient.rpc).toHaveBeenCalledWith("update_form_response", expect.objectContaining({
+      p_response_id: "response-1",
+      p_browser_id: "223e4567-e89b-42d3-a456-426614174000",
+    }));
   });
 });
 
@@ -82,6 +121,8 @@ describe("fetchResponsesByForm", () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      gte: vi.fn(() => query),
+      lt: vi.fn(() => query),
       order: vi.fn(() => query),
       abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [response], count: 72, error: null })),
@@ -108,6 +149,8 @@ describe("fetchResponsesByForm", () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      gte: vi.fn(() => query),
+      lt: vi.fn(() => query),
       order: vi.fn(() => query),
       abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
@@ -118,5 +161,25 @@ describe("fetchResponsesByForm", () => {
 
     expect(query.abortSignal).toHaveBeenCalledOnce();
     expect(query.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
+  });
+
+  it("applies inclusive start and exclusive end date filters", async () => {
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      gte: vi.fn(() => query),
+      lt: vi.fn(() => query),
+      order: vi.fn(() => query),
+      range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await fetchResponsesByForm("form-1", {
+      dateFrom: "2026-08-01T00:00:00.000Z",
+      dateToExclusive: "2026-08-04T00:00:00.000Z",
+    });
+
+    expect(query.gte).toHaveBeenCalledWith("created_at", "2026-08-01T00:00:00.000Z");
+    expect(query.lt).toHaveBeenCalledWith("created_at", "2026-08-04T00:00:00.000Z");
   });
 });

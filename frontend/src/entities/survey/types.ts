@@ -1,4 +1,5 @@
 import type { ITheme } from "survey-core";
+import type { OrganizationType } from "../organization/types";
 
 export type SurveyQuestion = {
   type: string;
@@ -45,6 +46,8 @@ export type SurveyForm = {
   is_public: boolean;
   deadline_at: string | null;
   max_responses?: number | null;
+  allow_response_editing?: boolean;
+  organization_types?: OrganizationType[];
   author_id: string;
   schema: SurveySchema;
   theme: ITheme;
@@ -54,7 +57,7 @@ export type SurveyForm = {
   responses_count?: number;
 };
 
-export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme">;
+export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme" | "allow_response_editing">;
 
 export type PaginatedSurveyFormSummaries = {
   items: SurveyFormSummary[];

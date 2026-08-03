@@ -21,12 +21,19 @@ import {
   sanitizeSurveyHtml,
   sanitizeSurveySchema,
 } from "../../entities/survey/model/surveySchemaSecurity";
-import { useSubmitResponseMutation } from "../submit-response/useSubmitResponse";
+import { useSubmitResponseMutation, useUpdateResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import { useToast } from "../../app/providers/ToastProvider";
+import { getFormOrganizations, getOrganizations } from "../../entities/organization/api";
+import {
+  DEFAULT_FORM_ORGANIZATION_TYPES,
+  hasOrganizationQuestion,
+} from "../../entities/organization/model";
+import { applyOrganizationChoicesToSurvey } from "../../entities/organization/surveyQuestion";
 import { getSubmitResponseErrorMessage } from "../../shared/lib/error";
 import {
   getStoragePathFromSurveyFileValue,
+  getStoragePathsFromResponseData,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -38,6 +45,7 @@ import {
   loadSurveyResponseDraft,
   saveSurveyResponseDraft,
 } from "./responseDraft";
+import { getOrCreateResponseBrowserId } from "./responseBrowserId";
 
 surveyLocalization.defaultLocale = "ru";
 
@@ -58,6 +66,14 @@ type SurveyFormRendererProps = {
   renderMode?: SurveyRenderMode;
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
+  allowResponseEditing?: boolean;
+};
+
+type SavedResponseState = {
+  status: "submitted" | "already_submitted";
+  responseId: string;
+  data: Record<string, unknown>;
+  editable: boolean;
 };
 
 type DropdownPopupModel = {
@@ -199,15 +215,21 @@ export function SurveyFormRenderer({
   renderMode,
   isPreview = false,
   allowAnonymousUploads = false,
+  allowResponseEditing = false,
 }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingResponse, setIsEditingResponse] = useState(false);
+  const [savedResponse, setSavedResponse] = useState<SavedResponseState | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
+  const updateResponseMutation = useUpdateResponseMutation();
   const allowProgrammaticCompleteRef = useRef(false);
   const submissionIdRef = useRef<string>(createSubmissionId());
+  const browserIdRef = useRef<string>(getOrCreateResponseBrowserId());
   const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
   const isInteractiveMode = resolvedRenderMode === "interactive";
+  const usesOrganizationDirectory = useMemo(() => hasOrganizationQuestion(schema), [schema]);
   const responseDraftStorageKey = useMemo(
     () => (isInteractiveMode ? getSurveyResponseDraftStorageKey(formId, respondentId) : null),
     [formId, isInteractiveMode, respondentId],
@@ -253,6 +275,27 @@ export function SurveyFormRenderer({
     applyRenderMode(nextModel, resolvedRenderMode);
     return nextModel;
   }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
+
+  useEffect(() => {
+    if (!usesOrganizationDirectory) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const request = formId === "__builder_preview__"
+      ? getOrganizations(DEFAULT_FORM_ORGANIZATION_TYPES, controller.signal)
+      : getFormOrganizations(formId, controller.signal);
+
+    void request
+      .then((organizations) => applyOrganizationChoicesToSurvey(model, organizations))
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        showToast("Не удалось загрузить список организаций", "error");
+      });
+
+    return () => controller.abort();
+  }, [formId, model, showToast, usesOrganizationDirectory]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -319,6 +362,11 @@ export function SurveyFormRenderer({
       options: { value: unknown; callback: (status: "success" | "error") => void }
     ) => {
       try {
+        if (isEditingResponse) {
+          options.callback("success");
+          return;
+        }
+
         const values = Array.isArray(options.value) ? options.value : [options.value];
         const paths = values
           .map((value) => getStoragePathFromSurveyFileValue(value))
@@ -352,11 +400,58 @@ export function SurveyFormRenderer({
 
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
-        await submitResponseMutation.mutateAsync({
+
+        if (isEditingResponse && savedResponse) {
+          const previousPaths = new Set(getStoragePathsFromResponseData(savedResponse.data));
+          const nextPaths = new Set(getStoragePathsFromResponseData(payload.answers));
+          const updatedResponse = await updateResponseMutation.mutateAsync({
+            formId: payload.formId,
+            responseId: savedResponse.responseId,
+            data: payload.answers,
+            browserId: browserIdRef.current,
+          });
+          const removedPaths = [...previousPaths].filter((path) => !nextPaths.has(path));
+
+          await Promise.allSettled(
+            removedPaths.map((path) => removeFileFromStorage(path, {
+              allowAnonymous: allowAnonymousUploads,
+              formId,
+            })),
+          );
+          setSavedResponse({
+            ...savedResponse,
+            status: "submitted",
+            data: updatedResponse.data,
+          });
+          setIsEditingResponse(false);
+          clearSurveyResponseDraft(responseDraftStorageKey);
+          allowProgrammaticCompleteRef.current = true;
+          sender.doComplete();
+          showToast("Изменения ответа сохранены", "success");
+          return;
+        }
+
+        const result = await submitResponseMutation.mutateAsync({
           formId: payload.formId,
           data: payload.answers,
           submissionId: submissionIdRef.current,
+          browserId: browserIdRef.current,
         });
+        setSavedResponse(result);
+
+        if (result.status === "already_submitted") {
+          const existingPaths = new Set(getStoragePathsFromResponseData(result.data));
+          const unusedAttemptPaths = getStoragePathsFromResponseData(payload.answers)
+            .filter((path) => !existingPaths.has(path));
+          await Promise.allSettled(
+            unusedAttemptPaths.map((path) => removeFileFromStorage(path, {
+              allowAnonymous: allowAnonymousUploads,
+              formId,
+            })),
+          );
+          return;
+        }
+
         clearSurveyResponseDraft(responseDraftStorageKey);
         allowProgrammaticCompleteRef.current = true;
         sender.doComplete();
@@ -389,12 +484,50 @@ export function SurveyFormRenderer({
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
-  }, [allowAnonymousUploads, formId, isInteractiveMode, model, responseDraftStorageKey, showToast, submitResponseMutation]);
+  }, [
+    allowAnonymousUploads,
+    formId,
+    isEditingResponse,
+    isInteractiveMode,
+    model,
+    responseDraftStorageKey,
+    savedResponse,
+    showToast,
+    submitResponseMutation,
+    updateResponseMutation,
+  ]);
+
+  const canEditSavedResponse = Boolean(savedResponse?.editable && allowResponseEditing);
+  const handleStartResponseEditing = () => {
+    if (!savedResponse || !canEditSavedResponse) {
+      return;
+    }
+
+    model.clear(false, true);
+    model.data = savedResponse.data;
+    model.currentPageNo = 0;
+    model.completeText = "Сохранить изменения";
+    setSubmitError(null);
+    setIsEditingResponse(true);
+  };
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>
       {submitError && <p style={{ color: "#991b1b", marginBottom: 10 }}>Ошибка отправки: {submitError}</p>}
+      {savedResponse?.status === "already_submitted" && !isEditingResponse && (
+        <div className="survey-response-already-submitted" role="status">
+          <p>Вы уже отправляли ответ на эту форму.</p>
+          {canEditSavedResponse && (
+            <button type="button" onClick={handleStartResponseEditing}>Редактировать</button>
+          )}
+        </div>
+      )}
       <Survey model={model} />
+      {savedResponse?.status === "submitted" && canEditSavedResponse && !isEditingResponse && (
+        <div className="survey-response-edit-actions">
+          <button type="button" onClick={handleStartResponseEditing}>Редактировать ответ</button>
+        </div>
+      )}
     </div>
   );
 }

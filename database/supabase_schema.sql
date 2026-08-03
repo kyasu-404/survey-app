@@ -24,6 +24,27 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
+create table public.education_organizations (
+  id uuid primary key default gen_random_uuid(),
+  organization_type text not null check (organization_type in ('school', 'kindergarten', 'odo', 'udod')),
+  number text,
+  alias text not null,
+  email text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint education_organizations_alias_length check (length(btrim(alias)) between 1 and 200),
+  constraint education_organizations_email_length check (length(btrim(email)) between 3 and 320),
+  constraint education_organizations_number_rules check (
+    (organization_type = 'udod' and number is null)
+    or (
+      organization_type <> 'udod'
+      and number is not null
+      and length(btrim(number)) between 1 and 40
+    )
+  ),
+  unique nulls not distinct (organization_type, number, alias)
+);
+
 create table public.forms (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -35,6 +56,8 @@ create table public.forms (
   deadline_at timestamptz,
   max_responses integer,
   responses_count integer not null default 0,
+  allow_response_editing boolean not null default false,
+  organization_types text[] not null default array['school', 'kindergarten']::text[],
   author_id uuid not null references public.profiles(id) on delete cascade,
   author_name text not null default '',
   created_at timestamptz not null default now()
@@ -45,8 +68,10 @@ create table public.responses (
   form_id uuid not null references public.forms(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete set null,
   submission_id uuid not null default gen_random_uuid(),
+  browser_id uuid,
   data jsonb not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.response_file_references (
@@ -168,6 +193,13 @@ add constraint forms_max_responses_hard_cap check (max_responses is null or max_
 alter table public.forms
 add constraint forms_responses_count_nonnegative check (responses_count >= 0);
 
+alter table public.forms
+add constraint forms_organization_types_valid check (
+  cardinality(organization_types) between 1 and 4
+  and organization_types <@ array['school', 'kindergarten', 'odo', 'udod']::text[]
+  and array_position(organization_types, null) is null
+);
+
 alter table public.responses
 add constraint responses_data_is_object check (jsonb_typeof(data) = 'object');
 
@@ -274,6 +306,64 @@ $$;
 revoke all on function public.is_public_active_form(uuid) from public;
 grant execute on function public.is_public_active_form(uuid) to anon, authenticated, service_role;
 
+create or replace function public.set_education_organization_updated_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  new.alias = btrim(new.alias);
+  new.email = lower(btrim(new.email));
+  new.number = case when new.organization_type = 'udod' then null else btrim(new.number) end;
+  return new;
+end;
+$$;
+
+create trigger education_organizations_set_updated_at
+before insert or update on public.education_organizations
+for each row execute procedure public.set_education_organization_updated_at();
+
+create or replace function public.list_form_organizations(p_form_id uuid)
+returns table (
+  id uuid,
+  organization_type text,
+  number text,
+  alias text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select o.id, o.organization_type, o.number, o.alias
+  from public.education_organizations o
+  join public.forms f on f.id = p_form_id
+  where o.organization_type = any(f.organization_types)
+    and jsonb_path_exists(f.schema, '$.** ? (@.type == "organization")', '{}'::jsonb, true)
+    and (
+      public.is_public_active_form(f.id)
+      or (
+        auth.uid() is not null
+        and public.request_is_enabled()
+        and (f.author_id = auth.uid() or public.request_role() = 'admin')
+      )
+    )
+  order by
+    case o.organization_type
+      when 'school' then 1
+      when 'kindergarten' then 2
+      when 'odo' then 3
+      else 4
+    end,
+    o.number nulls last,
+    o.alias;
+$$;
+
+revoke all on function public.list_form_organizations(uuid) from public;
+grant execute on function public.list_form_organizations(uuid) to anon, authenticated, service_role;
+
 create or replace trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
@@ -351,6 +441,31 @@ $$;
 create or replace trigger forms_enforce_response_limit_settings
 before insert or update of max_responses, is_public on public.forms
 for each row execute procedure public.enforce_form_response_limit_settings();
+
+create or replace function public.prevent_answered_form_schema_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.responses_count > 0
+    and (
+      new.schema is distinct from old.schema
+      or new.organization_types is distinct from old.organization_types
+    )
+  then
+    raise exception 'У формы уже есть ответы. Создайте её копию, чтобы не нарушить существующие данные.'
+      using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace trigger forms_prevent_answered_schema_update
+before update of schema, organization_types on public.forms
+for each row execute procedure public.prevent_answered_form_schema_update();
 
 create or replace function public.ensure_form_response_limit()
 returns trigger
@@ -441,6 +556,169 @@ $$;
 create or replace trigger responses_set_user_id
 before insert on public.responses
 for each row execute procedure public.set_response_user_id();
+
+create or replace function public.submit_form_response(
+  p_form_id uuid,
+  p_browser_id uuid,
+  p_submission_id uuid,
+  p_data jsonb
+)
+returns table (
+  status text,
+  response_id uuid,
+  response_data jsonb,
+  response_editable boolean
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  target_form public.forms%rowtype;
+  existing_response public.responses%rowtype;
+  inserted_response public.responses%rowtype;
+begin
+  if auth.uid() is not null and not public.request_is_enabled() then
+    raise exception 'Пользователь отключён' using errcode = '42501';
+  end if;
+
+  if p_browser_id is null or p_submission_id is null then
+    raise exception 'Некорректный идентификатор отправки' using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(p_data) <> 'object' or pg_column_size(p_data) > 262144 then
+    raise exception 'Некорректные данные ответа' using errcode = '22023';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('survey-response/' || p_form_id::text || '/' || p_browser_id::text, 0)
+  );
+
+  select f.*
+  into target_form
+  from public.forms f
+  join public.profiles p on p.id = f.author_id
+  where f.id = p_form_id
+    and p.is_disabled = false;
+
+  if target_form.id is null then
+    raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
+  end if;
+
+  select r.*
+  into existing_response
+  from public.responses r
+  where r.form_id = p_form_id
+    and r.browser_id = p_browser_id;
+
+  if existing_response.id is not null then
+    return query select
+      'already_submitted'::text,
+      existing_response.id,
+      existing_response.data,
+      target_form.allow_response_editing
+        and target_form.is_public
+        and (target_form.deadline_at is null or target_form.deadline_at > now());
+    return;
+  end if;
+
+  if not target_form.is_public
+    or (target_form.deadline_at is not null and target_form.deadline_at <= now())
+  then
+    raise exception 'Форма закрыта для ответов' using errcode = '42501';
+  end if;
+
+  insert into public.responses (form_id, browser_id, submission_id, data)
+  values (p_form_id, p_browser_id, p_submission_id, p_data)
+  returning * into inserted_response;
+
+  return query select
+    'submitted'::text,
+    inserted_response.id,
+    inserted_response.data,
+    target_form.allow_response_editing
+      and target_form.is_public
+      and (target_form.deadline_at is null or target_form.deadline_at > now());
+end;
+$$;
+
+create or replace function public.update_form_response(
+  p_form_id uuid,
+  p_browser_id uuid,
+  p_response_id uuid,
+  p_data jsonb
+)
+returns table (
+  response_id uuid,
+  response_data jsonb
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  target_form public.forms%rowtype;
+  updated_response public.responses%rowtype;
+begin
+  if auth.uid() is not null and not public.request_is_enabled() then
+    raise exception 'Пользователь отключён' using errcode = '42501';
+  end if;
+
+  if p_browser_id is null or p_response_id is null then
+    raise exception 'Некорректный идентификатор ответа' using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(p_data) <> 'object' or pg_column_size(p_data) > 262144 then
+    raise exception 'Некорректные данные ответа' using errcode = '22023';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('survey-response/' || p_form_id::text || '/' || p_browser_id::text, 0)
+  );
+
+  select f.*
+  into target_form
+  from public.forms f
+  join public.profiles p on p.id = f.author_id
+  where f.id = p_form_id
+    and p.is_disabled = false;
+
+  if target_form.id is null then
+    raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
+  end if;
+
+  if not target_form.allow_response_editing then
+    raise exception 'Редактирование ответов отключено' using errcode = '42501';
+  end if;
+
+  if not target_form.is_public
+    or (target_form.deadline_at is not null and target_form.deadline_at <= now())
+  then
+    raise exception 'Форма закрыта для редактирования ответов' using errcode = '42501';
+  end if;
+
+  update public.responses r
+  set data = p_data,
+      updated_at = now()
+  where r.id = p_response_id
+    and r.form_id = p_form_id
+    and r.browser_id = p_browser_id
+  returning r.* into updated_response;
+
+  if updated_response.id is null then
+    raise exception 'Ответ не найден' using errcode = 'P0002';
+  end if;
+
+  return query select updated_response.id, updated_response.data;
+end;
+$$;
+
+revoke all on function public.submit_form_response(uuid, uuid, uuid, jsonb) from public;
+revoke all on function public.update_form_response(uuid, uuid, uuid, jsonb) from public;
+grant execute on function public.submit_form_response(uuid, uuid, uuid, jsonb) to anon, authenticated, service_role;
+grant execute on function public.update_form_response(uuid, uuid, uuid, jsonb) to anon, authenticated, service_role;
 
 create or replace function public.sync_response_file_references()
 returns trigger
@@ -545,6 +823,7 @@ grant execute on function public.get_dashboard_forms_stats(text, timestamptz, ti
 -- =========================
 
 alter table public.profiles enable row level security;
+alter table public.education_organizations enable row level security;
 alter table public.forms enable row level security;
 alter table public.responses enable row level security;
 
@@ -556,17 +835,18 @@ grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema extensions to anon, authenticated, service_role;
 
 grant select on table public.profiles to authenticated;
+grant select, insert, update, delete on table public.education_organizations to authenticated;
 grant select on table public.forms to anon;
 grant select on table public.forms to authenticated;
-grant insert (id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, author_id)
+grant insert (id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types, author_id)
   on table public.forms to authenticated;
 revoke delete on table public.forms from authenticated;
 revoke update on table public.forms from authenticated;
-grant update (title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses) on table public.forms to authenticated;
-grant insert (form_id, submission_id, data) on table public.responses to anon;
+grant update (title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types) on table public.forms to authenticated;
+revoke insert on table public.responses from anon;
 grant select on table public.responses to authenticated;
-grant insert (form_id, submission_id, data) on table public.responses to authenticated;
-grant select, insert, update, delete on table public.profiles, public.forms, public.responses to service_role;
+revoke insert on table public.responses from authenticated;
+grant select, insert, update, delete on table public.profiles, public.education_organizations, public.forms, public.responses to service_role;
 revoke all on table public.response_file_references from anon, authenticated;
 grant select, insert, update, delete on table public.response_file_references to service_role;
 
@@ -598,6 +878,29 @@ with check (
 
 revoke update on table public.profiles from authenticated;
 grant update (name) on table public.profiles to authenticated;
+
+-- =========================
+-- EDUCATION ORGANIZATIONS
+-- =========================
+
+create policy "education_organizations_select"
+on public.education_organizations
+for select
+to authenticated
+using ((select public.request_is_enabled()));
+
+create policy "education_organizations_admin_write"
+on public.education_organizations
+for all
+to authenticated
+using (
+  (select public.request_is_enabled())
+  and (select public.request_role()) = 'admin'
+)
+with check (
+  (select public.request_is_enabled())
+  and (select public.request_role()) = 'admin'
+);
 
 -- =========================
 -- FORMS
@@ -981,6 +1284,7 @@ create index idx_forms_author_created_at_id on public.forms(author_id, created_a
 create index idx_responses_form_id on public.responses(form_id);
 create index idx_responses_form_created_at_id on public.responses(form_id, created_at desc, id desc);
 create unique index idx_responses_form_submission_id on public.responses(form_id, submission_id);
+create unique index idx_responses_form_browser_id on public.responses(form_id, browser_id) where browser_id is not null;
 create index idx_response_file_references_object_form on public.response_file_references(object_path, form_id);
 create index idx_forms_title_trgm on public.forms using gin (title extensions.gin_trgm_ops);
 create index idx_forms_author_name_trgm on public.forms using gin (author_name extensions.gin_trgm_ops);

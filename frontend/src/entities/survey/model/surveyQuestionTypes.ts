@@ -6,6 +6,7 @@ export const QUESTION_TYPES = [
   "radiogroup",
   "checkbox",
   "dropdown",
+  "organization",
   "number",
   "integer",
   "date",
@@ -71,6 +72,20 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
     iconName: "icon-dropdown",
     title: "Выпадающий список",
     category: "basic",
+  },
+  {
+    name: "organization",
+    iconName: "icon-dropdown",
+    title: "Организация",
+    category: "basic",
+    questionJSON: {
+      type: "dropdown",
+      title: "Организация",
+      placeholder: "Начните вводить название…",
+      searchEnabled: true,
+      choices: [],
+      titleLocation: "top",
+    },
   },
   {
     name: "number",

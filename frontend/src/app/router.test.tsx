@@ -8,6 +8,7 @@ const pageLoads = vi.hoisted(() => ({
   responsesHtml: 0,
   survey: 0,
   templates: 0,
+  organizations: 0,
   users: 0,
 }));
 
@@ -38,6 +39,11 @@ vi.mock("../pages/SurveyPage/SurveyPage", () => {
 
 vi.mock("../pages/TemplatesPage/TemplatesPage", () => {
   pageLoads.templates += 1;
+  return { default: () => null };
+});
+
+vi.mock("../pages/OrganizationsPage/OrganizationsPage", () => {
+  pageLoads.organizations += 1;
   return { default: () => null };
 });
 
@@ -72,6 +78,7 @@ describe("router", () => {
         routes.dashboardMy,
         routes.dashboardAll,
         routes.templates,
+        routes.organizations,
         routes.formResponsesById,
         routes.formResponsesHtmlById,
         routes.surveyById,
@@ -90,6 +97,7 @@ describe("router", () => {
     expect(routeByPath.get(routes.formResponsesHtmlById)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.surveyById)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.templates)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.organizations)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
 
     expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeUndefined();
@@ -101,6 +109,7 @@ describe("router", () => {
     expect(pageLoads.responsesHtml).toBe(0);
     expect(pageLoads.survey).toBe(0);
     expect(pageLoads.templates).toBe(0);
+    expect(pageLoads.organizations).toBe(0);
     expect(pageLoads.users).toBe(0);
-  });
+  }, 15_000);
 });

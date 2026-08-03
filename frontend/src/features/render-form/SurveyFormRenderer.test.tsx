@@ -11,8 +11,10 @@ const {
   downloadEventsDuringDataAssignment,
   includeUIStateEvent,
   mutateAsync,
+  updateMutateAsync,
   registeredCustomQuestionTypes,
   getStoragePathFromSurveyFileValue,
+  getStoragePathsFromResponseData,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -34,8 +36,10 @@ const {
     downloadEventsDuringDataAssignment: [] as unknown[],
     includeUIStateEvent: { current: true },
     mutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
+    updateMutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
     getStoragePathFromSurveyFileValue: vi.fn(),
+    getStoragePathsFromResponseData: vi.fn(() => []),
     removeFileFromStorage: vi.fn(),
     resolveSurveyFileValueContent: vi.fn(),
     uploadFileToStorage: vi.fn(),
@@ -93,6 +97,7 @@ vi.mock("survey-core", () => ({
     onCurrentPageChanged = new FakeSurveyEvent();
     onUIStateChanged = includeUIStateEvent.current ? new FakeSurveyEvent() : undefined;
     doComplete = vi.fn();
+    clear = vi.fn();
     applyTheme = vi.fn();
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
@@ -173,6 +178,9 @@ vi.mock("../submit-response/useSubmitResponse", () => ({
   useSubmitResponseMutation: () => ({
     mutateAsync,
   }),
+  useUpdateResponseMutation: () => ({
+    mutateAsync: updateMutateAsync,
+  }),
 }));
 
 vi.mock("../../app/providers/ToastProvider", () => ({
@@ -183,6 +191,7 @@ vi.mock("../../app/providers/ToastProvider", () => ({
 
 vi.mock("../../shared/api/storage", () => ({
   getStoragePathFromSurveyFileValue,
+  getStoragePathsFromResponseData,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -196,9 +205,12 @@ describe("SurveyFormRenderer", () => {
     registeredCustomQuestionTypes.clear();
     showToast.mockClear();
     mutateAsync.mockClear();
+    updateMutateAsync.mockClear();
     componentCollectionAdd.mockClear();
     componentCollectionGetByName.mockClear();
     getStoragePathFromSurveyFileValue.mockReset();
+    getStoragePathsFromResponseData.mockReset();
+    getStoragePathsFromResponseData.mockReturnValue([]);
     removeFileFromStorage.mockReset();
     resolveSurveyFileValueContent.mockReset();
     uploadFileToStorage.mockReset();
@@ -215,6 +227,42 @@ describe("SurveyFormRenderer", () => {
 
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(expect.any(String), "error");
+    });
+  });
+
+  it("shows the server duplicate message and edits the saved browser response when allowed", async () => {
+    mutateAsync.mockResolvedValueOnce({
+      status: "already_submitted",
+      responseId: "response-1",
+      data: { email: "saved@example.com" },
+      editable: true,
+    });
+    updateMutateAsync.mockResolvedValueOnce({
+      responseId: "response-1",
+      data: { email: "a@b.com" },
+    });
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        allowResponseEditing
+        schema={{ pages: [{ elements: [{ type: "text", name: "email" }] }] }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
+
+    expect(await screen.findByText("Вы уже отправляли ответ на эту форму.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+
+    expect(createdModels[0]).toMatchObject({ data: { email: "saved@example.com" } });
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+        responseId: "response-1",
+        data: { email: "a@b.com" },
+      }));
     });
   });
 
@@ -462,8 +510,13 @@ describe("SurveyFormRenderer", () => {
     let resolveMutation!: () => void;
     mutateAsync.mockImplementationOnce(
       () =>
-        new Promise<void>((resolve) => {
-          resolveMutation = resolve;
+        new Promise((resolve) => {
+          resolveMutation = () => resolve({
+            status: "submitted",
+            responseId: "response-1",
+            data: { email: "a@b.com" },
+            editable: false,
+          });
         }),
     );
 
@@ -757,7 +810,12 @@ describe("SurveyFormRenderer", () => {
   });
 
   it("clears the respondent draft after a successful submission", async () => {
-    mutateAsync.mockResolvedValueOnce(undefined);
+    mutateAsync.mockResolvedValueOnce({
+      status: "submitted",
+      responseId: "response-1",
+      data: { email: "a@b.com" },
+      editable: false,
+    });
     window.sessionStorage.setItem(
       "survey-response:draft:user-1:form-1",
       JSON.stringify({

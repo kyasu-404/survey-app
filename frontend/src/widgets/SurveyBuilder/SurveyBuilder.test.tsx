@@ -308,6 +308,7 @@ function createTemplateForm(overrides: Partial<SurveySchema & { id: string; titl
     deadline_at: null,
     max_responses: null,
     responses_count: 0,
+    allow_response_editing: false,
     schema: {
       title: "Редактируемый шаблон",
       locale: "ru",
@@ -745,6 +746,7 @@ describe("SurveyBuilder", () => {
       "radiogroup",
       "checkbox",
       "dropdown",
+      "organization",
       "number",
       "integer",
       "date",
@@ -793,7 +795,18 @@ describe("SurveyBuilder", () => {
     expect(serializerProperties["panel:showQuestionNumbers"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showNumber"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showQuestionNumbers"]?.visible).toBe(false);
-    expect(componentCollectionAdd).toHaveBeenCalledTimes(7);
+    expect(componentCollectionAdd).toHaveBeenCalledTimes(8);
+    expect(componentCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "organization",
+        questionJSON: expect.objectContaining({
+          type: "dropdown",
+          placeholder: "Начните вводить название…",
+          choices: [],
+        }),
+        inheritBaseProps: true,
+      }),
+    );
     expect(componentCollectionAdd).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "email",
@@ -1275,6 +1288,8 @@ describe("SurveyBuilder", () => {
       }),
       expect.objectContaining({ themeName: "default" }),
       "Шаблон для правки",
+      false,
+      ["school", "kindergarten"],
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
   });
@@ -1416,6 +1431,8 @@ describe("SurveyBuilder", () => {
       }),
       expect.objectContaining({ themeName: "default" }),
       "Старая форма",
+      false,
+      ["school", "kindergarten"],
     );
 
     const savedSchema = saveSurveySchema.mock.calls[0]?.[1] as SurveySchema;

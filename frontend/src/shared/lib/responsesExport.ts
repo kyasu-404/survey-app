@@ -1,5 +1,6 @@
 import type { SurveyResponse } from "../../entities/response/types";
 import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../entities/survey/types";
+import { ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 
 export type ResponsesTableRow = {
   [key: string]: string;
@@ -54,6 +55,7 @@ function visitSurveyQuestion(value: unknown, visitor: (question: SurveyQuestion)
 function getQuestionMeta(schema: SurveySchema) {
   const choiceMap = new Map<string, Map<string, string>>();
   const titleMap = new Map<string, string>();
+  const typeMap = new Map<string, string>();
   const orderedNames: string[] = [];
   const seenNames = new Set<string>();
 
@@ -65,6 +67,7 @@ function getQuestionMeta(schema: SurveySchema) {
       }
 
       titleMap.set(question.name, question.title ?? question.name);
+      typeMap.set(question.name, question.type);
     }
 
     if (!Array.isArray(question.choices) || !question.name) {
@@ -96,7 +99,7 @@ function getQuestionMeta(schema: SurveySchema) {
     elements.forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
   });
 
-  return { choiceMap, orderedNames, titleMap };
+  return { choiceMap, orderedNames, titleMap, typeMap };
 }
 
 function isSafeExportValue(value: unknown) {
@@ -139,8 +142,22 @@ function isSafeExportValue(value: unknown) {
   return true;
 }
 
-function formatAnswerValue(questionName: string, value: unknown, choiceMap: Map<string, Map<string, string>>) {
+function formatAnswerValue(
+  questionName: string,
+  value: unknown,
+  choiceMap: Map<string, Map<string, string>>,
+  typeMap: Map<string, string>,
+  organizationLabels?: Map<string, string>,
+) {
   const questionChoices = choiceMap.get(questionName);
+
+  if (
+    typeMap.get(questionName) === ORGANIZATION_QUESTION_TYPE
+    && typeof value === "string"
+    && organizationLabels?.has(value)
+  ) {
+    return organizationLabels.get(value) ?? value;
+  }
 
   if (Array.isArray(value)) {
     return value
@@ -243,8 +260,12 @@ function renderResponseHtmlCell(header: string, value: string) {
   )}</span>${timePart ? `<span class="responses-table-date-line">${escapeHtml(timePart)}</span>` : ""}</span>`;
 }
 
-export function formatResponsesForTable(responses: SurveyResponse[], schema: SurveySchema): ResponsesTableRow[] {
-  const { choiceMap, orderedNames, titleMap } = getQuestionMeta(schema);
+export function formatResponsesForTable(
+  responses: SurveyResponse[],
+  schema: SurveySchema,
+  organizationLabels?: Map<string, string>,
+): ResponsesTableRow[] {
+  const { choiceMap, orderedNames, titleMap, typeMap } = getQuestionMeta(schema);
 
   return responses.map((response) => {
     const base: ResponsesTableRow = {
@@ -254,12 +275,14 @@ export function formatResponsesForTable(responses: SurveyResponse[], schema: Sur
 
     orderedNames.forEach((key) => {
       const hasAnswer = answerEntries.has(key);
-      base[titleMap.get(key) ?? key] = hasAnswer ? formatAnswerValue(key, answerEntries.get(key), choiceMap) : "";
+      base[titleMap.get(key) ?? key] = hasAnswer
+        ? formatAnswerValue(key, answerEntries.get(key), choiceMap, typeMap, organizationLabels)
+        : "";
       answerEntries.delete(key);
     });
 
     answerEntries.forEach((value, key) => {
-      base[titleMap.get(key) ?? key] = formatAnswerValue(key, value, choiceMap);
+      base[titleMap.get(key) ?? key] = formatAnswerValue(key, value, choiceMap, typeMap, organizationLabels);
     });
 
     return base;

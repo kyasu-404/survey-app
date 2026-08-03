@@ -80,3 +80,14 @@ test("deletes only an exact unreferenced anonymous upload capability", () => {
   assert.match(source, /isReferenced !== false/);
   assert.match(source, /\.remove\(\[payload\.path\]\)/);
 });
+
+test("deletes selected responses only for the form owner or an admin and removes referenced files", () => {
+  assert.match(source, /action: "delete-responses"/);
+  assert.match(source, /getUniqueResponseIds/);
+  assert.match(source, /value\.length > 100/);
+  assert.match(source, /form\.author_id !== requester\.id/);
+  assert.match(source, /\.from\("response_file_references"\)/);
+  assert.match(source, /\.in\("response_id", existingResponseIds\)/);
+  assert.match(source, /adminClient\.storage\.from\(storageBucket\)\.remove\(batch\)/);
+  assert.match(source, /\.from\("responses"\)\s*\.delete\(\)/);
+});

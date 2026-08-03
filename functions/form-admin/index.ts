@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 type FormAdminAction =
   | { action: "delete"; formId: string }
+  | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "delete-upload"; formId: string; path: string }
   | { action: "cleanup-orphans"; olderThanHours?: number };
 
@@ -127,6 +128,14 @@ function isUuid(value: unknown): value is string {
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   );
+}
+
+function getUniqueResponseIds(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100 || !value.every(isUuid)) {
+    return null;
+  }
+
+  return [...new Set(value)];
 }
 
 function isAnonymousUploadPath(path: unknown, formId: string) {
@@ -420,6 +429,123 @@ Deno.serve(async (req) => {
       { success: true, removedFiles: names.length, removedAssets: removedAssetCount },
       actionLogContext,
     );
+  }
+
+  if (payload.action === "delete-responses") {
+    const responseIds = getUniqueResponseIds(payload.responseIds);
+    const actionLogContext: RequestLogContext = {
+      ...requestLogContext,
+      operation: "form-admin.delete-responses",
+      userId: requester.id,
+      formId: payload.formId,
+    };
+
+    if (!isUuid(payload.formId) || !responseIds) {
+      return errorResponse(req, 400, "Invalid delete responses payload", actionLogContext);
+    }
+
+    const { data: form, error: formError } = await adminClient
+      .from("forms")
+      .select("id, author_id")
+      .eq("id", payload.formId)
+      .single();
+
+    if (formError || !form) {
+      return errorResponse(req, 404, "Form not found", actionLogContext);
+    }
+
+    if (form.author_id !== requester.id && requesterProfile.role !== "admin") {
+      return errorResponse(req, 403, "Forbidden", actionLogContext);
+    }
+
+    const { data: responses, error: responsesError } = await adminClient
+      .from("responses")
+      .select("id")
+      .eq("form_id", payload.formId)
+      .in("id", responseIds);
+
+    if (responsesError) {
+      return errorResponse(req, 400, responsesError.message, actionLogContext);
+    }
+
+    const existingResponseIds = (responses ?? [])
+      .map((response: { id?: unknown }) => response.id)
+      .filter((id: unknown): id is string => typeof id === "string");
+
+    if (existingResponseIds.length === 0) {
+      return jsonResponse(req, 200, { success: true, deletedResponses: 0, removedFiles: 0 }, actionLogContext);
+    }
+
+    const { data: fileReferences, error: referencesError } = await adminClient
+      .from("response_file_references")
+      .select("object_path")
+      .eq("form_id", payload.formId)
+      .in("response_id", existingResponseIds);
+
+    if (referencesError) {
+      return errorResponse(req, 400, referencesError.message, actionLogContext);
+    }
+
+    const referencedObjectPaths = [...new Set(
+      (fileReferences ?? [])
+        .map((reference: { object_path?: unknown }) => reference.object_path)
+        .filter((path: unknown): path is string => typeof path === "string"),
+    )];
+    const selectedResponseIdSet = new Set(existingResponseIds);
+    const objectPaths: string[] = [];
+
+    for (let index = 0; index < referencedObjectPaths.length; index += 100) {
+      const pathBatch = referencedObjectPaths.slice(index, index + 100);
+      const { data: allReferences, error: allReferencesError } = await adminClient
+        .from("response_file_references")
+        .select("response_id, object_path")
+        .in("object_path", pathBatch);
+
+      if (allReferencesError) {
+        return errorResponse(req, 400, allReferencesError.message, actionLogContext);
+      }
+
+      const sharedPaths = new Set(
+        (allReferences ?? [])
+          .filter((reference: { response_id?: unknown }) =>
+            typeof reference.response_id === "string" && !selectedResponseIdSet.has(reference.response_id),
+          )
+          .map((reference: { object_path?: unknown }) => reference.object_path)
+          .filter((path: unknown): path is string => typeof path === "string"),
+      );
+      objectPaths.push(...pathBatch.filter((path) => !sharedPaths.has(path)));
+    }
+
+    for (let index = 0; index < objectPaths.length; index += 100) {
+      const batch = objectPaths.slice(index, index + 100);
+      const { error: removeError } = await adminClient.storage.from(storageBucket).remove(batch);
+
+      if (removeError) {
+        return errorResponse(req, 400, removeError.message, actionLogContext);
+      }
+    }
+
+    const { error: deleteError } = await adminClient
+      .from("responses")
+      .delete()
+      .eq("form_id", payload.formId)
+      .in("id", existingResponseIds);
+
+    if (deleteError) {
+      return errorResponse(req, 400, deleteError.message, actionLogContext);
+    }
+
+    console.info("form-admin action completed", {
+      ...actionLogContext,
+      deletedResponses: existingResponseIds.length,
+      removedFiles: objectPaths.length,
+    });
+
+    return jsonResponse(req, 200, {
+      success: true,
+      deletedResponses: existingResponseIds.length,
+      removedFiles: objectPaths.length,
+    }, actionLogContext);
   }
 
   if (payload.action !== "delete" || !isUuid(payload.formId)) {

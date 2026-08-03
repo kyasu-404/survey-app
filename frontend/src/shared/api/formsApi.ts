@@ -2,6 +2,11 @@ import { apiClient, publicApiClient, supabaseClient } from "./client";
 import { applyDeadlineStatePatch, buildDeadlineUpdatePayload, getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
 import { TEMPLATE_FORM_TYPE } from "../../entities/survey/model/surveyModel";
 import { resolveSurveyTheme, sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
+import {
+  DEFAULT_FORM_ORGANIZATION_TYPES,
+  normalizeOrganizationTypes,
+} from "../../entities/organization/model";
+import type { OrganizationType } from "../../entities/organization/types";
 import type { ITheme } from "survey-core";
 import type {
   DashboardFormsStats,
@@ -30,6 +35,8 @@ export type FormsFilters = {
 
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
   responses_count?: number | null;
+  allow_response_editing?: boolean | null;
+  organization_types?: OrganizationType[] | null;
 };
 
 type RawFormSummary = Pick<
@@ -167,6 +174,8 @@ function mapRawForm(form: RawForm): SurveyForm {
     author_email: null,
     author_name: form.author_name ?? null,
     responses_count: form.responses_count ?? 0,
+    allow_response_editing: form.allow_response_editing ?? false,
+    organization_types: normalizeOrganizationTypes(form.organization_types),
   };
 }
 
@@ -444,6 +453,8 @@ export async function insertForm(payload: {
   authorId: string;
   deadlineAt?: string | null;
   maxResponses?: number | null;
+  allowResponseEditing?: boolean;
+  organizationTypes?: OrganizationType[];
   isPublic?: boolean;
 }) {
   const currentUserId = await getAuthenticatedUserId();
@@ -473,6 +484,10 @@ export async function insertForm(payload: {
           theme: materialized.theme,
           deadline_at: deadlinePayload.deadline_at ?? null,
           max_responses: normalizedMaxResponses,
+          allow_response_editing: payload.allowResponseEditing ?? false,
+          organization_types: normalizeOrganizationTypes(
+            payload.organizationTypes ?? DEFAULT_FORM_ORGANIZATION_TYPES,
+          ),
           author_id: currentUserId,
           is_public: resolvedPublicationState,
         })
@@ -507,6 +522,7 @@ export async function createFormFromTemplate(templateForm: SurveyForm, authorId:
     formReason: "plan",
     schema,
     theme: templateForm.theme,
+    organizationTypes: templateForm.organization_types,
     authorId: currentUserId,
     isPublic: true,
   });
@@ -534,7 +550,14 @@ export async function updateFormTitle(id: string, title: string) {
   if (error) throw error;
 }
 
-export async function updateFormSchema(id: string, schema: SurveySchema, theme: ITheme, title: string) {
+export async function updateFormSchema(
+  id: string,
+  schema: SurveySchema,
+  theme: ITheme,
+  title: string,
+  allowResponseEditing: boolean,
+  organizationTypes: OrganizationType[],
+) {
   const currentUserId = await getAuthenticatedUserId();
   const { data: currentForm, error: fetchError } = await runRequest(
     "forms.fetchThemeForUpdate",
@@ -547,7 +570,13 @@ export async function updateFormSchema(id: string, schema: SurveySchema, theme: 
   const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
   const { error } = await runRequest(
     "forms.updateSchema",
-    () => apiClient.from("forms").update({ schema, theme: materialized.theme, title }).eq("id", id),
+    () => apiClient.from("forms").update({
+      schema,
+      theme: materialized.theme,
+      title,
+      allow_response_editing: allowResponseEditing,
+      organization_types: normalizeOrganizationTypes(organizationTypes),
+    }).eq("id", id),
     { context: { formId: id, pageCount: schema.pages.length } },
   );
   if (error) {
@@ -661,6 +690,8 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
     schema: form.schema,
     theme: sanitizeSurveyTheme(form.theme),
     maxResponses: form.max_responses ?? null,
+    allowResponseEditing: form.allow_response_editing,
+    organizationTypes: form.organization_types,
     authorId: currentUserId,
   });
 }

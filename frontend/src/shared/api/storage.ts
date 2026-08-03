@@ -182,6 +182,34 @@ export function getStoragePathFromSurveyFileValue(value: unknown) {
   return null;
 }
 
+export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
+  const paths = new Set<string>();
+  const pending: unknown[] = [data];
+  let visitedNodes = 0;
+
+  while (pending.length > 0 && visitedNodes < 10_000) {
+    const value = pending.pop();
+    visitedNodes += 1;
+
+    const storagePath = getStoragePathFromSurveyFileValue(value);
+    if (storagePath) {
+      paths.add(storagePath);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+
+    if (value && typeof value === "object") {
+      pending.push(...Object.values(value));
+    }
+  }
+
+  return [...paths];
+}
+
 async function createSignedUrlForStoragePath(path: string) {
   const bucket = supabaseClient.storage.from(SUPABASE_STORAGE_BUCKET);
   const { data, error } = await runRequest(

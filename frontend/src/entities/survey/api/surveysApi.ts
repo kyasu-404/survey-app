@@ -23,6 +23,7 @@ import type {
   SurveySchema,
 } from "../types";
 import type { ITheme } from "survey-core";
+import type { OrganizationType } from "../../organization/types";
 
 export type { FormsFilters };
 
@@ -77,6 +78,8 @@ export async function createSurvey(params: {
   authorId: string;
   deadlineAt?: string | null;
   maxResponses?: number | null;
+  allowResponseEditing?: boolean;
+  organizationTypes?: OrganizationType[];
   isPublic?: boolean;
 }) {
   return insertForm(params);
@@ -86,8 +89,15 @@ export async function renameForm(id: string, title: string) {
   return updateFormTitle(id, title);
 }
 
-export async function saveSurveySchema(id: string, schema: SurveySchema, theme: ITheme, title: string) {
-  return updateFormSchema(id, schema, theme, title);
+export async function saveSurveySchema(
+  id: string,
+  schema: SurveySchema,
+  theme: ITheme,
+  title: string,
+  allowResponseEditing: boolean,
+  organizationTypes: OrganizationType[],
+) {
+  return updateFormSchema(id, schema, theme, title, allowResponseEditing, organizationTypes);
 }
 
 export async function changeFormStatus(id: string, isPublic: boolean) {

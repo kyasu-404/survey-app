@@ -27,9 +27,17 @@ const formThemesMigration = readFileSync(
   new URL("./migrations/202607171200_add_form_themes_and_assets.sql", import.meta.url),
   "utf8",
 );
+const responseManagementMigration = readFileSync(
+  new URL("./migrations/202608031200_response_management.sql", import.meta.url),
+  "utf8",
+);
+const organizationDirectoryMigration = readFileSync(
+  new URL("./migrations/202608031300_organization_directory.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
-  "title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses";
+  "title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types";
 const legacySafeFormsUpdateColumns =
   "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
 
@@ -142,7 +150,7 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
   assert.match(schema, /grant select on table public\.forms to anon;/i);
   assert.match(schema, /grant select on table public\.forms to authenticated;/i);
-  assert.match(schema, /grant insert \(id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, author_id\)\s+on table public\.forms to authenticated;/i);
+  assert.match(schema, /grant insert \(id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types, author_id\)\s+on table public\.forms to authenticated;/i);
   assert.doesNotMatch(schema, /grant insert \([^)]*responses_count/i);
   assert.match(schema, /revoke delete on table public\.forms from authenticated;/i);
   assert.match(schema, /revoke update on table public\.forms from authenticated;/i);
@@ -158,12 +166,13 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
     schema,
     /grant select, insert, delete on table public\.forms to authenticated;/i,
   );
-  assert.match(schema, /grant insert \(form_id, submission_id, data\) on table public\.responses to anon;/i);
+  assert.match(schema, /revoke insert on table public\.responses from anon;/i);
   assert.match(schema, /grant select on table public\.responses to authenticated;/i);
-  assert.match(schema, /grant insert \(form_id, submission_id, data\) on table public\.responses to authenticated;/i);
+  assert.match(schema, /revoke insert on table public\.responses from authenticated;/i);
+  assert.match(schema, /grant execute on function public\.submit_form_response\(uuid, uuid, uuid, jsonb\) to anon, authenticated, service_role;/i);
   assert.match(
     schema,
-    /grant select, insert, update, delete on table public\.profiles, public\.forms, public\.responses to service_role;/i,
+    /grant select, insert, update, delete on table public\.profiles, public\.education_organizations, public\.forms, public\.responses to service_role;/i,
   );
 });
 
@@ -309,15 +318,45 @@ test("response limits use an atomic form counter instead of counting response ro
   );
 });
 
-test("response retries are idempotent even after the form closes", () => {
+test("response submission is limited to one response per browser and remains idempotent", () => {
   assert.match(schema, /submission_id uuid not null default gen_random_uuid\(\)/i);
   assert.match(schema, /create unique index idx_responses_form_submission_id on public\.responses\(form_id, submission_id\)/i);
-  const duplicateHelper = getFunctionDefinition("is_existing_response_submission");
-  assert.match(duplicateHelper, /r\.user_id is not distinct from target_user_id/i);
-  const insertPolicy = getPolicyDefinition("responses_insert");
-  assert.match(insertPolicy, /public\.is_existing_response_submission\(form_id, submission_id, \(select auth\.uid\(\)\)\)/i);
-  const ensureLimit = getFunctionDefinition("ensure_form_response_limit");
-  assert.match(ensureLimit, /r\.submission_id = new\.submission_id[\s\S]*?return new/i);
+  assert.match(schema, /browser_id uuid/i);
+  assert.match(schema, /create unique index idx_responses_form_browser_id on public\.responses\(form_id, browser_id\) where browser_id is not null/i);
+  const submitFunction = getFunctionDefinition("submit_form_response");
+  assert.match(submitFunction, /pg_advisory_xact_lock/i);
+  assert.match(submitFunction, /r\.browser_id = p_browser_id/i);
+  assert.match(submitFunction, /'already_submitted'::text/i);
+  assert.match(responseManagementMigration, /revoke insert on table public\.responses from anon, authenticated/i);
+});
+
+test("answered form schemas are immutable and response editing is server-authorized", () => {
+  assert.match(schema, /allow_response_editing boolean not null default false/i);
+  const schemaGuard = getFunctionDefinition("prevent_answered_form_schema_update");
+  assert.match(schemaGuard, /old\.responses_count > 0/i);
+  assert.match(schemaGuard, /new\.schema is distinct from old\.schema/i);
+  assert.match(schemaGuard, /new\.organization_types is distinct from old\.organization_types/i);
+  const updateResponse = getFunctionDefinition("update_form_response");
+  assert.match(updateResponse, /not target_form\.allow_response_editing/i);
+  assert.match(updateResponse, /r\.browser_id = p_browser_id/i);
+  assert.match(responseManagementMigration, /forms_prevent_answered_schema_update/i);
+});
+
+test("organization directory is admin-managed and exposes only selectable fields to public forms", () => {
+  assert.match(schema, /create table public\.education_organizations/i);
+  assert.match(schema, /organization_type in \('school', 'kindergarten', 'odo', 'udod'\)/i);
+  assert.match(schema, /organization_type = 'udod' and number is null/i);
+  assert.match(schema, /organization_type <> 'udod'\s+and number is not null\s+and length\(btrim\(number\)\) between 1 and 40/i);
+  assert.match(schema, /organization_types text\[\] not null default array\['school', 'kindergarten'\]/i);
+  const selectPolicy = getPolicyDefinition("education_organizations_select");
+  const writePolicy = getPolicyDefinition("education_organizations_admin_write");
+  assert.match(selectPolicy, /to authenticated/i);
+  assert.match(writePolicy, /public\.request_role\(\)\) = 'admin'/i);
+  const publicList = getFunctionDefinition("list_form_organizations");
+  assert.match(publicList, /returns table \(\s*id uuid,\s*organization_type text,\s*number text,\s*alias text\s*\)/i);
+  assert.doesNotMatch(publicList, /email text/i);
+  assert.match(publicList, /jsonb_path_exists\(f\.schema/i);
+  assert.match(organizationDirectoryMigration, /grant execute on function public\.list_form_organizations\(uuid\) to anon, authenticated, service_role/i);
 });
 
 test("forms and responses are published to realtime", () => {

@@ -54,6 +54,9 @@ export function Sidebar({ onToggle }: SidebarProps) {
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.templates}>
               Шаблоны
             </NavLink>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.organizations}>
+              Справочник ОУ
+            </NavLink>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.builder}>
               Конструктор
             </NavLink>

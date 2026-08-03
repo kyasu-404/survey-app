@@ -25,6 +25,13 @@ import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import {
+  DEFAULT_FORM_ORGANIZATION_TYPES,
+  hasOrganizationQuestion,
+  normalizeOrganizationTypes,
+  ORGANIZATION_TYPE_OPTIONS,
+} from "../../entities/organization/model";
+import type { OrganizationType } from "../../entities/organization/types";
+import {
   getFormById,
   saveSurveySchema,
 } from "../../entities/survey/api/surveysApi";
@@ -109,7 +116,49 @@ type PostSaveSettingsState = {
   responseLimitValue: string;
   formTypeValue: string;
   formReasonValue: string;
+  allowResponseEditing: boolean;
+  organizationTypes: OrganizationType[];
 };
+
+function OrganizationTypeSettings({
+  selectedTypes,
+  onChange,
+  disabled = false,
+  className = "",
+}: {
+  selectedTypes: OrganizationType[];
+  onChange: (types: OrganizationType[]) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const toggleType = (type: OrganizationType) => {
+    const nextTypes = selectedTypes.includes(type)
+      ? selectedTypes.filter((item) => item !== type)
+      : [...selectedTypes, type];
+    if (nextTypes.length > 0) {
+      onChange(nextTypes);
+    }
+  };
+
+  return (
+    <fieldset className={`builder-organization-settings ${className}`.trim()}>
+      <legend>Организации для выбора:</legend>
+      <div className="builder-organization-options">
+        {ORGANIZATION_TYPE_OPTIONS.map((option) => (
+          <label key={option.value}>
+            <input
+              type="checkbox"
+              checked={selectedTypes.includes(option.value)}
+              onChange={() => toggleType(option.value)}
+              disabled={disabled || (selectedTypes.length === 1 && selectedTypes[0] === option.value)}
+            />
+            <span>{option.selectionLabel}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;
 const builderDesignerSurveys = new WeakMap<SurveyCreator, Set<{ applyTheme: (theme: ITheme) => void }>>();
@@ -385,12 +434,30 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
   const [isPostSaveSettingsSaving, setIsPostSaveSettingsSaving] = useState(false);
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
   const [galleryBackground, setGalleryBackground] = useState("");
+  const [responseEditingEnabled, setResponseEditingEnabled] = useState(false);
+  const [usesOrganizationQuestion, setUsesOrganizationQuestion] = useState(false);
+  const [organizationTypes, setOrganizationTypes] = useState<OrganizationType[]>(
+    DEFAULT_FORM_ORGANIZATION_TYPES,
+  );
   const { showToast } = useToast();
   const { theme: applicationTheme } = useTheme();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
-    mutationFn: ({ id, schema, theme, title }: { id: string; schema: SurveySchema; theme: ITheme; title: string }) =>
-      saveSurveySchema(id, schema, theme, title),
+    mutationFn: ({ id, schema, theme, title, allowResponseEditing, selectedOrganizationTypes }: {
+      id: string;
+      schema: SurveySchema;
+      theme: ITheme;
+      title: string;
+      allowResponseEditing: boolean;
+      selectedOrganizationTypes: OrganizationType[];
+    }) => saveSurveySchema(
+      id,
+      schema,
+      theme,
+      title,
+      allowResponseEditing,
+      selectedOrganizationTypes,
+    ),
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -444,6 +511,8 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     assetFormIdRef.current = formId ?? createSurveyAssetFormId();
     const nextCreator = createCreatorInstance(formId);
     setCreator(nextCreator);
+    setUsesOrganizationQuestion(false);
+    setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "idle";
     updateRuntimePreviewBridgeFromCreator(nextCreator, formId);
 
@@ -492,6 +561,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       creator.theme = resolveSurveyTheme(restoredDraft.theme);
       applyThemeToBuilderDesigners(creator);
       creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft.schema, "Новая форма"));
+      setUsesOrganizationQuestion(hasOrganizationQuestion(restoredDraft.schema));
       syncRuntimePreviewNow(creator);
       return;
     }
@@ -517,8 +587,17 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
         editableForm.title,
       ),
     );
+    setUsesOrganizationQuestion(hasOrganizationQuestion(editableForm.schema));
     syncRuntimePreviewNow(creator);
   }, [creator, editableForm, syncRuntimePreviewNow]);
+
+  useEffect(() => {
+    setResponseEditingEnabled(editableForm?.allow_response_editing ?? false);
+  }, [editableForm?.allow_response_editing, formId]);
+
+  useEffect(() => {
+    setOrganizationTypes(normalizeOrganizationTypes(editableForm?.organization_types));
+  }, [editableForm?.organization_types, formId]);
 
   useEffect(() => {
     if (!creator) {
@@ -526,6 +605,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     }
 
     const handleModified = () => {
+      setUsesOrganizationQuestion(hasOrganizationQuestion(creator.JSON as SurveySchema));
       saveSurveyBuilderDraft(
         userId,
         formId,
@@ -650,6 +730,8 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
     applyThemeToBuilderDesigners(creator);
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
+    setUsesOrganizationQuestion(false);
+    setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "empty";
     syncRuntimePreviewNow(creator);
   };
@@ -680,6 +762,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
         theme,
         title,
         formType: TEMPLATE_FORM_TYPE,
+        organizationTypes,
         isPublic: false,
       });
 
@@ -893,6 +976,8 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
         formReason: normalizedFormReason,
         deadlineAt,
         maxResponses,
+        allowResponseEditing: postSaveSettings.allowResponseEditing,
+        organizationTypes: postSaveSettings.organizationTypes,
         isPublic: true,
       });
 
@@ -939,6 +1024,8 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
             schema,
             theme,
             title,
+            allowResponseEditing: responseEditingEnabled,
+            selectedOrganizationTypes: organizationTypes,
           });
         } else {
           setPostSaveSettings({
@@ -950,6 +1037,8 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
             responseLimitValue: "",
             formTypeValue: "",
             formReasonValue: "",
+            allowResponseEditing: responseEditingEnabled,
+            organizationTypes,
           });
           callback(saveNo, true);
           return;
@@ -989,7 +1078,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       creator.saveSurveyFunc = undefined;
       creator.saveThemeFunc = undefined;
     };
-  }, [creator, createSurveyMutation, editableForm, formId, navigate, queryClient, saveSurveyMutation, showToast, userId]);
+  }, [creator, createSurveyMutation, editableForm, formId, navigate, organizationTypes, queryClient, responseEditingEnabled, saveSurveyMutation, showToast, userId]);
 
   const handleApplyBackground = useCallback((backgroundUrl: string) => {
     if (!creator) return;
@@ -1020,6 +1109,33 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
             <Skeleton className="builder-loading-skeleton-line" />
             <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-short" />
           </div>
+        )}
+        {isEditMode && editableForm && !isTemplateForm(editableForm) && (
+          <div className="builder-response-settings card">
+            <div>
+              <strong>Редактирование ответов</strong>
+              <span>Респондент сможет изменить свой ответ в этом браузере.</span>
+            </div>
+            <button
+              type="button"
+              className={`settings-toggle ${responseEditingEnabled ? "settings-toggle-active" : ""}`.trim()}
+              role="switch"
+              aria-checked={responseEditingEnabled}
+              aria-label="Редактирование ответов"
+              onClick={() => setResponseEditingEnabled((current) => !current)}
+              disabled={isSurveyMutationBusy}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {isEditMode && editableForm && !isTemplateForm(editableForm) && usesOrganizationQuestion && (
+          <OrganizationTypeSettings
+            className="card"
+            selectedTypes={organizationTypes}
+            onChange={setOrganizationTypes}
+            disabled={isSurveyMutationBusy}
+          />
         )}
       </div>
 
@@ -1157,6 +1273,37 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
                 }
               />
             </label>
+            <div className="builder-response-settings builder-response-settings-modal">
+              <div>
+                <strong>Редактирование ответов</strong>
+                <span>Разрешить респонденту менять уже отправленный ответ.</span>
+              </div>
+              <button
+                type="button"
+                className={`settings-toggle ${postSaveSettings.allowResponseEditing ? "settings-toggle-active" : ""}`.trim()}
+                role="switch"
+                aria-checked={postSaveSettings.allowResponseEditing}
+                aria-label="Редактирование ответов"
+                onClick={() => setPostSaveSettings((current) => current ? {
+                  ...current,
+                  allowResponseEditing: !current.allowResponseEditing,
+                } : current)}
+                disabled={isPostSaveSettingsSaving}
+              >
+                <span aria-hidden="true" />
+              </button>
+            </div>
+            {hasOrganizationQuestion(postSaveSettings.schema) && (
+              <OrganizationTypeSettings
+                className="builder-organization-settings-modal"
+                selectedTypes={postSaveSettings.organizationTypes}
+                onChange={(types) => setPostSaveSettings((current) => current ? {
+                  ...current,
+                  organizationTypes: types,
+                } : current)}
+                disabled={isPostSaveSettingsSaving}
+              />
+            )}
             <p className="deadline-modal-hint">
               Дедлайн и лимит ответов можно оставить пустыми.
             </p>

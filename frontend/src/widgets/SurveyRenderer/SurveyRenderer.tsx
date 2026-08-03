@@ -12,6 +12,7 @@ type SurveyRendererProps = {
   renderMode?: SurveyRenderMode;
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
+  allowResponseEditing?: boolean;
 };
 
 export function SurveyRenderer({
@@ -24,6 +25,7 @@ export function SurveyRenderer({
   renderMode,
   isPreview = false,
   allowAnonymousUploads = false,
+  allowResponseEditing = false,
 }: SurveyRendererProps) {
   return (
     <SurveyFormRenderer
@@ -36,6 +38,7 @@ export function SurveyRenderer({
       renderMode={renderMode}
       isPreview={isPreview}
       allowAnonymousUploads={allowAnonymousUploads}
+      allowResponseEditing={allowResponseEditing}
     />
   );
 }

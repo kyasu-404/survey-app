@@ -42,12 +42,16 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function exportToExcel(data: Array<Record<string, unknown>>, fileName = "responses") {
+export async function exportToExcel(
+  data: Array<Record<string, unknown>>,
+  fileName = "responses",
+  worksheetName = "Ответы",
+) {
   if (!data.length) return;
 
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Ответы");
+  const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
   const headers = getHeaders(data);
 
   worksheet.columns = headers.map((header) => ({

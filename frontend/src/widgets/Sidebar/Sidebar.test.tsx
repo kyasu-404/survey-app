@@ -31,6 +31,7 @@ describe("Sidebar", () => {
     );
 
     expect(screen.getByRole("link", { name: "Шаблоны" })).toHaveAttribute("href", routes.templates);
+    expect(screen.getByRole("link", { name: "Справочник ОУ" })).toHaveAttribute("href", routes.organizations);
   });
 
   it("keeps the logout action in a separate sidebar footer", () => {

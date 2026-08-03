@@ -11,6 +11,7 @@ import {
 
 vi.mock("../../entities/response/api", () => ({
   createResponse: vi.fn(),
+  editResponse: vi.fn(),
 }));
 
 describe("submitResponse", () => {
@@ -18,9 +19,19 @@ describe("submitResponse", () => {
     vi.mocked(createResponse).mockResolvedValue({ id: "response-1" } as never);
 
     const payload = { q1: "yes" };
-    await submitResponse("form-1", payload, "123e4567-e89b-42d3-a456-426614174000");
+    await submitResponse(
+      "form-1",
+      payload,
+      "123e4567-e89b-42d3-a456-426614174000",
+      "223e4567-e89b-42d3-a456-426614174000",
+    );
 
-    expect(createResponse).toHaveBeenCalledWith("form-1", payload, "123e4567-e89b-42d3-a456-426614174000");
+    expect(createResponse).toHaveBeenCalledWith(
+      "form-1",
+      payload,
+      "123e4567-e89b-42d3-a456-426614174000",
+      "223e4567-e89b-42d3-a456-426614174000",
+    );
   });
 
   it("invalidates dependent admin queries without refetching the active public survey after successful submit", async () => {
@@ -44,6 +55,7 @@ describe("submitResponse", () => {
         formId: "form-1",
         data: { q1: "answer" },
         submissionId: "123e4567-e89b-42d3-a456-426614174001",
+        browserId: "223e4567-e89b-42d3-a456-426614174000",
       });
     });
 

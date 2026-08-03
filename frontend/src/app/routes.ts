@@ -3,6 +3,7 @@ export const routes = {
   dashboardMy: "/dashboard/my",
   dashboardAll: "/dashboard/all",
   templates: "/templates",
+  organizations: "/organizations",
   formResponsesById: "/dashboard/forms/:id/responses",
   formResponses: (id: string) => `/dashboard/forms/${id}/responses`,
   formResponsesHtmlById: "/dashboard/forms/:id/responses/html",

@@ -95,6 +95,20 @@ async function loadUsersRoute() {
   };
 }
 
+async function loadOrganizationsRoute() {
+  const { default: OrganizationsPage } = await import("../pages/OrganizationsPage/OrganizationsPage");
+
+  return {
+    Component: function OrganizationsRoute() {
+      return (
+        <ProtectedRoute>
+          <OrganizationsPage />
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
 export const router = createBrowserRouter([
   {
     element: <AppLayout />,
@@ -122,6 +136,10 @@ export const router = createBrowserRouter([
       {
         path: routes.templates,
         lazy: loadTemplatesRoute,
+      },
+      {
+        path: routes.organizations,
+        lazy: loadOrganizationsRoute,
       },
       {
         path: routes.formResponsesById,

@@ -9,7 +9,8 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import FormResponsesPage from "./FormResponsesPage";
 
-const { getFormById, getResponsesByForm, exportToExcel, showToast } = vi.hoisted(() => ({
+const { deleteResponses, getFormById, getResponsesByForm, exportToExcel, showToast } = vi.hoisted(() => ({
+  deleteResponses: vi.fn(),
   getFormById: vi.fn(),
   getResponsesByForm: vi.fn(),
   exportToExcel: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../entities/response/api", () => ({
+  deleteResponses,
   getResponsesByForm,
 }));
 
@@ -78,6 +80,13 @@ vi.mock("../../shared/api", () => ({
 vi.mock("../../app/providers/ToastProvider", () => ({
   useToast: () => ({
     showToast,
+  }),
+}));
+
+vi.mock("../../app/providers/AuthProvider", () => ({
+  useAuth: () => ({
+    user: { id: "user-1" },
+    profile: { role: "user" },
   }),
 }));
 
@@ -169,6 +178,7 @@ function readAppCss() {
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    deleteResponses.mockResolvedValue(undefined);
     resetRealtimeChannel();
   });
 
@@ -239,6 +249,7 @@ describe("FormResponsesPage", () => {
     expect(screen.getByText("Тип: Анкетирование")).toBeInTheDocument();
     expect(screen.getByText("Основание: План работ")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Скачать XLSX" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отчёт" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     const refreshButton = screen.getByRole("button", { name: "Обновить" });
     expect(refreshButton).toBeInTheDocument();
@@ -1051,5 +1062,51 @@ describe("FormResponsesPage", () => {
         "ответы-Форма обратной связи",
       );
     });
+  });
+
+  it("filters responses by date and deletes selected answers", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Форма обратной связи",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      responses_count: 1,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    getResponsesByForm.mockResolvedValue(createResponsesPage([createResponse(1, "Анна")]));
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Routes>
+            <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("С даты"), "2026-08-01");
+
+    await waitFor(() => {
+      expect(getResponsesByForm).toHaveBeenLastCalledWith("form-1", expect.objectContaining({
+        page: 1,
+        dateFrom: expect.any(String),
+      }));
+    });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
+    expect(screen.getByText("☑ Выбрано: 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(deleteResponses).toHaveBeenCalledWith("form-1", ["response-1"]);
+    });
+    confirmSpy.mockRestore();
   });
 });
