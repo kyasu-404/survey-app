@@ -16,7 +16,6 @@ export type AppThemeTokens = {
 export type SurveyThemeBundle = {
   app: AppThemeTokens;
   survey: ITheme;
-  creatorUi: ICreatorTheme;
 };
 
 export const THEME_STORAGE_KEY = "survey-app:theme";
@@ -104,9 +103,9 @@ function createSurveyTheme(app: AppThemeTokens): ITheme {
   };
 }
 
-function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): ICreatorTheme {
+function createCreatorTheme(app: AppThemeTokens): ICreatorTheme {
   return {
-    themeName: `survey-app-${themeId}`,
+    themeName: "survey-app-neutral",
     iconSet: "v2",
     isLight: true,
     cssVariables: {
@@ -127,8 +126,8 @@ function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): ICreatorThem
       "--sjs-layer-1-foreground-50": app.muted,
       "--sjs-layer-1-background-500": app.bg,
       "--sjs-layer-3-background-500": app.surface,
-      "--sjs-special-background": app.bg,
-      "--sjs2-color-utility-surface-designer": app.bg,
+      "--sjs-special-background": app.surface,
+      "--sjs2-color-utility-surface-designer": app.surface,
       "--ctr-button-group-item-text-color-selected": app.accent,
       "--ctr-button-group-item-icon-color-selected": app.accent,
       "--ctr-button-group-border-color-focused": app.accent,
@@ -141,21 +140,33 @@ function createCreatorTheme(themeId: ThemeId, app: AppThemeTokens): ICreatorThem
   };
 }
 
+/**
+ * Survey Creator has its own interface theme, separate from the theme of the
+ * survey being edited. Keep this palette stable so application color schemes
+ * cannot reduce the readability of the toolbox and property grid.
+ */
+export const NEUTRAL_CREATOR_THEME: ICreatorTheme = createCreatorTheme({
+  label: "Нейтральная",
+  accent: "#121212",
+  accentHover: "#000000",
+  bg: "#fffdf9",
+  surface: "#f2eee8",
+  text: "#181818",
+  muted: "#5f5a54",
+});
+
 export const themes: Record<ThemeId, SurveyThemeBundle> = {
   sand: {
     app: palettes.sand,
     survey: createSurveyTheme(palettes.sand),
-    creatorUi: createCreatorTheme("sand", palettes.sand),
   },
   sky: {
     app: palettes.sky,
     survey: createSurveyTheme(palettes.sky),
-    creatorUi: createCreatorTheme("sky", palettes.sky),
   },
   teal: {
     app: palettes.teal,
     survey: createSurveyTheme(palettes.teal),
-    creatorUi: createCreatorTheme("teal", palettes.teal),
   },
 };
 

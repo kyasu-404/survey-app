@@ -12,6 +12,7 @@ export function createEmptySurveySchema(title = "Новая форма"): Survey
     completedHtml: DEFAULT_COMPLETED_HTML,
     questionDescriptionLocation: "underTitle",
     logo: DEFAULT_SURVEY_LOGO_TOKEN,
+    logoPosition: "left",
     logoWidth: "120px",
     logoHeight: "90px",
     logoFit: "contain",

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   editorLocalization,
+  registerCreatorTheme,
   registerSurveyTheme,
   type ICreatorPlugin,
   type UploadFileEvent,
@@ -75,7 +76,7 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
-import { useTheme } from "../../shared/theme/ThemeProvider";
+import { NEUTRAL_CREATOR_THEME } from "../../shared/theme/themeRegistry";
 import { createSurveyAssetFormId, uploadSurveyBackground } from "../../shared/api/themeAssets";
 import {
   BUILDER_PREVIEW_COMPONENT_NAME,
@@ -87,6 +88,7 @@ import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft
 import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
 
 registerSurveyTheme(SurveyTheme);
+registerCreatorTheme(NEUTRAL_CREATOR_THEME);
 
 type SurveyBuilderProps = {
   canAdministerAllForms?: boolean;
@@ -298,6 +300,7 @@ function createCreatorInstance(formId?: string) {
   });
 
   creator.locale = "ru";
+  creator.applyCreatorTheme(NEUTRAL_CREATOR_THEME);
   creator.onSurveyInstanceCreated.add((_sender, options) => {
     if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
       patchedDesignerSurveys.add(options.survey);
@@ -440,7 +443,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     DEFAULT_FORM_ORGANIZATION_TYPES,
   );
   const { showToast } = useToast();
-  const { theme: applicationTheme } = useTheme();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
     mutationFn: ({ id, schema, theme, title, allowResponseEditing, selectedOrganizationTypes }: {
@@ -526,14 +528,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       nextCreator.dispose();
     };
   }, [clearScheduledRuntimePreviewSync, formId]);
-
-  useLayoutEffect(() => {
-    if (!creator) {
-      return;
-    }
-
-    creator.applyCreatorTheme(applicationTheme.creatorUi);
-  }, [applicationTheme.creatorUi, creator]);
 
   useEffect(() => {
     draftHydrationStateRef.current = "idle";

@@ -1663,8 +1663,35 @@ textarea:focus {
 }
 
 .builder-organization-settings-modal {
+  padding-top: 14px;
   border-radius: 12px;
   background: rgba(248, 250, 252, 0.82);
+}
+
+.builder-organization-settings-modal legend {
+  float: left;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 10px;
+  padding: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.builder-organization-settings-modal .builder-organization-options {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.builder-organization-settings-modal .builder-organization-options label,
+.builder-organization-settings-modal .builder-organization-options label span {
+  min-width: 0;
+}
+
+.builder-organization-settings-modal .builder-organization-options label span {
+  overflow-wrap: anywhere;
 }
 
 .settings-toggle {
@@ -4500,6 +4527,36 @@ button.responses-export-button:disabled {
   white-space: nowrap !important;
 }
 
+.builder-creator-shell .svc-question__content {
+  border: 1px solid rgba(24, 24, 24, 0.18);
+  box-shadow: 0 2px 8px rgba(24, 24, 24, 0.1);
+}
+
+.builder-creator-shell .svc-designer-header .svc-surface-header {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+}
+
+.builder-creator-shell .svc-designer-header,
+.builder-creator-shell .svc-designer-header .svc-surface-header,
+.builder-creator-shell .svc-designer-header .sd-container-modern__title {
+  background: #f2eee8 !important;
+}
+
+.builder-creator-shell .svc-designer-header .svc-logo-image,
+.builder-creator-shell .svc-designer-header .svc-logo-image-container {
+  order: -1;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+
+.builder-creator-shell .svc-designer-header .sd-header__text {
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+
 .response-preview-builder-palette.survey-page-card .sd-root-modern,
 .response-preview-builder-palette.survey-page-card .sd-root-modern__wrapper {
   --sjs-primary-backcolor: #121212;
@@ -5512,47 +5569,6 @@ body,
   background: var(--theme-accent-gradient);
 }
 
-.builder-creator-shell .svc-creator {
-  --sjs-primary-backcolor: var(--theme-accent);
-  --sjs-primary-backcolor-dark: var(--theme-accent-strong);
-  --sjs-primary-backcolor-light: var(--theme-accent-soft);
-  --sjs-primary-background-500: var(--theme-accent);
-  --sjs-primary-background-400: var(--theme-accent-strong);
-  --sjs-primary-background-10: var(--theme-accent-soft);
-  --sjs-general-backcolor: var(--theme-surface-light);
-  --sjs-general-backcolor-dim: var(--theme-surface);
-  --sjs-general-backcolor-dim-light: var(--theme-surface-light);
-  --sjs-general-backcolor-dark: var(--theme-border);
-  --sjs-general-forecolor: var(--theme-text);
-  --sjs-general-forecolor-light: var(--theme-muted);
-  --sjs-layer-1-foreground-100: var(--theme-text);
-  --sjs-layer-1-foreground-50: var(--theme-muted);
-  --sjs-layer-1-background-500: var(--theme-surface-light);
-  --sjs-layer-3-background-500: var(--theme-surface);
-  --ctr-button-group-item-text-color-selected: var(--theme-accent);
-  --ctr-button-group-item-icon-color-selected: var(--theme-accent);
-  --ctr-button-group-border-color-focused: var(--theme-accent);
-  --ctr-survey-action-button-text-color-positive: var(--theme-accent);
-  --ctr-menu-item-border-color-selected: var(--theme-accent);
-  --ctr-property-grid-header-border-color: var(--theme-accent);
-  --ctr-editor-border-color-focused: var(--theme-accent);
-  --ctr-editor-border-color-highlighted: var(--theme-accent-soft);
-  border-color: var(--theme-border);
-  background: var(--theme-card-background);
-}
-
-.builder-creator-shell .svc-toolbox,
-.builder-creator-shell .svc-side-bar,
-.builder-creator-shell .spg-root-modern {
-  border-color: var(--theme-border) !important;
-  background: var(--theme-panel-background) !important;
-}
-
-.builder-creator-shell .svc-tabbed-menu-item--selected::after,
-.builder-creator-shell .spg-button-group__item--selected {
-  border-color: var(--theme-accent) !important;
-}
-
 .sidebar-footer {
   position: relative;
   display: flex;
@@ -5700,12 +5716,12 @@ body,
   background-clip: padding-box;
 }
 
-/* Survey Creator owns these canvases. The official creator theme supplies the
-   same values; this fallback also prevents the built-in aqua default flashing
-   before the Creator model applies it. */
+/* Survey Creator uses a fixed neutral interface theme. This fallback matches
+   the runtime surface and prevents the built-in aqua default from flashing
+   before the Creator model applies its theme through applyCreatorTheme(). */
 .builder-creator-shell svc-tab-designer,
 .builder-creator-shell .svc-tab-designer {
-  background: var(--theme-surface-light) !important;
+  background: #f2eee8 !important;
 }
 
 .dashboard-status-pill-active,

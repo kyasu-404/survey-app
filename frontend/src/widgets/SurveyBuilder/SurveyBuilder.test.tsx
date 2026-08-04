@@ -143,6 +143,7 @@ vi.mock("survey-creator-core", () => ({
       tabs: {},
     }),
   },
+  registerCreatorTheme: vi.fn(),
   registerSurveyTheme: vi.fn(),
 }));
 
@@ -351,19 +352,22 @@ describe("SurveyBuilder", () => {
     registerElement.mockClear();
   });
 
-  it("applies the application palette through the Survey Creator UI theme API", async () => {
+  it("applies one neutral Survey Creator UI theme independently of the application palette", async () => {
     renderBuilder();
 
     await waitFor(() => {
       expect(creatorInstances).toHaveLength(1);
       expect(creatorInstances[0].applyCreatorTheme).toHaveBeenCalledWith(
         expect.objectContaining({
-          themeName: "survey-app-sand",
+          themeName: "survey-app-neutral",
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-special-background": "#f7f1e8",
-            "--sjs2-color-utility-surface-designer": "#f7f1e8",
+            "--sjs-primary-backcolor": "#121212",
+            "--sjs-general-backcolor": "#fffdf9",
+            "--sjs-general-forecolor": "#181818",
+            "--sjs-special-background": "#f2eee8",
+            "--sjs2-color-utility-surface-designer": "#f2eee8",
           }),
         }),
       );
@@ -623,6 +627,7 @@ describe("SurveyBuilder", () => {
     await waitFor(() => {
       expect(creatorInstances[0].JSON).toMatchObject({
         title: "Новая форма",
+        logoPosition: "left",
         logoWidth: "120px",
         logoHeight: "90px",
         logoFit: "contain",
@@ -635,6 +640,7 @@ describe("SurveyBuilder", () => {
       schema: expect.objectContaining({
         title: "Новая форма",
         logo: DEFAULT_SURVEY_LOGO_TOKEN,
+        logoPosition: "left",
         logoWidth: "120px",
         logoHeight: "90px",
         logoFit: "contain",
@@ -675,6 +681,7 @@ describe("SurveyBuilder", () => {
       showQuestionNumbers: false,
       questionDescriptionLocation: "underTitle",
       completedHtml: expect.stringContaining("Спасибо за Ваш ответ!"),
+      logoPosition: "left",
       logoWidth: "120px",
       logoHeight: "90px",
       logoFit: "contain",
@@ -994,6 +1001,7 @@ describe("SurveyBuilder", () => {
     expect(surveyBuilderSource).toContain('import "survey-core/survey-core.css";');
     expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.css";');
     expect(surveyBuilderSource).toContain('registerSurveyTheme(SurveyTheme);');
+    expect(surveyBuilderSource).toContain('registerCreatorTheme(NEUTRAL_CREATOR_THEME);');
   });
 
   it("keeps the built-in save action icon-only while custom builder actions stay compact text buttons", () => {
@@ -1010,6 +1018,34 @@ describe("SurveyBuilder", () => {
 
     expect(appCss).toMatch(
       /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color:\s*#242424\s*!important;/s,
+    );
+  });
+
+  it("matches the designer canvas to the preview and keeps question cards visible", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-creator-shell svc-tab-designer,\s*\.builder-creator-shell \.svc-tab-designer\s*\{[^}]*background:\s*#f2eee8\s*!important;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-question__content\s*\{[^}]*border:\s*1px solid rgba\(24,\s*24,\s*24,\s*0\.18\);[^}]*box-shadow:\s*0 2px 8px rgba\(24,\s*24,\s*24,\s*0\.1\);/s,
+    );
+  });
+
+  it("keeps the designer logo and title left-aligned", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-designer-header \.svc-surface-header\s*\{[^}]*flex-direction:\s*row\s*!important;[^}]*align-items:\s*center\s*!important;[^}]*justify-content:\s*flex-start\s*!important;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-designer-header \.sd-header__text\s*\{[^}]*align-items:\s*flex-start;[^}]*text-align:\s*left;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-designer-header \.svc-logo-image,\s*\.builder-creator-shell \.svc-designer-header \.svc-logo-image-container\s*\{[^}]*order:\s*-1;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*#f2eee8\s*!important;/s,
     );
   });
 
@@ -1115,6 +1151,12 @@ describe("SurveyBuilder", () => {
     expect(appCss).toMatch(/\.deadline-modal \.deadline-clear-button:hover,\s*\.deadline-modal \.deadline-clear-button:focus-visible\s*\{[^}]*background:\s*rgba\(254,\s*202,\s*202,\s*0\.92\);[^}]*color:\s*#991b1b;/);
     expect(appCss.lastIndexOf(".deadline-modal .deadline-save-button")).toBeGreaterThan(
       appCss.indexOf(".deadline-clear-button,\n.deadline-save-button,\n.responses-export-button"),
+    );
+    expect(appCss).toMatch(
+      /\.builder-organization-settings-modal legend\s*\{[^}]*float:\s*left;[^}]*width:\s*100%;[^}]*overflow-wrap:\s*anywhere;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-organization-settings-modal \.builder-organization-options\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
     );
   });
 
