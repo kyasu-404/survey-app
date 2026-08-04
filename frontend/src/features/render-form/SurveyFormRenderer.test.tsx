@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SurveyFormRenderer } from "./SurveyFormRenderer";
@@ -146,14 +147,22 @@ vi.mock("survey-react-ui", () => ({
   }: {
     model: {
       completeText: string;
+      completedHtml: string;
       data: Record<string, unknown>;
       questionNames: string[];
       showCompleteButton: boolean;
       showNavigationButtons: boolean;
       onCompleting: { fire: (arg: unknown, options: unknown) => Promise<void> };
     };
-  }) => (
-    <div>
+  }) => {
+    const [isCompleted, setIsCompleted] = useState(false);
+
+    if (isCompleted) {
+      return <div data-testid="survey-complete-page" dangerouslySetInnerHTML={{ __html: model.completedHtml }} />;
+    }
+
+    return (
+      <div>
       <div data-testid="survey-question-names">{model.questionNames.join(",")}</div>
       <div className="sd-body__navigation">
         {model.showNavigationButtons && <button className="sd-navigation__prev-btn">Назад</button>}
@@ -163,15 +172,20 @@ vi.mock("survey-react-ui", () => ({
             className="sd-btn sd-btn--action"
             onClick={async () => {
               model.data = { email: "a@b.com" };
-              await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+              const options = { allowComplete: true, allow: true };
+              await model.onCompleting.fire(model, options);
+              if (options.allowComplete && options.allow) {
+                setIsCompleted(true);
+              }
             }}
           >
             {model.completeText || "Отправить"}
           </button>
         )}
       </div>
-    </div>
-  ),
+      </div>
+    );
+  },
 }));
 
 vi.mock("../submit-response/useSubmitResponse", () => ({
@@ -264,6 +278,60 @@ describe("SurveyFormRenderer", () => {
         data: { email: "a@b.com" },
       }));
     });
+    expect(await screen.findByText("Спасибо за Ваш ответ!")).toBeInTheDocument();
+  });
+
+  it("shows the completion message after the first successful submission", async () => {
+    mutateAsync.mockResolvedValueOnce({
+      status: "submitted",
+      responseId: "response-1",
+      data: { email: "a@b.com" },
+      editable: true,
+    });
+
+    render(<SurveyFormRenderer formId="form-1" schema={{ pages: [] }} allowResponseEditing />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
+
+    expect(await screen.findByText("Спасибо за Ваш ответ!")).toBeInTheDocument();
+    expect(createdModels[0]).toMatchObject({ showCompletePage: true });
+    expect(screen.queryByText("Вы уже отправляли ответ на эту форму.")).not.toBeInTheDocument();
+  });
+
+  it("shows an existing response before the form and only offers editing when enabled", async () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        allowResponseEditing
+        existingResponse={{
+          responseId: "response-1",
+          data: { email: "saved@example.com" },
+          editable: true,
+        }}
+        schema={{ pages: [{ elements: [{ type: "text", name: "email" }] }] }}
+      />,
+    );
+
+    expect(screen.getByText("Вы уже отправляли ответ на эту форму.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+
+    expect(createdModels[0]).toMatchObject({ data: { email: "saved@example.com" } });
+    expect(screen.getByRole("button", { name: "Сохранить изменения" })).toBeInTheDocument();
+  });
+
+  it("does not show editing for an existing response when response editing is disabled", () => {
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        existingResponse={{ responseId: "response-1", data: {}, editable: false }}
+        schema={{ pages: [] }}
+      />,
+    );
+
+    expect(screen.getByText("Вы уже отправляли ответ на эту форму.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Редактировать" })).not.toBeInTheDocument();
   });
 
   it("keeps interactive mode editable with submit and draft side effects enabled", async () => {

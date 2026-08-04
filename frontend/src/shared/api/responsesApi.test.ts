@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
+import { fetchExistingResponse, fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
 import { apiClient } from "./client";
 
 vi.mock("./client", () => ({
@@ -103,6 +103,43 @@ describe("insertResponse", () => {
       p_response_id: "response-1",
       p_browser_id: "223e4567-e89b-42d3-a456-426614174000",
     }));
+  });
+});
+
+describe("fetchExistingResponse", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("checks the browser response without submitting new data", async () => {
+    vi.mocked(apiClient.rpc).mockResolvedValue({
+      data: [{
+        response_id: "response-1",
+        response_data: { q1: "saved" },
+        response_editable: true,
+      }],
+      error: null,
+    } as never);
+
+    await expect(fetchExistingResponse(
+      "form-1",
+      "223e4567-e89b-42d3-a456-426614174000",
+    )).resolves.toEqual({
+      responseId: "response-1",
+      data: { q1: "saved" },
+      editable: true,
+    });
+
+    expect(apiClient.rpc).toHaveBeenCalledWith("get_form_response_status", {
+      p_form_id: "form-1",
+      p_browser_id: "223e4567-e89b-42d3-a456-426614174000",
+    });
+  });
+
+  it("returns null when this browser has not submitted the form", async () => {
+    vi.mocked(apiClient.rpc).mockResolvedValue({ data: [], error: null } as never);
+
+    await expect(fetchExistingResponse("form-1", "browser-1")).resolves.toBeNull();
   });
 });
 

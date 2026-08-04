@@ -23,6 +23,7 @@ import type {
 } from "../../entities/organization/types";
 import { exportOrganizationsXlsx, parseOrganizationsXlsx } from "../../entities/organization/xlsx";
 import downloadIcon from "../../img/Download.svg";
+import uploadIcon from "../../img/Upload.svg";
 import deleteIcon from "../../img/delete.svg";
 import editIcon from "../../img/edit.svg";
 import { getErrorMessage } from "../../shared/lib/error";
@@ -170,18 +171,19 @@ export default function OrganizationsPage() {
           <div className="organizations-toolbar">
             {canManage && (
               <button type="button" className="responses-export-button" onClick={openCreateModal}>
-                Добавить
+                Добавить +
               </button>
             )}
             <button
               type="button"
-              className="responses-export-button"
+              className="responses-export-button organizations-file-button"
               onClick={() => importInputRef.current?.click()}
               disabled={!canManage || isImporting}
               title={!canManage ? "Импорт доступен администратору" : undefined}
             >
               {isImporting && <InlineSpinner />}
               Импорт XLSX
+              <img src={uploadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             <input
               ref={importInputRef}
@@ -192,7 +194,7 @@ export default function OrganizationsPage() {
             />
             <button
               type="button"
-              className="responses-export-button"
+              className="responses-export-button organizations-file-button"
               onClick={() => void exportOrganizationsXlsx(filteredOrganizations)}
               disabled={filteredOrganizations.length === 0}
             >
@@ -201,7 +203,7 @@ export default function OrganizationsPage() {
             </button>
             <button
               type="button"
-              className="responses-delete-button"
+              className="responses-export-button organizations-delete-all-button"
               onClick={() => void handleDeleteAll()}
               disabled={!canManage || organizations.length === 0 || isDeletingAll}
               title={!canManage ? "Удаление доступно администратору" : undefined}

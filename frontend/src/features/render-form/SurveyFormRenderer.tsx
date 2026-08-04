@@ -23,6 +23,7 @@ import {
 } from "../../entities/survey/model/surveySchemaSecurity";
 import { useSubmitResponseMutation, useUpdateResponseMutation } from "../submit-response/useSubmitResponse";
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
+import type { ExistingResponseResult } from "../../entities/response/types";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getFormOrganizations, getOrganizations } from "../../entities/organization/api";
 import {
@@ -67,6 +68,8 @@ type SurveyFormRendererProps = {
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
   allowResponseEditing?: boolean;
+  existingResponse?: ExistingResponseResult | null;
+  responseBrowserId?: string;
 };
 
 type SavedResponseState = {
@@ -216,17 +219,22 @@ export function SurveyFormRenderer({
   isPreview = false,
   allowAnonymousUploads = false,
   allowResponseEditing = false,
+  existingResponse = null,
+  responseBrowserId,
 }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingResponse, setIsEditingResponse] = useState(false);
-  const [savedResponse, setSavedResponse] = useState<SavedResponseState | null>(null);
+  const [savedResponse, setSavedResponse] = useState<SavedResponseState | null>(() => (
+    existingResponse
+      ? { ...existingResponse, status: "already_submitted" }
+      : null
+  ));
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
   const updateResponseMutation = useUpdateResponseMutation();
-  const allowProgrammaticCompleteRef = useRef(false);
   const submissionIdRef = useRef<string>(createSubmissionId());
-  const browserIdRef = useRef<string>(getOrCreateResponseBrowserId());
+  const browserIdRef = useRef<string>(responseBrowserId ?? getOrCreateResponseBrowserId());
   const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
   const isInteractiveMode = resolvedRenderMode === "interactive";
   const usesOrganizationDirectory = useMemo(() => hasOrganizationQuestion(schema), [schema]);
@@ -254,6 +262,9 @@ export function SurveyFormRenderer({
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
     nextModel.completeText = resolvedRenderMode === "preview-navigable" ? "Завершить" : "Отправить";
     nextModel.completedHtml = sanitizeSurveyHtml(resolvedSchema.completedHtml ?? DEFAULT_COMPLETED_HTML);
+    if (isInteractiveMode) {
+      nextModel.showCompletePage = true;
+    }
     if (initialData) {
       nextModel.data = initialData;
       if (resolvedRenderMode !== "readonly-static" && typeof initialPageNo === "number") {
@@ -275,6 +286,15 @@ export function SurveyFormRenderer({
     applyRenderMode(nextModel, resolvedRenderMode);
     return nextModel;
   }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
+
+  useEffect(() => {
+    if (!existingResponse) {
+      return;
+    }
+
+    setSavedResponse({ ...existingResponse, status: "already_submitted" });
+    clearSurveyResponseDraft(responseDraftStorageKey);
+  }, [existingResponse, responseDraftStorageKey]);
 
   useEffect(() => {
     if (!usesOrganizationDirectory) {
@@ -388,13 +408,6 @@ export function SurveyFormRenderer({
       sender: Model,
       options: { allowComplete?: boolean; allow?: boolean }
     ) => {
-      if (allowProgrammaticCompleteRef.current) {
-        allowProgrammaticCompleteRef.current = false;
-        return;
-      }
-
-      options.allowComplete = false;
-      options.allow = false;
       setIsSubmitting(true);
       setSubmitError(null);
 
@@ -425,8 +438,6 @@ export function SurveyFormRenderer({
           });
           setIsEditingResponse(false);
           clearSurveyResponseDraft(responseDraftStorageKey);
-          allowProgrammaticCompleteRef.current = true;
-          sender.doComplete();
           showToast("Изменения ответа сохранены", "success");
           return;
         }
@@ -440,6 +451,8 @@ export function SurveyFormRenderer({
         setSavedResponse(result);
 
         if (result.status === "already_submitted") {
+          options.allowComplete = false;
+          options.allow = false;
           const existingPaths = new Set(getStoragePathsFromResponseData(result.data));
           const unusedAttemptPaths = getStoragePathsFromResponseData(payload.answers)
             .filter((path) => !existingPaths.has(path));
@@ -453,10 +466,10 @@ export function SurveyFormRenderer({
         }
 
         clearSurveyResponseDraft(responseDraftStorageKey);
-        allowProgrammaticCompleteRef.current = true;
-        sender.doComplete();
         showToast("Ответ успешно отправлен", "success");
       } catch (error) {
+        options.allowComplete = false;
+        options.allow = false;
         console.error(error);
 
         const errorMessage = getSubmitResponseErrorMessage(error);
@@ -522,12 +535,7 @@ export function SurveyFormRenderer({
           )}
         </div>
       )}
-      <Survey model={model} />
-      {savedResponse?.status === "submitted" && canEditSavedResponse && !isEditingResponse && (
-        <div className="survey-response-edit-actions">
-          <button type="button" onClick={handleStartResponseEditing}>Редактировать ответ</button>
-        </div>
-      )}
+      {(savedResponse?.status !== "already_submitted" || isEditingResponse) && <Survey model={model} />}
     </div>
   );
 }

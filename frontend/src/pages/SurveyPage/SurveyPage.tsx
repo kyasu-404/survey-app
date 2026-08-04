@@ -2,6 +2,7 @@ import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { getExistingResponse } from "../../entities/response/api";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
 import {
   getPrivateSurveyFormQueryKey,
@@ -12,6 +13,7 @@ import { Skeleton } from "../../shared/ui/Skeleton";
 import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
 import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 import type { SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
+import { getOrCreateResponseBrowserId } from "../../features/render-form/responseBrowserId";
 
 function SurveyNotFound() {
   return (
@@ -67,6 +69,7 @@ export default function SurveyPage() {
   const { user, loading: isAuthLoading } = useAuth();
   const renderMode = getRouteRenderMode(location.state);
   const isPreview = renderMode !== "interactive";
+  const responseBrowserId = useMemo(() => getOrCreateResponseBrowserId(), []);
 
   const isPrivatePreview = isPreview;
   const surveyQuery = useQuery({
@@ -90,17 +93,39 @@ export default function SurveyPage() {
     refetchOnReconnect: true,
   });
   const form = surveyQuery.data;
-  const showInitialSkeleton = !form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading));
+  const existingResponseQuery = useQuery({
+    queryKey: ["form-response-status", id, responseBrowserId],
+    queryFn: ({ signal }) => {
+      if (!id) return null;
+      return getExistingResponse(id, responseBrowserId, signal);
+    },
+    enabled: renderMode === "interactive" && Boolean(id) && Boolean(form?.is_public),
+    retry: 1,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+  const showInitialSkeleton = (
+    (!form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading)))
+    || Boolean(form && renderMode === "interactive" && existingResponseQuery.isLoading)
+  );
 
   const errorMessage = useMemo(() => {
-    if (!surveyQuery.error || isAbortError(surveyQuery.error)) {
-      return null;
+    if (surveyQuery.error && !isAbortError(surveyQuery.error)) {
+      return surveyQuery.error instanceof Error
+        ? surveyQuery.error.message
+        : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
     }
 
-    return surveyQuery.error instanceof Error
-      ? surveyQuery.error.message
-      : "Не удалось загрузить форму. Проверьте доступ к форме и повторите попытку.";
-  }, [surveyQuery.error]);
+    if (existingResponseQuery.error && !isAbortError(existingResponseQuery.error)) {
+      return existingResponseQuery.error instanceof Error
+        ? existingResponseQuery.error.message
+        : "Не удалось проверить, отправлялся ли ответ на эту форму.";
+    }
+
+    return null;
+  }, [existingResponseQuery.error, surveyQuery.error]);
 
   if (!id) return <SurveyNotFound />;
   if (showInitialSkeleton) {
@@ -126,7 +151,6 @@ export default function SurveyPage() {
   if (errorMessage) return <p>Ошибка: {errorMessage}</p>;
   if (isPrivatePreview && !user?.id) return <SurveyNotFound />;
   if (!form || (!form.is_public && !isPreview)) return <SurveyNotFound />;
-
   return (
     <div className="survey-page survey-page-shell">
       <SurveyRuntimeSurface className="card">
@@ -140,6 +164,8 @@ export default function SurveyPage() {
             isPreview={isPreview}
             allowAnonymousUploads={form.is_public}
             allowResponseEditing={form.allow_response_editing ?? false}
+            existingResponse={existingResponseQuery.data ?? null}
+            responseBrowserId={responseBrowserId}
           />
         </Suspense>
       </SurveyRuntimeSurface>

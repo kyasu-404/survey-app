@@ -1,6 +1,7 @@
 import type { SurveySchema } from "../../entities/survey/types";
 import type { ITheme } from "survey-core";
 import { SurveyFormRenderer, type SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
+import type { ExistingResponseResult } from "../../entities/response/types";
 
 type SurveyRendererProps = {
   schema: SurveySchema;
@@ -13,6 +14,8 @@ type SurveyRendererProps = {
   isPreview?: boolean;
   allowAnonymousUploads?: boolean;
   allowResponseEditing?: boolean;
+  existingResponse?: ExistingResponseResult | null;
+  responseBrowserId?: string;
 };
 
 export function SurveyRenderer({
@@ -26,6 +29,8 @@ export function SurveyRenderer({
   isPreview = false,
   allowAnonymousUploads = false,
   allowResponseEditing = false,
+  existingResponse = null,
+  responseBrowserId,
 }: SurveyRendererProps) {
   return (
     <SurveyFormRenderer
@@ -39,6 +44,8 @@ export function SurveyRenderer({
       isPreview={isPreview}
       allowAnonymousUploads={allowAnonymousUploads}
       allowResponseEditing={allowResponseEditing}
+      existingResponse={existingResponse}
+      responseBrowserId={responseBrowserId}
     />
   );
 }

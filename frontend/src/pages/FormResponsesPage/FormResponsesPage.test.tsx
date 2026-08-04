@@ -294,12 +294,25 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
   });
 
-  it("keeps the HTML export button in the same monochrome family", () => {
+  it("makes the HTML export button match the XLSX button", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#27272a\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#52525b,\s*#3f3f46\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.responses-html-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+  });
+
+  it("uses matching light styles for report, refresh, and directory file buttons", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/button\.organizations-file-button,\s*button\.responses-report-button,\s*\.responses-page-toolbar button\.dashboard-refresh-button\s*\{[^}]*background:\s*var\(--theme-surface-light\);[^}]*color:\s*var\(--theme-text\);/);
+  });
+
+  it("adds matching hover feedback to report and directory tabs", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/\.response-report-tabs button\s*\{[^}]*cursor:\s*pointer;[^}]*transition:/);
+    expect(css).toMatch(/\.organizations-type-switcher button\s*\{[^}]*cursor:\s*pointer;[^}]*transition:/);
   });
 
   it("keeps row hover highlighting stronger than alternating row backgrounds", () => {
@@ -1064,7 +1077,7 @@ describe("FormResponsesPage", () => {
     });
   });
 
-  it("filters responses by date and deletes selected answers", async () => {
+  it("does not show date filters and deletes selected answers", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -1091,17 +1104,11 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("С даты"), "2026-08-01");
-
-    await waitFor(() => {
-      expect(getResponsesByForm).toHaveBeenLastCalledWith("form-1", expect.objectContaining({
-        page: 1,
-        dateFrom: expect.any(String),
-      }));
-    });
+    expect(screen.queryByLabelText("С даты")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("По дату")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
-    expect(screen.getByText("☑ Выбрано: 1")).toBeInTheDocument();
+    expect(screen.getByText("Выбрано: 1")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
 
     await waitFor(() => {

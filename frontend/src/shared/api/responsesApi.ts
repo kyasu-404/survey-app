@@ -1,4 +1,5 @@
 import type {
+  ExistingResponseResult,
   SubmitResponseResult,
   SurveyResponse,
   UpdateResponseResult,
@@ -37,6 +38,12 @@ type SubmitResponseRpcRow = {
 type UpdateResponseRpcRow = {
   response_id?: unknown;
   response_data?: unknown;
+};
+
+type ExistingResponseRpcRow = {
+  response_id?: unknown;
+  response_data?: unknown;
+  response_editable?: unknown;
 };
 
 function normalizePositiveInteger(value: number | undefined, fallback: number) {
@@ -105,6 +112,24 @@ function mapUpdateResponseResult(value: unknown): UpdateResponseResult {
   };
 }
 
+function mapExistingResponseResult(value: unknown): ExistingResponseResult | null {
+  const row = getFirstRpcRow(value) as ExistingResponseRpcRow | null;
+
+  if (!row) {
+    return null;
+  }
+
+  if (typeof row.response_id !== "string" || !isRecord(row.response_data)) {
+    throw new Error("Сервер вернул некорректный статус ответа");
+  }
+
+  return {
+    responseId: row.response_id,
+    data: row.response_data,
+    editable: row.response_editable === true,
+  };
+}
+
 async function getFunctionErrorMessage(error: unknown, response?: Response) {
   const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
 
@@ -141,6 +166,27 @@ export async function insertResponse(
 
   if (error) throw error;
   return mapSubmitResponseResult(result);
+}
+
+export async function fetchExistingResponse(
+  formId: string,
+  browserId: string,
+  signal?: AbortSignal,
+): Promise<ExistingResponseResult | null> {
+  const { data: result, error } = await runRequest(
+    "responses.fetchExisting",
+    (requestSignal) => applyAbortSignal(
+      apiClient.rpc("get_form_response_status", {
+        p_form_id: formId,
+        p_browser_id: browserId,
+      }),
+      requestSignal,
+    ),
+    { signal, context: { formId } },
+  );
+
+  if (error) throw error;
+  return mapExistingResponseResult(result);
 }
 
 export async function updateResponse(

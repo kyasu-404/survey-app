@@ -2477,7 +2477,6 @@ textarea:focus {
   align-self: flex-start;
 }
 
-.responses-date-filters,
 .responses-selection-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2489,19 +2488,6 @@ textarea:focus {
   background: rgba(248, 250, 252, 0.72);
 }
 
-.responses-date-filters label {
-  display: grid;
-  gap: 6px;
-  color: #475569;
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
-.responses-date-filters input {
-  min-height: 40px;
-}
-
-.responses-filter-reset,
 .responses-delete-button {
   min-height: 40px;
 }
@@ -3990,30 +3976,55 @@ button.responses-export-button:disabled {
   cursor: pointer;
 }
 
-.survey-response-already-submitted,
-.survey-response-edit-actions {
+.survey-response-already-submitted {
   display: grid;
-  justify-items: start;
-  gap: 10px;
-  margin: 0 0 16px;
-  padding: 14px 16px;
-  border: 1px solid rgba(249, 115, 22, 0.3);
-  border-radius: 12px;
-  background: rgba(255, 237, 213, 0.76);
+  justify-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  background: transparent;
 }
 
 .survey-response-already-submitted p {
   margin: 0;
-  color: #7c2d12;
+  color: var(--theme-text, #111111);
   font-weight: 800;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  text-align: center;
 }
 
-.survey-response-already-submitted button,
-.survey-response-edit-actions button {
-  min-height: 40px;
+.survey-response-already-submitted button {
+  min-height: 44px;
+  padding: 10px 20px;
   border-color: rgba(17, 17, 17, 0.34);
+  border-radius: 12px;
   background: #171717;
   color: #ffffff;
+  box-shadow: 0 10px 22px rgba(17, 17, 17, 0.16);
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.survey-response-already-submitted button:hover,
+.survey-response-already-submitted button:focus-visible {
+  background: #333333;
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(17, 17, 17, 0.22);
+  transform: translateY(-2px);
+}
+
+.survey-page-shell:has(.survey-response-already-submitted) {
+  align-items: center;
+  padding-top: 18px;
+}
+
+.survey-page-shell:has(.survey-response-already-submitted) .survey-runtime-surface.survey-page-card {
+  width: min(760px, 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none;
 }
 
 .responses-table td.responses-table-date-column {
@@ -5147,39 +5158,23 @@ button.responses-export-button:disabled {
   gap: 10px;
 }
 
-.responses-html-button {
-  border-color: rgba(39, 39, 42, 0.52);
-  background: linear-gradient(180deg, #3f3f46, #27272a);
-  color: #ffffff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 14px 28px rgba(39, 39, 42, 0.2);
-}
-
-.responses-html-button:hover,
-.responses-html-button:focus-visible {
-  border-color: rgba(63, 63, 70, 0.72);
-  background: linear-gradient(180deg, #52525b, #3f3f46);
-  color: #ffffff;
-}
-
 .responses-html-button .toolbar-icon {
   filter: brightness(0) invert(1);
 }
 
 button.responses-export-button.responses-html-button {
-  border-color: rgba(39, 39, 42, 0.52);
-  background: linear-gradient(180deg, #3f3f46, #27272a);
+  border-color: rgba(17, 17, 17, 0.36);
+  background: linear-gradient(180deg, #27272a, #111111);
   color: #ffffff;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 14px 28px rgba(39, 39, 42, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 28px rgba(17, 17, 17, 0.18);
 }
 
 button.responses-export-button.responses-html-button:hover,
 button.responses-export-button.responses-html-button:focus-visible {
-  border-color: rgba(63, 63, 70, 0.72);
-  background: linear-gradient(180deg, #52525b, #3f3f46);
+  border-color: rgba(17, 17, 17, 0.48);
+  background: linear-gradient(180deg, #3f3f46, #18181b);
   color: #ffffff;
 }
 
@@ -5767,8 +5762,38 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   gap: 10px;
 }
 
-.organizations-toolbar .responses-delete-button {
+.organizations-toolbar .organizations-delete-all-button {
   min-height: 42px;
+}
+
+button.organizations-file-button,
+button.responses-report-button,
+.responses-page-toolbar button.dashboard-refresh-button {
+  border-color: var(--theme-border);
+  background: var(--theme-surface-light);
+  color: var(--theme-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 10px 22px rgba(17, 17, 17, 0.1);
+}
+
+button.organizations-file-button:hover,
+button.organizations-file-button:focus-visible,
+button.responses-report-button:hover,
+button.responses-report-button:focus-visible,
+.responses-page-toolbar button.dashboard-refresh-button:hover,
+.responses-page-toolbar button.dashboard-refresh-button:focus-visible {
+  border-color: rgba(17, 17, 17, 0.28);
+  background: #ffffff;
+  color: #111111;
+}
+
+.organizations-file-button .toolbar-icon,
+.responses-report-button .toolbar-icon,
+.responses-page-toolbar .dashboard-refresh-button .toolbar-icon {
+  width: 18px;
+  height: 18px;
+  filter: none;
 }
 
 .organizations-type-switcher {
@@ -5791,6 +5816,14 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   color: var(--theme-text-muted);
   background: transparent;
   cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.organizations-type-switcher button:not(.active):hover,
+.organizations-type-switcher button:not(.active):focus-visible {
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+  transform: translateY(-1px);
 }
 
 .organizations-type-switcher button.active {
@@ -5878,9 +5911,48 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 .response-report-modal {
-  width: min(980px, calc(100vw - 32px));
+  width: min(1080px, calc(100vw - 32px));
   max-height: min(90vh, 900px);
   overflow: auto;
+}
+
+.response-report-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 5px;
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-surface-muted);
+}
+
+.response-report-tabs button {
+  flex: 1 1 0;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--theme-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.response-report-tabs button:not(.active):not(:disabled):hover,
+.response-report-tabs button:not(.active):not(:disabled):focus-visible {
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+  transform: translateY(-1px);
+}
+
+.response-report-tabs button.active {
+  color: #ffffff;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 8px 18px var(--theme-accent-soft);
+}
+
+.response-report-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .response-report-header {
@@ -5924,6 +5996,8 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .response-report-summary span,
 .response-report-question-heading span {
   color: var(--theme-text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
 }
 
 .response-report-summary strong {
@@ -5945,9 +6019,10 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 .response-report-question {
-  padding: 15px;
+  padding: 18px;
   border: 1px solid var(--theme-border);
   border-radius: 14px;
+  background: var(--theme-surface-light);
 }
 
 .response-report-question-heading {
@@ -5959,16 +6034,101 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 
 .response-report-values {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   margin-top: 12px;
 }
 
-.response-report-values > div {
+.response-report-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.response-report-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-muted);
+}
+
+.response-report-metrics span {
+  color: var(--theme-text-muted);
+  font-size: 0.78rem;
+}
+
+.response-report-metrics strong {
+  color: var(--theme-text);
+  font-size: 1.08rem;
+}
+
+.response-report-values > .response-report-value {
+  display: grid;
+  gap: 6px;
+}
+
+.response-report-value-copy {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 7px;
-  border-top: 1px solid var(--theme-border);
+  color: var(--theme-text);
+}
+
+.response-report-value-copy strong {
+  flex: 0 0 auto;
+  font-size: 0.88rem;
+}
+
+.response-report-value-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--theme-surface-muted);
+}
+
+.response-report-value-track span {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--theme-accent-gradient);
+}
+
+.response-report-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.response-report-group {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-muted);
+}
+
+.response-report-group h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.response-report-group .response-report-metrics > div,
+.response-report-group .response-report-value-track {
+  background: var(--theme-surface-light);
+}
+
+.response-report-coverage-note,
+.response-report-empty {
+  margin: 0 0 18px;
+  padding: 13px 15px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-muted);
 }
 
 .response-report-missing-table-shell {
@@ -5989,6 +6149,25 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   background: rgba(34, 197, 94, 0.12);
 }
 
+.response-report-status {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.response-report-status.submitted {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.response-report-status.missing {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.12);
+}
+
 @media (max-width: 760px) {
   .organizations-page-card {
     padding: 18px;
@@ -6007,6 +6186,10 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   }
 
   .response-report-question-heading {
+    display: grid;
+  }
+
+  .response-report-tabs {
     display: grid;
   }
 

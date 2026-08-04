@@ -169,6 +169,7 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /revoke insert on table public\.responses from anon;/i);
   assert.match(schema, /grant select on table public\.responses to authenticated;/i);
   assert.match(schema, /revoke insert on table public\.responses from authenticated;/i);
+  assert.match(schema, /grant execute on function public\.get_form_response_status\(uuid, uuid\) to anon, authenticated, service_role;/i);
   assert.match(schema, /grant execute on function public\.submit_form_response\(uuid, uuid, uuid, jsonb\) to anon, authenticated, service_role;/i);
   assert.match(
     schema,
@@ -328,6 +329,9 @@ test("response submission is limited to one response per browser and remains ide
   assert.match(submitFunction, /r\.browser_id = p_browser_id/i);
   assert.match(submitFunction, /'already_submitted'::text/i);
   assert.match(responseManagementMigration, /revoke insert on table public\.responses from anon, authenticated/i);
+  const responseStatusFunction = getFunctionDefinition("get_form_response_status");
+  assert.match(responseStatusFunction, /r\.browser_id = p_browser_id/i);
+  assert.doesNotMatch(responseStatusFunction, /insert into public\.responses/i);
 });
 
 test("answered form schemas are immutable and response editing is server-authorized", () => {

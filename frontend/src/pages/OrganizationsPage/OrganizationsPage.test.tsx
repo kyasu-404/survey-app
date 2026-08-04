@@ -89,6 +89,11 @@ describe("OrganizationsPage", () => {
       expect(screen.getByRole("tab", { name })).toBeInTheDocument();
     });
     await screen.findByText("ГБОУ");
+    expect(screen.getByRole("button", { name: "Добавить +" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Импорт XLSX/ })).toHaveClass("organizations-file-button");
+    expect(screen.getByRole("button", { name: /Импорт XLSX/ }).querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Экспорт XLSX/ })).toHaveClass("organizations-file-button");
+    expect(screen.getByRole("button", { name: /Удалить все/ })).toHaveClass("organizations-delete-all-button");
     ["Тип ОУ", "Номер", "Алиасы", "Email", "Действия"].forEach((name) => {
       expect(screen.getByRole("columnheader", { name })).toBeInTheDocument();
     });
@@ -123,6 +128,6 @@ describe("OrganizationsPage", () => {
     await screen.findByText("ГБОУ");
     expect(screen.getByRole("button", { name: /Импорт XLSX/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Удалить все/ })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Добавить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить +" })).not.toBeInTheDocument();
   });
 });

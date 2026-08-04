@@ -13,6 +13,12 @@ export type SubmitResponseResult = {
   editable: boolean;
 };
 
+export type ExistingResponseResult = {
+  responseId: string;
+  data: Record<string, unknown>;
+  editable: boolean;
+};
+
 export type UpdateResponseResult = {
   responseId: string;
   data: Record<string, unknown>;

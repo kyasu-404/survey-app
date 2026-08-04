@@ -1,11 +1,20 @@
 import {
   fetchResponsesByForm,
+  fetchExistingResponse,
   insertResponse,
   updateResponse,
   deleteResponses as deleteResponsesRequest,
   type FetchResponsesByFormOptions,
   type PaginatedResponses,
 } from "../../shared/api";
+
+export async function getExistingResponse(
+  formId: string,
+  browserId: string,
+  signal?: AbortSignal,
+) {
+  return fetchExistingResponse(formId, browserId, signal);
+}
 
 export async function createResponse(
   formId: string,

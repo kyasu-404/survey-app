@@ -40,10 +40,6 @@ type SelectedResponsePreview = {
 
 const RESPONSES_SCROLL_PAGE_SIZE = 100;
 type ResponsesPage = Awaited<ReturnType<typeof getResponsesByForm>>;
-type ResponseDateRange = {
-  dateFrom?: string;
-  dateToExclusive?: string;
-};
 
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   const primaryValue = Object.entries(row).find(
@@ -134,31 +130,15 @@ function getDateCellParts(value: string) {
   return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
 }
 
-function getResponseDateRange(dateFrom: string, dateTo: string): ResponseDateRange {
-  const range: ResponseDateRange = {};
-
-  if (dateFrom) {
-    range.dateFrom = new Date(`${dateFrom}T00:00:00`).toISOString();
-  }
-  if (dateTo) {
-    const exclusiveDate = new Date(`${dateTo}T00:00:00`);
-    exclusiveDate.setDate(exclusiveDate.getDate() + 1);
-    range.dateToExclusive = exclusiveDate.toISOString();
-  }
-
-  return range;
-}
-
-async function getResponsePage(formId: string, dateRange: ResponseDateRange, signal?: AbortSignal) {
+async function getResponsePage(formId: string, signal?: AbortSignal) {
   return getResponsesByForm(formId, {
     page: 1,
     pageSize: RESPONSES_SCROLL_PAGE_SIZE,
-    ...dateRange,
     signal,
   });
 }
 
-async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage, dateRange: ResponseDateRange) {
+async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage) {
   const pageSize = firstPage.pageSize || RESPONSES_SCROLL_PAGE_SIZE;
   const responses = [...firstPage.data];
   let currentPage = firstPage;
@@ -168,7 +148,6 @@ async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage
     currentPage = await getResponsesByForm(formId, {
       page: nextPageNumber,
       pageSize,
-      ...dateRange,
     });
     responses.push(...currentPage.data);
   }
@@ -227,29 +206,14 @@ export default function FormResponsesPage() {
   const queryClient = useQueryClient();
   const [selectedResponsePreview, setSelectedResponsePreview] = useState<SelectedResponsePreview | null>(null);
   const [selectedResponseIds, setSelectedResponseIds] = useState<Set<string>>(() => new Set());
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [isDeletingResponses, setIsDeletingResponses] = useState(false);
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const isDateRangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo);
-  const dateRange = useMemo(() => getResponseDateRange(dateFrom, dateTo), [dateFrom, dateTo]);
-  const responsesQueryKey = dateRange.dateFrom || dateRange.dateToExclusive
-    ? getFormResponsesQueryKey(
-        id,
-        "page",
-        1,
-        RESPONSES_SCROLL_PAGE_SIZE,
-        dateRange.dateFrom,
-        dateRange.dateToExclusive,
-      )
-    : getFormResponsesQueryKey(id, "page", 1, RESPONSES_SCROLL_PAGE_SIZE);
+  const responsesQueryKey = getFormResponsesQueryKey(id, "page", 1, RESPONSES_SCROLL_PAGE_SIZE);
 
   useEffect(() => {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
-    setDateFrom("");
-    setDateTo("");
   }, [id]);
 
   const formQuery = useQuery({
@@ -282,9 +246,9 @@ export default function FormResponsesPage() {
         };
       }
 
-      return getResponsePage(id, dateRange, signal);
+      return getResponsePage(id, signal);
     },
-    enabled: Boolean(id) && !isDateRangeInvalid,
+    enabled: Boolean(id),
     retry: 1,
     staleTime: 30_000,
     refetchOnMount: "always",
@@ -332,7 +296,6 @@ export default function FormResponsesPage() {
   const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
     .find((error) => error && !isAbortError(error)) ?? null;
   const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
-  const filteredResponses = responsesQuery.data?.count ?? 0;
   const canDeleteResponses = Boolean(
     formQuery.data && (formQuery.data.author_id === user?.id || profile?.role === "admin"),
   );
@@ -407,7 +370,7 @@ export default function FormResponsesPage() {
     }
 
     const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
-    void Promise.resolve(getAllResponsesForExport(id, responsesQuery.data, dateRange))
+    void Promise.resolve(getAllResponsesForExport(id, responsesQuery.data))
       .then((exportResponses) => formatResponsesForTable(
         exportResponses,
         formQuery.data!.schema,
@@ -429,7 +392,7 @@ export default function FormResponsesPage() {
 
     setIsGeneratingReport(true);
     try {
-      const reportResponses = await getAllResponsesForExport(id, responsesQuery.data, dateRange);
+      const reportResponses = await getAllResponsesForExport(id, responsesQuery.data);
       const reportOrganizations = usesOrganizationDirectory
         ? organizationsQuery.data ?? await getOrganizations(formOrganizationTypes)
         : [];
@@ -567,41 +530,9 @@ export default function FormResponsesPage() {
           </div>
         </div>
 
-        <div className="responses-date-filters" aria-label="Фильтр ответов по дате">
-          <label>
-            <span>С даты</span>
-            <input
-              type="date"
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(event) => setDateFrom(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>По дату</span>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(event) => setDateTo(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="responses-filter-reset"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-            }}
-            disabled={!dateFrom && !dateTo}
-          >
-            Сбросить
-          </button>
-        </div>
-
         {canDeleteResponses && selectedResponseIds.size > 0 && (
           <div className="responses-selection-bar" aria-live="polite">
-            <strong>☑ Выбрано: {selectedResponseIds.size}</strong>
+            <strong>Выбрано: {selectedResponseIds.size}</strong>
             <button
               type="button"
               className="responses-delete-button"
@@ -614,11 +545,7 @@ export default function FormResponsesPage() {
           </div>
         )}
 
-        {isDateRangeInvalid && (
-          <p className="responses-page-error">Начальная дата не может быть позже конечной.</p>
-        )}
-
-        {!isDateRangeInvalid && isLoading && (
+        {isLoading && (
           <div className="responses-page-table-shell responses-page-skeleton" aria-hidden="true">
             <div className="responses-page-skeleton-head">
               <Skeleton className="responses-page-skeleton-cell" />
@@ -634,18 +561,18 @@ export default function FormResponsesPage() {
             ))}
           </div>
         )}
-        {!isDateRangeInvalid && !isLoading && combinedError && (
+        {!isLoading && combinedError && (
           <p className="responses-page-error">{getErrorMessage(combinedError, "Не удалось загрузить ответы")}</p>
         )}
 
-        {!isDateRangeInvalid && !isLoading && !combinedError && !rows.length && (
+        {!isLoading && !combinedError && !rows.length && (
           <div className="dashboard-empty-state responses-page-empty">
             <h4>Ответов пока нет</h4>
             <p>Новые ответы появятся здесь автоматически после отправки формы.</p>
           </div>
         )}
 
-        {!isDateRangeInvalid && !isLoading && !combinedError && !!rows.length && (
+        {!isLoading && !combinedError && !!rows.length && (
           <div className="responses-page-table-shell">
             <table className="responses-table">
               <thead>
@@ -727,9 +654,9 @@ export default function FormResponsesPage() {
           </div>
         )}
 
-        {!isDateRangeInvalid && !isLoading && !combinedError && totalResponses > 0 && (
+        {!isLoading && !combinedError && totalResponses > 0 && (
           <p className="responses-page-total" aria-live="polite">
-            {dateFrom || dateTo ? `Найдено: ${filteredResponses}. Всего ответов: ${totalResponses}` : `Ответов: ${totalResponses}`}
+            Ответов: {totalResponses}
           </p>
         )}
       </div>
