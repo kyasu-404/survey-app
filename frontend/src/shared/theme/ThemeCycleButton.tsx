@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import settingsIcon from "../../img/Settings.svg";
+import settingsIcon from "../../img/SettingsBlack.svg";
 import { themes } from "./themeRegistry";
 import { useTheme } from "./ThemeProvider";
 

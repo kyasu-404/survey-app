@@ -438,7 +438,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
   const [galleryBackground, setGalleryBackground] = useState("");
   const [responseEditingEnabled, setResponseEditingEnabled] = useState(false);
-  const [usesOrganizationQuestion, setUsesOrganizationQuestion] = useState(false);
   const [organizationTypes, setOrganizationTypes] = useState<OrganizationType[]>(
     DEFAULT_FORM_ORGANIZATION_TYPES,
   );
@@ -513,7 +512,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     assetFormIdRef.current = formId ?? createSurveyAssetFormId();
     const nextCreator = createCreatorInstance(formId);
     setCreator(nextCreator);
-    setUsesOrganizationQuestion(false);
     setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "idle";
     updateRuntimePreviewBridgeFromCreator(nextCreator, formId);
@@ -555,7 +553,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       creator.theme = resolveSurveyTheme(restoredDraft.theme);
       applyThemeToBuilderDesigners(creator);
       creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft.schema, "Новая форма"));
-      setUsesOrganizationQuestion(hasOrganizationQuestion(restoredDraft.schema));
       syncRuntimePreviewNow(creator);
       return;
     }
@@ -581,7 +578,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
         editableForm.title,
       ),
     );
-    setUsesOrganizationQuestion(hasOrganizationQuestion(editableForm.schema));
     syncRuntimePreviewNow(creator);
   }, [creator, editableForm, syncRuntimePreviewNow]);
 
@@ -599,7 +595,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     }
 
     const handleModified = () => {
-      setUsesOrganizationQuestion(hasOrganizationQuestion(creator.JSON as SurveySchema));
       saveSurveyBuilderDraft(
         userId,
         formId,
@@ -724,7 +719,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
     applyThemeToBuilderDesigners(creator);
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
-    setUsesOrganizationQuestion(false);
     setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "empty";
     syncRuntimePreviewNow(creator);
@@ -1103,33 +1097,6 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
             <Skeleton className="builder-loading-skeleton-line" />
             <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-short" />
           </div>
-        )}
-        {isEditMode && editableForm && !isTemplateForm(editableForm) && (
-          <div className="builder-response-settings card">
-            <div>
-              <strong>Редактирование ответов</strong>
-              <span>Респондент сможет изменить свой ответ в этом браузере.</span>
-            </div>
-            <button
-              type="button"
-              className={`settings-toggle ${responseEditingEnabled ? "settings-toggle-active" : ""}`.trim()}
-              role="switch"
-              aria-checked={responseEditingEnabled}
-              aria-label="Редактирование ответов"
-              onClick={() => setResponseEditingEnabled((current) => !current)}
-              disabled={isSurveyMutationBusy}
-            >
-              <span aria-hidden="true" />
-            </button>
-          </div>
-        )}
-        {isEditMode && editableForm && !isTemplateForm(editableForm) && usesOrganizationQuestion && (
-          <OrganizationTypeSettings
-            className="card"
-            selectedTypes={organizationTypes}
-            onChange={setOrganizationTypes}
-            disabled={isSurveyMutationBusy}
-          />
         )}
       </div>
 

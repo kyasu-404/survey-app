@@ -64,4 +64,13 @@ describe("Sidebar", () => {
     expect(css).toMatch(/\.sidebar\s*\{[^}]*overflow:\s*visible;[^}]*z-index:\s*500;/s);
     expect(css).toMatch(/\.theme-cycle-menu\s*\{[^}]*z-index:\s*520;/s);
   });
+
+  it("keeps only the sidebar utility controls neutral in every application theme", () => {
+    const css = readAppCss();
+    const surfaceOverrides = css.slice(css.indexOf("Keep every application scheme inside one color temperature"));
+
+    expect(surfaceOverrides).not.toMatch(/\.sidebar\s*\{[^}]*background:\s*#fbfbfc;/s);
+    expect(surfaceOverrides).not.toMatch(/\.sidebar \.nav-link,[^{]+\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.sidebar-toggle-button,[^{]+\.sidebar \.logout-button:focus-visible\s*\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+  });
 });

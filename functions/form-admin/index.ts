@@ -150,83 +150,108 @@ function isAnonymousUploadPath(path: unknown, formId: string) {
   ).test(path);
 }
 
-function parseStorageObjectName(value: unknown) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const parts = value.split("/");
-
-  if (parts.length < 3) {
-    return null;
-  }
-
-  return {
-    name: value,
-    formId: parts[1],
-  };
-}
-
 async function removeStorageObjectsForForm(adminClient: SupabaseAdminClient, formId: string) {
+  const { data, error } = await adminClient
+    .from("response_file_references")
+    .select("object_path")
+    .eq("form_id", formId);
+
+  if (error) return { removedCount: 0, error };
+
+  const names = [...new Set(
+    (data ?? [])
+      .map((item: { object_path?: unknown }) => item.object_path)
+      .filter((path: unknown): path is string => typeof path === "string" && path.length > 0),
+  )];
   let removedCount = 0;
 
-  for (;;) {
-    const { data, error } = await adminClient
-      .schema("storage")
-      .from("objects")
-      .select("name")
-      .eq("bucket_id", storageBucket)
-      .like("name", `%/${formId}/%`)
-      .limit(1000);
-
-    if (error) {
-      return { removedCount, error };
-    }
-
-    const names = (data ?? [])
-      .map((item: { name?: unknown }) => parseStorageObjectName(item.name))
-      .filter((item): item is { name: string; formId: string } => item?.formId === formId)
-      .map((item) => item.name);
-
-    if (names.length === 0) {
-      return { removedCount, error: null };
-    }
-
-    const { error: removeError } = await adminClient.storage.from(storageBucket).remove(names);
-
-    if (removeError) {
-      return { removedCount, error: removeError };
-    }
-
-    removedCount += names.length;
+  for (let index = 0; index < names.length; index += 100) {
+    const batch = names.slice(index, index + 100);
+    const { error: removeError } = await adminClient.storage.from(storageBucket).remove(batch);
+    if (removeError) return { removedCount, error: removeError };
+    removedCount += batch.length;
   }
+
+  return { removedCount, error: null };
+}
+
+type ListedStorageEntry = {
+  id?: string | null;
+  name?: string;
+  created_at?: string | null;
+};
+
+function isSafeStorageEntryName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value !== "." && value !== ".." && !value.includes("/");
+}
+
+function isListedStorageFile(entry: ListedStorageEntry) {
+  return typeof entry.id === "string" && entry.id.length > 0;
+}
+
+function joinStoragePath(parent: string, name: string) {
+  return parent ? `${parent}/${name}` : name;
+}
+
+async function listStorageEntries(adminClient: SupabaseAdminClient, bucketName: string, path: string) {
+  const bucket = adminClient.storage.from(bucketName);
+  const entries: ListedStorageEntry[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await bucket.list(path, {
+      limit: 1000,
+      offset,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) return { entries, error };
+
+    const page = (data ?? []) as ListedStorageEntry[];
+    entries.push(...page);
+    if (page.length < 1000) return { entries, error: null };
+    offset += page.length;
+  }
+}
+
+async function removeStorageTree(
+  adminClient: SupabaseAdminClient,
+  bucketName: string,
+  path: string,
+  depth = 0,
+): Promise<{ removedCount: number; error: Error | null }> {
+  if (depth > 8) return { removedCount: 0, error: new Error("Storage folder nesting is too deep") };
+
+  const { entries, error } = await listStorageEntries(adminClient, bucketName, path);
+  if (error) return { removedCount: 0, error };
+
+  let removedCount = 0;
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    if (!isSafeStorageEntryName(entry.name)) continue;
+    const entryPath = joinStoragePath(path, entry.name);
+    if (isListedStorageFile(entry)) {
+      files.push(entryPath);
+      continue;
+    }
+
+    const nestedResult = await removeStorageTree(adminClient, bucketName, entryPath, depth + 1);
+    if (nestedResult.error) return { removedCount, error: nestedResult.error };
+    removedCount += nestedResult.removedCount;
+  }
+
+  for (let index = 0; index < files.length; index += 100) {
+    const batch = files.slice(index, index + 100);
+    const { error: removeError } = await adminClient.storage.from(bucketName).remove(batch);
+    if (removeError) return { removedCount, error: removeError };
+    removedCount += batch.length;
+  }
+
+  return { removedCount, error: null };
 }
 
 async function removeSurveyAssetsForForm(adminClient: SupabaseAdminClient, formId: string) {
-  let removedCount = 0;
-  const prefix = `forms/${formId}/`;
-
-  for (;;) {
-    const { data, error } = await adminClient
-      .schema("storage")
-      .from("objects")
-      .select("name")
-      .eq("bucket_id", surveyAssetsBucket)
-      .like("name", `${prefix}%`)
-      .limit(1000);
-
-    if (error) return { removedCount, error };
-
-    const names = (data ?? [])
-      .map((item: { name?: unknown }) => item.name)
-      .filter((name: unknown): name is string => typeof name === "string" && name.startsWith(prefix));
-
-    if (names.length === 0) return { removedCount, error: null };
-
-    const { error: removeError } = await adminClient.storage.from(surveyAssetsBucket).remove(names);
-    if (removeError) return { removedCount, error: removeError };
-    removedCount += names.length;
-  }
+  return removeStorageTree(adminClient, surveyAssetsBucket, `forms/${formId}`);
 }
 
 function parseSurveyAssetObjectName(value: unknown) {
@@ -237,20 +262,33 @@ function parseSurveyAssetObjectName(value: unknown) {
 }
 
 async function removeStaleDraftSurveyAssets(adminClient: SupabaseAdminClient, cutoff: string) {
-  const { data, error } = await adminClient
-    .schema("storage")
-    .from("objects")
-    .select("name")
-    .eq("bucket_id", surveyAssetsBucket)
-    .like("name", "forms/%")
-    .lt("created_at", cutoff)
-    .limit(500);
-
+  const { entries: formEntries, error } = await listStorageEntries(adminClient, surveyAssetsBucket, "forms");
   if (error) return { removedCount: 0, error };
 
-  const candidates = (data ?? [])
-    .map((item: { name?: unknown }) => parseSurveyAssetObjectName(item.name))
-    .filter((item): item is { name: string; formId: string } => item !== null);
+  const candidates: Array<{ name: string; formId: string }> = [];
+
+  for (const formEntry of formEntries) {
+    if (candidates.length >= 500 || !isSafeStorageEntryName(formEntry.name) || !isUuid(formEntry.name)) continue;
+    const formPath = `forms/${formEntry.name}`;
+    const { entries: ownerEntries, error: ownerError } = await listStorageEntries(adminClient, surveyAssetsBucket, formPath);
+    if (ownerError) return { removedCount: 0, error: ownerError };
+
+    for (const ownerEntry of ownerEntries) {
+      if (candidates.length >= 500 || !isSafeStorageEntryName(ownerEntry.name) || isListedStorageFile(ownerEntry)) continue;
+      const ownerPath = joinStoragePath(formPath, ownerEntry.name);
+      const { entries: assetEntries, error: assetError } = await listStorageEntries(adminClient, surveyAssetsBucket, ownerPath);
+      if (assetError) return { removedCount: 0, error: assetError };
+
+      for (const assetEntry of assetEntries) {
+        if (candidates.length >= 500) break;
+        if (!isListedStorageFile(assetEntry) || !isSafeStorageEntryName(assetEntry.name)) continue;
+        if (!assetEntry.created_at || assetEntry.created_at >= cutoff) continue;
+        const parsed = parseSurveyAssetObjectName(joinStoragePath(ownerPath, assetEntry.name));
+        if (parsed) candidates.push(parsed);
+      }
+    }
+  }
+
   const formIds = [...new Set(candidates.map((item) => item.formId))];
   if (formIds.length === 0) return { removedCount: 0, error: null };
 

@@ -160,10 +160,16 @@ describe("SurveyPage", () => {
       /\.survey-runtime-surface\.survey-page-card\s*\{[^}]*border-radius:\s*28px;/s,
     );
     expect(css).toMatch(
+      /\.survey-runtime-surface\.survey-page-card \.sd-container-modern__title,\s*\.survey-runtime-surface\.survey-page-card \.sv-header\s*\{[^}]*border-radius:\s*27px 27px 0 0;/s,
+    );
+    expect(css).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s*\{[^}]*border-radius:\s*20px\s*!important;/,
     );
     expect(css).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,\s*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern__wrapper\s*\{[^}]*min-height:\s*100svh;/,
+    );
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-runtime-surface\.survey-page-card \.sd-container-modern__title,\s*\.survey-runtime-surface\.survey-page-card \.sv-header\s*\{[^}]*border-radius:\s*20px 20px 0 0;/s,
     );
     expect(css).not.toMatch(
       /\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\)\s+\.survey-page-card\s+\.sd-root-modern,[^{]*\{[^}]*--sjs-general-backcolor:/s,

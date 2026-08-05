@@ -59,7 +59,10 @@ test("removes storage objects before deleting the form row", () => {
   assert.ok(removeIndex < deleteMatch.index);
   assert.ok(removeAssetsIndex < deleteMatch.index);
   assert.match(source, /SURVEY_ASSETS_BUCKET/);
-  assert.match(source, /`forms\/\$\{formId\}\//);
+  assert.match(source, /\.from\("response_file_references"\)\s*\.select\("object_path"\)\s*\.eq\("form_id", formId\)/);
+  assert.match(source, /removeStorageTree\(adminClient, surveyAssetsBucket, `forms\/\$\{formId\}`\)/);
+  assert.match(source, /\.storage\.from\(bucketName\)\.remove\(batch\)/);
+  assert.doesNotMatch(source, /\.schema\("storage"\)/);
 });
 
 test("offers an admin-only cleanup for stale unreferenced public uploads", () => {
@@ -68,8 +71,8 @@ test("offers an admin-only cleanup for stale unreferenced public uploads", () =>
   assert.match(source, /\.rpc\("list_orphan_survey_files"/);
   assert.match(source, /olderThanHours/);
   assert.match(source, /removeStaleDraftSurveyAssets/);
-  assert.match(source, /\.eq\("bucket_id", surveyAssetsBucket\)/);
-  assert.match(source, /\.like\("name", "forms\/%"\)/);
+  assert.match(source, /listStorageEntries\(adminClient, surveyAssetsBucket, "forms"\)/);
+  assert.match(source, /assetEntry\.created_at >= cutoff/);
   assert.match(source, /removedAssets/);
 });
 

@@ -109,6 +109,9 @@ describe("OrganizationsPage", () => {
     await userEvent.click(within(row).getByRole("button", { name: /Изменить/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Изменение организации" });
+    expect(within(dialog).getByRole("heading", { name: "Изменить организацию" })).toHaveClass("users-modal-title");
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
+    expect(within(dialog).getByRole("button", { name: "Сохранить" })).toHaveClass("users-yellow-button");
     expect(within(dialog).getByLabelText("Номер")).toBeDisabled();
     fireEvent.change(within(dialog).getByLabelText("Алиас"), { target: { value: "Дом творчества" } });
     await userEvent.click(within(dialog).getByRole("button", { name: "Сохранить" }));

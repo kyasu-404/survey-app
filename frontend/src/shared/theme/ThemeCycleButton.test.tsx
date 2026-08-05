@@ -23,9 +23,11 @@ describe("ThemeCycleButton", () => {
     const user = userEvent.setup();
     const button = screen.getByRole("button", { name: /Сменить тему/i });
     const icon = button.querySelector(".theme-cycle-button-icon");
+    const source = readFileSync(join(process.cwd(), "src/shared/theme/ThemeCycleButton.tsx"), "utf8");
 
     expect(icon).toBeInTheDocument();
     expect(icon).toHaveAttribute("src");
+    expect(source).toContain('import settingsIcon from "../../img/SettingsBlack.svg";');
     expect(button).toHaveAttribute("data-theme-id", "sand");
     expect(button).toHaveAttribute("aria-label", expect.stringContaining("Сейчас Бежевая"));
     expect(button).toHaveAttribute("aria-expanded", "false");
@@ -92,8 +94,39 @@ describe("ThemeCycleButton", () => {
     expect(sandOption).toHaveStyle("--theme-option-accent: #6f5137");
     expect(sandOption).toHaveStyle("--theme-option-surface: #eadfce");
     expect(skyOption).toHaveStyle("--theme-option-accent: #397fbd");
-    expect(skyOption).toHaveStyle("--theme-option-surface: #d9eaf7");
+    expect(skyOption).toHaveStyle("--theme-option-surface: #d5e4ef");
     expect(tealOption).toHaveStyle("--theme-option-accent: #3c805b");
-    expect(tealOption).toHaveStyle("--theme-option-surface: #d9ebdd");
+    expect(tealOption).toHaveStyle("--theme-option-surface: #d8e7dc");
+  });
+
+  it("uses scheme surfaces for nested application panels", () => {
+    const css = readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+    const surfaceOverrides = css.slice(css.indexOf("Keep every application scheme inside one color temperature"));
+
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--theme-surface-muted:[^;]+;[^}]*--theme-control-background:[^;]+;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--theme-surface-muted:[^;]+;[^}]*--theme-control-background:[^;]+;/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--sidebar-bg:[^;]*rgba\(241,\s*248,\s*252,\s*0\.98\)[^;]*;[^}]*--theme-form-card-background:[^;]*rgba\(246,\s*250,\s*253,\s*0\.98\)[^;]*;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--sidebar-bg:[^;]*rgba\(243,\s*249,\s*245,\s*0\.98\)[^;]*;[^}]*--theme-form-card-background:[^;]*rgba\(247,\s*251,\s*248,\s*0\.98\)[^;]*;/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--theme-card-background:\s*linear-gradient\(180deg,\s*rgba\(255,\s*255,\s*255,\s*0\.99\)/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--theme-card-background:\s*linear-gradient\(180deg,\s*rgba\(255,\s*255,\s*255,\s*0\.99\)/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-main-card,[^{]+\{[^}]*background:\s*var\(--theme-page-surface\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-form-card\s*\{[^}]*background:\s*var\(--theme-form-card-background\);/s);
+    expect(surfaceOverrides).toMatch(/\.responses-table th\s*\{[^}]*background:\s*var\(--theme-surface\);/s);
+    expect(surfaceOverrides).toMatch(/\.responses-table tbody tr td,\s*\.responses-table tbody tr:nth-child\(even\) td\s*\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar input,[^{]+\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar select option,[^{]+\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-info-button,[^{]+\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-stats-popover\s*\{[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-stats-item span,[^{]+\{[^}]*color:\s*#111111;/s);
+    expect(surfaceOverrides).toMatch(/\.form-menu-trigger,[^{]+\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.form-menu-trigger:hover,\s*\.form-menu-trigger:focus-visible\s*\{[^}]*transform:\s*translateY\(-2px\);[^}]*box-shadow:\s*0 12px 24px rgba\(17,\s*17,\s*17,\s*0\.14\);/s);
+    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-edit-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-delete-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.16\);/s);
+    expect(surfaceOverrides).toMatch(/\.theme-cycle-button,[^{]+\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-creator\s*\{[^}]*--sjs-primary-backcolor:\s*#2f3437\s*!important;[^}]*--sjs-general-backcolor:\s*#ffffff\s*!important;[^}]*--sjs-general-backcolor-dim:\s*#f1f3f5\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-tabbed-menu\s*\{[^}]*background:\s*#ffffff\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-side-bar,[^{]+\{[^}]*background:\s*#f1f3f5\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell svc-tab-designer,[^{]+\{[^}]*background:\s*#f7f8f9\s*!important;/s);
   });
 });

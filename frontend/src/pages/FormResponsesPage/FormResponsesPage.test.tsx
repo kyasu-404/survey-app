@@ -305,7 +305,8 @@ describe("FormResponsesPage", () => {
   it("uses matching light styles for report, refresh, and directory file buttons", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.organizations-file-button,\s*button\.responses-report-button,\s*\.responses-page-toolbar button\.dashboard-refresh-button\s*\{[^}]*background:\s*var\(--theme-surface-light\);[^}]*color:\s*var\(--theme-text\);/);
+    expect(css).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*color:\s*#111111;[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+    expect(css).toMatch(/\.responses-page-toolbar button\.dashboard-refresh-button,[^{]+\{[^}]*color:\s*#111111;[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
   });
 
   it("adds matching hover feedback to report and directory tabs", () => {
@@ -334,7 +335,7 @@ describe("FormResponsesPage", () => {
 
     expect(css).toMatch(/\.response-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*#111111;[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(
-      /\.response-preview-body\.survey-page-card \.sd-question \.sd-description,\s*\.response-preview-body\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/,
+      /\.survey-runtime-surface\.survey-page-card \.sd-question \.sd-description,\s*\.survey-runtime-surface\.survey-page-card \.sd-question__description\s*\{[^}]*width:\s*fit-content;[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/s,
     );
     expect(css).not.toMatch(
       /\.response-preview-builder-palette\.survey-page-card \.sd-question \.sd-description,\s*\.response-preview-builder-palette\.survey-page-card \.sd-question__description\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\)\s*!important;/,

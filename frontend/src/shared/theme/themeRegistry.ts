@@ -37,8 +37,8 @@ const palettes: Record<ThemeId, AppThemeTokens> = {
     label: "Голубая",
     accent: "#397fbd",
     accentHover: "#2c6599",
-    bg: "#eef6fc",
-    surface: "#d9eaf7",
+    bg: "#f4f8fb",
+    surface: "#d5e4ef",
     text: "#183047",
     muted: "#607487",
   },
@@ -46,8 +46,8 @@ const palettes: Record<ThemeId, AppThemeTokens> = {
     label: "Зелёная",
     accent: "#3c805b",
     accentHover: "#2f6748",
-    bg: "#eef7f0",
-    surface: "#d9ebdd",
+    bg: "#f4f8f5",
+    surface: "#d8e7dc",
     text: "#20372a",
     muted: "#64766b",
   },
@@ -147,12 +147,12 @@ function createCreatorTheme(app: AppThemeTokens): ICreatorTheme {
  */
 export const NEUTRAL_CREATOR_THEME: ICreatorTheme = createCreatorTheme({
   label: "Нейтральная",
-  accent: "#121212",
-  accentHover: "#000000",
-  bg: "#fffdf9",
-  surface: "#f2eee8",
-  text: "#181818",
-  muted: "#5f5a54",
+  accent: "#2f3437",
+  accentHover: "#111315",
+  bg: "#ffffff",
+  surface: "#f1f3f5",
+  text: "#202124",
+  muted: "#656b73",
 });
 
 export const themes: Record<ThemeId, SurveyThemeBundle> = {

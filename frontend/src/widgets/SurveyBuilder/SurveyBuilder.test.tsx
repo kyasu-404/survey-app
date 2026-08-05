@@ -363,11 +363,11 @@ describe("SurveyBuilder", () => {
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-primary-backcolor": "#121212",
-            "--sjs-general-backcolor": "#fffdf9",
-            "--sjs-general-forecolor": "#181818",
-            "--sjs-special-background": "#f2eee8",
-            "--sjs2-color-utility-surface-designer": "#f2eee8",
+            "--sjs-primary-backcolor": "#2f3437",
+            "--sjs-general-backcolor": "#ffffff",
+            "--sjs-general-forecolor": "#202124",
+            "--sjs-special-background": "#f1f3f5",
+            "--sjs2-color-utility-surface-designer": "#f1f3f5",
           }),
         }),
       );
@@ -571,7 +571,11 @@ describe("SurveyBuilder", () => {
 
     expect(await screen.findByRole("dialog", { name: "Галерея фонов" })).toBeInTheDocument();
 
-    const fileInput = container.querySelector(".theme-background-file-input") as HTMLInputElement;
+    const fileInput = await waitFor(() => {
+      const input = container.querySelector(".theme-background-file-input");
+      expect(input).toBeInstanceOf(HTMLInputElement);
+      return input as HTMLInputElement;
+    });
     const file = new File(["image"], "my-background.png", { type: "image/png" });
     await userEvent.upload(fileInput, file);
 
@@ -962,16 +966,10 @@ describe("SurveyBuilder", () => {
     expect(appCss).not.toMatch(/\nbutton:disabled\s*\{/s);
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-page\s*\{/);
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-creator\s+\.sd-(body|page|panel)/);
-    expect(appCss).not.toMatch(
-      /\.builder-creator-shell\s+\.sd-question\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-question__description\s*\{[^}]*display:/s,
-    );
-    expect(appCss).not.toMatch(
-      /\.builder-creator-shell\s+\.sd-question\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-question__description\s*\{[^}]*padding:/s,
-    );
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-page__title/s);
 
     expect(appCss).toContain(".builder-creator-shell .svc-creator {");
-    expect(appCss).toContain("--sjs-primary-backcolor: #121212;");
+    expect(appCss).toContain("--sjs-primary-backcolor: #2f3437;");
     expect(appCss).toContain(".builder-creator-shell .svc-side-bar");
     expect(appCss).toContain(".builder-creator-shell .spg-button-group__item--selected");
     expect(appCss).toContain(".app-button,");
@@ -1017,7 +1015,7 @@ describe("SurveyBuilder", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color:\s*#242424\s*!important;/s,
+      /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color:\s*#202124\s*!important;/s,
     );
   });
 
@@ -1025,7 +1023,7 @@ describe("SurveyBuilder", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-creator-shell svc-tab-designer,\s*\.builder-creator-shell \.svc-tab-designer\s*\{[^}]*background:\s*#f2eee8\s*!important;/s,
+      /\.builder-creator-shell svc-tab-designer,\s*\.builder-creator-shell \.svc-tab-designer\s*\{[^}]*background:\s*#f7f8f9\s*!important;/s,
     );
     expect(appCss).toMatch(
       /\.builder-creator-shell \.svc-question__content\s*\{[^}]*border:\s*1px solid rgba\(24,\s*24,\s*24,\s*0\.18\);[^}]*box-shadow:\s*0 2px 8px rgba\(24,\s*24,\s*24,\s*0\.1\);/s,
@@ -1045,7 +1043,10 @@ describe("SurveyBuilder", () => {
       /\.builder-creator-shell \.svc-designer-header \.svc-logo-image,\s*\.builder-creator-shell \.svc-designer-header \.svc-logo-image-container\s*\{[^}]*order:\s*-1;/s,
     );
     expect(appCss).toMatch(
-      /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*#f2eee8\s*!important;/s,
+      /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*var\(--sjs-general-backcolor-dim\)\s*!important;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-tab-designer \.svc-designer-header\s*\{[^}]*border-bottom:\s*2px solid #111111;/s,
     );
   });
 
@@ -1065,7 +1066,7 @@ describe("SurveyBuilder", () => {
     );
   });
 
-  it("keeps required stars attached while leaving runtime typography to the selected theme", () => {
+  it("keeps required stars attached and gives question descriptions a compact shared highlight", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
@@ -1075,7 +1076,18 @@ describe("SurveyBuilder", () => {
       /\.builder-creator-shell\s+\.sd-question__required-text\s*\{[^}]*white-space:\s*nowrap/s,
     );
     expect(appCss).not.toMatch(/\.survey-page-card\s+\.sd-question__title\s*\{[^}]*font-(?:size|weight):/s);
-    expect(appCss).not.toMatch(/\.survey-page-card\s+\.sd-question__description\s*\{[^}]*border-radius:/s);
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.sd-question \.sd-description,\s*\.builder-creator-shell \.sd-question__description,\s*\.survey-runtime-surface\.survey-page-card \.sd-question \.sd-description,\s*\.survey-runtime-surface\.survey-page-card \.sd-question__description\s*\{[^}]*display:\s*inline-block;[^}]*width:\s*fit-content;[^}]*max-width:\s*100%;[^}]*padding:\s*2px 6px;[^}]*border:\s*1px solid rgba\(96, 165, 250, 0\.55\);[^}]*border-radius:\s*4px;[^}]*background:\s*rgba\(219, 234, 254, 0\.88\)\s*!important;/s,
+    );
+  });
+
+  it("keeps edit-only settings in the builder flow instead of overlaying the canvas", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-status-stack\s*\{[^}]*position:\s*relative;[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(320px, 100%\), 1fr\)\);[^}]*flex:\s*0 0 auto;[^}]*width:\s*100%;[^}]*pointer-events:\s*auto;/s,
+    );
+    expect(appCss).toMatch(/\.builder-status-stack:empty\s*\{[^}]*display:\s*none;/s);
   });
 
   it("keeps the builder editor full-width and syncs creator JSON into the runtime preview tab bridge", async () => {
@@ -1334,6 +1346,48 @@ describe("SurveyBuilder", () => {
       ["school", "kindergarten"],
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
+  });
+
+  it("does not render persistent form settings over the editor and preserves their saved values", async () => {
+    getFormById.mockResolvedValue(
+      createTemplateForm({
+        id: "form-7",
+        title: "Форма для правки",
+        form_type: "survey",
+        allow_response_editing: true,
+        organization_types: ["school", "odo"],
+        schema: {
+          title: "Форма для правки",
+          locale: "ru",
+          pages: [{
+            name: "page1",
+            elements: [{ type: "organization", name: "organization", title: "Организация" }],
+          }],
+        },
+      } as never) as never,
+    );
+
+    renderBuilder("form-7");
+
+    await waitFor(() => {
+      expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Форма для правки" });
+    });
+
+    expect(screen.queryByText("Респондент сможет изменить свой ответ в этом браузере.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Организации для выбора:")).not.toBeInTheDocument();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, vi.fn());
+    });
+
+    expect(saveSurveySchema).toHaveBeenCalledWith(
+      "form-7",
+      expect.objectContaining({ title: "Форма для правки" }),
+      expect.any(Object),
+      "Форма для правки",
+      true,
+      ["school", "odo"],
+    );
   });
 
   it("does not hydrate the editor with a form owned by another non-admin user", async () => {

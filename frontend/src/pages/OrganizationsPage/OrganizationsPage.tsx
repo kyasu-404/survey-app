@@ -274,11 +274,11 @@ export default function OrganizationsPage() {
                     {canManage && (
                       <td>
                         <div className="organizations-row-actions">
-                          <button type="button" onClick={() => openEditModal(organization)}>
+                          <button type="button" className="organization-edit-button" onClick={() => openEditModal(organization)}>
                             Изменить
                             <img src={editIcon} alt="" aria-hidden="true" />
                           </button>
-                          <button type="button" className="danger" onClick={() => void handleDelete(organization)}>
+                          <button type="button" className="danger organization-delete-button" onClick={() => void handleDelete(organization)}>
                             Удалить
                             <img src={deleteIcon} alt="" aria-hidden="true" />
                           </button>
@@ -296,7 +296,7 @@ export default function OrganizationsPage() {
       {isModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-card card organization-edit-modal" role="dialog" aria-modal="true" aria-label={editingOrganization ? "Изменение организации" : "Добавление организации"}>
-            <h3>{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
+            <h3 className="users-modal-title">{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
             <label>
               <span>Тип ОУ</span>
               <select
@@ -342,8 +342,8 @@ export default function OrganizationsPage() {
               />
             </label>
             <div className="deadline-modal-actions">
-              <button type="button" className="deadline-clear-button" onClick={closeModal} disabled={isSaving}>Отмена</button>
-              <button type="button" className="deadline-save-button" onClick={() => void handleSave()} disabled={isSaving}>
+              <button type="button" className="users-neutral-button" onClick={closeModal} disabled={isSaving}>Отмена</button>
+              <button type="button" className="users-yellow-button" onClick={() => void handleSave()} disabled={isSaving}>
                 {isSaving && <InlineSpinner />}
                 Сохранить
               </button>
