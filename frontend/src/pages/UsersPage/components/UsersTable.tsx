@@ -1,13 +1,20 @@
-import type { UserProfile } from "../../../entities/user/types";
+import type { UserProfile, UserRole } from "../../../entities/user/types";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { getStatusLabel, getUserDisplayName } from "../usersPageUtils";
 
 type UsersTableProps = {
   currentUserId?: string;
   isDeletePending: boolean;
+  isRoleChangePending: boolean;
   isStatusChangePending: boolean;
   onOpenPasswordModal: (userId: string, title: string, isOwnPassword: boolean) => void;
   onRequestDelete: (userId: string, userName: string) => void;
+  onRequestRoleChange: (
+    userId: string,
+    userName: string,
+    currentRole: UserRole,
+    nextRole: UserRole,
+  ) => void;
   onToggleUserDisabled: (userId: string, disabled: boolean) => void;
   pendingStatusUserId: string | null;
   users: UserProfile[];
@@ -16,9 +23,11 @@ type UsersTableProps = {
 export function UsersTable({
   currentUserId,
   isDeletePending,
+  isRoleChangePending,
   isStatusChangePending,
   onOpenPasswordModal,
   onRequestDelete,
+  onRequestRoleChange,
   onToggleUserDisabled,
   pendingStatusUserId,
   users,
@@ -41,13 +50,40 @@ export function UsersTable({
             const isOwnUser = profile.id === currentUserId;
             const displayName = getUserDisplayName(profile);
             const isStatusPending = pendingStatusUserId === profile.id;
+            const nextRole: UserRole = profile.role === "admin" ? "user" : "admin";
 
             return (
               <tr key={profile.id}>
                 <td>{profile.name || "—"}</td>
                 <td>{profile.email}</td>
                 <td>
-                  <span className="users-role-chip users-role-chip-static">{profile.role}</span>
+                  {isOwnUser ? (
+                    <span
+                      className="users-role-chip users-role-chip-static"
+                      title="Нельзя изменить собственную роль"
+                    >
+                      {profile.role}
+                    </span>
+                  ) : (
+                    <select
+                      className="users-role-chip users-role-select"
+                      aria-label={`Изменить роль пользователя ${displayName}`}
+                      value={profile.role}
+                      onChange={(event) => {
+                        const selectedRole = event.target.value as UserRole;
+
+                        if (selectedRole !== profile.role) {
+                          onRequestRoleChange(profile.id, displayName, profile.role, selectedRole);
+                        }
+                      }}
+                      disabled={isRoleChangePending}
+                    >
+                      <option value={profile.role} hidden>
+                        {profile.role}
+                      </option>
+                      <option value={nextRole}>{nextRole}</option>
+                    </select>
+                  )}
                 </td>
                 <td>
                   <button

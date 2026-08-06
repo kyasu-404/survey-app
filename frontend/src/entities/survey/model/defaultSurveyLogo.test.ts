@@ -5,6 +5,8 @@ import {
   serializeDefaultSurveyLogo,
 } from "./defaultSurveyLogo";
 import type { SurveySchema } from "../types";
+import { SUPABASE_URL } from "../../../shared/config/env";
+import { SURVEY_ASSET_TOKEN_PREFIX } from "../../../shared/api/surveyAssetUrls";
 
 vi.mock("../../../img/card_logo.png", () => ({
   default: "mock-card-logo-url",
@@ -38,6 +40,25 @@ describe("defaultSurveyLogo", () => {
     expect(serialized).toMatchObject({
       logo: DEFAULT_SURVEY_LOGO_TOKEN,
     });
+  });
+
+  it("serializes managed Supabase logos to a durable token and resolves them for SurveyJS", () => {
+    const assetPath = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${assetPath}`;
+    const serialized = serializeDefaultSurveyLogo({ logo: publicUrl, pages: [] });
+
+    expect(serialized.logo).toBe(`${SURVEY_ASSET_TOKEN_PREFIX}${assetPath}`);
+    expect(resolveDefaultSurveyLogo(serialized).logo).toBe(publicUrl);
+  });
+
+  it("removes malformed managed logo tokens", () => {
+    const schema = {
+      logo: `${SURVEY_ASSET_TOKEN_PREFIX}../../private.png`,
+      pages: [],
+    } satisfies SurveySchema;
+
+    expect(resolveDefaultSurveyLogo(schema)).toEqual({ pages: [] });
+    expect(serializeDefaultSurveyLogo(schema)).toEqual({ pages: [] });
   });
 
   it("removes remote custom logos before SurveyJS can load them", () => {

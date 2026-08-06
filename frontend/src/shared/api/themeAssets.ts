@@ -1,10 +1,10 @@
 import type { ITheme } from "survey-core";
 import { sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
-import { SUPABASE_URL } from "../config/env";
 import { runRequest } from "./request";
 import { supabaseClient } from "./client";
+import { getManagedSurveyAssetPath, SURVEY_ASSETS_BUCKET } from "./surveyAssetUrls";
 
-export const SURVEY_ASSETS_BUCKET = "survey-assets";
+export { SURVEY_ASSETS_BUCKET } from "./surveyAssetUrls";
 export const MAX_SURVEY_BACKGROUND_SIZE_BYTES = 5 * 1024 * 1024;
 export const SURVEY_BACKGROUND_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -128,15 +128,7 @@ export async function removeSurveyBackground(asset: SurveyBackgroundAsset) {
 }
 
 function getSurveyAssetPath(url: string) {
-  try {
-    const parsedUrl = new URL(url, typeof window === "undefined" ? SUPABASE_URL : window.location.origin);
-    if (parsedUrl.origin !== new URL(SUPABASE_URL).origin) return null;
-    const marker = `/object/public/${SURVEY_ASSETS_BUCKET}/`;
-    const markerIndex = parsedUrl.pathname.indexOf(marker);
-    return markerIndex === -1 ? null : decodeURIComponent(parsedUrl.pathname.slice(markerIndex + marker.length));
-  } catch {
-    return null;
-  }
+  return getManagedSurveyAssetPath(url);
 }
 
 function getAssetFormId(path: string) {

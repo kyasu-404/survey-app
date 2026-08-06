@@ -311,7 +311,7 @@ describe("UsersPage", () => {
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("all");
   });
 
-  it("renders user roles as static labels and toggles status from the status column", async () => {
+  it("requires confirmation before changing another user's role and keeps the current admin role static", async () => {
     getAllUsers.mockResolvedValue([
       {
         id: "user-1",
@@ -346,18 +346,40 @@ describe("UsersPage", () => {
       throw new Error("Expected Maria row to be present");
     }
 
-    expect(screen.queryByRole("button", { name: "Роль пользователя Администратор: admin" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Роль пользователя Мария: user" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Изменить роль пользователя Мария" })).not.toBeInTheDocument();
-    expect(within(mariaRow).getByText("user")).toHaveClass("users-role-chip");
+    const adminRow = screen.getByText("Администратор").closest("tr");
+    expect(adminRow).not.toBeNull();
+
+    if (!adminRow) {
+      throw new Error("Expected administrator row to be present");
+    }
+
+    expect(screen.queryByRole("combobox", { name: "Изменить роль пользователя Администратор" })).not.toBeInTheDocument();
+    expect(within(adminRow).getByText("admin")).toHaveClass("users-role-chip-static");
+
+    const roleSelect = within(mariaRow).getByRole("combobox", { name: "Изменить роль пользователя Мария" });
+    expect(roleSelect).toHaveValue("user");
+    expect(roleSelect.querySelector('option[value="user"]')).toHaveAttribute("hidden");
+    expect(within(roleSelect).getByRole("option", { name: "admin" })).not.toHaveAttribute("hidden");
+
+    await userEvent.selectOptions(roleSelect, "admin");
+
+    expect(screen.getByRole("heading", { name: "Смена роли пользователя" })).toBeInTheDocument();
+    expect(screen.getByText(/Изменить роль пользователя Мария/)).toBeInTheDocument();
+    expect(updateUserRole).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Сменить роль" }));
+
+    await waitFor(() => {
+      expect(updateUserRole).toHaveBeenCalledWith("user-2", "admin");
+    });
+    expect(showToast).toHaveBeenCalledWith("Роль пользователя обновлена", "success");
+    expect(screen.queryByRole("heading", { name: "Смена роли пользователя" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Статус пользователя Мария: Активен" }));
 
     await waitFor(() => {
       expect(setUserDisabled).toHaveBeenCalledWith("user-2", true);
     });
-
-    expect(updateUserRole).not.toHaveBeenCalled();
   });
 
   it("uses red destructive controls, yellow password controls, and black cancel controls", async () => {

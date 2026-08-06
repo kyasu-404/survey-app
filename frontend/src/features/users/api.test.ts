@@ -38,6 +38,30 @@ describe("users api", () => {
     });
   });
 
+  it("sends role updates to the user-admin Edge Function", async () => {
+    invoke.mockResolvedValue({
+      data: { success: true },
+      error: null,
+      response: new Response(JSON.stringify({ success: true }), { status: 200 }),
+    });
+
+    await updateUserRole("user-2", "admin");
+
+    expect(invoke).toHaveBeenCalledWith(
+      "user-admin",
+      expect.objectContaining({
+        body: {
+          action: "updateRole",
+          userId: "user-2",
+          role: "admin",
+        },
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token",
+        }),
+      }),
+    );
+  });
+
   it("throws the Edge Function JSON error message when role update fails", async () => {
     const response = new Response(JSON.stringify({ error: "Unsupported action" }), {
       status: 400,

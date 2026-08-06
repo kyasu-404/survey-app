@@ -20,8 +20,9 @@ describe("survey schema security", () => {
   });
 
   it("removes cross-origin media URLs while retaining local and embedded raster assets", () => {
+    const managedLogoToken = "__APP_SURVEY_ASSET__/forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
     const result = sanitizeSurveySchema({
-      logo: "https://attacker.test/logo.png",
+      logo: managedLogoToken,
       backgroundImage: "//attacker.test/background.png",
       pages: [{
         elements: [
@@ -37,13 +38,20 @@ describe("survey schema security", () => {
       pages: Array<{ elements: Array<Record<string, unknown>> }>;
     };
 
-    expect(result.logo).toBeUndefined();
+    expect(result.logo).toBe(managedLogoToken);
     expect(result.backgroundImage).toBeUndefined();
     expect(result.pages[0].elements[0].imageLink).toBeUndefined();
     expect(result.pages[0].elements[1].imageLink).toBe("/assets/local.png");
     expect(result.pages[0].elements[2].imageLink).toBe("data:image/png;base64,aGVsbG8=");
     expect(result.pages[0].elements[3].contentMode).toBeUndefined();
     expect(result.pages[0].elements[3].videoLink).toBeUndefined();
+  });
+
+  it("removes an arbitrary remote logo", () => {
+    expect(sanitizeSurveySchema({
+      logo: "https://attacker.test/logo.png",
+      pages: [],
+    })).toEqual({ pages: [] });
   });
 
   it("rejects excessive nesting", () => {

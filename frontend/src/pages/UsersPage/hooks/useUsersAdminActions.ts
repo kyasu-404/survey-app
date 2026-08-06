@@ -6,12 +6,13 @@ import {
   setUserDisabled,
   updateMyPassword,
   updateUserPassword,
+  updateUserRole,
 } from "../../../features/users/api";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { USERS_QUERY_ROOT } from "../../../entities/survey/model/queryKeys";
 import { getErrorMessage } from "../../../shared/lib/error";
 import { scheduleQueryInvalidation } from "../../../shared/lib/queryRefresh";
-import type { DeleteUserModalState, NewUserForm, PasswordModalState } from "../types";
+import type { DeleteUserModalState, NewUserForm, PasswordModalState, RoleChangeModalState } from "../types";
 import { EMPTY_NEW_USER, getUsersPageSessionState, updateUsersPageSessionState } from "../usersPageSessionState";
 
 export function useUsersAdminActions() {
@@ -21,6 +22,7 @@ export function useUsersAdminActions() {
   const [pendingStatusUserId, setPendingStatusUserId] = useState<string | null>(null);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
+  const [roleChangeModal, setRoleChangeModal] = useState<RoleChangeModalState | null>(null);
 
   const setNewUser = useCallback<Dispatch<SetStateAction<NewUserForm>>>(
     (value) => {
@@ -71,6 +73,19 @@ export function useUsersAdminActions() {
     },
     onError: (error) => {
       showToast(getErrorMessage(error, "Не удалось изменить статус пользователя"), "error");
+    },
+  });
+
+  const updateUserRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: Pick<RoleChangeModalState, "userId"> & { role: RoleChangeModalState["nextRole"] }) =>
+      updateUserRole(userId, role),
+    onSuccess: () => {
+      setRoleChangeModal(null);
+      showToast("Роль пользователя обновлена", "success");
+      scheduleQueryInvalidation(queryClient, "update user role", [{ queryKey: USERS_QUERY_ROOT }]);
+    },
+    onError: (error) => {
+      showToast(getErrorMessage(error, "Не удалось изменить роль пользователя"), "error");
     },
   });
 
@@ -164,6 +179,17 @@ export function useUsersAdminActions() {
     await setUserDisabledMutation.mutateAsync({ userId, disabled });
   };
 
+  const onChangeRole = async () => {
+    if (!roleChangeModal) {
+      return;
+    }
+
+    await updateUserRoleMutation.mutateAsync({
+      userId: roleChangeModal.userId,
+      role: roleChangeModal.nextRole,
+    });
+  };
+
   return {
     createUserPending: createUserMutation.isPending,
     deleteUserModal,
@@ -173,15 +199,19 @@ export function useUsersAdminActions() {
     isStatusChangePending: setUserDisabledMutation.isPending,
     newUser,
     onChangePassword,
+    onChangeRole,
     onCreateUser,
     onDeleteUser,
     onToggleUserDisabled,
     openPasswordModal,
     passwordModal,
     pendingStatusUserId,
+    roleChangeModal,
+    roleChangePending: updateUserRoleMutation.isPending,
     setDeleteUserModal,
     setNewUser,
     setPasswordModal,
+    setRoleChangeModal,
     updatePasswordModalValue,
     updatePasswordPending: updatePasswordMutation.isPending || updateUserPasswordMutation.isPending,
   };

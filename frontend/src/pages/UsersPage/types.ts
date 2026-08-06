@@ -19,5 +19,12 @@ export type DeleteUserModalState = {
   userName: string;
 };
 
+export type RoleChangeModalState = {
+  userId: string;
+  userName: string;
+  currentRole: UserRole;
+  nextRole: UserRole;
+};
+
 export type UsersRoleFilter = UserRole | "all";
 export type UsersStatusFilter = "all" | "active" | "disabled";

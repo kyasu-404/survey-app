@@ -7,6 +7,7 @@ import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { CreateUserForm } from "./components/CreateUserForm";
 import { DeleteUserModal } from "./components/DeleteUserModal";
 import { PasswordModal } from "./components/PasswordModal";
+import { RoleChangeModal } from "./components/RoleChangeModal";
 import { UsersFiltersBar } from "./components/UsersFiltersBar";
 import { UsersTable } from "./components/UsersTable";
 import { useUsersAdminActions } from "./hooks/useUsersAdminActions";
@@ -84,9 +85,13 @@ export default function UsersPage() {
           <UsersTable
             currentUserId={user.id}
             isDeletePending={actions.deleteUserPending}
+            isRoleChangePending={actions.roleChangePending}
             isStatusChangePending={actions.isStatusChangePending}
             onOpenPasswordModal={actions.openPasswordModal}
             onRequestDelete={(userId, userName) => actions.setDeleteUserModal({ userId, userName })}
+            onRequestRoleChange={(userId, userName, currentRole, nextRole) =>
+              actions.setRoleChangeModal({ userId, userName, currentRole, nextRole })
+            }
             onToggleUserDisabled={(userId, disabled) => void actions.onToggleUserDisabled(userId, disabled)}
             pendingStatusUserId={actions.pendingStatusUserId}
             users={filters.filteredUsers}
@@ -111,6 +116,15 @@ export default function UsersPage() {
           modal={actions.deleteUserModal}
           onCancel={() => actions.setDeleteUserModal(null)}
           onConfirm={() => void actions.onDeleteUser()}
+        />
+      )}
+
+      {actions.roleChangeModal && (
+        <RoleChangeModal
+          isPending={actions.roleChangePending}
+          modal={actions.roleChangeModal}
+          onCancel={() => actions.setRoleChangeModal(null)}
+          onConfirm={() => void actions.onChangeRole()}
         />
       )}
     </div>

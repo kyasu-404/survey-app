@@ -245,8 +245,8 @@ export function SurveyFormRenderer({
   const model = useMemo(() => {
     registerCustomSurveyQuestionTypes();
     const safeSchema = sanitizeSurveySchema(schema);
-    const resolvedSchema = normalizeSurveyQuestionNumbers(
-      normalizeSurveyFileQuestions(resolveDefaultSurveyLogo(safeSchema)) as SurveySchema,
+    const resolvedSchema = resolveDefaultSurveyLogo(
+      normalizeSurveyQuestionNumbers(normalizeSurveyFileQuestions(safeSchema) as SurveySchema),
     );
     const nextModel = new Model(resolvedSchema);
     nextModel.applyTheme(resolveSurveyTheme(theme));

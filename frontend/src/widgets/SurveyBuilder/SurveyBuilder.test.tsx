@@ -12,6 +12,7 @@ import { SurveyBuilder } from "./SurveyBuilder";
 import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
 import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
+import { SUPABASE_URL } from "../../shared/config/env";
 
 const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
 
@@ -597,6 +598,49 @@ describe("SurveyBuilder", () => {
       theme: {
         backgroundImage: "https://cdn.example.com/uploaded-background.png",
       },
+    });
+  });
+
+  it("keeps an uploaded custom logo in the draft and runtime preview schema", async () => {
+    const assetPath = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${assetPath}`;
+    uploadSurveyBackground.mockResolvedValueOnce({ path: assetPath, url: publicUrl });
+    renderBuilder();
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+    });
+
+    const creator = creatorInstances[0];
+    const callback = vi.fn();
+    const file = new File(["logo"], "logo.png", { type: "image/png" });
+
+    act(() => {
+      creator.onUploadFile.fire(creator, {
+        elementType: "survey",
+        propertyName: "logo",
+        files: [file],
+        callback,
+      });
+    });
+
+    await waitFor(() => {
+      expect(callback).toHaveBeenCalledWith("success", publicUrl);
+    });
+
+    act(() => {
+      creator.JSON = { ...creator.JSON, logo: publicUrl };
+      creator.onModified.fire(creator, { type: "PROPERTY_CHANGED", propertyName: "logo" });
+    });
+
+    const expectedToken = `__APP_SURVEY_ASSET__/${assetPath}`;
+    await waitFor(() => {
+      expect(getBuilderPreviewSnapshot().previewSchema.logo).toBe(expectedToken);
+    });
+    expect(JSON.parse(
+      localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}",
+    )).toMatchObject({
+      schema: { logo: expectedToken },
     });
   });
 

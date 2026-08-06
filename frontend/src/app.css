@@ -4864,7 +4864,26 @@ button.responses-export-button:disabled {
 }
 
 .users-role-select {
-  min-width: 112px;
+  min-width: 72px;
+  padding: 2px 22px 2px 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.users-role-select:hover,
+.users-role-select:focus-visible {
+  color: var(--theme-accent-strong);
+  background-color: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.users-role-select:disabled {
+  cursor: wait;
 }
 
 .users-status-button {

@@ -3,6 +3,7 @@ import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SurveyFormRenderer } from "./SurveyFormRenderer";
+import { SUPABASE_URL } from "../../shared/config/env";
 
 const {
   componentCollectionAdd,
@@ -618,6 +619,24 @@ describe("SurveyFormRenderer", () => {
     );
 
     expect(createdModelSchemas[0]?.logo).not.toBe("__APP_DEFAULT_CARD_LOGO__");
+  });
+
+  it("resolves a managed custom logo token before creating the SurveyJS model", () => {
+    const assetPath = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
+
+    render(
+      <SurveyFormRenderer
+        formId="form-1"
+        schema={{
+          logo: `__APP_SURVEY_ASSET__/${assetPath}`,
+          pages: [],
+        }}
+      />,
+    );
+
+    expect(createdModelSchemas[0]?.logo).toBe(
+      `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${assetPath}`,
+    );
   });
 
   it("uses completedHtml from schema when provided", () => {

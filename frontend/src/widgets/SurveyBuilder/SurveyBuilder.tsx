@@ -386,8 +386,14 @@ function cloneSchema(schema: SurveySchema): SurveySchema {
   return sanitizeSurveySchema(schema);
 }
 
+function getSerializedBuilderSchema(creator: SurveyCreator): SurveySchema {
+  return normalizeSurveyQuestionNumbers(
+    serializeDefaultSurveyLogo(creator.JSON as SurveySchema),
+  );
+}
+
 function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
-  return normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema));
+  return getSerializedBuilderSchema(creator);
 }
 
 function updateRuntimePreviewBridgeFromCreator(creator: SurveyCreator, formId?: string) {
@@ -811,7 +817,7 @@ export function SurveyBuilder({
       saveSurveyBuilderDraft(
         userId,
         formId,
-        serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
+        getSerializedBuilderSchema(creator),
         sanitizeSurveyTheme(creator.theme),
         assetFormIdRef.current,
       );
@@ -877,7 +883,7 @@ export function SurveyBuilder({
           saveSurveyBuilderDraft(
             userId,
             formId,
-            serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
+            getSerializedBuilderSchema(creator),
             creator.theme,
             assetFormIdRef.current,
           );
@@ -946,9 +952,7 @@ export function SurveyBuilder({
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder save template");
 
     try {
-      const schema = serializeDefaultSurveyLogo(
-        normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema)),
-      );
+      const schema = getSerializedBuilderSchema(creator);
       if (!validateSurveySchema(schema)) {
         throw new Error("Некорректная JSON-схема формы");
       }
@@ -1215,9 +1219,7 @@ export function SurveyBuilder({
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 
       try {
-        const schema = serializeDefaultSurveyLogo(
-          normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema)),
-        );
+        const schema = getSerializedBuilderSchema(creator);
         if (!validateSurveySchema(schema)) {
           throw new Error("Некорректная JSON-схема формы");
         }
@@ -1392,7 +1394,7 @@ export function SurveyBuilder({
     saveSurveyBuilderDraft(
       userId,
       formId,
-      serializeDefaultSurveyLogo(normalizeSurveyQuestionNumbers(cloneSchema(creator.JSON as SurveySchema))),
+      getSerializedBuilderSchema(creator),
       creator.theme,
       assetFormIdRef.current,
     );
