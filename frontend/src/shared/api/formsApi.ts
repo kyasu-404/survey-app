@@ -33,6 +33,13 @@ export type FormsFilters = {
   isPublic?: boolean;
 };
 
+export type SchemaUpdateResult = {
+  status: "updated" | "confirmation_required" | "blocked";
+  safeChanges: string[];
+  warnings: string[];
+  breakingChanges: string[];
+};
+
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
   responses_count?: number | null;
   allow_response_editing?: boolean | null;
@@ -132,6 +139,21 @@ function normalizeMaxResponses(maxResponses?: number | null) {
   return typeof maxResponses === "number" && Number.isFinite(maxResponses)
     ? Math.max(1, Math.trunc(maxResponses))
     : null;
+}
+
+function isSchemaUpdateResult(value: unknown): value is SchemaUpdateResult {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Partial<SchemaUpdateResult>;
+
+  return (
+    (result.status === "updated" || result.status === "confirmation_required" || result.status === "blocked")
+    && Array.isArray(result.safeChanges)
+    && result.safeChanges.every((item) => typeof item === "string")
+    && Array.isArray(result.warnings)
+    && result.warnings.every((item) => typeof item === "string")
+    && Array.isArray(result.breakingChanges)
+    && result.breakingChanges.every((item) => typeof item === "string")
+  );
 }
 
 function syncFetchedDeadlineState<T extends Pick<SurveyForm, "deadline_at" | "form_type" | "is_public">>(form: T): T {
@@ -531,23 +553,39 @@ export async function createFormFromTemplate(templateForm: SurveyForm, authorId:
 export async function updateFormTitle(id: string, title: string) {
   const { data: form, error: fetchError } = await runRequest(
     "forms.fetchSchemaForTitleUpdate",
-    () => apiClient.from("forms").select("schema").eq("id", id).single(),
+    () => apiClient
+      .from("forms")
+      .select("schema, theme, allow_response_editing, organization_types")
+      .eq("id", id)
+      .single(),
     { context: { formId: id } },
   );
   if (fetchError) throw fetchError;
 
-  const currentSchema = ((form as { schema?: SurveySchema | null } | null)?.schema ?? { pages: [] }) as SurveySchema;
+  const currentForm = form as {
+    allow_response_editing?: boolean | null;
+    organization_types?: OrganizationType[] | null;
+    schema?: SurveySchema | null;
+    theme?: ITheme | null;
+  } | null;
+  const currentSchema = (currentForm?.schema ?? { pages: [] }) as SurveySchema;
   const schema: SurveySchema = {
     ...currentSchema,
     title,
   };
 
-  const { error } = await runRequest(
-    "forms.updateTitle",
-    () => apiClient.from("forms").update({ title, schema }).eq("id", id),
-    { context: { formId: id } },
+  const result = await updateFormSchema(
+    id,
+    schema,
+    resolveSurveyTheme(currentForm?.theme),
+    title,
+    currentForm?.allow_response_editing ?? false,
+    normalizeOrganizationTypes(currentForm?.organization_types),
   );
-  if (error) throw error;
+
+  if (result.status !== "updated") {
+    throw new Error("Не удалось безопасно обновить название формы");
+  }
 }
 
 export async function updateFormSchema(
@@ -557,6 +595,7 @@ export async function updateFormSchema(
   title: string,
   allowResponseEditing: boolean,
   organizationTypes: OrganizationType[],
+  confirmWarnings = false,
 ) {
   const currentUserId = await getAuthenticatedUserId();
   const { data: currentForm, error: fetchError } = await runRequest(
@@ -568,24 +607,58 @@ export async function updateFormSchema(
 
   const previousAssetPaths = getSurveyThemeAssetPaths((currentForm as { theme?: unknown } | null)?.theme);
   const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
-  const { error } = await runRequest(
-    "forms.updateSchema",
-    () => apiClient.from("forms").update({
-      schema,
-      theme: materialized.theme,
-      title,
-      allow_response_editing: allowResponseEditing,
-      organization_types: normalizeOrganizationTypes(organizationTypes),
-    }).eq("id", id),
-    { context: { formId: id, pageCount: schema.pages.length } },
+  const {
+    data: { session },
+  } = await runRequest(
+    "auth.getSession",
+    () => apiClient.auth.getCurrentSession(),
+    { context: { formId: id, action: "update-schema" } },
+  );
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
+  const { data, error, response } = await runRequest(
+    "functions.form-admin.update-schema",
+    (_signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
+      body: {
+        action: "update-schema",
+        formId: id,
+        schema,
+        theme: materialized.theme,
+        title,
+        allowResponseEditing,
+        organizationTypes: normalizeOrganizationTypes(organizationTypes),
+        confirmWarnings,
+      },
+      headers: {
+        ...traceContext.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }),
+    { context: { formId: id, pageCount: schema.pages.length, confirmWarnings } },
   );
   if (error) {
     await removeSurveyAssetPaths(materialized.uploadedPaths);
-    throw error;
+    throw new Error(await getFunctionErrorMessage(error, response));
+  }
+
+  if (!isSchemaUpdateResult(data)) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw new Error("Сервер вернул некорректный результат проверки формы");
+  }
+
+  if (data.status !== "updated") {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    return data;
   }
 
   const nextAssetPaths = new Set(getSurveyThemeAssetPaths(materialized.theme));
   await removeSurveyAssetPaths(previousAssetPaths.filter((path) => !nextAssetPaths.has(path)));
+  return data;
 }
 
 export async function updateFormStatus(id: string, isPublic: boolean) {

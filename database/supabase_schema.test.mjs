@@ -35,9 +35,13 @@ const organizationDirectoryMigration = readFileSync(
   new URL("./migrations/202608031300_organization_directory.sql", import.meta.url),
   "utf8",
 );
+const safeAnsweredFormEditingMigration = readFileSync(
+  new URL("./migrations/202608061200_safe_answered_form_editing.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
-  "title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types";
+  "title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing";
 const legacySafeFormsUpdateColumns =
   "title, schema, form_type, form_reason, is_public, deadline_at, max_responses";
 
@@ -334,12 +338,15 @@ test("response submission is limited to one response per browser and remains ide
   assert.doesNotMatch(responseStatusFunction, /insert into public\.responses/i);
 });
 
-test("answered form schemas are immutable and response editing is server-authorized", () => {
+test("answered form schemas are updated only through the server compatibility gate", () => {
   assert.match(schema, /allow_response_editing boolean not null default false/i);
-  const schemaGuard = getFunctionDefinition("prevent_answered_form_schema_update");
-  assert.match(schemaGuard, /old\.responses_count > 0/i);
-  assert.match(schemaGuard, /new\.schema is distinct from old\.schema/i);
-  assert.match(schemaGuard, /new\.organization_types is distinct from old\.organization_types/i);
+  assert.doesNotMatch(schema, /prevent_answered_form_schema_update/i);
+  assert.doesNotMatch(safeFormsUpdateColumns, /schema/i);
+  assert.match(safeAnsweredFormEditingMigration, /drop trigger if exists forms_prevent_answered_schema_update/i);
+  assert.match(
+    safeAnsweredFormEditingMigration,
+    /revoke update \(schema, organization_types\) on table public\.forms from authenticated/i,
+  );
   const updateResponse = getFunctionDefinition("update_form_response");
   assert.match(updateResponse, /not target_form\.allow_response_editing/i);
   assert.match(updateResponse, /r\.browser_id = p_browser_id/i);

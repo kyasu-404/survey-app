@@ -1,10 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
+import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
 type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "delete-upload"; formId: string; path: string }
-  | { action: "cleanup-orphans"; olderThanHours?: number };
+  | { action: "cleanup-orphans"; olderThanHours?: number }
+  | {
+      action: "update-schema";
+      formId: string;
+      schema: unknown;
+      theme: unknown;
+      title: string;
+      allowResponseEditing: boolean;
+      organizationTypes: unknown;
+      confirmWarnings?: boolean;
+    };
 
 type SupabaseAdminClient = ReturnType<typeof createClient>;
 type RequestLogContext = {
@@ -21,6 +32,7 @@ const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
 const storageBucket = Deno.env.get("SURVEY_FILES_BUCKET") ?? "survey-files";
 const surveyAssetsBucket = Deno.env.get("SURVEY_ASSETS_BUCKET") ?? "survey-assets";
+const allowedOrganizationTypes = new Set(["school", "kindergarten", "odo", "udod"]);
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, x-client-release, traceparent",
@@ -128,6 +140,53 @@ function isUuid(value: unknown): value is string {
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getSchemaUpdatePayload(payload: FormAdminAction) {
+  if (
+    payload.action !== "update-schema"
+    || !isUuid(payload.formId)
+    || !isRecord(payload.schema)
+    || !Array.isArray(payload.schema.pages)
+    || !isRecord(payload.theme)
+    || typeof payload.title !== "string"
+    || payload.title.trim().length === 0
+    || payload.title.trim().length > 500
+    || typeof payload.allowResponseEditing !== "boolean"
+    || !Array.isArray(payload.organizationTypes)
+    || payload.organizationTypes.length === 0
+    || payload.organizationTypes.length > allowedOrganizationTypes.size
+    || !payload.organizationTypes.every((value) => typeof value === "string" && allowedOrganizationTypes.has(value))
+  ) {
+    return null;
+  }
+
+  const organizationTypes = [...new Set(payload.organizationTypes as string[])];
+  if (organizationTypes.length !== payload.organizationTypes.length) {
+    return null;
+  }
+
+  try {
+    if (JSON.stringify(payload.schema).length > 262_144 || JSON.stringify(payload.theme).length > 131_072) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  return {
+    formId: payload.formId,
+    schema: payload.schema,
+    theme: payload.theme,
+    title: payload.title.trim(),
+    allowResponseEditing: payload.allowResponseEditing,
+    organizationTypes,
+    confirmWarnings: payload.confirmWarnings === true,
+  };
 }
 
 function getUniqueResponseIds(value: unknown) {
@@ -415,6 +474,102 @@ Deno.serve(async (req) => {
 
   if (requesterProfileError || requesterProfile?.is_disabled) {
     return errorResponse(req, 403, "Forbidden", { ...requestLogContext, userId: requester.id });
+  }
+
+  if (payload.action === "update-schema") {
+    const actionLogContext: RequestLogContext = {
+      ...requestLogContext,
+      operation: "form-admin.update-schema",
+      userId: requester.id,
+      formId: payload.formId,
+    };
+    const updatePayload = getSchemaUpdatePayload(payload);
+    if (!updatePayload) {
+      return errorResponse(req, 400, "Некорректные данные формы", actionLogContext);
+    }
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { data: form, error: formError } = await adminClient
+        .from("forms")
+        .select("id, author_id, schema, responses_count, organization_types")
+        .eq("id", updatePayload.formId)
+        .single();
+
+      if (formError || !form) {
+        return errorResponse(req, 404, "Form not found", actionLogContext);
+      }
+
+      if (form.author_id !== requester.id && requesterProfile.role !== "admin") {
+        return errorResponse(req, 403, "Forbidden", actionLogContext);
+      }
+
+      let compatibility = { safeChanges: [], warnings: [], breakingChanges: [] };
+      if (Number(form.responses_count ?? 0) > 0) {
+        try {
+          compatibility = analyzeSchemaCompatibility(
+            form.schema,
+            updatePayload.schema,
+            form.organization_types,
+            updatePayload.organizationTypes,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Не удалось проверить совместимость схемы";
+          return errorResponse(req, 400, message, actionLogContext);
+        }
+
+        if (compatibility.breakingChanges.length > 0) {
+          return jsonResponse(req, 200, {
+            status: "blocked",
+            ...compatibility,
+          }, actionLogContext);
+        }
+
+        if (compatibility.warnings.length > 0 && !updatePayload.confirmWarnings) {
+          return jsonResponse(req, 200, {
+            status: "confirmation_required",
+            ...compatibility,
+          }, actionLogContext);
+        }
+      }
+
+      const responsesCount = Number(form.responses_count ?? 0);
+      const { data: updatedForm, error: updateError } = await adminClient
+        .from("forms")
+        .update({
+          schema: updatePayload.schema,
+          theme: updatePayload.theme,
+          title: updatePayload.title,
+          allow_response_editing: updatePayload.allowResponseEditing,
+          organization_types: updatePayload.organizationTypes,
+        })
+        .eq("id", updatePayload.formId)
+        .eq("responses_count", responsesCount)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) {
+        return errorResponse(req, 400, updateError.message, actionLogContext);
+      }
+
+      if (updatedForm) {
+        console.info("form-admin action completed", {
+          ...actionLogContext,
+          responsesCount,
+          warningsConfirmed: updatePayload.confirmWarnings,
+        });
+        return jsonResponse(req, 200, {
+          status: "updated",
+          ...compatibility,
+        }, actionLogContext);
+      }
+    }
+
+    return errorResponse(
+      req,
+      409,
+      "Форма изменилась во время сохранения. Повторите попытку.",
+      actionLogContext,
+    );
   }
 
   if (payload.action === "cleanup-orphans") {

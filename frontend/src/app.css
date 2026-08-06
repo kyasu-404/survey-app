@@ -594,12 +594,20 @@ textarea:focus {
   box-shadow: 0 0 0 1px rgba(20, 20, 20, 0.16), 0 18px 34px rgba(20, 20, 20, 0.08) !important;
 }
 
-.builder-preview-tab-shell {
+.survey-page.builder-preview-tab-shell {
   width: 100%;
   min-width: 0;
-  height: 100%;
+  flex: 0 0 auto;
+  height: auto;
   min-height: 100%;
-  overflow: auto;
+  padding-bottom: 48px;
+  overflow: visible;
+}
+
+.builder-creator-shell .svc-creator-tab:has(> .builder-preview-tab-shell) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-padding-bottom: 48px;
 }
 
 .builder-toolbar-action-item {
@@ -1742,6 +1750,34 @@ textarea:focus {
   border-color: rgba(17, 17, 17, 0.34);
   background: linear-gradient(180deg, #27272a, #111111);
   color: #ffffff;
+}
+
+.builder-safe-editing-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: 14px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.92rem;
+  font-weight: 750;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(180, 83, 9, 0.1);
+}
+
+.builder-compatibility-modal {
+  width: min(620px, 100%);
+}
+
+.builder-compatibility-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(36vh, 320px);
+  margin: 0 0 20px;
+  padding: 0 0 0 22px;
+  overflow: auto;
+  color: var(--theme-text);
+  line-height: 1.45;
 }
 
 .builder-template-modal {
@@ -4900,10 +4936,20 @@ button.responses-export-button:disabled {
 .deadline-action-cancel-button:hover,
 .deadline-action-cancel-button:focus-visible,
 .dashboard-settings-modal .deadline-action-cancel-button:hover,
-.dashboard-settings-modal .deadline-action-cancel-button:focus-visible {
+.dashboard-settings-modal .deadline-action-cancel-button:focus-visible,
+.builder-answered-warning .deadline-save-button:hover,
+.builder-answered-warning .deadline-save-button:focus-visible {
   border-color: rgba(17, 17, 17, 0.46);
   background: linear-gradient(180deg, #3f3f46, #18181b);
   color: #ffffff;
+}
+
+.builder-compatibility-modal .deadline-save-button:hover,
+.builder-compatibility-modal .deadline-save-button:focus-visible {
+  border-color: rgba(20, 20, 20, 0.22);
+  background: linear-gradient(180deg, rgba(248, 246, 243, 0.98), rgba(225, 220, 214, 0.96));
+  color: #141414;
+  box-shadow: 0 16px 30px rgba(20, 20, 20, 0.12), var(--surface-inset);
 }
 
 .dashboard-settings-modal .deadline-action-clear-button {
@@ -5501,6 +5547,18 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   --accent: var(--theme-accent);
   --accent-strong: var(--theme-accent-strong);
   --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #fffdf9;
+  --creator-panel: #faf6f0;
+  --creator-panel-muted: #f5efe7;
+  --creator-workspace: #eee7dd;
+  --creator-control: #fffdfa;
+  --creator-border: #ddd2c5;
+  --creator-border-strong: #cdbdad;
+  --creator-hover: #f1e7dc;
+  --creator-selected: #eadccc;
+  --creator-text: #332b24;
+  --creator-text-muted: #786e65;
+  --creator-accent: #765137;
 }
 
 :root[data-theme="sky"] {
@@ -5530,6 +5588,18 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   --accent: var(--theme-accent);
   --accent-strong: var(--theme-accent-strong);
   --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #fcfeff;
+  --creator-panel: #f4f8fb;
+  --creator-panel-muted: #edf4f8;
+  --creator-workspace: #e8f0f5;
+  --creator-control: #ffffff;
+  --creator-border: #d3e0e9;
+  --creator-border-strong: #bdd0dd;
+  --creator-hover: #e6f1f8;
+  --creator-selected: #d9eaf5;
+  --creator-text: #203447;
+  --creator-text-muted: #637787;
+  --creator-accent: #347db8;
 }
 
 :root[data-theme="teal"] {
@@ -5559,6 +5629,18 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   --accent: var(--theme-accent);
   --accent-strong: var(--theme-accent-strong);
   --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #fcfefd;
+  --creator-panel: #f4f8f5;
+  --creator-panel-muted: #edf4ef;
+  --creator-workspace: #e8f0eb;
+  --creator-control: #ffffff;
+  --creator-border: #d2ded6;
+  --creator-border-strong: #bccfc2;
+  --creator-hover: #e5f0e9;
+  --creator-selected: #d8e9df;
+  --creator-text: #26392d;
+  --creator-text-muted: #68796e;
+  --creator-accent: #337f5b;
 }
 
 body,
@@ -5726,10 +5808,18 @@ body,
 
 /* Public runtime and the Builder preview share the same neutral backdrop. */
 .app-main-public,
-.builder-preview-tab-shell {
+.builder-creator-shell .svc-creator-tab:has(> .builder-preview-tab-shell) {
   background:
     radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.8), transparent 26%),
     linear-gradient(180deg, #f7f2ea 0%, #ebe2d6 100%);
+}
+
+.builder-preview-tab-shell {
+  background: transparent;
+}
+
+.builder-preview-tab-shell::before {
+  content: none;
 }
 
 .survey-runtime-surface.survey-page-card {
@@ -6616,43 +6706,47 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   color: var(--theme-accent-strong);
 }
 
-/* Survey Creator is a fixed neutral workspace. Application themes still
-   color the surrounding navigation, while the survey keeps its own theme. */
+/* Survey Creator follows the application's color temperature without taking
+   over the survey theme. Toolbar, side panels and workspace are separate
+   surface levels; the survey canvas continues to use creator.theme. */
 .builder-creator-shell .svc-creator {
-  --sjs-primary-backcolor: #2f3437 !important;
-  --sjs-primary-backcolor-dark: #111315 !important;
-  --sjs-primary-backcolor-light: rgba(47, 52, 55, 0.12) !important;
-  --sjs-primary-background-500: #2f3437 !important;
-  --sjs-primary-background-400: #111315 !important;
-  --sjs-primary-background-10: rgba(47, 52, 55, 0.08) !important;
-  --sjs-general-backcolor: #ffffff !important;
-  --sjs-general-backcolor-dim: #f1f3f5 !important;
-  --sjs-general-backcolor-dim-light: #f7f8f9 !important;
-  --sjs-general-backcolor-dark: #d9dde1 !important;
-  --sjs-general-forecolor: #202124 !important;
-  --sjs-general-forecolor-light: #656b73 !important;
-  --sjs-layer-1-foreground-100: #202124 !important;
-  --sjs-layer-1-foreground-50: #656b73 !important;
-  --sjs-layer-1-background-500: #ffffff !important;
-  --sjs-layer-3-background-500: #f1f3f5 !important;
-  --sjs-special-background: #f1f3f5 !important;
-  --sjs2-color-utility-surface-designer: #f7f8f9 !important;
-  --ctr-button-group-item-text-color-selected: #2f3437 !important;
-  --ctr-button-group-item-icon-color-selected: #2f3437 !important;
-  --ctr-button-group-border-color-focused: #2f3437 !important;
-  --ctr-survey-action-button-text-color-positive: #2f3437 !important;
-  --ctr-menu-item-border-color-selected: #2f3437 !important;
-  --ctr-property-grid-header-border-color: #2f3437 !important;
-  --ctr-editor-border-color-focused: #2f3437 !important;
-  --ctr-editor-border-color-highlighted: rgba(47, 52, 55, 0.24) !important;
-  border-color: rgba(32, 33, 36, 0.14);
-  background: #fcfcfd;
-  box-shadow: 0 18px 36px rgba(32, 33, 36, 0.12);
+  --sjs-primary-backcolor: var(--creator-accent) !important;
+  --sjs-primary-backcolor-dark: var(--theme-accent-strong) !important;
+  --sjs-primary-backcolor-light: color-mix(in srgb, var(--creator-accent) 10%, transparent) !important;
+  --sjs-primary-background-500: var(--creator-accent) !important;
+  --sjs-primary-background-400: var(--theme-accent-strong) !important;
+  --sjs-primary-background-10: color-mix(in srgb, var(--creator-accent) 8%, transparent) !important;
+  --sjs-general-backcolor: var(--creator-control) !important;
+  --sjs-general-backcolor-dim: var(--creator-panel) !important;
+  --sjs-general-backcolor-dim-light: var(--creator-toolbar) !important;
+  --sjs-general-backcolor-dark: var(--creator-border) !important;
+  --sjs-general-forecolor: var(--creator-text) !important;
+  --sjs-general-forecolor-light: var(--creator-text-muted) !important;
+  --sjs-layer-1-foreground-100: var(--creator-text) !important;
+  --sjs-layer-1-foreground-50: var(--creator-text-muted) !important;
+  --sjs-layer-1-background-500: var(--creator-control) !important;
+  --sjs-layer-3-background-500: var(--creator-control) !important;
+  --sjs-special-background: var(--creator-panel-muted) !important;
+  --sjs2-color-utility-surface-designer: var(--creator-workspace) !important;
+  --ctr-surface-background-color: var(--creator-workspace) !important;
+  --ctr-property-grid-form-background-color: var(--creator-panel) !important;
+  --ctr-editor-background-color: var(--creator-control) !important;
+  --ctr-button-group-item-text-color-selected: var(--creator-accent) !important;
+  --ctr-button-group-item-icon-color-selected: var(--creator-accent) !important;
+  --ctr-button-group-border-color-focused: var(--creator-accent) !important;
+  --ctr-survey-action-button-text-color-positive: var(--creator-accent) !important;
+  --ctr-menu-item-border-color-selected: var(--creator-accent) !important;
+  --ctr-property-grid-header-border-color: var(--creator-accent) !important;
+  --ctr-editor-border-color-focused: var(--creator-accent) !important;
+  --ctr-editor-border-color-highlighted: color-mix(in srgb, var(--creator-accent) 24%, transparent) !important;
+  border-color: var(--creator-border-strong);
+  background: var(--creator-panel);
+  box-shadow: 0 18px 36px var(--theme-shadow-color);
 }
 
 .builder-creator-shell .svc-tabbed-menu {
-  border-color: rgba(32, 33, 36, 0.14);
-  background: #ffffff !important;
+  border-color: var(--creator-border-strong);
+  background: var(--creator-toolbar) !important;
 }
 
 .builder-creator-shell .svc-tabbed-menu-item,
@@ -6661,7 +6755,7 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .builder-creator-shell .svc-toolbox__item-title,
 .builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
 .builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title {
-  color: #202124 !important;
+  color: var(--creator-text) !important;
 }
 
 .builder-creator-shell .svc-tabbed-menu-item--selected,
@@ -6669,61 +6763,116 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .builder-creator-shell .svc-side-bar__content-tabs .svc-tabbed-menu-item--selected,
 .builder-creator-shell .svc-panel__add-new-question .svc-add-new-item-button__text,
 .builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question .svc-add-new-item-button__text {
-  color: #2f3437 !important;
+  color: var(--creator-accent) !important;
 }
 
 .builder-creator-shell .svc-tabbed-menu-item--selected::after {
-  background: #2f3437 !important;
+  background: var(--creator-accent) !important;
 }
 
 .builder-creator-shell .svc-toolbox,
 .builder-creator-shell .svc-panel__add-new-question,
 .builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question {
-  border-color: rgba(32, 33, 36, 0.14);
-  background: #f1f3f5 !important;
+  border-color: var(--creator-border);
+  background: var(--creator-panel) !important;
+}
+
+.builder-creator-shell .svc-toolbox {
+  border-right: 1px solid var(--creator-border);
 }
 
 .builder-creator-shell .svc-side-bar,
+.builder-creator-shell .svc-side-bar__container,
+.builder-creator-shell .svc-side-bar__container-wrapper,
 .builder-creator-shell .svc-side-bar__content,
 .builder-creator-shell .svc-side-bar__content-wrapper {
-  border-color: rgba(32, 33, 36, 0.14);
-  background: #f1f3f5 !important;
+  border-color: var(--creator-border);
+  background: var(--creator-panel) !important;
+}
+
+.builder-creator-shell .svc-side-bar {
+  border-left: 1px solid var(--creator-border);
 }
 
 .builder-creator-shell svc-tab-designer,
 .builder-creator-shell .svc-tab-designer {
-  border-color: rgba(32, 33, 36, 0.14);
-  background: #f7f8f9 !important;
+  border-color: var(--creator-border);
+  background: var(--creator-workspace) !important;
 }
 
 .builder-creator-shell .svc-designer-header,
 .builder-creator-shell .svc-designer-header .svc-surface-header,
 .builder-creator-shell .svc-designer-header .sd-container-modern__title {
-  border-color: rgba(32, 33, 36, 0.14);
-  background: var(--sjs-general-backcolor-dim) !important;
+  border-color: var(--creator-border);
+  background: var(--creator-workspace) !important;
 }
 
 .builder-creator-shell .svc-tab-designer .svc-designer-header {
   border-bottom: 2px solid #111111;
 }
 
+/* Keep the area around modal previews white regardless of the application
+   theme, while the rounded survey surface retains its own selected theme. */
+.template-preview-drawer,
+.response-preview-drawer {
+  background: #ffffff;
+}
+
+.template-preview-body.survey-page-card,
+.response-preview-body.survey-page-card {
+  padding: 0;
+  border-color: rgba(17, 17, 17, 0.12) !important;
+  background: transparent !important;
+}
+
 .builder-creator-shell .svc-toolbox__item:hover,
 .builder-creator-shell .svc-toolbox__item:focus,
 .builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item,
 .builder-creator-shell .spg-button-group__item--selected {
-  color: #202124 !important;
-  border-color: rgba(47, 52, 55, 0.38) !important;
-  background: #ffffff !important;
+  color: var(--creator-text) !important;
+  border-color: color-mix(in srgb, var(--creator-accent) 38%, transparent) !important;
+  background: var(--creator-hover) !important;
 }
 
 .builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
 .builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
-  border-color: rgba(47, 52, 55, 0.48) !important;
-  box-shadow: 0 0 0 4px rgba(47, 52, 55, 0.12) !important;
+  border-color: color-mix(in srgb, var(--creator-accent) 58%, transparent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--creator-accent) 14%, transparent) !important;
 }
 
 .builder-creator-shell .svc-surface-placeholder__text {
-  color: #656b73;
+  color: var(--creator-text-muted);
+}
+
+.builder-creator-shell .svc-toolbox__category-header {
+  border-color: var(--creator-border);
+  background: var(--creator-panel-muted) !important;
+}
+
+.builder-creator-shell .svc-toolbox__search-container,
+.builder-creator-shell .svc-toolbox .svc-search,
+.builder-creator-shell .svc-side-bar .svc-search,
+.builder-creator-shell .spg-input,
+.builder-creator-shell .spg-input-container,
+.builder-creator-shell .spg-dropdown,
+.builder-creator-shell .spg-tagbox {
+  border-color: var(--creator-border) !important;
+  background: var(--creator-control) !important;
+}
+
+.builder-creator-shell .svc-question__content:focus,
+.builder-creator-shell .svc-hovered > .svc-question__content {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--creator-accent) 28%, transparent) !important;
+}
+
+.builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) {
+  box-shadow:
+    0 0 0 2px var(--creator-accent),
+    0 12px 26px color-mix(in srgb, var(--creator-accent) 14%, transparent) !important;
+}
+
+.builder-creator-shell .svc-question__content--collapsed-drag-over-inside:not(.svc-question__content--dragged) {
+  background: var(--creator-selected) !important;
 }
 
 .builder-creator-shell .builder-toolbar-action-button,
@@ -6732,10 +6881,10 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .builder-creator-shell .builder-toolbar-action-button:focus-visible,
 .builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:hover,
 .builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:focus-visible {
-  color: #202124 !important;
-  border-color: rgba(32, 33, 36, 0.2) !important;
+  color: var(--creator-text) !important;
+  border-color: color-mix(in srgb, var(--creator-text) 24%, transparent) !important;
   background: #ffffff !important;
-  box-shadow: 0 8px 18px rgba(32, 33, 36, 0.1) !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--creator-text) 10%, transparent) !important;
 }
 
 @media (max-width: 760px) {

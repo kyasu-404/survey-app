@@ -8,9 +8,10 @@ import {
   deleteForm,
   updateFormStatus,
   updateFormResponseLimit,
+  updateFormSchema,
   updateFormTitle,
 } from "./formsApi";
-import { apiClient } from "./client";
+import { apiClient, supabaseClient } from "./client";
 
 vi.mock("./client", () => ({
   supabaseClient: {
@@ -741,25 +742,102 @@ describe("updateFormTitle", () => {
           title: "Старое название",
           pages: [{ name: "page1", elements: [] }],
         },
+        theme: {},
+        allow_response_editing: false,
+        organization_types: ["school"],
       },
       error: null,
     });
-    const updateQuery = createUpdateQuery();
+    const themeReadQuery = createSchemaReadQuery({ data: { theme: {} }, error: null });
     vi.mocked(apiClient.from)
       .mockReturnValueOnce(schemaReadQuery as never)
-      .mockReturnValueOnce(updateQuery as never);
+      .mockReturnValueOnce(themeReadQuery as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    } as never);
+    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({
+      data: { session: { access_token: "access-token" } },
+      error: null,
+    } as never);
+    vi.mocked(supabaseClient.functions.invoke).mockResolvedValue({
+      data: {
+        status: "updated",
+        safeChanges: ["Изменено оформление или текст формы"],
+        warnings: [],
+        breakingChanges: [],
+      },
+      error: null,
+    } as never);
 
     await updateFormTitle("form-1", "Новое название");
 
-    expect(schemaReadQuery.select).toHaveBeenCalledWith("schema");
+    expect(schemaReadQuery.select).toHaveBeenCalledWith(
+      "schema, theme, allow_response_editing, organization_types",
+    );
     expect(schemaReadQuery.eq).toHaveBeenCalledWith("id", "form-1");
-    expect(updateQuery.update).toHaveBeenCalledWith({
-      title: "Новое название",
-      schema: {
-        title: "Новое название",
-        pages: [{ name: "page1", elements: [] }],
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(
+      "form-admin",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          action: "update-schema",
+          formId: "form-1",
+          schema: {
+            title: "Новое название",
+            pages: [{ name: "page1", elements: [] }],
+          },
+          confirmWarnings: false,
+        }),
+        headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
+      }),
+    );
+  });
+});
+
+describe("updateFormSchema", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("uses form-admin and returns compatibility warnings without a direct table update", async () => {
+    const themeReadQuery = createSchemaReadQuery({ data: { theme: {} }, error: null });
+    vi.mocked(apiClient.from).mockReturnValue(themeReadQuery as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    } as never);
+    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({
+      data: { session: { access_token: "access-token" } },
+      error: null,
+    } as never);
+    vi.mocked(supabaseClient.functions.invoke).mockResolvedValue({
+      data: {
+        status: "confirmation_required",
+        safeChanges: [],
+        warnings: ["Добавлен новый необязательный вопрос «Адрес сайта»"],
+        breakingChanges: [],
       },
-    });
-    expect(updateQuery.eq).toHaveBeenCalledWith("id", "form-1");
+      error: null,
+    } as never);
+
+    await expect(updateFormSchema(
+      "form-1",
+      { pages: [{ name: "page1", elements: [] }] },
+      {},
+      "Форма",
+      false,
+      ["school"],
+    )).resolves.toMatchObject({ status: "confirmation_required" });
+
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(
+      "form-admin",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          action: "update-schema",
+          confirmWarnings: false,
+        }),
+      }),
+    );
+    expect(themeReadQuery).not.toHaveProperty("update");
   });
 });

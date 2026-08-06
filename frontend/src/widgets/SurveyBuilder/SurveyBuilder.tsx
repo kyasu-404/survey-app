@@ -5,6 +5,7 @@ import {
   editorLocalization,
   registerCreatorTheme,
   registerSurveyTheme,
+  type ICreatorTheme,
   type ICreatorPlugin,
   type UploadFileEvent,
 } from "survey-creator-core";
@@ -33,9 +34,11 @@ import {
 } from "../../entities/organization/model";
 import type { OrganizationType } from "../../entities/organization/types";
 import {
+  cloneForm,
   getFormById,
   saveSurveySchema,
 } from "../../entities/survey/api/surveysApi";
+import type { SchemaUpdateResult } from "../../entities/survey/api/surveysApi";
 import {
   FORM_REASON_OPTIONS,
   REGULAR_FORM_TYPE_OPTIONS,
@@ -76,7 +79,8 @@ import {
 } from "../../entities/survey/model/queryKeys";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
-import { NEUTRAL_CREATOR_THEME } from "../../shared/theme/themeRegistry";
+import { useTheme } from "../../shared/theme/ThemeProvider";
+import { creatorThemes } from "../../shared/theme/themeRegistry";
 import { createSurveyAssetFormId, uploadSurveyBackground } from "../../shared/api/themeAssets";
 import {
   BUILDER_PREVIEW_COMPONENT_NAME,
@@ -88,11 +92,12 @@ import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft
 import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
 
 registerSurveyTheme(SurveyTheme);
-registerCreatorTheme(NEUTRAL_CREATOR_THEME);
+registerCreatorTheme(...Object.values(creatorThemes));
 
 type SurveyBuilderProps = {
   canAdministerAllForms?: boolean;
   formId?: string;
+  safeEditingResponseCount?: number;
   userId: string;
 };
 
@@ -120,6 +125,23 @@ type PostSaveSettingsState = {
   formReasonValue: string;
   allowResponseEditing: boolean;
   organizationTypes: OrganizationType[];
+};
+
+type ExistingFormSaveRequest = {
+  allowResponseEditing: boolean;
+  callback: (saveNo: number, isSuccess: boolean) => void;
+  id: string;
+  isTemplate: boolean;
+  saveNo: number;
+  schema: SurveySchema;
+  selectedOrganizationTypes: OrganizationType[];
+  theme: ITheme;
+  title: string;
+};
+
+type CompatibilityDialogState = {
+  request: ExistingFormSaveRequest;
+  result: SchemaUpdateResult;
 };
 
 function OrganizationTypeSettings({
@@ -272,7 +294,11 @@ function configureCreatorQuestionTypes() {
   });
 }
 
-function createCreatorInstance(formId?: string) {
+function createCreatorInstance(
+  formId: string | undefined,
+  creatorTheme: ICreatorTheme,
+  safeEditingMode: boolean,
+) {
   configureCreatorLocalization();
   registerCustomIcons();
   configureCreatorQuestionTypes();
@@ -297,10 +323,11 @@ function createCreatorInstance(formId?: string) {
     previewAllowSelectLanguage: false,
     previewAllowHiddenElements: false,
     previewAllowSelectPage: true,
+    useElementTitles: true,
   });
 
   creator.locale = "ru";
-  creator.applyCreatorTheme(NEUTRAL_CREATOR_THEME);
+  creator.applyCreatorTheme(creatorTheme);
   creator.onSurveyInstanceCreated.add((_sender, options) => {
     if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
       patchedDesignerSurveys.add(options.survey);
@@ -323,7 +350,7 @@ function createCreatorInstance(formId?: string) {
 
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
-      options.question.isRequired = true;
+      options.question.isRequired = !safeEditingMode;
       options.question.descriptionLocation = "underTitle";
       (options.question as { showNumber?: boolean }).showNumber = false;
       const questionType = (options.question as { getType?: () => string }).getType?.();
@@ -342,6 +369,14 @@ function createCreatorInstance(formId?: string) {
     }
 
     options.allowChangeType = QUESTION_TYPES.includes(currentType as SurveyQuestionType);
+  });
+
+  creator.onPropertyGetReadOnly.add((_sender, options) => {
+    const propertyName = options.property?.name;
+    const elementType = options.element?.getType?.();
+    if (propertyName === "name" && elementType !== "survey") {
+      options.readOnly = true;
+    }
   });
 
   return creator;
@@ -428,7 +463,63 @@ function clearAutoPageTitle(page?: { title?: string; name?: string }) {
   }
 }
 
-export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }: SurveyBuilderProps) {
+const GUARDED_COLLECTION_PROPERTIES = ["choices", "rows", "columns", "rateValues", "items"] as const;
+
+function getProtectedCollectionItemIdentity(propertyName: string, item: unknown) {
+  if (item && typeof item === "object" && !Array.isArray(item)) {
+    const itemRecord = item as Record<string, unknown>;
+    const technicalValue = (
+      (propertyName === "items" || propertyName === "columns")
+      && itemRecord.name !== undefined
+      && itemRecord.value === undefined
+    )
+      ? itemRecord.name
+      : itemRecord.value;
+    if (technicalValue !== undefined) {
+      return JSON.stringify(technicalValue);
+    }
+  }
+
+  return JSON.stringify(item);
+}
+
+function collectOriginalSchemaProtection(schema: SurveySchema) {
+  const questionNames = new Set<string>();
+  const collectionItems = new Set<string>();
+  const stack: unknown[] = schema.pages.flatMap((page) => page.elements);
+
+  while (stack.length > 0) {
+    const element = stack.pop();
+    if (!element || typeof element !== "object" || Array.isArray(element)) continue;
+    const elementRecord = element as Record<string, unknown>;
+    const name = typeof elementRecord.name === "string" ? elementRecord.name : "";
+
+    if (name) {
+      questionNames.add(name);
+      GUARDED_COLLECTION_PROPERTIES.forEach((propertyName) => {
+        const items = elementRecord[propertyName];
+        if (!Array.isArray(items)) return;
+        items.forEach((item) => {
+          collectionItems.add(`${name}:${propertyName}:${getProtectedCollectionItemIdentity(propertyName, item)}`);
+        });
+      });
+    }
+
+    for (const propertyName of ["elements", "templateElements"]) {
+      const nestedElements = elementRecord[propertyName];
+      if (Array.isArray(nestedElements)) stack.push(...nestedElements);
+    }
+  }
+
+  return { questionNames, collectionItems };
+}
+
+export function SurveyBuilder({
+  canAdministerAllForms = false,
+  formId,
+  safeEditingResponseCount = 0,
+  userId,
+}: SurveyBuilderProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
   const [isTemplateActionLoading, setIsTemplateActionLoading] = useState<"save" | null>(null);
@@ -438,37 +529,62 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
   const [galleryBackground, setGalleryBackground] = useState("");
   const [responseEditingEnabled, setResponseEditingEnabled] = useState(false);
+  const [compatibilityDialog, setCompatibilityDialog] = useState<CompatibilityDialogState | null>(null);
+  const [isCompatibilityCopying, setIsCompatibilityCopying] = useState(false);
   const [organizationTypes, setOrganizationTypes] = useState<OrganizationType[]>(
     DEFAULT_FORM_ORGANIZATION_TYPES,
   );
   const { showToast } = useToast();
+  const { theme: applicationTheme } = useTheme();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
-    mutationFn: ({ id, schema, theme, title, allowResponseEditing, selectedOrganizationTypes }: {
-      id: string;
-      schema: SurveySchema;
-      theme: ITheme;
-      title: string;
-      allowResponseEditing: boolean;
-      selectedOrganizationTypes: OrganizationType[];
-    }) => saveSurveySchema(
+    mutationFn: ({
       id,
       schema,
       theme,
       title,
       allowResponseEditing,
       selectedOrganizationTypes,
-    ),
+      confirmWarnings = false,
+    }: {
+      id: string;
+      schema: SurveySchema;
+      theme: ITheme;
+      title: string;
+      allowResponseEditing: boolean;
+      selectedOrganizationTypes: OrganizationType[];
+      confirmWarnings?: boolean;
+    }) => confirmWarnings
+      ? saveSurveySchema(
+          id,
+          schema,
+          theme,
+          title,
+          allowResponseEditing,
+          selectedOrganizationTypes,
+          true,
+        )
+      : saveSurveySchema(
+          id,
+          schema,
+          theme,
+          title,
+          allowResponseEditing,
+          selectedOrganizationTypes,
+        ),
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditMode = Boolean(formId);
+  const isSafeEditingMode = isEditMode && safeEditingResponseCount > 0;
   const isSurveyMutationBusy = isSaving || saveSurveyMutation.isPending || createSurveyMutation.isPending;
   const isTemplateBusy = isTemplateActionLoading !== null;
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
   const runtimePreviewSyncTimeoutRef = useRef<number | null>(null);
   const assetFormIdRef = useRef(formId ?? createSurveyAssetFormId());
+  const creatorThemeRef = useRef(applicationTheme.creator);
+  creatorThemeRef.current = applicationTheme.creator;
 
   const clearScheduledRuntimePreviewSync = useCallback(() => {
     if (runtimePreviewSyncTimeoutRef.current) {
@@ -510,7 +626,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
 
   useEffect(() => {
     assetFormIdRef.current = formId ?? createSurveyAssetFormId();
-    const nextCreator = createCreatorInstance(formId);
+    const nextCreator = createCreatorInstance(formId, creatorThemeRef.current, isSafeEditingMode);
     setCreator(nextCreator);
     setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "idle";
@@ -525,7 +641,11 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       });
       nextCreator.dispose();
     };
-  }, [clearScheduledRuntimePreviewSync, formId]);
+  }, [clearScheduledRuntimePreviewSync, formId, isSafeEditingMode]);
+
+  useEffect(() => {
+    creator?.applyCreatorTheme(applicationTheme.creator);
+  }, [applicationTheme.creator, creator]);
 
   useEffect(() => {
     draftHydrationStateRef.current = "idle";
@@ -588,6 +708,99 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
   useEffect(() => {
     setOrganizationTypes(normalizeOrganizationTypes(editableForm?.organization_types));
   }, [editableForm?.organization_types, formId]);
+
+  useEffect(() => {
+    if (!creator || !editableForm || !isSafeEditingMode) {
+      return;
+    }
+
+    const protection = collectOriginalSchemaProtection(editableForm.schema);
+    const handleElementOperations = (_sender: unknown, rawOptions: unknown) => {
+      const options = rawOptions as {
+        allowChangeInputType?: boolean;
+        allowChangeType?: boolean;
+        allowDelete?: boolean;
+        allowDrag?: boolean;
+        allowEdit?: boolean;
+        element?: { name?: string };
+        obj?: { name?: string };
+      };
+      const elementName = options.element?.name ?? options.obj?.name;
+      if (!elementName || !protection.questionNames.has(elementName)) return;
+
+      options.allowDelete = false;
+      options.allowChangeType = false;
+      options.allowChangeInputType = false;
+      options.allowDrag = true;
+      options.allowEdit = true;
+    };
+    const handleCollectionOperations = (_sender: unknown, rawOptions: unknown) => {
+      const options = rawOptions as {
+        allowDelete?: boolean;
+        element?: { name?: string };
+        item?: unknown;
+        propertyName?: string;
+      };
+      const questionName = options.element?.name;
+      const propertyName = options.propertyName;
+      if (!questionName || !propertyName || !GUARDED_COLLECTION_PROPERTIES.includes(
+        propertyName as (typeof GUARDED_COLLECTION_PROPERTIES)[number],
+      )) {
+        return;
+      }
+
+      const key = `${questionName}:${propertyName}:${getProtectedCollectionItemIdentity(propertyName, options.item)}`;
+      if (protection.collectionItems.has(key)) {
+        options.allowDelete = false;
+      }
+    };
+    const handleReadOnlyProperty = (_sender: unknown, rawOptions: unknown) => {
+      const options = rawOptions as {
+        element?: unknown;
+        parentElement?: { name?: string };
+        parentProperty?: { name?: string };
+        property?: { name?: string };
+        readOnly?: boolean;
+      };
+      const questionName = options.parentElement?.name;
+      const collectionName = options.parentProperty?.name;
+      const itemRecord = options.element && typeof options.element === "object" && !Array.isArray(options.element)
+        ? options.element as Record<string, unknown>
+        : {};
+      const technicalPropertyName = (
+        (collectionName === "items" || collectionName === "columns")
+        && itemRecord.name !== undefined
+        && itemRecord.value === undefined
+      )
+        ? "name"
+        : "value";
+      if (
+        !questionName
+        || !collectionName
+        || options.property?.name !== technicalPropertyName
+        || !GUARDED_COLLECTION_PROPERTIES.includes(
+          collectionName as (typeof GUARDED_COLLECTION_PROPERTIES)[number],
+        )
+      ) {
+        return;
+      }
+
+      const key = `${questionName}:${collectionName}:${getProtectedCollectionItemIdentity(collectionName, options.element)}`;
+      if (protection.collectionItems.has(key)) {
+        options.readOnly = true;
+      }
+    };
+
+    creator.onElementAllowOperations.add(handleElementOperations);
+    creator.onCollectionItemAllowOperations.add(handleCollectionOperations);
+    creator.onPropertyGetReadOnly.add(handleReadOnlyProperty);
+
+    return () => {
+      creator.onElementAllowOperations.remove(handleElementOperations);
+      creator.onCollectionItemAllowOperations.remove(handleCollectionOperations);
+      creator.onPropertyGetReadOnly.remove(handleReadOnlyProperty);
+    };
+  }, [creator, editableForm, isSafeEditingMode]);
 
   useEffect(() => {
     if (!creator) {
@@ -776,6 +989,15 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       return;
     }
 
+    if (isSafeEditingMode) {
+      setIsResetConfirmOpen(false);
+      showToast(
+        "Сбросить форму с ответами нельзя. Создайте копию для изменения структуры.",
+        "warning",
+      );
+      return;
+    }
+
     const emptySchema = createEmptyBuilderSchema();
     if (!formId) assetFormIdRef.current = createSurveyAssetFormId();
     creator.locale = emptySchema.locale ?? "ru";
@@ -801,7 +1023,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
       const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
 
       if (galleryAction) galleryAction.visible = isThemeTab;
-      if (resetAction) resetAction.visible = !isThemeTab;
+      if (resetAction) resetAction.visible = !isThemeTab && !isSafeEditingMode;
       if (saveTemplateAction) saveTemplateAction.visible = !isThemeTab;
       if (isThemeTab) enableThemePageTitleFontEditor(creator);
     };
@@ -876,7 +1098,7 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
           action.id !== "builder-save-template",
       );
     };
-  }, [creator]);
+  }, [creator, isSafeEditingMode]);
 
   useEffect(() => {
     if (!creator) {
@@ -1007,14 +1229,29 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
         const isTemplate = Boolean(editableForm && isTemplateForm(editableForm));
 
         if (formId) {
-          await saveSurveyMutation.mutateAsync({
+          const request: ExistingFormSaveRequest = {
+            allowResponseEditing: responseEditingEnabled,
+            callback,
             id: formId,
+            isTemplate,
+            saveNo,
             schema,
+            selectedOrganizationTypes: organizationTypes,
             theme,
             title,
-            allowResponseEditing: responseEditingEnabled,
-            selectedOrganizationTypes: organizationTypes,
-          });
+          };
+          const result = await saveSurveyMutation.mutateAsync(request);
+
+          if (result?.status === "confirmation_required") {
+            setCompatibilityDialog({ request, result });
+            return;
+          }
+
+          if (result?.status === "blocked") {
+            setCompatibilityDialog({ request, result });
+            callback(saveNo, false);
+            return;
+          }
         } else {
           setPostSaveSettings({
             title,
@@ -1068,6 +1305,84 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
     };
   }, [creator, createSurveyMutation, editableForm, formId, navigate, organizationTypes, queryClient, responseEditingEnabled, saveSurveyMutation, showToast, userId]);
 
+  const handleCloseCompatibilityDialog = () => {
+    if (compatibilityDialog?.result.status === "confirmation_required") {
+      compatibilityDialog.request.callback(compatibilityDialog.request.saveNo, false);
+    }
+    setCompatibilityDialog(null);
+  };
+
+  const handleConfirmCompatibilityWarnings = async () => {
+    if (!compatibilityDialog || compatibilityDialog.result.status !== "confirmation_required") {
+      return;
+    }
+
+    const { request } = compatibilityDialog;
+    setIsSaving(true);
+    const stopPendingLogger = createPendingStateLogger(queryClient, `builder safe save ${request.id}`);
+
+    try {
+      const result = await saveSurveyMutation.mutateAsync({ ...request, confirmWarnings: true });
+      if (result?.status === "blocked" || result?.status === "confirmation_required") {
+        setCompatibilityDialog({ request, result });
+        if (result.status === "blocked") {
+          request.callback(request.saveNo, false);
+        }
+        return;
+      }
+
+      setCompatibilityDialog(null);
+      scheduleBuilderQueryRefresh(request.id);
+      showToast(request.isTemplate ? "Шаблон обновлён" : "Форма обновлена", "success");
+      clearSurveyBuilderDraft(userId, formId);
+
+      if (request.isTemplate) {
+        clearCurrentBuilderState();
+        navigateToSavedList("templates");
+      } else {
+        navigateToSavedList("forms");
+      }
+      request.callback(request.saveNo, true);
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, "Не удалось сохранить форму"), "error");
+      request.callback(request.saveNo, false);
+      setCompatibilityDialog(null);
+    } finally {
+      stopPendingLogger();
+      setIsSaving(false);
+    }
+  };
+
+  const handleCreateCompatibilityCopy = async () => {
+    if (!compatibilityDialog || !editableForm) {
+      return;
+    }
+
+    const { request } = compatibilityDialog;
+    setIsCompatibilityCopying(true);
+    try {
+      const copy = await cloneForm({
+        ...editableForm,
+        title: request.title,
+        schema: request.schema,
+        theme: request.theme,
+        allow_response_editing: request.allowResponseEditing,
+        organization_types: request.selectedOrganizationTypes,
+      }, userId);
+      clearSurveyBuilderDraft(userId, formId);
+      scheduleBuilderQueryRefresh(copy.id);
+      setCompatibilityDialog(null);
+      showToast("Копия формы создана с внесёнными изменениями", "success");
+      navigate(routes.builderEdit(copy.id), { replace: true });
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error, "Не удалось создать копию формы"), "error");
+    } finally {
+      setIsCompatibilityCopying(false);
+    }
+  };
+
   const handleApplyBackground = useCallback((backgroundUrl: string) => {
     if (!creator) return;
     const themeWithBackground = withSurveyBackground(creator.theme, backgroundUrl);
@@ -1091,6 +1406,11 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
   return (
     <div className="builder-host">
       <div className="builder-status-stack">
+        {isSafeEditingMode && (
+          <p className="builder-safe-editing-banner" role="status">
+            У формы есть {safeEditingResponseCount} ответов. Включён безопасный режим редактирования.
+          </p>
+        )}
         {isEditableFormLoading && (
           <div className="builder-loading-skeleton" aria-hidden="true">
             <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-title" />
@@ -1139,6 +1459,79 @@ export function SurveyBuilder({ canAdministerAllForms = false, formId, userId }:
               >
                 Сбросить
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {compatibilityDialog && (
+        <div className="modal-backdrop">
+          <div
+            className="modal-card card builder-compatibility-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={compatibilityDialog.result.status === "blocked"
+              ? "Несовместимые изменения формы"
+              : "Предупреждение об изменениях формы"}
+          >
+            <h3 className="builder-reset-title">
+              {compatibilityDialog.result.status === "blocked"
+                ? "Некоторые изменения несовместимы с полученными ответами"
+                : "Подтвердите изменения формы"}
+            </h3>
+            <p className="builder-template-subtitle">
+              {compatibilityDialog.result.status === "blocked"
+                ? "Эти изменения нельзя сохранить в текущей форме. Создайте копию, чтобы продолжить без риска для ответов."
+                : "Изменения будут применяться только к новым ответам. Ранее полученные ответы останутся без новых значений."}
+            </p>
+            <ul className="builder-compatibility-list">
+              {(compatibilityDialog.result.status === "blocked"
+                ? compatibilityDialog.result.breakingChanges
+                : compatibilityDialog.result.warnings
+              ).map((message) => <li key={message}>{message}</li>)}
+            </ul>
+            <div className="deadline-modal-actions">
+              {compatibilityDialog.result.status === "blocked" ? (
+                <>
+                  <button
+                    type="button"
+                    className="deadline-save-button"
+                    onClick={() => void handleCreateCompatibilityCopy()}
+                    disabled={isCompatibilityCopying}
+                  >
+                    {isCompatibilityCopying && <InlineSpinner />}
+                    Создать копию
+                  </button>
+                  <button
+                    type="button"
+                    className="deadline-action-cancel-button"
+                    onClick={handleCloseCompatibilityDialog}
+                    disabled={isCompatibilityCopying}
+                  >
+                    Вернуться к форме
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="deadline-save-button"
+                    onClick={() => void handleConfirmCompatibilityWarnings()}
+                    disabled={isSaving}
+                  >
+                    {isSaving && <InlineSpinner />}
+                    Сохранить изменения
+                  </button>
+                  <button
+                    type="button"
+                    className="deadline-action-cancel-button"
+                    onClick={handleCloseCompatibilityDialog}
+                    disabled={isSaving}
+                  >
+                    Отмена
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

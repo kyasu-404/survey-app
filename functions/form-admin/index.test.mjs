@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
 const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
@@ -93,4 +94,166 @@ test("deletes selected responses only for the form owner or an admin and removes
   assert.match(source, /\.in\("response_id", existingResponseIds\)/);
   assert.match(source, /adminClient\.storage\.from\(storageBucket\)\.remove\(batch\)/);
   assert.match(source, /\.from\("responses"\)\s*\.delete\(\)/);
+});
+
+test("routes schema updates through an owner-authorized compatibility check", () => {
+  assert.match(source, /action: "update-schema"/);
+  assert.match(source, /analyzeSchemaCompatibility/);
+  assert.match(source, /form\.author_id !== requester\.id/);
+  assert.match(source, /requesterProfile\.role !== "admin"/);
+  assert.match(source, /status: "confirmation_required"/);
+  assert.match(source, /status: "blocked"/);
+  assert.match(source, /\.eq\("responses_count", responsesCount\)/);
+  assert.match(source, /confirmWarnings/);
+});
+
+test("classifies safe display edits without warnings", () => {
+  const previous = {
+    title: "Старая форма",
+    pages: [{
+      name: "page1",
+      elements: [{
+        type: "radiogroup",
+        name: "status",
+        title: "Статус",
+        choices: [{ value: "yes", text: "Да" }],
+      }],
+    }],
+  };
+  const next = {
+    title: "Новая форма",
+    pages: [{
+      name: "page2",
+      elements: [{
+        type: "radiogroup",
+        name: "status",
+        title: "Текущий статус",
+        choices: [{ value: "yes", text: "Подтверждаю" }],
+      }],
+    }],
+  };
+
+  const result = analyzeSchemaCompatibility(previous, next, ["school"], ["school"]);
+
+  assert.equal(result.breakingChanges.length, 0);
+  assert.equal(result.warnings.length, 0);
+  assert.ok(result.safeChanges.some((message) => message.includes("отображаемый текст")));
+});
+
+test("warns for compatible additions and changed response behavior", () => {
+  const previous = {
+    pages: [{
+      elements: [{ type: "text", name: "employee_count", title: "Количество" }],
+    }],
+  };
+  const next = {
+    pages: [{
+      elements: [
+        {
+          type: "text",
+          name: "employee_count",
+          title: "Количество",
+          isRequired: true,
+          validators: [{ type: "numeric", minValue: 1 }],
+          visibleIf: "{has_staff} = true",
+        },
+        { type: "text", name: "website", title: "Адрес сайта" },
+      ],
+    }],
+  };
+
+  const result = analyzeSchemaCompatibility(previous, next, ["school"], ["school", "odo"]);
+
+  assert.equal(result.breakingChanges.length, 0);
+  assert.ok(result.warnings.some((message) => message.includes("стал обязательным")));
+  assert.ok(result.warnings.some((message) => message.includes("новый необязательный вопрос")));
+  assert.ok(result.warnings.some((message) => message.includes("валидаторы")));
+  assert.ok(result.warnings.some((message) => message.includes("условие видимости")));
+  assert.ok(result.warnings.some((message) => message.includes("типов организаций")));
+});
+
+test("blocks incompatible question, choice, matrix, and duplicate-name changes", () => {
+  const previous = {
+    pages: [{
+      elements: [
+        {
+          type: "text",
+          inputType: "text",
+          name: "employee_count",
+          title: "Количество",
+        },
+        {
+          type: "matrix",
+          name: "services",
+          title: "Услуги",
+          rows: [{ value: "row-1", text: "Строка" }],
+          columns: [{ value: "yes", text: "Да" }],
+        },
+      ],
+    }],
+  };
+  const next = {
+    pages: [{
+      elements: [
+        {
+          type: "text",
+          inputType: "number",
+          name: "employee_count",
+          title: "Количество",
+        },
+        {
+          type: "matrix",
+          name: "services",
+          title: "Услуги",
+          rows: [],
+          columns: [{ value: "no", text: "Нет" }],
+        },
+        { type: "text", name: "employee_count", title: "Дубликат" },
+        { type: "text", name: "required_new", title: "Новое", isRequired: true },
+      ],
+    }],
+  };
+
+  const result = analyzeSchemaCompatibility(previous, next);
+
+  assert.ok(result.breakingChanges.some((message) => message.includes("формат ввода")));
+  assert.ok(result.breakingChanges.some((message) => message.includes("строка матрицы")));
+  assert.ok(result.breakingChanges.some((message) => message.includes("столбец матрицы")));
+  assert.ok(result.breakingChanges.some((message) => message.includes("используется несколько раз")));
+  assert.ok(result.breakingChanges.some((message) => message.includes("обязательный вопрос")));
+});
+
+test("allows matrix column labels but protects their technical names and types", () => {
+  const previous = {
+    pages: [{ elements: [{
+      type: "matrixdropdown",
+      name: "budget",
+      title: "Бюджет",
+      columns: [{ name: "amount", title: "Сумма", cellType: "text", inputType: "number" }],
+    }] }],
+  };
+  const labelEdit = {
+    pages: [{ elements: [{
+      type: "matrixdropdown",
+      name: "budget",
+      title: "Бюджет",
+      columns: [{ name: "amount", title: "Размер суммы", cellType: "text", inputType: "number" }],
+    }] }],
+  };
+  const renamedColumn = {
+    pages: [{ elements: [{
+      type: "matrixdropdown",
+      name: "budget",
+      title: "Бюджет",
+      columns: [{ name: "total", title: "Размер суммы", cellType: "dropdown" }],
+    }] }],
+  };
+
+  const safeResult = analyzeSchemaCompatibility(previous, labelEdit);
+  const breakingResult = analyzeSchemaCompatibility(previous, renamedColumn);
+
+  assert.equal(safeResult.warnings.length, 0);
+  assert.equal(safeResult.breakingChanges.length, 0);
+  assert.ok(safeResult.safeChanges.some((message) => message.includes("отображаемый текст")));
+  assert.ok(breakingResult.breakingChanges.some((message) => message.includes("столбец матрицы")));
 });

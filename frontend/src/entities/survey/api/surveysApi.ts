@@ -25,6 +25,8 @@ import type {
 import type { ITheme } from "survey-core";
 import type { OrganizationType } from "../../organization/types";
 
+export type { SchemaUpdateResult } from "../../../shared/api/formsApi";
+
 export type { FormsFilters };
 
 type QueryRequestOptions = {
@@ -96,8 +98,17 @@ export async function saveSurveySchema(
   title: string,
   allowResponseEditing: boolean,
   organizationTypes: OrganizationType[],
+  confirmWarnings = false,
 ) {
-  return updateFormSchema(id, schema, theme, title, allowResponseEditing, organizationTypes);
+  return updateFormSchema(
+    id,
+    schema,
+    theme,
+    title,
+    allowResponseEditing,
+    organizationTypes,
+    confirmWarnings,
+  );
 }
 
 export async function changeFormStatus(id: string, isPublic: boolean) {

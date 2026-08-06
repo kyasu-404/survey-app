@@ -124,9 +124,12 @@ describe("ThemeCycleButton", () => {
     expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-edit-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*#ffffff;/s);
     expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-delete-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.16\);/s);
     expect(surfaceOverrides).toMatch(/\.theme-cycle-button,[^{]+\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-creator\s*\{[^}]*--sjs-primary-backcolor:\s*#2f3437\s*!important;[^}]*--sjs-general-backcolor:\s*#ffffff\s*!important;[^}]*--sjs-general-backcolor-dim:\s*#f1f3f5\s*!important;/s);
-    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-tabbed-menu\s*\{[^}]*background:\s*#ffffff\s*!important;/s);
-    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-side-bar,[^{]+\{[^}]*background:\s*#f1f3f5\s*!important;/s);
-    expect(surfaceOverrides).toMatch(/\.builder-creator-shell svc-tab-designer,[^{]+\{[^}]*background:\s*#f7f8f9\s*!important;/s);
+    expect(css).toMatch(/:root\[data-theme="sand"\][^{]*\{[^}]*--creator-toolbar:\s*#fffdf9;[^}]*--creator-workspace:\s*#eee7dd;[^}]*--creator-accent:\s*#765137;/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--creator-panel:\s*#f4f8fb;[^}]*--creator-workspace:\s*#e8f0f5;[^}]*--creator-accent:\s*#347db8;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--creator-panel:\s*#f4f8f5;[^}]*--creator-workspace:\s*#e8f0eb;[^}]*--creator-accent:\s*#337f5b;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-creator\s*\{[^}]*--sjs-primary-backcolor:\s*var\(--creator-accent\)\s*!important;[^}]*--sjs-general-backcolor:\s*var\(--creator-control\)\s*!important;[^}]*--ctr-surface-background-color:\s*var\(--creator-workspace\)\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-tabbed-menu\s*\{[^}]*background:\s*var\(--creator-toolbar\)\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-side-bar,[^{]+\{[^}]*background:\s*var\(--creator-panel\)\s*!important;/s);
+    expect(surfaceOverrides).toMatch(/\.builder-creator-shell svc-tab-designer,[^{]+\{[^}]*background:\s*var\(--creator-workspace\)\s*!important;/s);
   });
 });

@@ -442,31 +442,6 @@ create or replace trigger forms_enforce_response_limit_settings
 before insert or update of max_responses, is_public on public.forms
 for each row execute procedure public.enforce_form_response_limit_settings();
 
-create or replace function public.prevent_answered_form_schema_update()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if old.responses_count > 0
-    and (
-      new.schema is distinct from old.schema
-      or new.organization_types is distinct from old.organization_types
-    )
-  then
-    raise exception 'У формы уже есть ответы. Создайте её копию, чтобы не нарушить существующие данные.'
-      using errcode = '23514';
-  end if;
-
-  return new;
-end;
-$$;
-
-create or replace trigger forms_prevent_answered_schema_update
-before update of schema, organization_types on public.forms
-for each row execute procedure public.prevent_answered_form_schema_update();
-
 create or replace function public.ensure_form_response_limit()
 returns trigger
 language plpgsql
@@ -900,7 +875,7 @@ grant insert (id, title, schema, theme, form_type, form_reason, is_public, deadl
   on table public.forms to authenticated;
 revoke delete on table public.forms from authenticated;
 revoke update on table public.forms from authenticated;
-grant update (title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types) on table public.forms to authenticated;
+grant update (title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing) on table public.forms to authenticated;
 revoke insert on table public.responses from anon;
 grant select on table public.responses to authenticated;
 revoke insert on table public.responses from authenticated;

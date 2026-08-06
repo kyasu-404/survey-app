@@ -594,6 +594,12 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.template-preview-drawer\s*\{[^}]*width:\s*min\(820px,\s*calc\(100vw - 32px\)\);/);
     expect(css).toMatch(/\.template-preview-drawer\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*clip;/);
     expect(css).toMatch(/\.template-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
+    expect(css).toMatch(
+      /\.template-preview-drawer,\s*\.response-preview-drawer\s*\{[^}]*background:\s*#ffffff;/s,
+    );
+    expect(css).toMatch(
+      /\.template-preview-body\.survey-page-card,\s*\.response-preview-body\.survey-page-card\s*\{[^}]*padding:\s*0;[^}]*background:\s*transparent\s*!important;/s,
+    );
   });
 
   it("places the centered templates empty state noticeably below the header", () => {

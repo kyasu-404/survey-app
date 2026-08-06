@@ -18,6 +18,7 @@ export default function BuilderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isCopying, setIsCopying] = useState(false);
+  const [isSafeEditingConfirmed, setIsSafeEditingConfirmed] = useState(false);
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
     queryFn: ({ signal }) => getFormById(id ?? "", { signal }),
@@ -63,19 +64,30 @@ export default function BuilderPage() {
     return <p>{getErrorMessage(formQuery.error, "Не удалось открыть форму")}</p>;
   }
 
-  if (id && (formQuery.data?.responses_count ?? 0) > 0) {
+  const responsesCount = formQuery.data?.responses_count ?? 0;
+
+  if (id && responsesCount > 0 && !isSafeEditingConfirmed) {
     return (
       <div className="builder-page">
         <div className="modal-backdrop builder-answered-warning-backdrop">
           <div className="modal-card card builder-answered-warning" role="alertdialog" aria-modal="true">
             <h3 className="builder-reset-title">У формы уже есть ответы</h3>
             <p className="builder-template-subtitle">
-              Создайте её копию, чтобы не нарушить существующие данные.
+              Форму можно открыть в безопасном режиме. Изменение типов вопросов,
+              технических идентификаторов и удаление существующих полей будет недоступно.
             </p>
             <div className="deadline-modal-actions">
               <button
                 type="button"
                 className="deadline-save-button"
+                onClick={() => setIsSafeEditingConfirmed(true)}
+                disabled={isCopying}
+              >
+                Редактировать безопасно
+              </button>
+              <button
+                type="button"
+                className="deadline-clear-button"
                 onClick={() => void handleCreateCopy()}
                 disabled={isCopying}
               >
@@ -84,11 +96,11 @@ export default function BuilderPage() {
               </button>
               <button
                 type="button"
-                className="deadline-clear-button"
+                className="deadline-action-cancel-button"
                 onClick={() => navigate(routes.dashboardMy, { replace: true })}
                 disabled={isCopying}
               >
-                Отмена
+                Назад
               </button>
             </div>
           </div>
@@ -100,7 +112,12 @@ export default function BuilderPage() {
   return (
     <div className="builder-page">
       <div className="builder-container">
-        <SurveyBuilder formId={id} userId={user.id} canAdministerAllForms={profile?.role === "admin"} />
+        <SurveyBuilder
+          formId={id}
+          userId={user.id}
+          canAdministerAllForms={profile?.role === "admin"}
+          safeEditingResponseCount={responsesCount}
+        />
       </div>
     </div>
   );

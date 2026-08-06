@@ -15,6 +15,7 @@ export type AppThemeTokens = {
 
 export type SurveyThemeBundle = {
   app: AppThemeTokens;
+  creator: ICreatorTheme;
   survey: ITheme;
 };
 
@@ -50,6 +51,58 @@ const palettes: Record<ThemeId, AppThemeTokens> = {
     surface: "#d8e7dc",
     text: "#20372a",
     muted: "#64766b",
+  },
+};
+
+type CreatorThemeTokens = {
+  toolbar: string;
+  panel: string;
+  panelMuted: string;
+  workspace: string;
+  control: string;
+  border: string;
+  text: string;
+  textMuted: string;
+  accent: string;
+  accentHover: string;
+};
+
+const creatorPalettes: Record<ThemeId, CreatorThemeTokens> = {
+  sand: {
+    toolbar: "#fffdf9",
+    panel: "#faf6f0",
+    panelMuted: "#f5efe7",
+    workspace: "#eee7dd",
+    control: "#fffdfa",
+    border: "#ddd2c5",
+    text: "#332b24",
+    textMuted: "#786e65",
+    accent: "#765137",
+    accentHover: "#563d2a",
+  },
+  sky: {
+    toolbar: "#fcfeff",
+    panel: "#f4f8fb",
+    panelMuted: "#edf4f8",
+    workspace: "#e8f0f5",
+    control: "#ffffff",
+    border: "#d3e0e9",
+    text: "#203447",
+    textMuted: "#637787",
+    accent: "#347db8",
+    accentHover: "#2c6599",
+  },
+  teal: {
+    toolbar: "#fcfefd",
+    panel: "#f4f8f5",
+    panelMuted: "#edf4ef",
+    workspace: "#e8f0eb",
+    control: "#ffffff",
+    border: "#d2ded6",
+    text: "#26392d",
+    textMuted: "#68796e",
+    accent: "#337f5b",
+    accentHover: "#2f6748",
   },
 };
 
@@ -103,69 +156,68 @@ function createSurveyTheme(app: AppThemeTokens): ITheme {
   };
 }
 
-function createCreatorTheme(app: AppThemeTokens): ICreatorTheme {
+function createCreatorTheme(themeId: ThemeId, palette: CreatorThemeTokens): ICreatorTheme {
   return {
-    themeName: "survey-app-neutral",
+    themeName: `survey-app-creator-${themeId}`,
     iconSet: "v2",
     isLight: true,
     cssVariables: {
-      "--sjs-primary-backcolor": app.accent,
-      "--sjs-primary-backcolor-dark": app.accentHover,
-      "--sjs-primary-backcolor-light": rgba(app.accent, 0.1),
-      "--sjs-primary-background-500": app.accent,
-      "--sjs-primary-background-400": app.accentHover,
-      "--sjs-primary-background-10": rgba(app.accent, 0.06),
+      "--sjs-primary-backcolor": palette.accent,
+      "--sjs-primary-backcolor-dark": palette.accentHover,
+      "--sjs-primary-backcolor-light": rgba(palette.accent, 0.1),
+      "--sjs-primary-background-500": palette.accent,
+      "--sjs-primary-background-400": palette.accentHover,
+      "--sjs-primary-background-10": rgba(palette.accent, 0.08),
       "--sjs-primary-forecolor": "#ffffff",
-      "--sjs-general-backcolor": app.bg,
-      "--sjs-general-backcolor-dim": app.surface,
-      "--sjs-general-backcolor-dim-light": rgba(app.surface, 0.88),
-      "--sjs-general-backcolor-dark": rgba(app.text, 0.12),
-      "--sjs-general-forecolor": app.text,
-      "--sjs-general-forecolor-light": app.muted,
-      "--sjs-layer-1-foreground-100": app.text,
-      "--sjs-layer-1-foreground-50": app.muted,
-      "--sjs-layer-1-background-500": app.bg,
-      "--sjs-layer-3-background-500": app.surface,
-      "--sjs-special-background": app.surface,
-      "--sjs2-color-utility-surface-designer": app.surface,
-      "--ctr-button-group-item-text-color-selected": app.accent,
-      "--ctr-button-group-item-icon-color-selected": app.accent,
-      "--ctr-button-group-border-color-focused": app.accent,
-      "--ctr-survey-action-button-text-color-positive": app.accent,
-      "--ctr-menu-item-border-color-selected": app.accent,
-      "--ctr-property-grid-header-border-color": app.accent,
-      "--ctr-editor-border-color-focused": app.accent,
-      "--ctr-editor-border-color-highlighted": rgba(app.accent, 0.18),
+      "--sjs-general-backcolor": palette.control,
+      "--sjs-general-backcolor-dim": palette.panel,
+      "--sjs-general-backcolor-dim-light": palette.toolbar,
+      "--sjs-general-backcolor-dark": palette.border,
+      "--sjs-general-forecolor": palette.text,
+      "--sjs-general-forecolor-light": palette.textMuted,
+      "--sjs-layer-1-foreground-100": palette.text,
+      "--sjs-layer-1-foreground-50": palette.textMuted,
+      "--sjs-layer-1-background-500": palette.control,
+      "--sjs-layer-3-background-500": palette.control,
+      "--sjs-special-background": palette.panelMuted,
+      "--sjs2-color-utility-surface-designer": palette.workspace,
+      "--ctr-surface-background-color": palette.workspace,
+      "--ctr-property-grid-form-background-color": palette.panel,
+      "--ctr-editor-background-color": palette.control,
+      "--ctr-button-group-item-text-color-selected": palette.accent,
+      "--ctr-button-group-item-icon-color-selected": palette.accent,
+      "--ctr-button-group-border-color-focused": palette.accent,
+      "--ctr-survey-action-button-text-color-positive": palette.accent,
+      "--ctr-menu-item-border-color-selected": palette.accent,
+      "--ctr-property-grid-header-border-color": palette.accent,
+      "--ctr-editor-border-color-focused": palette.accent,
+      "--ctr-editor-border-color-highlighted": rgba(palette.accent, 0.18),
+      "--ctr-survey-question-panel-border-color-selected": palette.accent,
+      "--ctr-survey-question-panel-border-color-hovered": rgba(palette.accent, 0.26),
     },
   };
 }
 
-/**
- * Survey Creator has its own interface theme, separate from the theme of the
- * survey being edited. Keep this palette stable so application color schemes
- * cannot reduce the readability of the toolbox and property grid.
- */
-export const NEUTRAL_CREATOR_THEME: ICreatorTheme = createCreatorTheme({
-  label: "Нейтральная",
-  accent: "#2f3437",
-  accentHover: "#111315",
-  bg: "#ffffff",
-  surface: "#f1f3f5",
-  text: "#202124",
-  muted: "#656b73",
-});
+export const creatorThemes: Record<ThemeId, ICreatorTheme> = {
+  sand: createCreatorTheme("sand", creatorPalettes.sand),
+  sky: createCreatorTheme("sky", creatorPalettes.sky),
+  teal: createCreatorTheme("teal", creatorPalettes.teal),
+};
 
 export const themes: Record<ThemeId, SurveyThemeBundle> = {
   sand: {
     app: palettes.sand,
+    creator: creatorThemes.sand,
     survey: createSurveyTheme(palettes.sand),
   },
   sky: {
     app: palettes.sky,
+    creator: creatorThemes.sky,
     survey: createSurveyTheme(palettes.sky),
   },
   teal: {
     app: palettes.teal,
+    creator: creatorThemes.teal,
     survey: createSurveyTheme(palettes.teal),
   },
 };

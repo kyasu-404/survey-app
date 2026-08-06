@@ -8,10 +8,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
 import FormResponsesHtmlPage from "./FormResponsesHtmlPage";
 
-const { getFormById, getResponsesByForm, downloadHtmlDocument } = vi.hoisted(() => ({
+const { getFormById, getOrganizations, getResponsesByForm, downloadHtmlDocument } = vi.hoisted(() => ({
   getFormById: vi.fn(),
+  getOrganizations: vi.fn(),
   getResponsesByForm: vi.fn(),
   downloadHtmlDocument: vi.fn(),
+}));
+
+vi.mock("../../entities/organization/api", () => ({
+  getOrganizations,
 }));
 
 vi.mock("../../entities/survey/api/surveysApi", () => ({
@@ -74,6 +79,7 @@ function readAppCss() {
 describe("FormResponsesHtmlPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getOrganizations.mockResolvedValue([]);
   });
 
   it("uses the branded browser tab title", () => {
@@ -172,6 +178,63 @@ describe("FormResponsesHtmlPage", () => {
     expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
     expect(screen.getByText("Анна")).toBeInTheDocument();
     expect(screen.getByText("Хорошее")).toBeInTheDocument();
+  });
+
+  it("resolves organization identifiers in both the HTML preview and downloaded document", async () => {
+    const organizationId = "9a109521-b000-4d86-909e-119fa58594c9";
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Мониторинг организаций",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "monitoring",
+      form_reason: "order",
+      deadline_at: null,
+      organization_types: ["school"],
+      schema: {
+        pages: [
+          {
+            elements: [
+              { type: "organization", name: "organization", title: "Организация" },
+            ],
+          },
+        ],
+      },
+    });
+    getOrganizations.mockResolvedValue([
+      {
+        id: organizationId,
+        organization_type: "school",
+        number: "1",
+        alias: "ИМЦ",
+        email: "imc@example.test",
+        created_at: "2026-04-01T10:00:00.000Z",
+        updated_at: "2026-04-01T10:00:00.000Z",
+      },
+    ]);
+    getResponsesByForm.mockResolvedValue(createResponsesPage([
+      {
+        id: "response-organization",
+        form_id: "form-1",
+        created_at: "2026-04-08T11:30:00.000Z",
+        data: { organization: organizationId },
+      },
+    ]));
+
+    renderHtmlPage();
+
+    expect(await screen.findByText("ИМЦ 1")).toBeInTheDocument();
+    expect(screen.queryByText(organizationId)).not.toBeInTheDocument();
+    expect(getOrganizations).toHaveBeenCalledWith(["school"], expect.any(AbortSignal));
+
+    await userEvent.click(screen.getByRole("button", { name: "Скачать HTML" }));
+
+    expect(downloadHtmlDocument).toHaveBeenCalledWith(
+      expect.stringContaining("ИМЦ 1"),
+      "ответы-Мониторинг организаций",
+    );
+    expect(downloadHtmlDocument.mock.calls[0]?.[0]).not.toContain(organizationId);
   });
 
   it("does not refresh the static HTML report when the browser tab becomes focused again", async () => {

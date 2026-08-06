@@ -6,6 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
+import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
+import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { SurveyBuilder } from "./SurveyBuilder";
 import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
 import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
@@ -16,6 +18,7 @@ const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
 const {
   componentCollectionAdd,
   componentCollectionGetByName,
+  cloneForm,
   createSurveyMutateAsync,
   creatorInstances,
   getFormById,
@@ -35,6 +38,7 @@ const {
 } = vi.hoisted(() => ({
   componentCollectionAdd: vi.fn(),
   componentCollectionGetByName: vi.fn(),
+  cloneForm: vi.fn(),
   createSurveyMutateAsync: vi.fn(),
   creatorInstances: [] as any[],
   getFormById: vi.fn(),
@@ -94,6 +98,7 @@ vi.mock("../../features/create-survey/useCreateSurvey", () => ({
 }));
 
 vi.mock("../../entities/survey/api/surveysApi", () => ({
+  cloneForm,
   getFormById,
   getForms,
   saveSurveySchema,
@@ -199,6 +204,8 @@ vi.mock("survey-creator-react", () => {
     };
     options: Record<string, unknown>;
     onElementAllowOperations = new FakeEvent();
+    onCollectionItemAllowOperations = new FakeEvent();
+    onPropertyGetReadOnly = new FakeEvent();
     onSurveyInstanceCreated = new FakeEvent();
     onModified = new FakeEvent();
     onActiveTabChanged = new FakeEvent();
@@ -277,11 +284,15 @@ function createQueryClient() {
   });
 }
 
-function renderBuilder(formId?: string) {
+function renderBuilder(formId?: string, safeEditingResponseCount = 0) {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={createQueryClient()}>
-        <SurveyBuilder formId={formId} userId="user-1" />
+        <SurveyBuilder
+          formId={formId}
+          userId="user-1"
+          safeEditingResponseCount={safeEditingResponseCount}
+        />
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -341,6 +352,7 @@ describe("SurveyBuilder", () => {
     getFormById.mockResolvedValue(null);
     getForms.mockResolvedValue([]);
     saveSurveySchema.mockResolvedValue(undefined);
+    cloneForm.mockResolvedValue({ id: "copy-form-id" });
     setFormDeadline.mockResolvedValue(undefined);
     setFormResponseLimit.mockResolvedValue(undefined);
     createSurveyMutateAsync.mockResolvedValue({ id: "created-form-id" });
@@ -352,24 +364,57 @@ describe("SurveyBuilder", () => {
     registerElement.mockClear();
   });
 
-  it("applies one neutral Survey Creator UI theme independently of the application palette", async () => {
+  it("applies the beige Survey Creator UI theme independently of the survey palette", async () => {
     renderBuilder();
 
     await waitFor(() => {
       expect(creatorInstances).toHaveLength(1);
       expect(creatorInstances[0].applyCreatorTheme).toHaveBeenCalledWith(
         expect.objectContaining({
-          themeName: "survey-app-neutral",
+          themeName: "survey-app-creator-sand",
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-primary-backcolor": "#2f3437",
-            "--sjs-general-backcolor": "#ffffff",
-            "--sjs-general-forecolor": "#202124",
-            "--sjs-special-background": "#f1f3f5",
-            "--sjs2-color-utility-surface-designer": "#f1f3f5",
+            "--sjs-primary-backcolor": "#765137",
+            "--sjs-general-backcolor": "#fffdfa",
+            "--sjs-general-forecolor": "#332b24",
+            "--sjs-special-background": "#f5efe7",
+            "--sjs2-color-utility-surface-designer": "#eee7dd",
           }),
         }),
+      );
+    });
+  });
+
+  it("switches the Creator UI palette without recreating the builder", async () => {
+    window.localStorage.setItem("survey-app:theme", "sky");
+    const user = userEvent.setup();
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter>
+          <QueryClientProvider client={createQueryClient()}>
+            <SurveyBuilder userId="user-1" />
+            <ThemeCycleButton />
+          </QueryClientProvider>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+      expect(creatorInstances[0].applyCreatorTheme).toHaveBeenLastCalledWith(
+        expect.objectContaining({ themeName: "survey-app-creator-sky" }),
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: /Сменить тему/i }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Зелёная" }));
+
+    await waitFor(() => {
+      expect(creatorInstances).toHaveLength(1);
+      expect(creatorInstances[0].applyCreatorTheme).toHaveBeenLastCalledWith(
+        expect.objectContaining({ themeName: "survey-app-creator-teal" }),
       );
     });
   });
@@ -955,6 +1000,100 @@ describe("SurveyBuilder", () => {
     });
   });
 
+  it("protects existing questions and technical collection values in safe editing mode", async () => {
+    getFormById.mockResolvedValue(createTemplateForm({
+      id: "answered-form",
+      title: "Форма с ответами",
+      form_type: "survey",
+      responses_count: 18,
+      schema: {
+        title: "Форма с ответами",
+        pages: [{
+          name: "page1",
+          elements: [{
+            type: "radiogroup",
+            name: "status",
+            title: "Статус",
+            choices: [{ value: "yes", text: "Да" }],
+          }],
+        }],
+      },
+    } as never) as never);
+
+    renderBuilder("answered-form", 18);
+
+    await waitFor(() => {
+      expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Форма с ответами" });
+    });
+
+    const creator = creatorInstances[0];
+    expect(creator.options.useElementTitles).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "У формы есть 18 ответов. Включён безопасный режим редактирования.",
+    );
+
+    const oldQuestionOperations = {
+      element: { name: "status" },
+      obj: { name: "status", getType: () => "radiogroup" },
+      allowDelete: true,
+      allowChangeType: true,
+      allowChangeInputType: true,
+      allowDrag: false,
+      allowEdit: false,
+    };
+    creator.onElementAllowOperations.fire(creator, oldQuestionOperations);
+    expect(oldQuestionOperations).toMatchObject({
+      allowDelete: false,
+      allowChangeType: false,
+      allowChangeInputType: false,
+      allowDrag: true,
+      allowEdit: true,
+    });
+
+    const newQuestionOperations = {
+      element: { name: "new-question" },
+      obj: { name: "new-question", getType: () => "text" },
+      allowDelete: true,
+      allowChangeType: false,
+      allowChangeInputType: true,
+    };
+    creator.onElementAllowOperations.fire(creator, newQuestionOperations);
+    expect(newQuestionOperations.allowDelete).toBe(true);
+    expect(newQuestionOperations.allowChangeType).toBe(true);
+
+    const nameProperty = {
+      element: { getType: () => "radiogroup" },
+      property: { name: "name" },
+      readOnly: false,
+    };
+    creator.onPropertyGetReadOnly.fire(creator, nameProperty);
+    expect(nameProperty.readOnly).toBe(true);
+
+    const oldChoiceOperations = {
+      element: { name: "status" },
+      propertyName: "choices",
+      item: { value: "yes", text: "Да" },
+      allowDelete: true,
+    };
+    creator.onCollectionItemAllowOperations.fire(creator, oldChoiceOperations);
+    expect(oldChoiceOperations.allowDelete).toBe(false);
+
+    const choiceValueProperty = {
+      parentElement: { name: "status" },
+      parentProperty: { name: "choices" },
+      property: { name: "value" },
+      element: { value: "yes", text: "Да" },
+      readOnly: false,
+    };
+    creator.onPropertyGetReadOnly.fire(creator, choiceValueProperty);
+    expect(choiceValueProperty.readOnly).toBe(true);
+
+    const newQuestion = { isRequired: true, descriptionLocation: "", getType: () => "text" };
+    creator.onQuestionAdded.fire(creator, { question: newQuestion });
+    expect(newQuestion.isRequired).toBe(false);
+    expect(creator.toolbar.getActionById("builder-reset")?.visible).toBe(false);
+  });
+
   it("keeps SurveyJS builder overrides visual-only so Creator layout stays intact", () => {
     const appCss = readAppCss();
 
@@ -969,7 +1108,7 @@ describe("SurveyBuilder", () => {
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.sd-description,\s*\.builder-creator-shell\s+\.sd-page__title/s);
 
     expect(appCss).toContain(".builder-creator-shell .svc-creator {");
-    expect(appCss).toContain("--sjs-primary-backcolor: #2f3437;");
+    expect(appCss).toContain("--sjs-primary-backcolor: var(--creator-accent) !important;");
     expect(appCss).toContain(".builder-creator-shell .svc-side-bar");
     expect(appCss).toContain(".builder-creator-shell .spg-button-group__item--selected");
     expect(appCss).toContain(".app-button,");
@@ -999,7 +1138,7 @@ describe("SurveyBuilder", () => {
     expect(surveyBuilderSource).toContain('import "survey-core/survey-core.css";');
     expect(surveyBuilderSource).toContain('import "survey-creator-core/survey-creator-core.css";');
     expect(surveyBuilderSource).toContain('registerSurveyTheme(SurveyTheme);');
-    expect(surveyBuilderSource).toContain('registerCreatorTheme(NEUTRAL_CREATOR_THEME);');
+    expect(surveyBuilderSource).toContain('registerCreatorTheme(...Object.values(creatorThemes));');
   });
 
   it("keeps the built-in save action icon-only while custom builder actions stay compact text buttons", () => {
@@ -1019,11 +1158,11 @@ describe("SurveyBuilder", () => {
     );
   });
 
-  it("matches the designer canvas to the preview and keeps question cards visible", () => {
+  it("uses a themed workspace while keeping survey question cards visible", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-creator-shell svc-tab-designer,\s*\.builder-creator-shell \.svc-tab-designer\s*\{[^}]*background:\s*#f7f8f9\s*!important;/s,
+      /\.builder-creator-shell svc-tab-designer,\s*\.builder-creator-shell \.svc-tab-designer\s*\{[^}]*background:\s*var\(--creator-workspace\)\s*!important;/s,
     );
     expect(appCss).toMatch(
       /\.builder-creator-shell \.svc-question__content\s*\{[^}]*border:\s*1px solid rgba\(24,\s*24,\s*24,\s*0\.18\);[^}]*box-shadow:\s*0 2px 8px rgba\(24,\s*24,\s*24,\s*0\.1\);/s,
@@ -1043,7 +1182,7 @@ describe("SurveyBuilder", () => {
       /\.builder-creator-shell \.svc-designer-header \.svc-logo-image,\s*\.builder-creator-shell \.svc-designer-header \.svc-logo-image-container\s*\{[^}]*order:\s*-1;/s,
     );
     expect(appCss).toMatch(
-      /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*var\(--sjs-general-backcolor-dim\)\s*!important;/s,
+      /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*var\(--creator-workspace\)\s*!important;/s,
     );
     expect(appCss).toMatch(
       /\.builder-creator-shell \.svc-tab-designer \.svc-designer-header\s*\{[^}]*border-bottom:\s*2px solid #111111;/s,
@@ -1054,12 +1193,20 @@ describe("SurveyBuilder", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-preview-tab-shell\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*height:\s*100%;[^}]*min-height:\s*100%;[^}]*overflow:\s*auto;/s,
+      /\.survey-page\.builder-preview-tab-shell\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*flex:\s*0 0 auto;[^}]*height:\s*auto;[^}]*min-height:\s*100%;[^}]*padding-bottom:\s*48px;[^}]*overflow:\s*visible;/s,
     );
+    expect(appCss).toMatch(
+      /\.builder-creator-shell \.svc-creator-tab:has\(> \.builder-preview-tab-shell\)\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*hidden;[^}]*scroll-padding-bottom:\s*48px;/s,
+    );
+    expect(appCss).toMatch(
+      /\.app-main-public,\s*\.builder-creator-shell \.svc-creator-tab:has\(> \.builder-preview-tab-shell\)\s*\{[^}]*background:\s*radial-gradient\(circle at 14% 4%, rgba\(255, 255, 255, 0\.8\), transparent 26%\),\s*linear-gradient\(180deg, #f7f2ea 0%, #ebe2d6 100%\);/s,
+    );
+    expect(appCss).toMatch(/\.builder-preview-tab-shell\s*\{[^}]*background:\s*transparent;/s);
+    expect(appCss).toMatch(/\.builder-preview-tab-shell::before\s*\{[^}]*content:\s*none;/s);
     expect(appCss).toMatch(
       /\.builder-creator-shell\s+\.svc-creator-tab__content,\s*\.builder-creator-shell\s+\.svc-plugin-tab__content\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;/s,
     );
-    expect(appCss).not.toMatch(/\.builder-preview-tab-shell\s*\{[^}]*padding:/s);
+    expect(appCss).not.toMatch(/\.survey-page\.builder-preview-tab-shell\s*\{[^}]*padding:\s*[^;}]+;/s);
     expect(appCss).not.toContain(".builder-preview-tab-surface.survey-page-card");
     expect(appCss).toMatch(
       /\.survey-runtime-surface\.survey-page-card\s*\{[^}]*padding:\s*0;[^}]*border:\s*1px\s+solid\s+rgba\(78,\s*57,\s*39,\s*0\.12\);[^}]*border-radius:\s*28px;[^}]*background:\s*transparent\s*!important;[^}]*box-shadow:\s*0\s+22px\s+48px/s,
@@ -1179,6 +1326,17 @@ describe("SurveyBuilder", () => {
     expect(appCss).toMatch(/\.builder-reset-title\s*\{[^}]*text-align:\s*center;/);
     expect(surveyBuilderSource).toContain('className="deadline-action-cancel-button"');
     expect(appCss).toMatch(/\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+  });
+
+  it("keeps safe edit dark and softly darkens the compatibility action on hover", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(
+      /\.builder-answered-warning \.deadline-save-button:hover,[^{]*\.builder-answered-warning \.deadline-save-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/s,
+    );
+    expect(appCss).toMatch(
+      /\.builder-compatibility-modal \.deadline-save-button:hover,[^{]*\.builder-compatibility-modal \.deadline-save-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(248,\s*246,\s*243,\s*0\.98\),\s*rgba\(225,\s*220,\s*214,\s*0\.96\)\);[^}]*color:\s*#141414;/s,
+    );
   });
 
   it("keeps toast notifications above modal backdrops", () => {
@@ -1388,6 +1546,107 @@ describe("SurveyBuilder", () => {
       true,
       ["school", "odo"],
     );
+  });
+
+  it("asks for confirmation before saving warning-level changes to an answered form", async () => {
+    getFormById.mockResolvedValue(createTemplateForm({
+      id: "answered-form",
+      title: "Форма с ответами",
+      form_type: "survey",
+      responses_count: 5,
+    } as never) as never);
+    saveSurveySchema
+      .mockResolvedValueOnce({
+        status: "confirmation_required",
+        safeChanges: [],
+        warnings: ["Добавлен новый необязательный вопрос «Адрес сайта»"],
+        breakingChanges: [],
+      })
+      .mockResolvedValueOnce({
+        status: "updated",
+        safeChanges: [],
+        warnings: ["Добавлен новый необязательный вопрос «Адрес сайта»"],
+        breakingChanges: [],
+      });
+
+    renderBuilder("answered-form", 5);
+    await waitFor(() => expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Форма с ответами" }));
+    creatorInstances[0].JSON.pages[0].elements.push({
+      type: "text",
+      name: "website",
+      title: "Адрес сайта",
+    });
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    const dialog = await screen.findByRole("dialog", { name: "Предупреждение об изменениях формы" });
+    expect(dialog).toHaveTextContent("Добавлен новый необязательный вопрос «Адрес сайта»");
+    expect(callback).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Сохранить изменения" }));
+
+    await waitFor(() => expect(saveSurveySchema).toHaveBeenCalledTimes(2));
+    expect(saveSurveySchema.mock.calls[1]).toEqual([
+      "answered-form",
+      expect.objectContaining({ title: "Форма с ответами" }),
+      expect.any(Object),
+      "Форма с ответами",
+      false,
+      ["school", "kindergarten"],
+      true,
+    ]);
+    expect(callback).toHaveBeenCalledWith(1, true);
+    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, {
+      replace: true,
+      state: { refreshList: true },
+    });
+  });
+
+  it("blocks incompatible changes and can copy the modified schema", async () => {
+    getFormById.mockResolvedValue(createTemplateForm({
+      id: "answered-form",
+      title: "Форма с ответами",
+      form_type: "survey",
+      responses_count: 3,
+    } as never) as never);
+    saveSurveySchema.mockResolvedValueOnce({
+      status: "blocked",
+      safeChanges: [],
+      warnings: [],
+      breakingChanges: ["Изменён тип вопроса «Вопрос»"],
+    });
+
+    renderBuilder("answered-form", 3);
+    await waitFor(() => expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Форма с ответами" }));
+    creatorInstances[0].JSON.pages[0].elements[0].type = "comment";
+    const callback = vi.fn();
+
+    await act(async () => {
+      await creatorInstances[0].saveSurveyFunc?.(1, callback);
+    });
+
+    const dialog = await screen.findByRole("dialog", { name: "Несовместимые изменения формы" });
+    expect(dialog).toHaveTextContent("Изменён тип вопроса «Вопрос»");
+    expect(callback).toHaveBeenCalledWith(1, false);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Создать копию" }));
+
+    await waitFor(() => expect(cloneForm).toHaveBeenCalled());
+    expect(cloneForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "answered-form",
+        schema: expect.objectContaining({
+          pages: [expect.objectContaining({
+            elements: [expect.objectContaining({ type: "comment", name: "q1" })],
+          })],
+        }),
+      }),
+      "user-1",
+    );
+    expect(navigate).toHaveBeenCalledWith(routes.builderEdit("copy-form-id"), { replace: true });
   });
 
   it("does not hydrate the editor with a form owned by another non-admin user", async () => {

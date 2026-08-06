@@ -181,7 +181,7 @@ describe("SurveyPage", () => {
     );
   });
 
-  it("opens dashboard card navigation as preview mode", async () => {
+  it("opens dashboard card navigation as interactive preview mode", async () => {
     authState.user = { id: "user-1" };
     getFormById.mockResolvedValue({
       id: "form-1",
@@ -191,10 +191,10 @@ describe("SurveyPage", () => {
     });
 
     renderSurveyPage({
-      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "preview-navigable" } }],
+      initialEntries: [{ pathname: "/form/form-1", state: { renderMode: "preview-interactive" } }],
     });
 
-    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-navigable");
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-interactive");
     expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(getPublicFormById).not.toHaveBeenCalled();
   });

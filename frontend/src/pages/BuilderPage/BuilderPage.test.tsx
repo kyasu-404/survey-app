@@ -28,7 +28,9 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
 }));
 
 vi.mock("../../widgets/SurveyBuilder/SurveyBuilder", () => ({
-  SurveyBuilder: ({ formId }: { formId?: string }) => <div data-testid="survey-builder">{formId}</div>,
+  SurveyBuilder: ({ formId, safeEditingResponseCount }: { formId?: string; safeEditingResponseCount?: number }) => (
+    <div data-testid="survey-builder" data-safe-response-count={safeEditingResponseCount}>{formId}</div>
+  ),
 }));
 
 const answeredForm = {
@@ -73,7 +75,7 @@ describe("BuilderPage", () => {
     authState.profile = { role: "user" };
   });
 
-  it("blocks editing an answered form and creates a copy on request", async () => {
+  it("offers safe editing for an answered form and creates a copy on request", async () => {
     getFormById.mockResolvedValue(answeredForm);
     cloneForm.mockResolvedValue({ id: "copy-1" });
 
@@ -81,7 +83,7 @@ describe("BuilderPage", () => {
 
     expect(await screen.findByRole("alertdialog")).toHaveTextContent("У формы уже есть ответы");
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
-      "Создайте её копию, чтобы не нарушить существующие данные.",
+      "Форму можно открыть в безопасном режиме.",
     );
     expect(screen.queryByTestId("survey-builder")).not.toBeInTheDocument();
 
@@ -90,6 +92,16 @@ describe("BuilderPage", () => {
     await waitFor(() => expect(cloneForm).toHaveBeenCalledWith(answeredForm, "user-1"));
     expect(await screen.findByText("Копия открыта")).toBeInTheDocument();
     expect(showToast).toHaveBeenCalledWith("Копия формы создана", "success");
+  });
+
+  it("opens an answered form in safe editing mode", async () => {
+    getFormById.mockResolvedValue(answeredForm);
+
+    renderBuilderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Редактировать безопасно" }));
+
+    expect(await screen.findByTestId("survey-builder")).toHaveAttribute("data-safe-response-count", "2");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("opens the builder when the form has no responses", async () => {
@@ -101,11 +113,11 @@ describe("BuilderPage", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
-  it("returns to the dashboard when the warning is cancelled", async () => {
+  it("returns to the dashboard from the answered-form warning", async () => {
     getFormById.mockResolvedValue(answeredForm);
 
     renderBuilderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Отмена" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Назад" }));
 
     expect(await screen.findByText("Мои формы")).toBeInTheDocument();
     expect(cloneForm).not.toHaveBeenCalled();

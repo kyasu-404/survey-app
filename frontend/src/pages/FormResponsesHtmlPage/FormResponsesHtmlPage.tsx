@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
+import { getOrganizations } from "../../entities/organization/api";
+import {
+  getOrganizationDisplayName,
+  hasOrganizationQuestion,
+  normalizeOrganizationTypes,
+} from "../../entities/organization/model";
 import { getResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
@@ -59,10 +65,36 @@ export default function FormResponsesHtmlPage() {
     refetchOnReconnect: true,
   });
 
+  const usesOrganizationDirectory = Boolean(
+    formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
+  );
+  const formOrganizationTypes = normalizeOrganizationTypes(formQuery.data?.organization_types);
+  const organizationsQuery = useQuery({
+    queryKey: ["education-organizations", "form", id, ...formOrganizationTypes],
+    queryFn: ({ signal }) => getOrganizations(formOrganizationTypes, signal),
+    enabled: Boolean(id && usesOrganizationDirectory),
+    retry: 1,
+    staleTime: 30_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+
   const responses = responsesQuery.data?.data ?? [];
+  const organizationLabels = useMemo(
+    () => new Map(
+      (organizationsQuery.data ?? []).map((organization) => [
+        organization.id,
+        getOrganizationDisplayName(organization),
+      ]),
+    ),
+    [organizationsQuery.data],
+  );
   const rows = useMemo(
-    () => (formQuery.data ? formatResponsesForTable(responses, formQuery.data.schema) : []),
-    [formQuery.data, responses],
+    () => (formQuery.data
+      ? formatResponsesForTable(responses, formQuery.data.schema, organizationLabels)
+      : []),
+    [formQuery.data, organizationLabels, responses],
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
   const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
@@ -76,8 +108,11 @@ export default function FormResponsesHtmlPage() {
     () => createResponsesHtmlReport({ title: formTitle, rows, generatedAt }),
     [formTitle, generatedAt, rows],
   );
-  const isLoading = formQuery.isLoading || responsesQuery.isLoading;
-  const combinedError = [formQuery.error, responsesQuery.error].find((error) => error && !isAbortError(error)) ?? null;
+  const isLoading = formQuery.isLoading
+    || responsesQuery.isLoading
+    || (usesOrganizationDirectory && organizationsQuery.isLoading);
+  const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
+    .find((error) => error && !isAbortError(error)) ?? null;
   const canUseHtml = !isLoading && !combinedError;
 
   const handleDownload = () => {
