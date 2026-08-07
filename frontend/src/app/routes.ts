@@ -15,5 +15,6 @@ export const routes = {
   builderById: "/builder/:id",
   builderEdit: (id: string) => `/builder/${id}`,
   users: "/users",
+  settings: "/settings",
   login: "/login",
 } as const;

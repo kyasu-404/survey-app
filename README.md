@@ -58,6 +58,124 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/202608031300_organization_directory.sql
 ```
 
+## SMTP-коннектор и напоминания
+
+Администратору доступен раздел **«Настройки»** с параметрами SMTP-сервера, отправителя и тестовой отправкой. Поддерживаются:
+
+- SMTP over TLS, обычно порт `465`;
+- STARTTLS, обычно порт `587`;
+- соединение без шифрования для изолированной доверенной сети.
+
+SMTP-настройки не хранятся в файлах frontend или приложения. Сервер, порт, логин, параметры отправителя и зашифрованный пароль сохраняются в единственной строке таблицы Supabase `public.mail_settings`. В файле `docker/.env` хранится только постоянный ключ `MAIL_SETTINGS_ENCRYPTION_KEY`, необходимый для шифрования и расшифровки пароля.
+
+Пароль SMTP не возвращается во frontend. Edge Function `mail-admin` шифрует его AES-256-GCM, а расшифровать пароль может только `mail-worker`, получивший тот же `MAIL_SETTINGS_ENCRYPTION_KEY`. Не передавайте этот ключ во frontend и не добавляйте его в `frontend/.env`.
+
+Во вкладке отчёта **«Учёт сдавших»** автор формы или администратор может поставить индивидуальные напоминания в очередь. Список адресатов заново вычисляется на сервере по актуальным ответам. Если у формы есть срок сдачи, он добавляется в письмо; без срока соответствующая строка не формируется. Статусы `В очереди`, `Отправляется`, `Отправлено` и `Ошибка` сохраняются в Supabase и обновляются через Realtime. Журнал можно закрыть и снова открыть в том же отчёте.
+
+Для существующей базы сначала примените миграцию:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/202608061300_mail_reminders.sql
+```
+
+### Развёртывание с self-hosted Supabase Docker
+
+Supabase не требуется хранить внутри приложения. Ниже `SURVEY_APP_DIR` — каталог этого репозитория, а `SUPABASE_DOCKER_DIR` — каталог `docker/` из отдельно скачанного self-hosted Supabase.
+
+1. Сгенерируйте постоянный ключ шифрования. Сохраните его в менеджере секретов: при потере ключа сохранённый SMTP-пароль нельзя будет расшифровать, и его потребуется ввести заново.
+
+```bash
+openssl rand -base64 32
+```
+
+2. Скопируйте Edge Function, worker и compose-overlay в каталог Supabase:
+
+```bash
+SURVEY_APP_DIR=/opt/survey-app
+SUPABASE_DOCKER_DIR=/path/to/supabase/docker
+
+mkdir -p "$SUPABASE_DOCKER_DIR/volumes/functions/mail-admin"
+cp -R "$SURVEY_APP_DIR/functions/mail-admin/." \
+  "$SUPABASE_DOCKER_DIR/volumes/functions/mail-admin/"
+mkdir -p "$SUPABASE_DOCKER_DIR/mail-worker"
+cp -R "$SURVEY_APP_DIR/mail-worker/." \
+  "$SUPABASE_DOCKER_DIR/mail-worker/"
+cp "$SURVEY_APP_DIR/mail-worker/docker-compose.mail-worker.yml" \
+  "$SUPABASE_DOCKER_DIR/docker-compose.mail-worker.yml"
+```
+
+При повторном обновлении удалять каталог не нужно: замените в этих двух копиях только файлы из новой версии приложения.
+
+3. Добавьте в существующий `SUPABASE_DOCKER_DIR/.env` следующие значения. Это единственный файл настроек Supabase, который требуется изменить:
+
+```env
+# Один и тот же Base64-ключ для Edge Function и mail-worker.
+MAIL_SETTINGS_ENCRYPTION_KEY=PASTE_OPENSSL_OUTPUT_HERE
+
+# Публичный origin приложения, без пути и завершающего слеша.
+PUBLIC_APP_URL=https://forms.example.ru
+
+# Разрешённые origin-ы frontend через запятую.
+MAIL_ADMIN_ALLOWED_ORIGINS=https://forms.example.ru
+
+# Необязательно: частота опроса очереди и число параллельных отправок.
+MAIL_WORKER_POLL_INTERVAL_MS=3000
+MAIL_WORKER_CONCURRENCY=5
+```
+
+Переменная `SERVICE_ROLE_KEY` уже находится в стандартном `.env` Supabase. Overlay передаёт её воркеру внутри Docker-сети; не копируйте этот ключ во frontend и не публикуйте порт health-check воркера наружу.
+
+4. Из каталога `SUPABASE_DOCKER_DIR` пересоздайте Edge Runtime и запустите worker:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.mail-worker.yml \
+  up -d --build functions mail-worker
+```
+
+При последующих обычных запусках Supabase используйте обе compose-конфигурации:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.mail-worker.yml \
+  up -d
+```
+
+5. Проверьте состояние и последние логи, не выводя содержимое `.env`:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.mail-worker.yml \
+  ps functions mail-worker
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.mail-worker.yml \
+  logs --tail=100 mail-worker
+```
+
+После этого войдите администратором, откройте **«Настройки»**, сохраните SMTP-параметры и отправьте тестовое письмо. Успешный тест проверяет не только TCP-подключение, но и авторизацию, TLS и фактическую приёмку письма SMTP-сервером.
+
+Worker атомарно забирает задания через `FOR UPDATE SKIP LOCKED`, поэтому можно запустить несколько экземпляров. Неуспешная отправка повторяется до трёх раз с увеличивающейся задержкой; в интерфейс сохраняется безопасное сообщение без SMTP-пароля и низкоуровневого ответа сервера.
+
+### Развёртывание Edge Function вне self-hosted Docker
+
+Для Supabase CLI разверните функцию и передайте ей те же секреты:
+
+```bash
+supabase functions deploy mail-admin
+supabase secrets set \
+  MAIL_SETTINGS_ENCRYPTION_KEY="$MAIL_SETTINGS_ENCRYPTION_KEY" \
+  PUBLIC_APP_URL="https://forms.example.ru" \
+  MAIL_ADMIN_ALLOWED_ORIGINS="https://forms.example.ru"
+```
+
+Docker worker при этом должен получить `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` и тот же `MAIL_SETTINGS_ENCRYPTION_KEY` через секреты выбранной среды запуска.
+
 ## Запуск тестов
 
 Сначала установите зависимости фронтенда:
@@ -75,8 +193,10 @@ node --test \
   database/migrations.test.mjs \
   functions/user-admin/index.test.mjs \
   functions/form-admin/index.test.mjs \
+  functions/mail-admin/index.test.mjs \
   frontend/tooling.test.mjs \
-  frontend/Dockerfile.test.mjs
+  frontend/Dockerfile.test.mjs \
+  mail-worker/Dockerfile.test.mjs
 ```
 
 Основной frontend suite запускается из `frontend/`:
@@ -103,6 +223,15 @@ End-to-end smoke через Playwright:
 npm run test:e2e
 ```
 
+Тесты отдельного почтового worker:
+
+```bash
+cd mail-worker
+npm ci
+npm test
+npm audit --omit=dev
+```
+
 При первом запуске Playwright может потребоваться установить браузеры:
 
 ```bash
@@ -121,11 +250,12 @@ VITE_SUPABASE_STORAGE_BUCKET=survey-files
 
 Они используются в `frontend/src/shared/config/env.ts`.
 
-Для Edge Functions `user-admin` и `form-admin` можно явно задать allowlist origin-ов:
+Для Edge Functions `user-admin`, `form-admin` и `mail-admin` можно явно задать allowlist origin-ов:
 
 ```env
 USER_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
 FORM_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
+MAIL_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
 ```
 
 Локально функции по умолчанию разрешают `http://localhost:5173`, `http://127.0.0.1:5173` и private-network origin-ы на dev-портах `3000`, `4173`, `5173`, `8000` для запуска через IP машины или WSL. Для production или нестандартного порта задайте origin точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эти переменные задаются в `supabase/docker/.env` и передаются в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.

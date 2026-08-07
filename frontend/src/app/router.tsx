@@ -109,6 +109,22 @@ async function loadOrganizationsRoute() {
   };
 }
 
+async function loadSettingsRoute() {
+  const { default: SettingsPage } = await import("../pages/SettingsPage/SettingsPage");
+
+  return {
+    Component: function SettingsRoute() {
+      return (
+        <ProtectedRoute>
+          <AdminRoute>
+            <SettingsPage />
+          </AdminRoute>
+        </ProtectedRoute>
+      );
+    },
+  };
+}
+
 export const router = createBrowserRouter([
   {
     element: <AppLayout />,
@@ -162,6 +178,10 @@ export const router = createBrowserRouter([
       {
         path: routes.users,
         lazy: loadUsersRoute,
+      },
+      {
+        path: routes.settings,
+        lazy: loadSettingsRoute,
       },
       { path: routes.login, element: <LoginPage /> },
       { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },

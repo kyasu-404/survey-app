@@ -10,6 +10,7 @@ const pageLoads = vi.hoisted(() => ({
   templates: 0,
   organizations: 0,
   users: 0,
+  settings: 0,
 }));
 
 vi.mock("../pages/BuilderPage/BuilderPage", () => {
@@ -52,6 +53,11 @@ vi.mock("../pages/UsersPage/UsersPage", () => {
   return { default: () => null };
 });
 
+vi.mock("../pages/SettingsPage/SettingsPage", () => {
+  pageLoads.settings += 1;
+  return { default: () => null };
+});
+
 vi.mock("./layout/AppLayout", () => ({
   AppLayout: () => null,
 }));
@@ -86,6 +92,7 @@ describe("router", () => {
         routes.builder,
         routes.builderById,
         routes.users,
+        routes.settings,
         routes.login,
         "*",
       ]),
@@ -99,6 +106,7 @@ describe("router", () => {
     expect(routeByPath.get(routes.templates)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.organizations)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.settings)?.lazy).toBeTypeOf("function");
 
     expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeUndefined();
     expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeUndefined();
@@ -111,5 +119,6 @@ describe("router", () => {
     expect(pageLoads.templates).toBe(0);
     expect(pageLoads.organizations).toBe(0);
     expect(pageLoads.users).toBe(0);
+    expect(pageLoads.settings).toBe(0);
   }, 15_000);
 });

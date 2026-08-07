@@ -6331,6 +6331,422 @@ button.responses-report-button:focus-visible,
   background: rgba(239, 68, 68, 0.12);
 }
 
+.response-report-coverage-heading,
+.response-report-mail-actions,
+.mail-delivery-header,
+.settings-page-header,
+.settings-section-heading,
+.settings-save-row,
+.settings-test-row,
+.settings-test-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.response-report-coverage-heading {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.response-report-coverage-heading h3 {
+  margin: 0;
+}
+
+.response-report-mail-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mail-delivery-panel {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-surface-light);
+}
+
+.mail-delivery-header {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.mail-delivery-header h3,
+.mail-delivery-header p {
+  margin: 0;
+}
+
+.mail-delivery-header p {
+  margin-top: 3px;
+  color: var(--theme-text-muted);
+  font-size: 0.88rem;
+}
+
+.mail-delivery-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-text-muted);
+}
+
+.mail-batch-select {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--theme-text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.mail-batch-select select {
+  width: 100%;
+}
+
+.mail-delivery-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mail-delivery-summary span {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-muted);
+  font-size: 0.8rem;
+}
+
+.mail-delivery-summary strong {
+  color: var(--theme-text);
+  font-size: 1.05rem;
+}
+
+.mail-delivery-table-shell {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+}
+
+.mail-delivery-error {
+  max-width: 320px;
+  color: var(--theme-text-muted);
+  white-space: normal;
+}
+
+.mail-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mail-status-queued {
+  color: #854d0e;
+  background: rgba(234, 179, 8, 0.16);
+}
+
+.mail-status-processing {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.mail-status-sent {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.mail-status-failed {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.reminder-confirmation-backdrop {
+  z-index: 980;
+}
+
+.reminder-confirmation-modal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.reminder-confirmation-modal h2,
+.reminder-confirmation-modal p {
+  margin-top: 0;
+}
+
+.reminder-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.settings-page-card {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 26px;
+}
+
+.settings-page-header {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.settings-page-header p,
+.settings-page-header h1,
+.settings-page-header span {
+  margin: 0;
+}
+
+.settings-page-header p {
+  color: var(--theme-text-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-page-header h1 {
+  margin: 3px 0;
+}
+
+.settings-page-header > div > span {
+  color: var(--theme-text-muted);
+}
+
+.smtp-enable-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.smtp-enable-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.smtp-enable-track {
+  width: 44px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 160ms ease;
+}
+
+.smtp-enable-track > span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.28);
+  transition: transform 160ms ease;
+}
+
+.smtp-enable-control.active .smtp-enable-track {
+  background: var(--theme-accent);
+}
+
+.smtp-enable-control.active .smtp-enable-track > span {
+  transform: translateX(20px);
+}
+
+.smtp-enable-control:focus-within {
+  box-shadow: 0 0 0 4px var(--theme-accent-soft);
+}
+
+.settings-backend-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: 14px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.11);
+}
+
+.settings-backend-warning strong,
+.settings-backend-warning p {
+  margin: 0;
+}
+
+.settings-backend-warning p {
+  margin-top: 3px;
+  font-size: 0.86rem;
+}
+
+.settings-backend-warning button {
+  flex: 0 0 auto;
+}
+
+.settings-section {
+  padding: 20px;
+  border: 1px solid var(--theme-border);
+  border-radius: 18px;
+  background: var(--theme-control-background);
+}
+
+.settings-section + .settings-section {
+  margin-top: 14px;
+}
+
+.settings-section-heading {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.settings-section-heading h2,
+.settings-section-heading p {
+  margin: 0;
+}
+
+.settings-section-heading h2 {
+  font-size: 1.12rem;
+}
+
+.settings-section-heading p {
+  margin-top: 3px;
+  color: var(--theme-text-muted);
+  font-size: 0.86rem;
+}
+
+.settings-credential-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.settings-credential-badge.saved {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.settings-credential-badge.missing {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.13);
+}
+
+.settings-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--theme-text);
+  font-weight: 700;
+}
+
+.settings-field-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-field input,
+.settings-field select {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-field small {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.settings-form-error {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  border-radius: 12px;
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.settings-save-row {
+  justify-content: flex-start;
+  margin: 16px 0 24px;
+  color: var(--theme-text-muted);
+  font-size: 0.84rem;
+}
+
+.settings-save-button,
+.settings-test-row > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.settings-test-row {
+  align-items: end;
+}
+
+.settings-test-row .settings-field {
+  flex: 1 1 360px;
+}
+
+.settings-test-status {
+  justify-content: flex-start;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-muted);
+}
+
+.settings-test-status strong,
+.settings-test-status p {
+  margin: 0;
+}
+
+.settings-test-status p {
+  margin-top: 2px;
+  color: #991b1b;
+  font-size: 0.84rem;
+}
+
+.settings-form-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-field-skeleton {
+  min-height: 72px;
+}
+
 /* Keep every application scheme inside one color temperature. The accent is
    intentionally concentrated in actions and selected states; backgrounds,
    cards and controls use the quieter surface scale above. */
@@ -6907,6 +7323,44 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 @media (max-width: 760px) {
+  .settings-page-card {
+    padding: 18px;
+  }
+
+  .settings-page-header,
+  .settings-backend-warning,
+  .settings-section-heading,
+  .settings-test-row,
+  .response-report-coverage-heading {
+    display: grid;
+  }
+
+  .smtp-enable-control {
+    width: fit-content;
+  }
+
+  .settings-fields-grid,
+  .settings-form-skeleton,
+  .mail-delivery-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-field-wide {
+    grid-column: auto;
+  }
+
+  .response-report-mail-actions {
+    justify-content: stretch;
+  }
+
+  .response-report-mail-actions button {
+    flex: 1 1 160px;
+  }
+
+  .mail-batch-select {
+    grid-template-columns: 1fr;
+  }
+
   .organizations-page-card {
     padding: 18px;
   }

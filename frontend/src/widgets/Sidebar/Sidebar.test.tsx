@@ -2,14 +2,16 @@ import { render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
 import { Sidebar } from "./Sidebar";
+
+const authState = vi.hoisted(() => ({ role: "user" as "user" | "admin" }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
     user: { id: "user-1" },
-    profile: { role: "user" },
+    profile: { role: authState.role },
     loading: false,
   }),
 }));
@@ -23,6 +25,10 @@ function readAppCss() {
 }
 
 describe("Sidebar", () => {
+  beforeEach(() => {
+    authState.role = "user";
+  });
+
   it("links to the templates gallery as a separate tab", () => {
     render(
       <MemoryRouter>
@@ -32,6 +38,23 @@ describe("Sidebar", () => {
 
     expect(screen.getByRole("link", { name: "Шаблоны" })).toHaveAttribute("href", routes.templates);
     expect(screen.getByRole("link", { name: "Справочник ОУ" })).toHaveAttribute("href", routes.organizations);
+  });
+
+  it("shows Settings only to administrators", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <Sidebar onToggle={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("link", { name: "Настройки" })).not.toBeInTheDocument();
+
+    authState.role = "admin";
+    rerender(
+      <MemoryRouter>
+        <Sidebar onToggle={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Настройки" })).toHaveAttribute("href", routes.settings);
   });
 
   it("keeps the logout action in a separate sidebar footer", () => {

@@ -61,9 +61,14 @@ export function Sidebar({ onToggle }: SidebarProps) {
               Конструктор
             </NavLink>
             {profile?.role === "admin" && (
-              <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.users}>
-                Пользователи
-              </NavLink>
+              <>
+                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.users}>
+                  Пользователи
+                </NavLink>
+                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.settings}>
+                  Настройки
+                </NavLink>
+              </>
             )}
           </>
         )}

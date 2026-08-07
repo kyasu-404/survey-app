@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { useToast } from "../../app/providers/ToastProvider";
+import { queueFormReminders } from "../../entities/mail/api";
 import { getOrganizationDisplayName, getOrganizationTypeLabel } from "../../entities/organization/model";
+import { getErrorMessage } from "../../shared/lib/error";
 import type {
   ResponseQuestionAnalysisKind,
   ResponseReport,
@@ -7,6 +10,8 @@ import type {
   ResponseReportMetric,
   ResponseReportValue,
 } from "../../shared/lib/responseReport";
+import { MailDeliveryPanel } from "./MailDeliveryPanel";
+import { ReminderConfirmationModal } from "./ReminderConfirmationModal";
 
 const ANALYSIS_KIND_LABELS: Record<ResponseQuestionAnalysisKind, string> = {
   "single-choice": "Распределение ответов",
@@ -66,9 +71,44 @@ function Group({ group }: { group: ResponseReportGroup }) {
   );
 }
 
-export function ResponseReportModal({ report, onClose }: { report: ResponseReport; onClose: () => void }) {
+export function ResponseReportModal({
+  report,
+  formId,
+  canSendReminders,
+  onClose,
+}: {
+  report: ResponseReport;
+  formId: string;
+  canSendReminders: boolean;
+  onClose: () => void;
+}) {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<"statistics" | "coverage">("statistics");
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [isQueueingReminders, setIsQueueingReminders] = useState(false);
+  const [isMailActivityOpen, setIsMailActivityOpen] = useState(false);
+  const [preferredBatchId, setPreferredBatchId] = useState<string | null>(null);
   const coverage = report.organizationCoverage;
+
+  const handleQueueReminders = async () => {
+    setIsQueueingReminders(true);
+    try {
+      const result = await queueFormReminders(formId);
+      setIsConfirmationOpen(false);
+      setPreferredBatchId(result.batchId);
+      setIsMailActivityOpen(true);
+      showToast(
+        result.queuedCount > 0
+          ? `Поставлено в очередь писем: ${result.queuedCount}`
+          : "Все организации уже предоставили ответ",
+        result.queuedCount > 0 ? "success" : "warning",
+      );
+    } catch (error) {
+      showToast(getErrorMessage(error, "Не удалось сформировать рассылку"), "error");
+    } finally {
+      setIsQueueingReminders(false);
+    }
+  };
 
   return (
     <div className="modal-backdrop response-report-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -153,7 +193,28 @@ export function ResponseReportModal({ report, onClose }: { report: ResponseRepor
             </div>
 
             <section className="response-report-section">
-              <h3>Статус сдачи</h3>
+              <div className="response-report-coverage-heading">
+                <h3>Статус сдачи</h3>
+                {canSendReminders && (
+                  <div className="response-report-mail-actions">
+                    <button
+                      type="button"
+                      className="app-button"
+                      onClick={() => setIsMailActivityOpen((current) => !current)}
+                    >
+                      {isMailActivityOpen ? "Скрыть статусы" : "Статусы отправки"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button-primary"
+                      onClick={() => setIsConfirmationOpen(true)}
+                      disabled={coverage.missingOrganizations.length === 0 || isQueueingReminders}
+                    >
+                      Отправить напоминание
+                    </button>
+                  </div>
+                )}
+              </div>
               {coverage.expectedCount === 0 ? (
                 <p className="response-report-empty">Для формы не выбраны организации.</p>
               ) : (
@@ -182,9 +243,24 @@ export function ResponseReportModal({ report, onClose }: { report: ResponseRepor
                 </div>
               )}
             </section>
+
+            {isMailActivityOpen && (
+              <MailDeliveryPanel
+                formId={formId}
+                preferredBatchId={preferredBatchId}
+                onClose={() => setIsMailActivityOpen(false)}
+              />
+            )}
           </div>
         )}
       </div>
+      {isConfirmationOpen && (
+        <ReminderConfirmationModal
+          isPending={isQueueingReminders}
+          onCancel={() => setIsConfirmationOpen(false)}
+          onConfirm={() => void handleQueueReminders()}
+        />
+      )}
     </div>
   );
 }

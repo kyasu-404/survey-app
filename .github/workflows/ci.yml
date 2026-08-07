@@ -44,10 +44,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            mail-worker/package-lock.json
 
       - name: Validate repository policies and migrations
-        run: node --test database/supabase_schema.test.mjs database/migrations.test.mjs functions/user-admin/index.test.mjs functions/form-admin/index.test.mjs frontend/tooling.test.mjs frontend/Dockerfile.test.mjs
+        run: node --test database/supabase_schema.test.mjs database/migrations.test.mjs functions/user-admin/index.test.mjs functions/form-admin/index.test.mjs functions/mail-admin/index.test.mjs frontend/tooling.test.mjs frontend/Dockerfile.test.mjs mail-worker/Dockerfile.test.mjs
+
+      - name: Install mail worker dependencies
+        working-directory: mail-worker
+        run: npm ci
+
+      - name: Audit and test mail worker
+        working-directory: mail-worker
+        run: npm audit --omit=dev && npm test
 
       - name: Install frontend dependencies
         working-directory: frontend

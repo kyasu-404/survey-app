@@ -39,6 +39,10 @@ const safeAnsweredFormEditingMigration = readFileSync(
   new URL("./migrations/202608061200_safe_answered_form_editing.sql", import.meta.url),
   "utf8",
 );
+const mailRemindersMigration = readFileSync(
+  new URL("./migrations/202608061300_mail_reminders.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
   "title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing";
@@ -373,6 +377,20 @@ test("organization directory is admin-managed and exposes only selectable fields
 test("forms and responses are published to realtime", () => {
   assert.match(schema, /alter publication supabase_realtime add table public\.forms;/i);
   assert.match(schema, /alter publication supabase_realtime add table public\.responses;/i);
+});
+
+test("mail credentials stay service-only while delivery status is readable through RLS", () => {
+  assert.match(schema, /create table public\.mail_settings[\s\S]*password_encrypted text not null/i);
+  assert.match(schema, /revoke all on table public\.mail_settings, public\.mail_batches, public\.mail_queue from anon, authenticated/i);
+  assert.match(schema, /grant select on table public\.mail_batches, public\.mail_queue to authenticated/i);
+  assert.match(schema, /create policy "mail_queue_select"[\s\S]*public\.can_read_mail_batch\(batch_id\)/i);
+  assert.match(schema, /alter publication supabase_realtime add table public\.mail_queue;/i);
+
+  const claimJobs = getFunctionDefinition("claim_mail_jobs");
+  assert.match(claimJobs, /for update skip locked/i);
+  assert.match(claimJobs, /q\.status = 'processing'/i);
+  assert.match(mailRemindersMigration, /grant execute on function public\.claim_mail_jobs\(text, integer\) to service_role/i);
+  assert.doesNotMatch(mailRemindersMigration, /grant execute on function public\.claim_mail_jobs\(text, integer\) to authenticated/i);
 });
 
 test("list and search indexes support stable paginated reads", () => {

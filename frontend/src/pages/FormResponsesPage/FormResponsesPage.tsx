@@ -699,7 +699,12 @@ export default function FormResponsesPage() {
         </div>
       )}
       {responseReport && (
-        <ResponseReportModal report={responseReport} onClose={() => setResponseReport(null)} />
+        <ResponseReportModal
+          report={responseReport}
+          formId={id}
+          canSendReminders={canDeleteResponses}
+          onClose={() => setResponseReport(null)}
+        />
       )}
     </div>
   );

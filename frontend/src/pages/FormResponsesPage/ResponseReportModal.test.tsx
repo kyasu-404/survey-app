@@ -4,6 +4,24 @@ import { describe, expect, it, vi } from "vitest";
 import type { ResponseReport } from "../../shared/lib/responseReport";
 import { ResponseReportModal } from "./ResponseReportModal";
 
+const { queueFormRemindersMock, showToastMock } = vi.hoisted(() => ({
+  queueFormRemindersMock: vi.fn(),
+  showToastMock: vi.fn(),
+}));
+
+vi.mock("../../app/providers/ToastProvider", () => ({
+  useToast: () => ({ showToast: showToastMock }),
+}));
+
+vi.mock("../../entities/mail/api", () => ({
+  queueFormReminders: (...args: unknown[]) => queueFormRemindersMock(...args),
+  getFormMailActivity: vi.fn().mockResolvedValue({ batches: [], jobs: [] }),
+}));
+
+vi.mock("./MailDeliveryPanel", () => ({
+  MailDeliveryPanel: () => <div>Журнал отправки</div>,
+}));
+
 const baseReport: ResponseReport = {
   totalResponses: 2,
   questionReports: [{
@@ -42,7 +60,7 @@ const missingOrganization = {
 
 describe("ResponseReportModal", () => {
   it("shows type-specific statistics and disables submission tracking without an organization field", () => {
-    render(<ResponseReportModal report={baseReport} onClose={vi.fn()} />);
+    render(<ResponseReportModal report={baseReport} formId="form-1" canSendReminders onClose={vi.fn()} />);
 
     expect(screen.getByRole("tab", { name: "Статистика" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Учёт сдавших" })).toBeDisabled();
@@ -64,6 +82,8 @@ describe("ResponseReportModal", () => {
             missingOrganizations: [missingOrganization],
           },
         }}
+        formId="form-1"
+        canSendReminders
         onClose={vi.fn()}
       />,
     );
@@ -74,5 +94,32 @@ describe("ResponseReportModal", () => {
     expect(screen.getByText("Сдано")).toBeInTheDocument();
     expect(screen.getByText("Не сдано")).toBeInTheDocument();
     expect(screen.queryByText("Выберите вариант")).not.toBeInTheDocument();
+  });
+
+  it("confirms and queues one reminder batch for missing organizations", async () => {
+    queueFormRemindersMock.mockResolvedValueOnce({ batchId: "batch-1", queuedCount: 1 });
+    render(
+      <ResponseReportModal
+        report={{
+          ...baseReport,
+          organizationCoverage: {
+            expectedCount: 1,
+            submittedCount: 0,
+            submittedOrganizations: [],
+            missingOrganizations: [missingOrganization],
+          },
+        }}
+        formId="form-1"
+        canSendReminders
+        onClose={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Учёт сдавших" }));
+    await userEvent.click(screen.getByRole("button", { name: "Отправить напоминание" }));
+    expect(screen.getByText("Отправить на почту напоминания организациям, которые не предоставили ответ?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Да" }));
+
+    expect(queueFormRemindersMock).toHaveBeenCalledWith("form-1");
   });
 });

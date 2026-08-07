@@ -1,0 +1,28 @@
+services:
+  functions:
+    environment:
+      MAIL_SETTINGS_ENCRYPTION_KEY: ${MAIL_SETTINGS_ENCRYPTION_KEY}
+      MAIL_ADMIN_ALLOWED_ORIGINS: ${MAIL_ADMIN_ALLOWED_ORIGINS}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+
+  mail-worker:
+    build:
+      context: ./mail-worker
+    container_name: survey-mail-worker
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      MAIL_SETTINGS_ENCRYPTION_KEY: ${MAIL_SETTINGS_ENCRYPTION_KEY}
+      MAIL_WORKER_POLL_INTERVAL_MS: ${MAIL_WORKER_POLL_INTERVAL_MS:-3000}
+      MAIL_WORKER_CONCURRENCY: ${MAIL_WORKER_CONCURRENCY:-5}
+      MAIL_WORKER_HEALTH_PORT: 8080
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
