@@ -120,6 +120,7 @@ function createQueryClient() {
 
 function createTemplatesPage(items: SurveyForm[], totalCount = items.length) {
   return {
+    hasMore: items.length === 20,
     items,
     totalCount,
   };

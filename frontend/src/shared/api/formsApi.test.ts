@@ -223,7 +223,7 @@ describe("fetchDashboardFormsPage", () => {
     vi.resetAllMocks();
   });
 
-  it("requests the first 20 newest dashboard forms from the server", async () => {
+  it("requests one lookahead item after the first 20 newest dashboard forms", async () => {
     const listQuery = createSummaryQuery({
       data: [],
       count: 75,
@@ -238,13 +238,40 @@ describe("fetchDashboardFormsPage", () => {
         pageSize: 20,
       }),
     ).resolves.toEqual({
+      hasMore: false,
       items: [],
-      totalCount: 75,
+      totalCount: 0,
     });
 
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
-    expect(listQuery.range).toHaveBeenCalledWith(0, 19);
+    expect(listQuery.range).toHaveBeenCalledWith(0, 20);
+  });
+
+  it("uses the lookahead item to report another dashboard page without returning it", async () => {
+    const data = Array.from({ length: 21 }, (_, index) => ({
+      id: `form-${index + 1}`,
+      title: `Form ${index + 1}`,
+      form_type: "anketa",
+      form_reason: "plan",
+      is_public: true,
+      deadline_at: null,
+      max_responses: null,
+      author_id: "user-1",
+      author_name: "Автор",
+      created_at: `2026-04-01T10:${String(index).padStart(2, "0")}:00.000Z`,
+      responses_count: 0,
+    }));
+    const listQuery = createSummaryQuery({ data, count: null, error: null });
+
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+
+    const result = await fetchDashboardFormsPage({ page: 0, pageSize: 20 });
+
+    expect(result.hasMore).toBe(true);
+    expect(result.items).toHaveLength(20);
+    expect(result.items[19]?.id).toBe("form-20");
+    expect(result.totalCount).toBe(21);
   });
 
   it("passes abort signals to paginated dashboard requests", async () => {
@@ -267,7 +294,7 @@ describe("fetchDashboardFormsPage", () => {
     expect(listQuery.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
   });
 
-  it("fetches lightweight dashboard cards with planned count and server range", async () => {
+  it("fetches lightweight dashboard cards without a planned count", async () => {
     const listQuery = createSummaryQuery({
       data: [
         {
@@ -300,6 +327,7 @@ describe("fetchDashboardFormsPage", () => {
         },
       }),
     ).resolves.toEqual({
+      hasMore: false,
       items: [
         expect.objectContaining({
           id: "form-1",
@@ -307,19 +335,13 @@ describe("fetchDashboardFormsPage", () => {
           responses_count: 3,
         }),
       ],
-      totalCount: 41,
+      totalCount: 21,
     });
 
-    expect(listQuery.select).toHaveBeenCalledWith(
-      expect.stringContaining("author_name"),
-      { count: "planned" },
-    );
-    expect(listQuery.select).toHaveBeenCalledWith(
-      expect.not.stringContaining("profiles:author_id"),
-      { count: "planned" },
-    );
+    expect(listQuery.select).toHaveBeenCalledWith(expect.stringContaining("author_name"));
+    expect(listQuery.select).toHaveBeenCalledWith(expect.not.stringContaining("profiles:author_id"));
     expect(listQuery.neq).toHaveBeenCalledWith("form_type", "template");
-    expect(listQuery.range).toHaveBeenCalledWith(20, 39);
+    expect(listQuery.range).toHaveBeenCalledWith(20, 40);
   });
 
   it("applies both type and reason filters to dashboard queries", async () => {
@@ -373,6 +395,7 @@ describe("fetchDashboardFormsPage", () => {
         pageSize: 20,
       }),
     ).resolves.toEqual({
+      hasMore: false,
       items: [
         expect.objectContaining({
           id: "form-1",
@@ -413,6 +436,7 @@ describe("fetchDashboardFormsPage", () => {
         pageSize: 20,
       }),
     ).resolves.toEqual({
+      hasMore: false,
       items: [
         expect.objectContaining({
           id: "form-1",
@@ -431,7 +455,7 @@ describe("fetchTemplateFormsPage", () => {
     vi.resetAllMocks();
   });
 
-  it("fetches lightweight template cards without schema payload", async () => {
+  it("fetches lightweight template cards with a lookahead item and without a planned count", async () => {
     const listQuery = createSummaryQuery({
       data: [
         {
@@ -461,26 +485,21 @@ describe("fetchTemplateFormsPage", () => {
         },
       }),
     ).resolves.toEqual({
+      hasMore: false,
       items: [
         expect.objectContaining({
           id: "template-1",
           author_name: "Автор",
         }),
       ],
-      totalCount: 9,
+      totalCount: 1,
     });
 
-    expect(listQuery.select).toHaveBeenCalledWith(
-      expect.stringContaining("author_name"),
-      { count: "planned" },
-    );
-    expect(listQuery.select).toHaveBeenCalledWith(
-      expect.not.stringContaining("profiles:author_id"),
-      { count: "planned" },
-    );
+    expect(listQuery.select).toHaveBeenCalledWith(expect.stringContaining("author_name"));
+    expect(listQuery.select).toHaveBeenCalledWith(expect.not.stringContaining("profiles:author_id"));
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
-    expect(listQuery.range).toHaveBeenCalledWith(0, 23);
+    expect(listQuery.range).toHaveBeenCalledWith(0, 24);
   });
 });
 

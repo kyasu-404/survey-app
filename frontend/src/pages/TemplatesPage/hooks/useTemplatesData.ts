@@ -42,8 +42,7 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
                 isPublic: true,
               },
       }),
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.items.length === TEMPLATE_PAGE_SIZE ? allPages.length : undefined,
+    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
     enabled: !isAuthLoading && (section === "public" || Boolean(userId)),
     retry: 1,
     staleTime: 30_000,

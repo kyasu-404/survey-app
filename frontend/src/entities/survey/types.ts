@@ -60,6 +60,7 @@ export type SurveyForm = {
 export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme" | "allow_response_editing">;
 
 export type PaginatedSurveyFormSummaries = {
+  hasMore: boolean;
   items: SurveyFormSummary[];
   totalCount: number;
 };

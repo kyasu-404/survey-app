@@ -96,8 +96,23 @@ const TEMPLATE_FORMS_SUMMARY_SELECT = `
   created_at
 `;
 
-const PAGINATED_COUNT_MODE = "planned";
 const DASHBOARD_FORMS_STATS_RPC = "get_dashboard_forms_stats";
+
+function createPaginatedFormSummaries(
+  forms: SurveyFormSummary[],
+  rangeFrom: number,
+  pageSize: number,
+): PaginatedSurveyFormSummaries {
+  const hasMore = forms.length > pageSize;
+  const items = forms.slice(0, pageSize);
+  const loadedCountLowerBound = rangeFrom + items.length + (hasMore ? 1 : 0);
+
+  return {
+    hasMore,
+    items,
+    totalCount: loadedCountLowerBound,
+  };
+}
 
 async function getFunctionErrorMessage(error: unknown, response?: Response): Promise<string> {
   const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
@@ -338,18 +353,18 @@ export async function fetchDashboardFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
   const rangeFrom = Math.max(options.page, 0) * options.pageSize;
-  const rangeTo = rangeFrom + options.pageSize - 1;
+  const rangeTo = rangeFrom + options.pageSize;
 
   let query = apiClient
     .from("forms")
-    .select(DASHBOARD_FORMS_SUMMARY_SELECT, { count: PAGINATED_COUNT_MODE })
+    .select(DASHBOARD_FORMS_SUMMARY_SELECT)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .neq("form_type", TEMPLATE_FORM_TYPE);
 
   query = applyFormsFilters(query, options.filters);
 
-  const { data, count, error } = await runRequest(
+  const { data, error } = await runRequest(
     "forms.fetchDashboardPage",
     (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
     {
@@ -366,29 +381,28 @@ export async function fetchDashboardFormsPage(
     throw error;
   }
 
-  return {
-    items: ((data ?? []) as RawFormSummary[])
-      .map(mapRawFormSummary)
-      .map((form) => syncFetchedFormState(form)),
-    totalCount: count ?? 0,
-  };
+  const forms = ((data ?? []) as RawFormSummary[])
+    .map(mapRawFormSummary)
+    .map((form) => syncFetchedFormState(form));
+
+  return createPaginatedFormSummaries(forms, rangeFrom, options.pageSize);
 }
 
 export async function fetchTemplateFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
   const rangeFrom = Math.max(options.page, 0) * options.pageSize;
-  const rangeTo = rangeFrom + options.pageSize - 1;
+  const rangeTo = rangeFrom + options.pageSize;
 
   let query = apiClient
     .from("forms")
-    .select(TEMPLATE_FORMS_SUMMARY_SELECT, { count: PAGINATED_COUNT_MODE })
+    .select(TEMPLATE_FORMS_SUMMARY_SELECT)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
 
   query = applyFormsFilters(query, options.filters);
 
-  const { data, count, error } = await runRequest(
+  const { data, error } = await runRequest(
     "forms.fetchTemplatePage",
     (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
     {
@@ -405,10 +419,9 @@ export async function fetchTemplateFormsPage(
     throw error;
   }
 
-  return {
-    items: ((data ?? []) as RawFormSummary[]).map(mapRawFormSummary),
-    totalCount: count ?? 0,
-  };
+  const forms = ((data ?? []) as RawFormSummary[]).map(mapRawFormSummary);
+
+  return createPaginatedFormSummaries(forms, rangeFrom, options.pageSize);
 }
 
 export async function fetchDashboardFormsStats(

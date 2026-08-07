@@ -180,6 +180,7 @@ function createQueryClient() {
 
 function createDashboardPage(items: SurveyForm[], totalCount = items.length) {
   return {
+    hasMore: items.length === 20,
     items,
     totalCount,
   };
@@ -534,6 +535,21 @@ describe("DashboardPage", () => {
     });
     expect(await screen.findByText("Форма 25")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Количество форм" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer another page when the lookahead confirms exactly 20 forms", async () => {
+    const forms = Array.from({ length: 20 }, (_, index) => createForm(index + 1));
+
+    getDashboardFormsPage.mockResolvedValue({
+      ...createDashboardPage(forms, forms.length),
+      hasMore: false,
+    });
+    getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
+
+    renderPage();
+
+    expect(await screen.findByText("Форма 20")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Показать ещё" })).not.toBeInTheDocument();
   });
 
   it("keeps pagination available when planned count underestimates a full dashboard page", async () => {

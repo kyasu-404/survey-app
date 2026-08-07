@@ -57,8 +57,7 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
         filters: filters.listFilters,
         signal,
       }),
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.items.length === DASHBOARD_PAGE_SIZE ? allPages.length : undefined,
+    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
     retry: 1,
     staleTime: 30_000,
