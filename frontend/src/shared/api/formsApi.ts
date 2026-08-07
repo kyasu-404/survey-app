@@ -21,6 +21,8 @@ import {
   getSurveyThemeAssetPaths,
   materializeSurveyThemeAssets,
   removeSurveyAssetPaths,
+  resolveSurveyThemeAssetUrls,
+  serializeSurveyThemeAssetUrls,
 } from "./themeAssets";
 
 export type FormsFilters = {
@@ -207,7 +209,7 @@ function syncFetchedFormState<
 function mapRawForm(form: RawForm): SurveyForm {
   return {
     ...form,
-    theme: resolveSurveyTheme(form.theme),
+    theme: resolveSurveyTheme(resolveSurveyThemeAssetUrls(form.theme)),
     author_email: null,
     author_name: form.author_name ?? null,
     responses_count: form.responses_count ?? 0,
@@ -516,7 +518,7 @@ export async function insertForm(payload: {
           form_type: payload.formType,
           form_reason: payload.formReason,
           schema: payload.schema,
-          theme: materialized.theme,
+          theme: serializeSurveyThemeAssetUrls(materialized.theme),
           deadline_at: deadlinePayload.deadline_at ?? null,
           max_responses: normalizedMaxResponses,
           allow_response_editing: payload.allowResponseEditing ?? false,
@@ -641,7 +643,7 @@ export async function updateFormSchema(
         action: "update-schema",
         formId: id,
         schema,
-        theme: materialized.theme,
+        theme: serializeSurveyThemeAssetUrls(materialized.theme),
         title,
         allowResponseEditing,
         organizationTypes: normalizeOrganizationTypes(organizationTypes),

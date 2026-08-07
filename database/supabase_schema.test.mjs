@@ -175,7 +175,7 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
     /grant select, insert, delete on table public\.forms to authenticated;/i,
   );
   assert.match(schema, /revoke insert on table public\.responses from anon;/i);
-  assert.match(schema, /grant select on table public\.responses to authenticated;/i);
+  assert.match(schema, /grant select \(id, form_id, data, created_at, updated_at\) on table public\.responses to authenticated;/i);
   assert.match(schema, /revoke insert on table public\.responses from authenticated;/i);
   assert.match(schema, /grant execute on function public\.get_form_response_status\(uuid, uuid\) to anon, authenticated, service_role;/i);
   assert.match(schema, /grant execute on function public\.submit_form_response\(uuid, uuid, uuid, jsonb\) to anon, authenticated, service_role;/i);
@@ -334,11 +334,11 @@ test("response submission is limited to one response per browser and remains ide
   assert.match(schema, /create unique index idx_responses_form_browser_id on public\.responses\(form_id, browser_id\) where browser_id is not null/i);
   const submitFunction = getFunctionDefinition("submit_form_response");
   assert.match(submitFunction, /pg_advisory_xact_lock/i);
-  assert.match(submitFunction, /r\.browser_id = p_browser_id/i);
+  assert.match(submitFunction, /r\.browser_id = public\.browser_capability_hash\(p_browser_id\)/i);
   assert.match(submitFunction, /'already_submitted'::text/i);
   assert.match(responseManagementMigration, /revoke insert on table public\.responses from anon, authenticated/i);
   const responseStatusFunction = getFunctionDefinition("get_form_response_status");
-  assert.match(responseStatusFunction, /r\.browser_id = p_browser_id/i);
+  assert.match(responseStatusFunction, /r\.browser_id = public\.browser_capability_hash\(p_browser_id\)/i);
   assert.doesNotMatch(responseStatusFunction, /insert into public\.responses/i);
 });
 
@@ -353,7 +353,7 @@ test("answered form schemas are updated only through the server compatibility ga
   );
   const updateResponse = getFunctionDefinition("update_form_response");
   assert.match(updateResponse, /not target_form\.allow_response_editing/i);
-  assert.match(updateResponse, /r\.browser_id = p_browser_id/i);
+  assert.match(updateResponse, /r\.browser_id = public\.browser_capability_hash\(p_browser_id\)/i);
   assert.match(responseManagementMigration, /forms_prevent_answered_schema_update/i);
 });
 
@@ -434,10 +434,63 @@ test("dashboard form stats use one aggregate rpc with nullable filters", () => {
   );
   assert.match(statsFunction, /from public\.forms f/i);
   assert.match(statsFunction, /f\.form_type <> 'template'/i);
-  assert.match(statsFunction, /count\(\*\) filter \(where f\.is_public = true\)/i);
-  assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at is not null\)/i);
+  assert.match(statsFunction, /count\(\*\) filter \([\s\S]*?f\.is_public = true[\s\S]*?f\.deadline_at > now\(\)/i);
+  assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at > now\(\)\)/i);
   assert.match(
     schema,
     /grant execute on function public\.get_dashboard_forms_stats\(text, timestamptz, timestamptz, uuid, text, text, boolean\) to authenticated, service_role;/i,
   );
+});
+
+test("response listing does not disclose browser edit capabilities", () => {
+  const capabilityHash = getFunctionDefinition("browser_capability_hash");
+  const submitFunction = getFunctionDefinition("submit_form_response");
+
+  assert.match(capabilityHash, /select md5\(value::text\)::uuid/i);
+  assert.match(submitFunction, /values \(p_form_id, public\.browser_capability_hash\(p_browser_id\), p_submission_id, p_data\)/i);
+  assert.match(schema, /revoke select on table public\.responses from authenticated;/i);
+  assert.match(
+    schema,
+    /grant select \(id, form_id, data, created_at, updated_at\) on table public\.responses to authenticated;/i,
+  );
+  assert.doesNotMatch(schema, /grant select on table public\.responses to authenticated;/i);
+});
+
+test("public response payloads are checked against the form schema and organization directory", () => {
+  const validator = getFunctionDefinition("response_data_matches_form");
+  const submitFunction = getFunctionDefinition("submit_form_response");
+  const updateFunction = getFunctionDefinition("update_form_response");
+
+  assert.match(validator, /jsonb_object_keys\(response_data\)/i);
+  assert.match(validator, /jsonb_path_query\(form_schema, '\$\.\*\* \? \(@\.type\(\) == "object"\)'/i);
+  assert.match(validator, /from public\.education_organizations/i);
+  assert.match(submitFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
+  assert.match(updateFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
+});
+
+test("anonymous survey uploads have a small provisional orphan budget", () => {
+  const uploadGuard = getFunctionDefinition("can_upload_survey_file");
+
+  assert.match(uploadGuard, /orphan_count bigint/i);
+  assert.match(uploadGuard, /left join public\.response_file_references/i);
+  assert.match(uploadGuard, /orphan_count < 20/i);
+  assert.match(uploadGuard, /orphan_bytes \+ object_size <= 104857600/i);
+});
+
+test("reminder batches are enqueued atomically under a per-form lock", () => {
+  const enqueue = getFunctionDefinition("enqueue_mail_reminder_batch");
+
+  assert.match(enqueue, /pg_advisory_xact_lock/i);
+  assert.match(enqueue, /status in \('queued', 'processing'\)/i);
+  assert.match(enqueue, /insert into public\.mail_batches/i);
+  assert.match(enqueue, /insert into public\.mail_queue/i);
+  assert.match(schema, /grant execute on function public\.enqueue_mail_reminder_batch\(uuid, uuid, uuid, jsonb\) to service_role;/i);
+  assert.doesNotMatch(schema, /grant execute on function public\.enqueue_mail_reminder_batch[^;]+to authenticated/i);
+});
+
+test("dashboard active statistics treat expired forms as closed", () => {
+  const statsFunction = getFunctionDefinition("get_dashboard_forms_stats");
+
+  assert.match(statsFunction, /f\.is_public = true\s+and \(f\.deadline_at is null or f\.deadline_at > now\(\)\)/i);
+  assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at > now\(\)\)/i);
 });

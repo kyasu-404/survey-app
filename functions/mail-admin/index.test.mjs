@@ -40,5 +40,8 @@ test("keeps SMTP credentials server-side and restricts administrative actions", 
   assert.match(source, /form\.author_id !== profile\.id && profile\.role !== "admin"/);
   assert.match(source, /list_missing_form_organizations/);
   assert.match(source, /MAIL_ADMIN_ALLOWED_ORIGINS/);
+  assert.match(source, /rpc\("enqueue_mail_reminder_batch"/);
+  assert.doesNotMatch(source, /const \{ data: activeJob/);
+  assert.doesNotMatch(source, /configured \|\| req\.headers\.get\("Origin"\)/);
   assert.doesNotMatch(source, /Access-Control-Allow-Origin": "\*"/);
 });

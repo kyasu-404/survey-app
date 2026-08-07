@@ -2544,6 +2544,10 @@ textarea:focus {
   align-self: flex-start;
 }
 
+.responses-page-pagination button {
+  min-height: 40px;
+}
+
 .responses-selection-bar {
   display: flex;
   flex-wrap: wrap;
@@ -4150,6 +4154,18 @@ button.responses-export-button:disabled {
 .responses-page-limit-note,
 .responses-page-total {
   margin: 0;
+}
+
+.responses-page-footer,
+.responses-page-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.responses-page-footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .responses-pagination-actions {
@@ -6483,6 +6499,10 @@ button.responses-report-button:focus-visible,
 .reminder-confirmation-modal h2,
 .reminder-confirmation-modal p {
   margin-top: 0;
+}
+
+.reminder-confirmation-modal h2 {
+  text-align: center;
 }
 
 .reminder-confirmation-actions {

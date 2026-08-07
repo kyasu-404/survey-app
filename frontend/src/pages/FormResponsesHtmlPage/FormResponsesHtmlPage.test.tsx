@@ -180,6 +180,41 @@ describe("FormResponsesHtmlPage", () => {
     expect(screen.getByText("Хорошее")).toBeInTheDocument();
   });
 
+  it("loads every response page for the HTML report", async () => {
+    getFormById.mockResolvedValue({
+      id: "form-1",
+      title: "Полный отчёт",
+      created_at: "2026-04-08T10:00:00.000Z",
+      is_public: true,
+      author_id: "user-1",
+      form_type: "anketa",
+      form_reason: "plan",
+      deadline_at: null,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    const firstPage = Array.from({ length: 50 }, (_, index): SurveyResponse => ({
+      id: `response-${index + 1}`,
+      form_id: "form-1",
+      created_at: "2026-04-08T11:30:00.000Z",
+      data: { name: `Ответ ${index + 1}` },
+    }));
+    getResponsesByForm.mockImplementation((_formId: string, options: { page?: number }) => Promise.resolve(
+      options.page === 2
+        ? createResponsesPage([{
+            id: "response-51",
+            form_id: "form-1",
+            created_at: "2026-04-08T11:31:00.000Z",
+            data: { name: "Ответ 51" },
+          }], { page: 2 })
+        : createResponsesPage(firstPage, { pageSize: 50, totalPages: 2 }),
+    ));
+
+    renderHtmlPage();
+
+    expect(await screen.findByText("Ответ 51")).toBeInTheDocument();
+    expect(getResponsesByForm).toHaveBeenCalledWith("form-1", expect.objectContaining({ page: 2 }));
+  });
+
   it("resolves organization identifiers in both the HTML preview and downloaded document", async () => {
     const organizationId = "9a109521-b000-4d86-909e-119fa58594c9";
     getFormById.mockResolvedValue({

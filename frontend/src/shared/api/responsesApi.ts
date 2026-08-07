@@ -8,15 +8,15 @@ import { apiClient, supabaseClient } from "./client";
 import { runRequest } from "./request";
 
 export const RESPONSES_PAGE_SIZE = 50;
+export const MAX_CLIENT_RESPONSE_EXPORT = 10_000;
 const MIN_RESPONSES_PAGE_SIZE = 1;
 const MAX_RESPONSES_PAGE_SIZE = 100;
 const PAGINATED_COUNT_MODE = "planned";
+const SAFE_RESPONSE_LIST_COLUMNS = "id, form_id, data, created_at, updated_at";
 
 export type FetchResponsesByFormOptions = {
   page?: number;
   pageSize?: number;
-  dateFrom?: string;
-  dateToExclusive?: string;
   signal?: AbortSignal;
 };
 
@@ -253,17 +253,10 @@ export async function fetchResponsesByForm(
   const { data, error, count } = await runRequest(
     "responses.fetchByForm",
     (signal) => {
-      let query = apiClient
+      const query = apiClient
         .from("responses")
-        .select("*", { count: PAGINATED_COUNT_MODE })
+        .select(SAFE_RESPONSE_LIST_COLUMNS, { count: PAGINATED_COUNT_MODE })
         .eq("form_id", formId);
-
-      if (options.dateFrom) {
-        query = query.gte("created_at", options.dateFrom);
-      }
-      if (options.dateToExclusive) {
-        query = query.lt("created_at", options.dateToExclusive);
-      }
 
       const orderedQuery = query
         .order("created_at", { ascending: false })
@@ -277,8 +270,6 @@ export async function fetchResponsesByForm(
         formId,
         page,
         pageSize,
-        dateFrom: options.dateFrom ?? null,
-        dateToExclusive: options.dateToExclusive ?? null,
       },
     },
   );
@@ -294,4 +285,23 @@ export async function fetchResponsesByForm(
     pageSize,
     totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
   };
+}
+
+export async function fetchAllResponsesByForm(
+  formId: string,
+  options: Omit<FetchResponsesByFormOptions, "page" | "pageSize"> = {},
+) {
+  const pageSize = MAX_RESPONSES_PAGE_SIZE;
+  const responses: SurveyResponse[] = [];
+  let page = 1;
+
+  for (;;) {
+    const currentPage = await fetchResponsesByForm(formId, { ...options, page, pageSize });
+    if (responses.length + currentPage.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
+      throw new Error(`В одной клиентской выгрузке поддерживается не более ${MAX_CLIENT_RESPONSE_EXPORT} ответов`);
+    }
+    responses.push(...currentPage.data);
+    if (currentPage.data.length < pageSize) return responses;
+    page += 1;
+  }
 }

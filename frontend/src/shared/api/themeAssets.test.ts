@@ -4,6 +4,8 @@ import {
   BUILT_IN_SURVEY_BACKGROUNDS,
   MAX_SURVEY_BACKGROUND_SIZE_BYTES,
   getSurveyThemeAssetPaths,
+  resolveSurveyThemeAssetUrls,
+  serializeSurveyThemeAssetUrls,
   validateSurveyBackgroundFile,
 } from "./themeAssets";
 
@@ -36,5 +38,17 @@ describe("survey theme assets", () => {
       backgroundImage: managedUrl,
       header: { backgroundImage: "/theme-backgrounds/waves.svg" },
     })).toEqual(["forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.webp"]);
+  });
+
+  it("stores managed backgrounds as non-network tokens and restores them for rendering", () => {
+    const managedUrl = `${SUPABASE_URL}/storage/v1/object/public/survey-assets/forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.webp`;
+    const stored = serializeSurveyThemeAssetUrls({ backgroundImage: managedUrl });
+
+    expect(stored.backgroundImage).toBe(
+      "__APP_SURVEY_ASSET__/forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.webp",
+    );
+    expect(resolveSurveyThemeAssetUrls(stored).backgroundImage).toBe(managedUrl);
+    expect(serializeSurveyThemeAssetUrls({ backgroundImage: "https://tracker.example/pixel.png" }))
+      .not.toHaveProperty("backgroundImage");
   });
 });

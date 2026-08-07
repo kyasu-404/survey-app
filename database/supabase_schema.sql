@@ -60,6 +60,7 @@ create table public.forms (
   organization_types text[] not null default array['school', 'kindergarten']::text[],
   author_id uuid not null references public.profiles(id) on delete cascade,
   author_name text not null default '',
+  revision bigint not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -150,6 +151,19 @@ alter table public.forms
 add constraint forms_schema_is_object check (jsonb_typeof(schema) = 'object');
 
 alter table public.forms
+add constraint forms_title_length check (length(btrim(title)) between 1 and 500);
+
+alter table public.forms
+add constraint forms_type_valid check (
+  form_type in ('template', 'anketa', 'voting', 'request', 'monitoring', 'survey', 'sample', 'other')
+);
+
+alter table public.forms
+add constraint forms_reason_valid check (
+  form_reason in ('request', 'plan', 'order', 'directive', 'other')
+);
+
+alter table public.forms
 add constraint forms_schema_size check (pg_column_size(schema) <= 262144);
 
 alter table public.forms
@@ -233,7 +247,7 @@ as $$
         or not (
           btrim(asset #>> '{}') = ''
           or btrim(asset #>> '{}') ~ '^/[^/\\]'
-          or btrim(asset #>> '{}') ~* '^https://[^[:space:]]+$'
+          or btrim(asset #>> '{}') ~* '^__APP_SURVEY_ASSET__/(gallery/[a-z0-9._-]{1,255}|forms/[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(jpe?g|png|webp))$'
           or btrim(asset #>> '{}') ~* '^http://(localhost|127\.0\.0\.1|10\.[0-9.]+|192\.168\.[0-9.]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9.]+|\[::1\])(:[0-9]+)?/[^[:space:]]*$'
         )
     );
@@ -593,6 +607,20 @@ create or replace trigger responses_set_user_id
 before insert on public.responses
 for each row execute procedure public.set_response_user_id();
 
+create or replace function public.browser_capability_hash(value uuid)
+returns uuid
+language sql
+immutable
+strict
+security definer
+set search_path = ''
+as $$
+  select md5(value::text)::uuid;
+$$;
+
+revoke all on function public.browser_capability_hash(uuid) from public;
+grant execute on function public.browser_capability_hash(uuid) to service_role;
+
 create or replace function public.get_form_response_status(
   p_form_id uuid,
   p_browser_id uuid
@@ -634,7 +662,7 @@ begin
   into existing_response
   from public.responses r
   where r.form_id = p_form_id
-    and r.browser_id = p_browser_id;
+    and r.browser_id = public.browser_capability_hash(p_browser_id);
 
   if existing_response.id is null then
     return;
@@ -648,6 +676,96 @@ begin
       and (target_form.deadline_at is null or target_form.deadline_at > now());
 end;
 $$;
+
+create or replace function public.response_data_matches_form(
+  form_schema jsonb,
+  allowed_organization_types text[],
+  response_data jsonb
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  question jsonb;
+  question_name text;
+  organization_id uuid;
+begin
+  if jsonb_typeof(response_data) <> 'object' or pg_column_size(response_data) > 262144 then
+    return false;
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_object_keys(response_data) response_key
+    where not exists (
+      select 1
+      from jsonb_path_query(form_schema, '$.** ? (@.type() == "object")', '{}'::jsonb, true) element
+      where jsonb_typeof(element -> 'name') = 'string'
+        and element ->> 'name' = response_key
+    )
+  ) then
+    return false;
+  end if;
+
+  for question in
+    select element
+    from jsonb_path_query(form_schema, '$.** ? (@.type() == "object")', '{}'::jsonb, true) element
+    where element ->> 'type' = 'organization'
+      and jsonb_typeof(element -> 'name') = 'string'
+  loop
+    question_name := question ->> 'name';
+    if response_data ? question_name then
+      begin
+        organization_id := (response_data ->> question_name)::uuid;
+      exception when invalid_text_representation then
+        return false;
+      end;
+
+      if not exists (
+        select 1
+        from public.education_organizations organization
+        where organization.id = organization_id
+          and organization.organization_type = any(allowed_organization_types)
+      ) then
+        return false;
+      end if;
+    end if;
+  end loop;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.response_data_matches_form(jsonb, text[], jsonb) from public;
+grant execute on function public.response_data_matches_form(jsonb, text[], jsonb) to service_role;
+
+create or replace function public.validate_response_payload()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_form public.forms%rowtype;
+begin
+  select f.* into target_form from public.forms f where f.id = new.form_id;
+  if target_form.id is null
+    or not public.response_data_matches_form(target_form.schema, target_form.organization_types, new.data)
+  then
+    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger responses_validate_payload
+before insert or update of form_id, data on public.responses
+for each row execute procedure public.validate_response_payload();
+
+revoke all on function public.validate_response_payload() from public;
 
 create or replace function public.submit_form_response(
   p_form_id uuid,
@@ -698,11 +816,15 @@ begin
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
   end if;
 
+  if not public.response_data_matches_form(target_form.schema, target_form.organization_types, p_data) then
+    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
+  end if;
+
   select r.*
   into existing_response
   from public.responses r
   where r.form_id = p_form_id
-    and r.browser_id = p_browser_id;
+    and r.browser_id = public.browser_capability_hash(p_browser_id);
 
   if existing_response.id is not null then
     return query select
@@ -722,7 +844,7 @@ begin
   end if;
 
   insert into public.responses (form_id, browser_id, submission_id, data)
-  values (p_form_id, p_browser_id, p_submission_id, p_data)
+  values (p_form_id, public.browser_capability_hash(p_browser_id), p_submission_id, p_data)
   returning * into inserted_response;
 
   return query select
@@ -781,6 +903,10 @@ begin
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
   end if;
 
+  if not public.response_data_matches_form(target_form.schema, target_form.organization_types, p_data) then
+    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
+  end if;
+
   if not target_form.allow_response_editing then
     raise exception 'Редактирование ответов отключено' using errcode = '42501';
   end if;
@@ -796,7 +922,7 @@ begin
       updated_at = now()
   where r.id = p_response_id
     and r.form_id = p_form_id
-    and r.browser_id = p_browser_id
+    and r.browser_id = public.browser_capability_hash(p_browser_id)
   returning r.* into updated_response;
 
   if updated_response.id is null then
@@ -891,8 +1017,11 @@ set search_path = ''
 as $$
   select
     count(*)::bigint as total_count,
-    count(*) filter (where f.is_public = true)::bigint as active_count,
-    count(*) filter (where f.deadline_at is not null)::bigint as forms_with_deadline_count
+    count(*) filter (
+      where f.is_public = true
+        and (f.deadline_at is null or f.deadline_at > now())
+    )::bigint as active_count,
+    count(*) filter (where f.deadline_at > now())::bigint as forms_with_deadline_count
   from public.forms f
   where f.form_type <> 'template'
     and (
@@ -906,8 +1035,30 @@ as $$
     and (p_author_id is null or f.author_id = p_author_id)
     and (p_form_type is null or f.form_type = p_form_type)
     and (p_form_reason is null or f.form_reason = p_form_reason)
-    and (p_is_public is null or f.is_public = p_is_public);
+    and (
+      p_is_public is null
+      or (
+        f.is_public = true
+        and (f.deadline_at is null or f.deadline_at > now())
+      ) = p_is_public
+    );
 $$;
+
+create or replace function public.increment_form_revision()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.revision := old.revision + 1;
+  return new;
+end;
+$$;
+
+create trigger forms_increment_revision
+before update on public.forms
+for each row execute procedure public.increment_form_revision();
 
 revoke all on function public.get_dashboard_forms_stats(text, timestamptz, timestamptz, uuid, text, text, boolean) from public;
 grant execute on function public.get_dashboard_forms_stats(text, timestamptz, timestamptz, uuid, text, text, boolean) to authenticated, service_role;
@@ -1003,6 +1154,71 @@ as $$
     o.alias;
 $$;
 
+create or replace function public.enqueue_mail_reminder_batch(
+  p_batch_id uuid,
+  p_form_id uuid,
+  p_created_by uuid,
+  p_jobs jsonb
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  job_count integer;
+begin
+  if p_batch_id is null or p_form_id is null or p_created_by is null or jsonb_typeof(p_jobs) <> 'array' then
+    raise exception 'Invalid reminder batch' using errcode = '22023';
+  end if;
+
+  job_count := jsonb_array_length(p_jobs);
+  if job_count not between 1 and 5000
+    or exists (select 1 from jsonb_array_elements(p_jobs) job where jsonb_typeof(job) <> 'object')
+  then
+    raise exception 'Invalid reminder jobs' using errcode = '22023';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('mail-reminder/' || p_form_id::text, 0)
+  );
+
+  if exists (
+    select 1
+    from public.mail_queue q
+    where q.form_id = p_form_id
+      and q.status in ('queued', 'processing')
+  ) then
+    raise exception 'Previous reminder run is still active' using errcode = '55000';
+  end if;
+
+  insert into public.mail_batches (id, kind, form_id, created_by, total_count)
+  values (p_batch_id, 'reminder', p_form_id, p_created_by, job_count);
+
+  insert into public.mail_queue (
+    batch_id,
+    form_id,
+    organization_id,
+    recipient_email,
+    recipient_name,
+    subject,
+    body_text
+  )
+  select
+    p_batch_id,
+    p_form_id,
+    (job ->> 'organization_id')::uuid,
+    lower(btrim(job ->> 'recipient_email')),
+    btrim(job ->> 'recipient_name'),
+    job ->> 'subject',
+    job ->> 'body_text'
+  from jsonb_array_elements(p_jobs) job;
+
+  return job_count;
+end;
+$$;
+
 create or replace function public.claim_mail_jobs(
   p_worker_id text,
   p_limit integer default 20
@@ -1080,10 +1296,12 @@ $$;
 
 revoke all on function public.can_read_mail_batch(uuid) from public;
 revoke all on function public.list_missing_form_organizations(uuid) from public;
+revoke all on function public.enqueue_mail_reminder_batch(uuid, uuid, uuid, jsonb) from public;
 revoke all on function public.claim_mail_jobs(text, integer) from public;
 revoke all on function public.finish_mail_job(uuid, text, boolean, text) from public;
 grant execute on function public.can_read_mail_batch(uuid) to authenticated, service_role;
 grant execute on function public.list_missing_form_organizations(uuid) to service_role;
+grant execute on function public.enqueue_mail_reminder_batch(uuid, uuid, uuid, jsonb) to service_role;
 grant execute on function public.claim_mail_jobs(text, integer) to service_role;
 grant execute on function public.finish_mail_job(uuid, text, boolean, text) to service_role;
 
@@ -1116,7 +1334,8 @@ revoke delete on table public.forms from authenticated;
 revoke update on table public.forms from authenticated;
 grant update (title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing) on table public.forms to authenticated;
 revoke insert on table public.responses from anon;
-grant select on table public.responses to authenticated;
+revoke select on table public.responses from authenticated;
+grant select (id, form_id, data, created_at, updated_at) on table public.responses to authenticated;
 revoke insert on table public.responses from authenticated;
 grant select, insert, update, delete on table public.profiles, public.education_organizations, public.forms, public.responses to service_role;
 revoke all on table public.response_file_references from anon, authenticated;
@@ -1295,6 +1514,8 @@ declare
   target_form_id uuid;
   existing_count bigint;
   existing_bytes bigint;
+  orphan_count bigint := 0;
+  orphan_bytes bigint := 0;
 begin
   if array_length(path_parts, 1) <> 3
     or length(path_parts[3]) > 512
@@ -1341,8 +1562,29 @@ begin
   where o.bucket_id = 'survey-files'
     and split_part(o.name, '/', 2) = target_form_id::text;
 
+  if anonymous_request then
+    select count(*), coalesce(sum(
+      case
+        when coalesce(o.metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
+          then least((o.metadata ->> 'size')::numeric, 10485760)::bigint
+        else 10485760
+      end
+    ), 0)
+    into orphan_count, orphan_bytes
+    from storage.objects o
+    left join public.response_file_references reference on reference.object_path = o.name
+    where o.bucket_id = 'survey-files'
+      and split_part(o.name, '/', 1) = 'public'
+      and split_part(o.name, '/', 2) = target_form_id::text
+      and reference.object_path is null;
+  end if;
+
   return existing_count < 2000
-    and existing_bytes + object_size <= 2147483648;
+    and existing_bytes + object_size <= 2147483648
+    and (
+      not anonymous_request
+      or (orphan_count < 20 and orphan_bytes + object_size <= 104857600)
+    );
 end;
 $$;
 
@@ -1437,7 +1679,6 @@ as $$
   select o.name
   from storage.objects o
   where o.bucket_id = 'survey-files'
-    and o.name like 'public/%'
     and o.created_at < cutoff
     and not exists (
       select 1 from public.response_file_references rf

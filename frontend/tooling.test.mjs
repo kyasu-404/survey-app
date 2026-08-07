@@ -4,6 +4,7 @@ import test from "node:test";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const productionProxy = readFileSync(new URL("../nginx.conf", import.meta.url), "utf8");
+const supabaseEnvExample = readFileSync(new URL("../supabase/docker/.env.example", import.meta.url), "utf8");
 
 test("frontend exposes a TypeScript typecheck script", () => {
   assert.equal(packageJson.scripts?.typecheck, "tsc --noEmit");
@@ -59,4 +60,27 @@ test("production proxy applies a dedicated anonymous upload rate limit", () => {
   assert.match(productionProxy, /location\s+\^~\s+\/api\/storage\/v1\/object\/survey-files\//);
   assert.match(productionProxy, /limit_req\s+zone=survey_uploads\s+burst=5\s+nodelay;/);
   assert.match(productionProxy, /Do not expose Kong directly in production/i);
+});
+
+test("production proxy rate-limits the actual response RPC and handles realtime upgrades", () => {
+  assert.match(productionProxy, /location\s+=\s+\/api\/rest\/v1\/rpc\/submit_form_response/);
+  assert.match(productionProxy, /limit_req\s+zone=survey_responses\s+burst=6\s+nodelay;/);
+  assert.match(productionProxy, /limit_except\s+POST\s+OPTIONS\s+\{\s*deny all;\s*\}/);
+  assert.doesNotMatch(productionProxy, /location\s+=\s+\/api\/rest\/v1\/responses/);
+  assert.match(productionProxy, /location\s+\^~\s+\/api\/realtime\//);
+  assert.match(productionProxy, /proxy_set_header\s+Upgrade\s+\$http_upgrade;/);
+});
+
+test("production proxy redirects HTTP and does not allow arbitrary remote theme images", () => {
+  assert.match(productionProxy, /listen\s+80;/);
+  assert.match(productionProxy, /return\s+301\s+https:\/\/\$host\$request_uri;/);
+  assert.match(productionProxy, /ssl_protocols\s+TLSv1\.2\s+TLSv1\.3;/);
+  assert.doesNotMatch(productionProxy, /img-src[^;]*\shttps:/i);
+});
+
+test("self-hosted auth defaults do not allow public employee registration", () => {
+  assert.match(supabaseEnvExample, /^DISABLE_SIGNUP=true$/m);
+  assert.match(supabaseEnvExample, /^ENABLE_EMAIL_SIGNUP=false$/m);
+  assert.match(supabaseEnvExample, /^ENABLE_PHONE_SIGNUP=false$/m);
+  assert.match(supabaseEnvExample, /^ENABLE_PHONE_AUTOCONFIRM=false$/m);
 });

@@ -2,13 +2,53 @@ import type { ITheme } from "survey-core";
 import { sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
 import { runRequest } from "./request";
 import { supabaseClient } from "./client";
-import { getManagedSurveyAssetPath, SURVEY_ASSETS_BUCKET } from "./surveyAssetUrls";
+import {
+  getManagedSurveyAssetPath,
+  resolveManagedSurveyAssetUrl,
+  serializeManagedSurveyAssetUrl,
+  SURVEY_ASSETS_BUCKET,
+} from "./surveyAssetUrls";
 
 export { SURVEY_ASSETS_BUCKET } from "./surveyAssetUrls";
 export const MAX_SURVEY_BACKGROUND_SIZE_BYTES = 5 * 1024 * 1024;
 export const SURVEY_BACKGROUND_ACCEPT = "image/jpeg,image/png,image/webp";
 
 const ALLOWED_IMAGE_TYPES = new Set(SURVEY_BACKGROUND_ACCEPT.split(","));
+
+function transformThemeImageUrls(
+  themeValue: unknown,
+  transform: (value: string) => string | null,
+) {
+  const theme = sanitizeSurveyTheme(themeValue);
+  const backgroundImage = theme.backgroundImage ? transform(theme.backgroundImage) : theme.backgroundImage;
+  const headerImage = theme.header?.backgroundImage
+    ? transform(theme.header.backgroundImage)
+    : theme.header?.backgroundImage;
+
+  if (backgroundImage === null) delete theme.backgroundImage;
+  else if (typeof backgroundImage === "string") theme.backgroundImage = backgroundImage;
+
+  if (headerImage === null) {
+    const { backgroundImage: _removed, ...header } = theme.header ?? {};
+    theme.header = header;
+  } else if (theme.header && typeof headerImage === "string") {
+    theme.header = { ...theme.header, backgroundImage: headerImage };
+  }
+
+  return theme;
+}
+
+export function serializeSurveyThemeAssetUrls(themeValue: unknown) {
+  return transformThemeImageUrls(themeValue, (value) => {
+    const serialized = serializeManagedSurveyAssetUrl(value);
+    return serialized === value && /^https?:/i.test(value) ? null : serialized;
+  });
+}
+
+export function resolveSurveyThemeAssetUrls(themeValue: unknown) {
+  const resolved = transformThemeImageUrls(themeValue, resolveManagedSurveyAssetUrl);
+  return sanitizeSurveyTheme(resolved);
+}
 
 export type SurveyBackgroundAsset = {
   id: string;

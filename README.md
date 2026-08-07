@@ -8,13 +8,28 @@
 - `database/supabase_schema.sql` — недеструктивный baseline схемы таблиц и RLS-политик для пустого Supabase-проекта.
 - `database/migrations/` — место для production-миграций. Каждый применённый файл считается неизменяемым.
 
+Для нового развёртывания применяйте только полный baseline:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
+```
+
+Исторические файлы из `database/migrations/` предназначены только для обновления уже существующей базы и к базе,
+созданной из актуального baseline, повторно не применяются.
+
+Перед публикацией self-hosted Supabase обязательно:
+
+- выполните штатные скрипты Supabase `sh utils/generate-keys.sh` и `sh utils/add-new-auth-keys.sh` и замените все демонстрационные секреты;
+- оставьте `DISABLE_SIGNUP=true`, `ENABLE_EMAIL_SIGNUP=false` и `ENABLE_PHONE_SIGNUP=false`: сотрудников создаёт администратор через `user-admin`;
+- задайте сложные `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`, постоянный `MAIL_SETTINGS_ENCRYPTION_KEY` и точный `PUBLIC_APP_URL`;
+- публикуйте наружу только Nginx на портах 80/443; Kong, PostgreSQL, pooler, Studio и mail-worker не должны слушать публичный интерфейс.
+
 ## Ответы и защита структуры формы
 
 - Для каждой формы разрешён один ответ на браузер. Постоянный UUID хранится в `localStorage`, а уникальность дополнительно проверяется в Supabase по паре `form_id + browser_id`.
 - Повторная отправка возвращает существующий ответ. Если при сохранении формы включён ползунок **«Редактирование ответов»**, респондент может открыть этот ответ и сохранить изменения из того же браузера.
 - После появления первого ответа форма открывается в безопасном режиме. Тексты, оформление и порядок элементов можно менять сразу; изменения, влияющие только на новые ответы, требуют подтверждения; удаление и изменение технической структуры блокируются с предложением создать копию.
 - Автор формы (и администратор) может выбрать до 100 видимых ответов и удалить их. Edge Function `form-admin` удаляет также связанные объекты из приватного bucket `survey-files`.
-- На странице ответов доступен фильтр по включительному диапазону дат. Верхняя граница передаётся в БД как начало следующего дня, поэтому ответы за выбранный конечный день не теряются.
 
 Для существующего Supabase-проекта примените миграцию управления ответами:
 
@@ -32,6 +47,16 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 После миграций обязательно повторно разверните Edge Function `form-admin`: она обрабатывает действия `delete-responses` и `update-schema`. Frontend и функция должны обновляться вместе, иначе сохранение формы завершится ошибкой `Invalid delete payload`.
 
+Для обновления уже существующей базы после всех перечисленных выше миграций примените общий hardening-пакет:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/202608071200_security_reliability_hardening.sql
+```
+
+Он хеширует прежние идентификаторы редактирования ответов, ограничивает незакреплённые анонимные загрузки,
+исправляет статистику дедлайнов и добавляет атомарную постановку SMTP-напоминаний.
+
 ## Справочник образовательных организаций
 
 Раздел **«Справочник ОУ»** доступен авторизованным пользователям. Просматривать и экспортировать справочник могут все пользователи, а добавлять, изменять, импортировать и удалять организации — только администраторы. Поддерживаются типы **«Школы»**, **«Сады»**, **«ОДО»** и **«УДОДы»**. Для УДОД номер не задаётся; отображаемое название в формах состоит из алиаса, для остальных типов — из алиаса и номера.
@@ -47,7 +72,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 В конструкторе SurveyJS справочник представлен отдельным защищённым элементом **«Организация»**. Внутри он работает как выпадающий список с поиском, но источник и технические свойства не доступны автору формы. При сохранении формы можно выбрать включённые типы организаций; по умолчанию выбраны школы и детские сады. После первого ответа изменение набора типов требует явного подтверждения, поскольку оно влияет на последующие ответы.
 
-Кнопка **«Отчёт»** на странице ответов рассчитывает заполненность и распределение значений по вопросам с учётом текущего фильтра дат. Если форма содержит поле организации, отчёт дополнительно сравнивает ответы с актуальным выбранным срезом справочника и показывает организации, которые не сдали ответ.
+Кнопка **«Отчёт»** на странице ответов рассчитывает заполненность и распределение значений по всем ответам. Если форма содержит поле организации, отчёт дополнительно сравнивает ответы с актуальным выбранным срезом справочника и показывает организации, которые не сдали ответ.
 
 Публичная форма получает через `list_form_organizations` только идентификатор, тип, номер и алиас организации. Email из справочника анонимным респондентам не передаётся.
 
@@ -316,140 +341,20 @@ order by policyname;
 
 ## Хранение файлов в Supabase Storage (S3)
 
-Файлы из вопросов типа `file` в SurveyJS загружаются в бакет Supabase Storage, указанный в `VITE_SUPABASE_STORAGE_BUCKET`.
+Файлы из вопросов типа `file` в SurveyJS загружаются в фиксированный приватный bucket `survey-files`.
 
 Связи ответа с объектами Storage индексируются в `response_file_references`. Не удаляйте ответы прямым SQL или клиентским `delete`: используйте действие `delete-responses` функции `form-admin`, чтобы вместе со строками были удалены прикреплённые файлы.
 
 ### Что настроить в Supabase
 
-1. Откройте **Storage** → **Create bucket**.
-2. Создайте бакет с именем `survey-files` (или своим, но тогда обновите `VITE_SUPABASE_STORAGE_BUCKET`).
-3. Оставьте бакет приватным.
-4. Добавьте RLS политики на `storage.objects`. Для авторизованных пользователей фронтенд кладёт файлы в путь `user_id/form_id/file_id.ext`. Для публичных форм без логина используются пути `public/form_id/file_id.ext`. В ответе формы хранится путь к объекту, а signed URL создаётся по запросу при превью/скачивании файла.
+Bucket, функции проверки квот и RLS-политики уже создаются актуальным `database/supabase_schema.sql`.
+Не создавайте дополнительные политики анонимного чтения или удаления: анонимному респонденту разрешена только
+ограниченная загрузка в путь `public/form-id/file-id`, а скачивание выполняется через короткоживущую signed URL.
 
-Пример SQL-политик для бакета `survey-files`:
-
-```sql
-create policy "survey files upload authenticated"
-on storage.objects
-for insert
-to authenticated
-with check (
-  bucket_id = 'survey-files'
-  and (
-    (storage.foldername(name))[1] = (select auth.uid())::text
-    or (
-      (storage.foldername(name))[1] = 'public'
-      and exists (
-        select 1
-        from public.forms f
-        where f.id::text = (storage.foldername(name))[2]
-          and f.is_public = true
-          and (f.deadline_at is null or f.deadline_at > now())
-      )
-    )
-  )
-);
-
-create policy "survey files upload anon"
-on storage.objects
-for insert
-to anon
-with check (
-  bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = 'public'
-  and exists (
-    select 1
-    from public.forms f
-    where f.id::text = (storage.foldername(name))[2]
-      and f.is_public = true
-      and (f.deadline_at is null or f.deadline_at > now())
-  )
-);
-
-create policy "survey files read authenticated"
-on storage.objects
-for select
-to authenticated
-using (
-  bucket_id = 'survey-files'
-  and (
-    (storage.foldername(name))[1] = (select auth.uid())::text
-    or (
-      (storage.foldername(name))[1] = 'public'
-      and exists (
-        select 1
-        from public.forms f
-        where f.id::text = (storage.foldername(name))[2]
-          and f.is_public = true
-          and (f.deadline_at is null or f.deadline_at > now())
-      )
-    )
-    or exists (
-      select 1
-      from public.forms f
-      where f.id::text = (storage.foldername(name))[2]
-        and (
-          f.author_id = (select auth.uid())
-          or (select public.request_role()) = 'admin'
-        )
-    )
-  )
-);
-
-create policy "survey files read anon"
-on storage.objects
-for select
-to anon
-using (
-  bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = 'public'
-  and exists (
-    select 1
-    from public.forms f
-    where f.id::text = (storage.foldername(name))[2]
-      and f.is_public = true
-      and (f.deadline_at is null or f.deadline_at > now())
-  )
-);
-
-create policy "survey files delete authenticated"
-on storage.objects
-for delete
-to authenticated
-using (
-  bucket_id = 'survey-files'
-  and (
-    (storage.foldername(name))[1] = (select auth.uid())::text
-    or (
-      (storage.foldername(name))[1] = 'public'
-      and exists (
-        select 1
-        from public.forms f
-        where f.id::text = (storage.foldername(name))[2]
-          and f.is_public = true
-          and (f.deadline_at is null or f.deadline_at > now())
-      )
-    )
-  )
-);
-
-create policy "survey files delete anon"
-on storage.objects
-for delete
-to anon
-using (
-  bucket_id = 'survey-files'
-  and (storage.foldername(name))[1] = 'public'
-  and exists (
-    select 1
-    from public.forms f
-    where f.id::text = (storage.foldername(name))[2]
-      and f.is_public = true
-      and (f.deadline_at is null or f.deadline_at > now())
-  )
-);
-```
+Имя bucket менять нельзя без согласованного изменения SQL-политик, Edge Function и frontend. Значение
+`VITE_SUPABASE_STORAGE_BUCKET` должно оставаться `survey-files`. Для очистки незавершённых загрузок запускайте
+административное действие `cleanup-orphans`; для анонимных незакреплённых файлов дополнительно действует небольшой
+временный бюджет на одну форму.
 
 ### S3-совместимое подключение (опционально)
 
@@ -564,7 +469,7 @@ Cursor/keyset pagination пока не включена намеренно. Те
 
 После восстановления:
 
-1. Создайте приватный Storage bucket `survey-files` или имя из `VITE_SUPABASE_STORAGE_BUCKET`.
+1. Создайте приватный Storage bucket строго с именем `survey-files`.
 2. Перенесите файлы Storage, если формы содержат file-вопросы.
 3. Разверните Edge Function `user-admin` и задайте `SUPABASE_SERVICE_ROLE_KEY`.
 4. Обновите `frontend/.env`: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_STORAGE_BUCKET`.

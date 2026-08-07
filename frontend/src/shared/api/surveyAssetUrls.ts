@@ -3,7 +3,11 @@ import { SUPABASE_URL } from "../config/env";
 export const SURVEY_ASSETS_BUCKET = "survey-assets";
 export const SURVEY_ASSET_TOKEN_PREFIX = "__APP_SURVEY_ASSET__/";
 
-const SURVEY_ASSET_PATH = /^forms\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpe?g|png|webp)$/i;
+const UUID_PATH_PART = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const SURVEY_ASSET_PATH = new RegExp(
+  `^(?:gallery/[a-z0-9._-]{1,255}|forms/${UUID_PATH_PART}/${UUID_PATH_PART}/${UUID_PATH_PART}\\.(?:jpe?g|png|webp))$`,
+  "i",
+);
 
 function isManagedSurveyAssetPath(path: string) {
   return SURVEY_ASSET_PATH.test(path);

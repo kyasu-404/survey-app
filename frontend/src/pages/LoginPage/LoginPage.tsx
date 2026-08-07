@@ -7,6 +7,20 @@ import { getAuthErrorMessage } from "../../shared/lib/error";
 
 type MessageType = "success" | "error";
 
+export function getSafeLoginTarget(value: unknown) {
+  return typeof value === "string"
+    && value.startsWith("/")
+    && !value.startsWith("//")
+    && !value.includes("\\")
+    ? value
+    : routes.dashboardMy;
+}
+
+export function getWelcomeMessage(displayName: string) {
+  const normalizedName = displayName.trim();
+  return normalizedName ? `Добро пожаловать, ${normalizedName}` : "Добро пожаловать!";
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +30,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-  const targetPath = from ?? routes.dashboardMy;
+  const targetPath = getSafeLoginTarget(from);
 
   if (!loading && user) {
     return <Navigate to={targetPath} replace />;
@@ -25,10 +39,10 @@ export default function LoginPage() {
   async function onLogin() {
     try {
       setMessage("");
-      await login(email, password);
+      const displayName = await login(email, password);
       navigate(targetPath, {
         replace: true,
-        state: { toast: `Добро пожаловать, ${email}` },
+        state: { toast: getWelcomeMessage(displayName) },
       });
     } catch (error) {
       setMessageType("error");

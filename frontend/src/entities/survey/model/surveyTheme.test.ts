@@ -28,7 +28,7 @@ describe("survey theme", () => {
       themeName: "sharp",
       colorPalette: "dark",
       isPanelless: true,
-      backgroundImage: "https://cdn.example.com/background.webp",
+      backgroundImage: "__APP_SURVEY_ASSET__/forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.webp",
       backgroundImageFit: "cover",
       backgroundImageAttachment: "fixed",
       backgroundOpacity: 0.4,
@@ -45,7 +45,7 @@ describe("survey theme", () => {
       themeName: "sharp",
       colorPalette: "dark",
       isPanelless: true,
-      backgroundImage: "https://cdn.example.com/background.webp",
+      backgroundImage: "__APP_SURVEY_ASSET__/forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.webp",
       backgroundOpacity: 0.4,
       header: {
         height: 240,
@@ -77,6 +77,11 @@ describe("survey theme", () => {
     expect(sanitizeSurveyTheme({ backgroundImage: "http://localhost:8000/storage/background.webp" }))
       .toHaveProperty("backgroundImage");
     expect(sanitizeSurveyTheme({ backgroundImage: "http://evil.example/background.webp" }))
+      .not.toHaveProperty("backgroundImage");
+  });
+
+  it("rejects arbitrary HTTPS image URLs used for stored tracking", () => {
+    expect(sanitizeSurveyTheme({ backgroundImage: "https://tracker.example/pixel.png" }))
       .not.toHaveProperty("backgroundImage");
   });
 
@@ -137,11 +142,11 @@ describe("survey theme", () => {
       theme,
       "theme",
       "backgroundImage",
-      "https://cdn.example.com/uploaded-background.png",
+      "/api/storage/v1/object/public/survey-assets/uploaded-background.png",
     )).toMatchObject({
       themeName: "sharp",
       backgroundOpacity: 0.72,
-      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundImage: "/api/storage/v1/object/public/survey-assets/uploaded-background.png",
       header: { height: 240 },
     });
 
@@ -149,12 +154,12 @@ describe("survey theme", () => {
       theme,
       "header",
       "backgroundImage",
-      "https://cdn.example.com/uploaded-header.png",
+      "/api/storage/v1/object/public/survey-assets/uploaded-header.png",
     )).toMatchObject({
       themeName: "sharp",
       header: {
         height: 240,
-        backgroundImage: "https://cdn.example.com/uploaded-header.png",
+        backgroundImage: "/api/storage/v1/object/public/survey-assets/uploaded-header.png",
       },
     });
   });

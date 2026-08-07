@@ -49,16 +49,14 @@ test("rejects disabled owners and administrators", () => {
   assert.match(source, /requesterProfile\?\.is_disabled/);
 });
 
-test("removes storage objects before deleting the form row", () => {
-  const removeIndex = source.indexOf("removeStorageObjectsForForm");
-  const removeAssetsIndex = source.indexOf("removeSurveyAssetsForForm");
-  const deleteMatch = source.match(/\.from\("forms"\)\s*\.delete\(\)/);
+test("deletes database rows before best-effort storage cleanup", () => {
+  const deleteIndex = source.lastIndexOf('.from("forms")\n    .delete()');
+  const removeIndex = source.lastIndexOf("removeStorageObjectPaths(adminClient, responseObjectPaths)");
+  const removeAssetsIndex = source.lastIndexOf("removeSurveyAssetsForForm(");
 
-  assert.notEqual(removeIndex, -1);
-  assert.notEqual(removeAssetsIndex, -1);
-  assert.ok(deleteMatch);
-  assert.ok(removeIndex < deleteMatch.index);
-  assert.ok(removeAssetsIndex < deleteMatch.index);
+  assert.notEqual(deleteIndex, -1);
+  assert.ok(deleteIndex < removeIndex);
+  assert.ok(deleteIndex < removeAssetsIndex);
   assert.match(source, /SURVEY_ASSETS_BUCKET/);
   assert.match(source, /\.from\("response_file_references"\)\s*\.select\("object_path"\)\s*\.eq\("form_id", formId\)/);
   assert.match(source, /removeStorageTree\(adminClient, surveyAssetsBucket, `forms\/\$\{formId\}`\)/);
@@ -94,6 +92,7 @@ test("deletes selected responses only for the form owner or an admin and removes
   assert.match(source, /\.in\("response_id", existingResponseIds\)/);
   assert.match(source, /adminClient\.storage\.from\(storageBucket\)\.remove\(batch\)/);
   assert.match(source, /\.from\("responses"\)\s*\.delete\(\)/);
+  assert.match(source, /storage cleanup deferred/);
 });
 
 test("routes schema updates through an owner-authorized compatibility check", () => {
@@ -104,6 +103,7 @@ test("routes schema updates through an owner-authorized compatibility check", ()
   assert.match(source, /status: "confirmation_required"/);
   assert.match(source, /status: "blocked"/);
   assert.match(source, /\.eq\("responses_count", responsesCount\)/);
+  assert.match(source, /\.eq\("revision", revision\)/);
   assert.match(source, /confirmWarnings/);
 });
 

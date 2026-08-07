@@ -1,5 +1,6 @@
 import {
   fetchResponsesByForm,
+  fetchAllResponsesByForm,
   fetchExistingResponse,
   insertResponse,
   updateResponse,
@@ -43,4 +44,11 @@ export async function getResponsesByForm(
   options?: FetchResponsesByFormOptions,
 ): Promise<PaginatedResponses> {
   return fetchResponsesByForm(formId, options);
+}
+
+export async function getAllResponsesByForm(
+  formId: string,
+  options?: Omit<FetchResponsesByFormOptions, "page" | "pageSize">,
+) {
+  return fetchAllResponsesByForm(formId, options);
 }

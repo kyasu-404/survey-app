@@ -30,8 +30,14 @@ type RequestLogContext = {
 
 const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
-const storageBucket = Deno.env.get("SURVEY_FILES_BUCKET") ?? "survey-files";
-const surveyAssetsBucket = Deno.env.get("SURVEY_ASSETS_BUCKET") ?? "survey-assets";
+function readFixedBucket(variableName: string, expected: string) {
+  const configured = Deno.env.get(variableName)?.trim() || expected;
+  if (configured !== expected) throw new Error(`${variableName} must be ${expected}`);
+  return configured;
+}
+
+const storageBucket = readFixedBucket("SURVEY_FILES_BUCKET", "survey-files");
+const surveyAssetsBucket = readFixedBucket("SURVEY_ASSETS_BUCKET", "survey-assets");
 const allowedOrganizationTypes = new Set(["school", "kindergarten", "odo", "udod"]);
 
 const baseCorsHeaders = {
@@ -209,28 +215,30 @@ function isAnonymousUploadPath(path: unknown, formId: string) {
   ).test(path);
 }
 
-async function removeStorageObjectsForForm(adminClient: SupabaseAdminClient, formId: string) {
+async function listStorageObjectPathsForForm(adminClient: SupabaseAdminClient, formId: string) {
   const { data, error } = await adminClient
     .from("response_file_references")
     .select("object_path")
     .eq("form_id", formId);
 
-  if (error) return { removedCount: 0, error };
+  if (error) return { names: [] as string[], error };
 
   const names = [...new Set(
     (data ?? [])
       .map((item: { object_path?: unknown }) => item.object_path)
       .filter((path: unknown): path is string => typeof path === "string" && path.length > 0),
   )];
-  let removedCount = 0;
+  return { names, error: null };
+}
 
+async function removeStorageObjectPaths(adminClient: SupabaseAdminClient, names: string[]) {
+  let removedCount = 0;
   for (let index = 0; index < names.length; index += 100) {
     const batch = names.slice(index, index + 100);
-    const { error: removeError } = await adminClient.storage.from(storageBucket).remove(batch);
-    if (removeError) return { removedCount, error: removeError };
+    const { error } = await adminClient.storage.from(storageBucket).remove(batch);
+    if (error) return { removedCount, error };
     removedCount += batch.length;
   }
-
   return { removedCount, error: null };
 }
 
@@ -491,7 +499,7 @@ Deno.serve(async (req) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const { data: form, error: formError } = await adminClient
         .from("forms")
-        .select("id, author_id, schema, responses_count, organization_types")
+        .select("id, author_id, schema, responses_count, organization_types, revision")
         .eq("id", updatePayload.formId)
         .single();
 
@@ -533,6 +541,7 @@ Deno.serve(async (req) => {
       }
 
       const responsesCount = Number(form.responses_count ?? 0);
+      const revision = Number(form.revision ?? 0);
       const { data: updatedForm, error: updateError } = await adminClient
         .from("forms")
         .update({
@@ -544,6 +553,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", updatePayload.formId)
         .eq("responses_count", responsesCount)
+        .eq("revision", revision)
         .select("id")
         .maybeSingle();
 
@@ -709,15 +719,6 @@ Deno.serve(async (req) => {
       objectPaths.push(...pathBatch.filter((path) => !sharedPaths.has(path)));
     }
 
-    for (let index = 0; index < objectPaths.length; index += 100) {
-      const batch = objectPaths.slice(index, index + 100);
-      const { error: removeError } = await adminClient.storage.from(storageBucket).remove(batch);
-
-      if (removeError) {
-        return errorResponse(req, 400, removeError.message, actionLogContext);
-      }
-    }
-
     const { error: deleteError } = await adminClient
       .from("responses")
       .delete()
@@ -728,16 +729,23 @@ Deno.serve(async (req) => {
       return errorResponse(req, 400, deleteError.message, actionLogContext);
     }
 
+    const { removedCount, error: removeError } = await removeStorageObjectPaths(adminClient, objectPaths);
+    if (removeError) {
+      console.warn("form-admin storage cleanup deferred", { ...actionLogContext, error: removeError.message });
+    }
+
     console.info("form-admin action completed", {
       ...actionLogContext,
       deletedResponses: existingResponseIds.length,
-      removedFiles: objectPaths.length,
+      removedFiles: removedCount,
+      cleanupPending: Boolean(removeError),
     });
 
     return jsonResponse(req, 200, {
       success: true,
       deletedResponses: existingResponseIds.length,
-      removedFiles: objectPaths.length,
+      removedFiles: removedCount,
+      cleanupPending: Boolean(removeError),
     }, actionLogContext);
   }
 
@@ -768,19 +776,12 @@ Deno.serve(async (req) => {
     return errorResponse(req, 403, "Forbidden", actionLogContext);
   }
 
-  const { removedCount, error: storageError } = await removeStorageObjectsForForm(adminClient, payload.formId);
-
-  if (storageError) {
-    return errorResponse(req, 400, storageError.message, actionLogContext);
-  }
-
-  const { removedCount: removedAssetCount, error: assetStorageError } = await removeSurveyAssetsForForm(
+  const { names: responseObjectPaths, error: listStorageError } = await listStorageObjectPathsForForm(
     adminClient,
     payload.formId,
   );
-
-  if (assetStorageError) {
-    return errorResponse(req, 400, assetStorageError.message, actionLogContext);
+  if (listStorageError) {
+    return errorResponse(req, 400, listStorageError.message, actionLogContext);
   }
 
   const { error: deleteError } = await adminClient
@@ -792,16 +793,31 @@ Deno.serve(async (req) => {
     return errorResponse(req, 400, deleteError.message, actionLogContext);
   }
 
+  const { removedCount, error: storageError } = await removeStorageObjectPaths(adminClient, responseObjectPaths);
+  const { removedCount: removedAssetCount, error: assetStorageError } = await removeSurveyAssetsForForm(
+    adminClient,
+    payload.formId,
+  );
+  const cleanupPending = Boolean(storageError || assetStorageError);
+  if (cleanupPending) {
+    console.warn("form-admin storage cleanup deferred", {
+      ...actionLogContext,
+      responseFilesError: storageError?.message ?? null,
+      assetsError: assetStorageError?.message ?? null,
+    });
+  }
+
   console.info("form-admin action completed", {
     ...actionLogContext,
     removedFiles: removedCount,
     removedAssets: removedAssetCount,
+    cleanupPending,
   });
 
   return jsonResponse(
     req,
     200,
-    { success: true, removedFiles: removedCount, removedAssets: removedAssetCount },
+    { success: true, removedFiles: removedCount, removedAssets: removedAssetCount, cleanupPending },
     actionLogContext,
   );
 });

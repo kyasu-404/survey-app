@@ -171,11 +171,10 @@ async function encryptPassword(password: string) {
   return `v1:${toBase64(iv)}:${toBase64(encrypted)}`;
 }
 
-function getAppBaseUrl(req: Request) {
+function getAppBaseUrl() {
   const configured = Deno.env.get("PUBLIC_APP_URL")?.trim();
-  const candidate = configured || req.headers.get("Origin") || "";
   try {
-    const url = new URL(candidate);
+    const url = new URL(configured ?? "");
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     return url.origin;
   } catch {
@@ -330,17 +329,7 @@ Deno.serve(async (req) => {
       if (settingsError) throw settingsError;
       if (!settings?.enabled) return json(req, 409, { error: "SMTP-коннектор не настроен или выключен" }, requestId);
 
-      const { data: activeJob, error: activeJobError } = await adminClient
-        .from("mail_queue")
-        .select("id")
-        .eq("form_id", formId)
-        .in("status", ["queued", "processing"])
-        .limit(1)
-        .maybeSingle();
-      if (activeJobError) throw activeJobError;
-      if (activeJob) return json(req, 409, { error: "Предыдущая рассылка по этой форме ещё выполняется" }, requestId);
-
-      const appBaseUrl = getAppBaseUrl(req);
+      const appBaseUrl = getAppBaseUrl();
       if (!appBaseUrl) return json(req, 500, { error: "Для ссылок в письмах задайте PUBLIC_APP_URL" }, requestId);
       const { data: missingData, error: missingError } = await adminClient.rpc("list_missing_form_organizations", { p_form_id: formId });
       if (missingError) throw missingError;
@@ -355,14 +344,6 @@ Deno.serve(async (req) => {
       }
 
       const batchId = crypto.randomUUID();
-      const { error: batchError } = await adminClient.from("mail_batches").insert({
-        id: batchId,
-        kind: "reminder",
-        form_id: formId,
-        created_by: profile.id,
-        total_count: missing.length,
-      });
-      if (batchError) throw batchError;
       const formUrl = new URL(`/form/${formId}`, appBaseUrl).toString();
       const jobs = missing.map((organization) => {
         const recipientName = getOrganizationMailName(organization);
@@ -373,8 +354,6 @@ Deno.serve(async (req) => {
           formUrl,
         });
         return {
-          batch_id: batchId,
-          form_id: formId,
           organization_id: organization.id,
           recipient_email: organization.email.toLowerCase(),
           recipient_name: recipientName,
@@ -382,11 +361,17 @@ Deno.serve(async (req) => {
           body_text: content.bodyText,
         };
       });
-      try {
-        await insertJobs(adminClient, jobs);
-      } catch (error) {
-        await adminClient.from("mail_batches").delete().eq("id", batchId);
-        throw error;
+      const { error: enqueueError } = await adminClient.rpc("enqueue_mail_reminder_batch", {
+        p_batch_id: batchId,
+        p_form_id: formId,
+        p_created_by: profile.id,
+        p_jobs: jobs,
+      });
+      if (enqueueError) {
+        if (enqueueError.message.includes("Previous reminder run is still active")) {
+          return json(req, 409, { error: "Предыдущая рассылка по этой форме ещё выполняется" }, requestId);
+        }
+        throw enqueueError;
       }
       return json(req, 202, { batchId, queuedCount: jobs.length }, requestId);
     }

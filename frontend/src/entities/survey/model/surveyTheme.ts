@@ -29,6 +29,7 @@ export const DEFAULT_SURVEY_THEME: ITheme = {
 };
 
 const SAFE_CSS_VALUE = /^(?!.*(?:url\s*\(|expression\s*\(|@import|javascript:))[\u0020-\u007e\u00a0-\uffff]{1,512}$/i;
+const MANAGED_ASSET_TOKEN = /^__APP_SURVEY_ASSET__\/(?:gallery\/[a-z0-9._-]{1,255}|forms\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpe?g|png|webp))$/i;
 const HEADER_STRING_PROPERTIES = {
   inheritWidthFrom: ["survey", "container"],
   backgroundImageFit: ["cover", "fill", "contain", "tile"],
@@ -47,12 +48,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isSafeImageUrl(value: string) {
   const normalized = value.trim();
   if (normalized === "") return true;
+  if (MANAGED_ASSET_TOKEN.test(normalized)) return true;
   if (normalized.startsWith("/") && !normalized.startsWith("//") && !normalized.includes("\\")) return true;
   if (/\s|\\/.test(normalized)) return false;
 
   try {
     const url = new URL(normalized);
-    if (url.protocol === "https:") return true;
+    if (url.protocol === "https:") {
+      return typeof window !== "undefined" && url.origin === window.location.origin;
+    }
     if (url.protocol !== "http:") return false;
 
     return (

@@ -32,6 +32,14 @@ describe("required Supabase env", () => {
   });
 });
 
+describe("survey file bucket", () => {
+  it("rejects a bucket name that is not covered by Storage RLS", async () => {
+    const { resolveSurveyFilesBucket } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);
+    expect(() => resolveSurveyFilesBucket("custom-files")).toThrow(/survey-files/);
+    expect(resolveSurveyFilesBucket(undefined)).toBe("survey-files");
+  });
+});
+
 describe("resolveSupabaseUrl", () => {
   it("rewrites localhost Supabase URL to the current page host", async () => {
     const { resolveSupabaseUrl } = await importEnv(TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY);

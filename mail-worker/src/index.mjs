@@ -2,6 +2,7 @@ import http from "node:http";
 import os from "node:os";
 import nodemailer from "nodemailer";
 import { createTransportOptions, decryptPassword, toPublicSmtpError } from "./config.mjs";
+import { isWorkerHealthy } from "./health.mjs";
 
 const supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
@@ -14,6 +15,7 @@ const healthPort = Math.min(65535, Math.max(1, Number(process.env.MAIL_WORKER_HE
 const state = {
   startedAt: new Date().toISOString(),
   lastPollAt: null,
+  lastSuccessfulPollAt: null,
   lastSuccessAt: null,
   lastError: null,
   configured: false,
@@ -96,18 +98,21 @@ async function poll() {
   state.busy = true;
   state.lastPollAt = new Date().toISOString();
   let transporter;
+  let completed = false;
 
   try {
     const settings = await loadSettings();
     state.configured = Boolean(settings?.enabled);
     if (!settings?.enabled) {
       state.lastError = null;
+      completed = true;
       return;
     }
 
     const jobs = await claimJobs();
     if (jobs.length === 0) {
       state.lastError = null;
+      completed = true;
       return;
     }
 
@@ -116,6 +121,7 @@ async function poll() {
       transporter = nodemailer.createTransport(createTransportOptions(settings, password));
       await Promise.all(jobs.map((job) => sendJob(transporter, settings, job)));
       state.lastError = null;
+      completed = true;
     } catch (error) {
       const publicError = toPublicSmtpError(error);
       state.lastError = publicError;
@@ -125,6 +131,7 @@ async function poll() {
     state.lastError = "Не удалось получить задания из Supabase";
     console.error("mail worker poll failed", { message: error instanceof Error ? error.message : String(error) });
   } finally {
+    if (completed) state.lastSuccessfulPollAt = new Date().toISOString();
     transporter?.close();
     state.busy = false;
   }
@@ -138,22 +145,33 @@ function assertEnvironment() {
 
 assertEnvironment();
 
-http.createServer((request, response) => {
+const server = http.createServer((request, response) => {
   if (request.url !== "/health") {
     response.writeHead(404).end();
     return;
   }
-  const healthy = Boolean(state.lastPollAt) && !state.busy;
+  const healthy = isWorkerHealthy(state, Date.now(), pollIntervalMs);
   response.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
   response.end(JSON.stringify({ ok: healthy, ...state, workerId }));
 }).listen(healthPort, "0.0.0.0");
 
-void poll();
-const timer = setInterval(() => void poll(), pollIntervalMs);
+let activePoll = Promise.resolve();
+function schedulePoll() {
+  if (state.busy) return;
+  activePoll = poll();
+}
+
+schedulePoll();
+const timer = setInterval(schedulePoll, pollIntervalMs);
+let shuttingDown = false;
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
-  process.on(signal, () => {
+  process.on(signal, async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     clearInterval(timer);
-    process.exit(0);
+    await activePoll;
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

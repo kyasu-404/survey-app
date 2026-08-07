@@ -158,8 +158,6 @@ describe("fetchResponsesByForm", () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
-      gte: vi.fn(() => query),
-      lt: vi.fn(() => query),
       order: vi.fn(() => query),
       abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [response], count: 72, error: null })),
@@ -174,7 +172,10 @@ describe("fetchResponsesByForm", () => {
       totalPages: 3,
     });
 
-    expect(query.select).toHaveBeenCalledWith("*", { count: "planned" });
+    expect(query.select).toHaveBeenCalledWith(
+      "id, form_id, data, created_at, updated_at",
+      { count: "planned" },
+    );
     expect(query.eq).toHaveBeenCalledWith("form_id", "form-1");
     expect(query.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(query.order).toHaveBeenCalledWith("id", { ascending: false });
@@ -186,8 +187,6 @@ describe("fetchResponsesByForm", () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
-      gte: vi.fn(() => query),
-      lt: vi.fn(() => query),
       order: vi.fn(() => query),
       abortSignal: vi.fn((_signal: AbortSignal) => query),
       range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
@@ -198,25 +197,5 @@ describe("fetchResponsesByForm", () => {
 
     expect(query.abortSignal).toHaveBeenCalledOnce();
     expect(query.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
-  });
-
-  it("applies inclusive start and exclusive end date filters", async () => {
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      gte: vi.fn(() => query),
-      lt: vi.fn(() => query),
-      order: vi.fn(() => query),
-      range: vi.fn(() => Promise.resolve({ data: [], count: 0, error: null })),
-    };
-    vi.mocked(apiClient.from).mockReturnValue(query as never);
-
-    await fetchResponsesByForm("form-1", {
-      dateFrom: "2026-08-01T00:00:00.000Z",
-      dateToExclusive: "2026-08-04T00:00:00.000Z",
-    });
-
-    expect(query.gte).toHaveBeenCalledWith("created_at", "2026-08-01T00:00:00.000Z");
-    expect(query.lt).toHaveBeenCalledWith("created_at", "2026-08-04T00:00:00.000Z");
   });
 });

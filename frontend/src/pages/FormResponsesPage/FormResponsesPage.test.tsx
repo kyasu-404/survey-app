@@ -70,6 +70,7 @@ vi.mock("../../shared/lib/export", () => ({
 }));
 
 vi.mock("../../shared/api", () => ({
+  MAX_CLIENT_RESPONSE_EXPORT: 10_000,
   RESPONSES_PAGE_SIZE: 50,
   supabaseClient: {
     channel: createRealtimeChannel,
@@ -1084,7 +1085,7 @@ describe("FormResponsesPage", () => {
     });
   });
 
-  it("does not show date filters and deletes selected answers", async () => {
+  it("deletes selected answers", async () => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Форма обратной связи",
@@ -1111,9 +1112,6 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
-    expect(screen.queryByLabelText("С даты")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("По дату")).not.toBeInTheDocument();
-
     await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
     expect(screen.getByText("Выбрано: 1")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));

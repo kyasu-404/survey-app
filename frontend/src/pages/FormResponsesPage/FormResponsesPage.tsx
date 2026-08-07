@@ -20,7 +20,7 @@ import downloadIcon from "../../img/Download.svg";
 import useIcon from "../../img/use.svg";
 import deleteIcon from "../../img/delete.svg";
 import infoIcon from "../../img/info.svg";
-import { supabaseClient } from "../../shared/api";
+import { MAX_CLIENT_RESPONSE_EXPORT, supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { scheduleDebouncedQueryInvalidation } from "../../shared/lib/queryRefresh";
@@ -130,29 +130,34 @@ function getDateCellParts(value: string) {
   return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
 }
 
-async function getResponsePage(formId: string, signal?: AbortSignal) {
+async function getResponsePage(
+  formId: string,
+  page: number,
+  signal?: AbortSignal,
+) {
   return getResponsesByForm(formId, {
-    page: 1,
+    page,
     pageSize: RESPONSES_SCROLL_PAGE_SIZE,
     signal,
   });
 }
 
-async function getAllResponsesForExport(formId: string, firstPage: ResponsesPage) {
+async function getAllResponsesForExport(
+  formId: string,
+  firstPage: ResponsesPage,
+) {
   const pageSize = firstPage.pageSize || RESPONSES_SCROLL_PAGE_SIZE;
   const responses = [...firstPage.data];
   let currentPage = firstPage;
 
-  while (currentPage.data.length >= pageSize) {
-    const nextPageNumber = currentPage.page + 1;
-    currentPage = await getResponsesByForm(formId, {
-      page: nextPageNumber,
-      pageSize,
-    });
+  for (;;) {
+    if (currentPage.data.length < pageSize) return responses;
+    currentPage = await getResponsesByForm(formId, { page: currentPage.page + 1, pageSize });
+    if (responses.length + currentPage.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
+      throw new Error(`В одной клиентской выгрузке поддерживается не более ${MAX_CLIENT_RESPONSE_EXPORT} ответов`);
+    }
     responses.push(...currentPage.data);
   }
-
-  return responses;
 }
 
 function SelectAllResponsesCheckbox({
@@ -209,11 +214,18 @@ export default function FormResponsesPage() {
   const [isDeletingResponses, setIsDeletingResponses] = useState(false);
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const responsesQueryKey = getFormResponsesQueryKey(id, "page", 1, RESPONSES_SCROLL_PAGE_SIZE);
+  const [responsePage, setResponsePage] = useState(1);
+  const responsesQueryKey = getFormResponsesQueryKey(
+    id,
+    "page",
+    responsePage,
+    RESPONSES_SCROLL_PAGE_SIZE,
+  );
 
   useEffect(() => {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
+    setResponsePage(1);
   }, [id]);
 
   const formQuery = useQuery({
@@ -246,7 +258,7 @@ export default function FormResponsesPage() {
         };
       }
 
-      return getResponsePage(id, signal);
+      return getResponsePage(id, responsePage, signal);
     },
     enabled: Boolean(id),
     retry: 1,
@@ -338,6 +350,7 @@ export default function FormResponsesPage() {
           schema: "public",
           table: "responses",
           filter: `form_id=eq.${id}`,
+          select: ["id", "form_id", "data", "created_at", "updated_at"],
         },
         refreshResponses,
       )
@@ -655,9 +668,24 @@ export default function FormResponsesPage() {
         )}
 
         {!isLoading && !combinedError && totalResponses > 0 && (
-          <p className="responses-page-total" aria-live="polite">
-            Ответов: {totalResponses}
-          </p>
+          <div className="responses-page-footer">
+            <p className="responses-page-total" aria-live="polite">Ответов: {totalResponses}</p>
+            {(responsesQuery.data?.totalPages ?? 1) > 1 && (
+              <div className="responses-page-pagination" aria-label="Страницы ответов">
+                <button type="button" disabled={responsePage <= 1} onClick={() => setResponsePage((page) => page - 1)}>
+                  Назад
+                </button>
+                <span>{responsePage} из {responsesQuery.data?.totalPages}</span>
+                <button
+                  type="button"
+                  disabled={responsePage >= (responsesQuery.data?.totalPages ?? 1)}
+                  onClick={() => setResponsePage((page) => page + 1)}
+                >
+                  Далее
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

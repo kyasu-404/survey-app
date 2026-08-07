@@ -46,4 +46,12 @@ export const SUPABASE_URL = resolveSupabaseUrl(
 
 export const SUPABASE_ANON_KEY = readRequiredEnv(import.meta.env.VITE_SUPABASE_ANON_KEY, "VITE_SUPABASE_ANON_KEY");
 
-export const SUPABASE_STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET ?? "survey-files";
+export function resolveSurveyFilesBucket(configuredBucket?: string) {
+  const bucket = configuredBucket?.trim() || "survey-files";
+  if (bucket !== "survey-files") {
+    throw new Error("VITE_SUPABASE_STORAGE_BUCKET must be survey-files because Storage RLS is bucket-specific.");
+  }
+  return bucket;
+}
+
+export const SUPABASE_STORAGE_BUCKET = resolveSurveyFilesBucket(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET);

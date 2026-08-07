@@ -8,11 +8,12 @@ import {
   normalizeOrganizationTypes,
 } from "../../entities/organization/model";
 import { getResponsesByForm } from "../../entities/response/api";
+import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
-import { RESPONSES_PAGE_SIZE } from "../../shared/api";
+import { MAX_CLIENT_RESPONSE_EXPORT, RESPONSES_PAGE_SIZE } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import {
   createResponsesHtmlDocument,
@@ -21,6 +22,27 @@ import {
   formatResponsesForTable,
 } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
+
+async function getAllResponses(
+  formId: string,
+  signal?: AbortSignal,
+) {
+  const data: SurveyResponse[] = [];
+  let page = 1;
+  for (;;) {
+    const result = await getResponsesByForm(formId, {
+      page,
+      pageSize: RESPONSES_PAGE_SIZE,
+      signal,
+    });
+    if (data.length + result.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
+      throw new Error(`HTML-выгрузка ограничена ${MAX_CLIENT_RESPONSE_EXPORT} ответами`);
+    }
+    data.push(...result.data);
+    if (result.data.length < RESPONSES_PAGE_SIZE) return data;
+    page += 1;
+  }
+}
 
 export default function FormResponsesHtmlPage() {
   const { id } = useParams();
@@ -46,16 +68,10 @@ export default function FormResponsesHtmlPage() {
     queryKey: getFormResponsesQueryKey(id, "html", RESPONSES_PAGE_SIZE),
     queryFn: async ({ signal }) => {
       if (!id) {
-        return {
-          data: [],
-          count: 0,
-          page: 1,
-          pageSize: RESPONSES_PAGE_SIZE,
-          totalPages: 1,
-        };
+        return [];
       }
 
-      return getResponsesByForm(id, { page: 1, pageSize: RESPONSES_PAGE_SIZE, signal });
+      return getAllResponses(id, signal);
     },
     enabled: Boolean(id),
     retry: 1,
@@ -80,7 +96,7 @@ export default function FormResponsesHtmlPage() {
     refetchOnReconnect: true,
   });
 
-  const responses = responsesQuery.data?.data ?? [];
+  const responses = responsesQuery.data ?? [];
   const organizationLabels = useMemo(
     () => new Map(
       (organizationsQuery.data ?? []).map((organization) => [
@@ -97,8 +113,6 @@ export default function FormResponsesHtmlPage() {
     [formQuery.data, organizationLabels, responses],
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
-  const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
-  const shownResponses = rows.length;
   const generatedAt = useMemo(() => new Date(), [formTitle, rows]);
   const htmlDocument = useMemo(
     () => createResponsesHtmlDocument({ title: formTitle, rows, generatedAt }),
@@ -159,9 +173,6 @@ export default function FormResponsesHtmlPage() {
 
       {!isLoading && !combinedError && (
         <>
-          {totalResponses > shownResponses && (
-            <p className="responses-page-limit-note">Показаны первые {shownResponses} из {totalResponses}.</p>
-          )}
           <div
             className="responses-html-preview"
             dangerouslySetInnerHTML={{

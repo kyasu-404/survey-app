@@ -15,6 +15,8 @@ import type { SurveySchema } from "../../entities/survey/types";
 import { SUPABASE_URL } from "../../shared/config/env";
 
 const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
+const UPLOADED_BACKGROUND_PATH = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
+const UPLOADED_BACKGROUND_URL = `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${UPLOADED_BACKGROUND_PATH}`;
 
 const {
   componentCollectionAdd,
@@ -358,8 +360,8 @@ describe("SurveyBuilder", () => {
     setFormResponseLimit.mockResolvedValue(undefined);
     createSurveyMutateAsync.mockResolvedValue({ id: "created-form-id" });
     uploadSurveyBackground.mockResolvedValue({
-      path: "forms/draft/user-1/uploaded-background.png",
-      url: "https://cdn.example.com/uploaded-background.png",
+      path: UPLOADED_BACKGROUND_PATH,
+      url: UPLOADED_BACKGROUND_URL,
     });
     surveyFormRendererProps.length = 0;
     registerElement.mockClear();
@@ -577,26 +579,26 @@ describe("SurveyBuilder", () => {
     await waitFor(() => {
       expect(callback).toHaveBeenCalledWith(
         "success",
-        "https://cdn.example.com/uploaded-background.png",
+        UPLOADED_BACKGROUND_URL,
       );
     });
 
     expect(creator.theme).toMatchObject({
-      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundImage: UPLOADED_BACKGROUND_URL,
     });
     expect(creator.themeEditor.themeModel.setTheme).toHaveBeenCalledWith(
       expect.objectContaining({
-        backgroundImage: "https://cdn.example.com/uploaded-background.png",
+        backgroundImage: UPLOADED_BACKGROUND_URL,
       }),
     );
     expect(getBuilderPreviewSnapshot().previewTheme).toMatchObject({
-      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundImage: UPLOADED_BACKGROUND_URL,
     });
     expect(JSON.parse(
       localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1")) ?? "{}",
     )).toMatchObject({
       theme: {
-        backgroundImage: "https://cdn.example.com/uploaded-background.png",
+        backgroundImage: UPLOADED_BACKGROUND_URL,
       },
     });
   });
@@ -671,18 +673,18 @@ describe("SurveyBuilder", () => {
     await waitFor(() => {
       expect(creator.themeEditor.themeModel.setTheme).toHaveBeenCalledWith(
         expect.objectContaining({
-          backgroundImage: "https://cdn.example.com/uploaded-background.png",
+          backgroundImage: UPLOADED_BACKGROUND_URL,
           backgroundOpacity: 1,
         }),
       );
     });
 
     expect(creator.theme).toMatchObject({
-      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundImage: UPLOADED_BACKGROUND_URL,
       backgroundOpacity: 1,
     });
     expect(getBuilderPreviewSnapshot().previewTheme).toMatchObject({
-      backgroundImage: "https://cdn.example.com/uploaded-background.png",
+      backgroundImage: UPLOADED_BACKGROUND_URL,
     });
   });
 

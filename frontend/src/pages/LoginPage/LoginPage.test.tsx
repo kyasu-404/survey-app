@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import LoginPage from "./LoginPage";
+import LoginPage, { getSafeLoginTarget, getWelcomeMessage } from "./LoginPage";
 
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
@@ -15,6 +15,18 @@ vi.mock("../../features/auth/api", () => ({
 }));
 
 describe("LoginPage", () => {
+  it("accepts only same-origin application paths after login", () => {
+    expect(getSafeLoginTarget("/dashboard/my")).toBe("/dashboard/my");
+    expect(getSafeLoginTarget("//evil.example/path")).toBe("/dashboard/my");
+    expect(getSafeLoginTarget("/\\evil.example/path")).toBe("/dashboard/my");
+    expect(getSafeLoginTarget("https://evil.example/path")).toBe("/dashboard/my");
+  });
+
+  it("builds the welcome message from the profile name instead of email", () => {
+    expect(getWelcomeMessage(" Анна Иванова ")).toBe("Добро пожаловать, Анна Иванова");
+    expect(getWelcomeMessage("")).toBe("Добро пожаловать!");
+  });
+
   it("renders premium auth styling hooks", () => {
     const { container } = render(
       <MemoryRouter>
