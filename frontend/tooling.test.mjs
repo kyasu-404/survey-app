@@ -4,7 +4,7 @@ import test from "node:test";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const productionProxy = readFileSync(new URL("../nginx.conf", import.meta.url), "utf8");
-const supabaseEnvExample = readFileSync(new URL("../supabase/docker/.env.example", import.meta.url), "utf8");
+const deploymentGuide = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 
 test("frontend exposes a TypeScript typecheck script", () => {
   assert.equal(packageJson.scripts?.typecheck, "tsc --noEmit");
@@ -78,9 +78,9 @@ test("production proxy redirects HTTP and does not allow arbitrary remote theme 
   assert.doesNotMatch(productionProxy, /img-src[^;]*\shttps:/i);
 });
 
-test("self-hosted auth defaults do not allow public employee registration", () => {
-  assert.match(supabaseEnvExample, /^DISABLE_SIGNUP=true$/m);
-  assert.match(supabaseEnvExample, /^ENABLE_EMAIL_SIGNUP=false$/m);
-  assert.match(supabaseEnvExample, /^ENABLE_PHONE_SIGNUP=false$/m);
-  assert.match(supabaseEnvExample, /^ENABLE_PHONE_AUTOCONFIRM=false$/m);
+test("deployment guide disables public employee registration", () => {
+  assert.match(deploymentGuide, /`DISABLE_SIGNUP=true`/);
+  assert.match(deploymentGuide, /`ENABLE_EMAIL_SIGNUP=false`/);
+  assert.match(deploymentGuide, /`ENABLE_PHONE_SIGNUP=false`/);
+  assert.match(deploymentGuide, /`ENABLE_PHONE_AUTOCONFIRM=false`/);
 });

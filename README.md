@@ -20,7 +20,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
 Перед публикацией self-hosted Supabase обязательно:
 
 - выполните штатные скрипты Supabase `sh utils/generate-keys.sh` и `sh utils/add-new-auth-keys.sh` и замените все демонстрационные секреты;
-- оставьте `DISABLE_SIGNUP=true`, `ENABLE_EMAIL_SIGNUP=false` и `ENABLE_PHONE_SIGNUP=false`: сотрудников создаёт администратор через `user-admin`;
+- оставьте `DISABLE_SIGNUP=true`, `ENABLE_EMAIL_SIGNUP=false`, `ENABLE_PHONE_SIGNUP=false` и `ENABLE_PHONE_AUTOCONFIRM=false`: сотрудников создаёт администратор через `user-admin`;
 - задайте сложные `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`, постоянный `MAIL_SETTINGS_ENCRYPTION_KEY` и точный `PUBLIC_APP_URL`;
 - публикуйте наружу только Nginx на портах 80/443; Kong, PostgreSQL, pooler, Studio и mail-worker не должны слушать публичный интерфейс.
 
