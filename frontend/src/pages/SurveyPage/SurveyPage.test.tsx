@@ -134,6 +134,7 @@ describe("SurveyPage", () => {
     expect(css).toMatch(/\.survey-response-already-submitted\s*\{[^}]*background:\s*transparent;/);
     expect(css).toMatch(/\.survey-response-already-submitted button\s*\{[^}]*border-radius:\s*12px;[^}]*transition:/);
     expect(css).toMatch(/\.survey-response-already-submitted button:hover,[\s\S]*\.survey-response-already-submitted button:focus-visible\s*\{[^}]*transform:\s*translateY\(-2px\);/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.survey-page\.survey-page-shell:not\(\.builder-preview-tab-shell\):has\(\.survey-response-already-submitted\)[\s\S]*\.survey-runtime-surface\.survey-page-card\s*\{[^}]*display:\s*grid;[^}]*align-content:\s*center;[^}]*justify-items:\s*center;/);
   });
 
   it("lets the page, not the survey card, own scrolling so dropdowns do not shift the form", () => {

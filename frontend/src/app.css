@@ -4506,6 +4506,13 @@ button.responses-export-button:disabled {
     backdrop-filter: none;
   }
 
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell):has(.survey-response-already-submitted)
+    .survey-runtime-surface.survey-page-card {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+  }
+
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
   .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper {
     min-height: 100svh;
@@ -6545,6 +6552,46 @@ button.responses-report-button:focus-visible,
   color: var(--theme-text-muted);
 }
 
+.settings-area + .settings-area {
+  margin-top: 30px;
+  padding-top: 30px;
+  border-top: 2px solid var(--theme-border);
+}
+
+.settings-area-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.settings-area-heading p,
+.settings-area-heading h2,
+.settings-area-heading span {
+  margin: 0;
+}
+
+.settings-area-heading p {
+  color: var(--theme-accent-strong);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.settings-area-heading h2 {
+  margin: 3px 0;
+  font-size: 1.4rem;
+}
+
+.settings-area-heading > div > span {
+  display: block;
+  max-width: 720px;
+  color: var(--theme-text-muted);
+  font-size: 0.9rem;
+}
+
 .smtp-enable-control {
   display: inline-flex;
   align-items: center;
@@ -6699,6 +6746,29 @@ button.responses-report-button:focus-visible,
   min-width: 0;
 }
 
+.settings-page-card .settings-field input:not([type="checkbox"]),
+.settings-page-card .settings-field select,
+.settings-page-card .settings-field textarea,
+.settings-page-card .settings-field input:not([type="checkbox"]):focus,
+.settings-page-card .settings-field select:focus,
+.settings-page-card .settings-field textarea:focus {
+  color: #111827;
+  border-color: rgba(17, 24, 39, 0.2);
+  background: #ffffff !important;
+  color-scheme: light;
+}
+
+.settings-page-card .settings-field input::placeholder,
+.settings-page-card .settings-field textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+.settings-page-card .settings-field select option {
+  color: #111827;
+  background: #ffffff;
+}
+
 .settings-field small {
   color: var(--theme-text-muted);
   font-weight: 500;
@@ -6765,6 +6835,119 @@ button.responses-report-button:focus-visible,
 
 .settings-field-skeleton {
   min-height: 72px;
+}
+
+.settings-cleanup-schedule-badge {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 999px;
+  color: #166534;
+  background: rgba(34, 197, 94, 0.12);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.settings-cleanup-section {
+  background: var(--theme-surface-muted);
+}
+
+.settings-cleanup-section .settings-backend-warning {
+  margin-bottom: 16px;
+}
+
+.settings-cleanup-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-cleanup-summary > div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.settings-cleanup-summary span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.settings-cleanup-summary strong {
+  color: #111827;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-cleanup-summary .cleanup-status-running {
+  color: #9a3412;
+}
+
+.settings-cleanup-summary .cleanup-status-succeeded {
+  color: #166534;
+}
+
+.settings-cleanup-summary .cleanup-status-failed {
+  color: #991b1b;
+}
+
+.settings-cleanup-actions,
+.settings-cleanup-confirmation,
+.settings-cleanup-confirmation-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-cleanup-actions {
+  margin-top: 16px;
+}
+
+.settings-cleanup-actions > span {
+  color: var(--theme-text-muted);
+  font-size: 0.84rem;
+}
+
+.settings-cleanup-button,
+.settings-cleanup-confirmation-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.settings-cleanup-confirmation {
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.settings-cleanup-confirmation strong,
+.settings-cleanup-confirmation p {
+  margin: 0;
+}
+
+.settings-cleanup-confirmation p {
+  margin-top: 3px;
+  color: var(--theme-text-muted);
+  font-size: 0.84rem;
+}
+
+.settings-cleanup-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 /* Keep every application scheme inside one color temperature. The accent is
@@ -7348,9 +7531,12 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   }
 
   .settings-page-header,
+  .settings-area-heading,
   .settings-backend-warning,
   .settings-section-heading,
   .settings-test-row,
+  .settings-cleanup-actions,
+  .settings-cleanup-confirmation,
   .response-report-coverage-heading {
     display: grid;
   }
@@ -7361,8 +7547,26 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 
   .settings-fields-grid,
   .settings-form-skeleton,
+  .settings-cleanup-skeleton,
   .mail-delivery-summary {
     grid-template-columns: 1fr;
+  }
+
+  .settings-cleanup-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-cleanup-schedule-badge {
+    width: fit-content;
+  }
+
+  .settings-cleanup-button {
+    width: 100%;
+  }
+
+  .settings-cleanup-confirmation-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-field-wide {

@@ -43,6 +43,10 @@ const mailRemindersMigration = readFileSync(
   new URL("./migrations/202608061300_mail_reminders.sql", import.meta.url),
   "utf8",
 );
+const storageCleanupMigration = readFileSync(
+  new URL("./migrations/202608101200_storage_cleanup_automation.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
   "title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing";
@@ -249,6 +253,42 @@ test("final storage policies prevent anonymous reads and keep cleanup server-sid
   assert.match(securityHardeningMigration, /values \('survey-files', 'survey-files', false, 10485760\)/i);
   assert.match(securityFollowupMigration, /drop policy if exists "survey files read anon" on storage\.objects/i);
   assert.match(securityFollowupMigration, /drop policy if exists "survey files upload authenticated" on storage\.objects/i);
+});
+
+test("storage cleanup is leased, recorded, and restricted to the service role", () => {
+  assert.match(schema, /create table public\.storage_cleanup_runs/i);
+  assert.match(schema, /retention_hours integer not null default 168/i);
+  assert.match(schema, /alter table public\.storage_cleanup_runs enable row level security;/i);
+  assert.match(schema, /revoke all on table public\.storage_cleanup_runs from anon, authenticated;/i);
+  assert.match(schema, /grant select, insert, update, delete on table public\.storage_cleanup_runs to service_role;/i);
+  assert.match(schema, /idx_storage_cleanup_runs_one_active[\s\S]*where status = 'running'/i);
+
+  const beginRun = getFunctionDefinition("begin_storage_cleanup_run");
+  const finishRun = getFunctionDefinition("finish_storage_cleanup_run");
+  assert.match(beginRun, /pg_advisory_xact_lock/i);
+  assert.match(beginRun, /p_trigger_type = 'manual'[\s\S]*p\.role = 'admin'[\s\S]*p\.is_disabled = false/i);
+  assert.match(beginRun, /p_retention_hours not between 168 and 720/i);
+  assert.match(finishRun, /run\.status = 'running'/i);
+  assert.match(storageCleanupMigration, /begin_storage_cleanup_run/i);
+  assert.match(storageCleanupMigration, /finish_storage_cleanup_run/i);
+});
+
+test("storage cleanup rechecks references and never targets the shared asset gallery", () => {
+  const confirmFiles = getFunctionDefinition("confirm_orphan_survey_files");
+  const listAssets = getFunctionDefinition("list_orphan_survey_assets");
+  const confirmAssets = getFunctionDefinition("confirm_orphan_survey_assets");
+
+  assert.match(confirmFiles, /o\.bucket_id = 'survey-files'/i);
+  assert.match(confirmFiles, /not exists[\s\S]*public\.response_file_references/i);
+  assert.match(confirmFiles, /o\.name = any\(object_names\)/i);
+  assert.match(listAssets, /o\.bucket_id = 'survey-assets'/i);
+  assert.match(listAssets, /o\.name ~\* '\^forms\//i);
+  assert.match(listAssets, /not exists[\s\S]*public\.forms/i);
+  assert.doesNotMatch(listAssets, /gallery\//i);
+  assert.match(confirmAssets, /o\.name = any\(object_names\)/i);
+  assert.match(confirmAssets, /not exists[\s\S]*public\.forms/i);
+  assert.match(schema, /grant execute on function public\.confirm_orphan_survey_files\(timestamptz, text\[\]\) to service_role;/i);
+  assert.match(schema, /grant execute on function public\.confirm_orphan_survey_assets\(timestamptz, text\[\]\) to service_role;/i);
 });
 
 test("storage deletes are limited to the uploader's unreferenced object", () => {

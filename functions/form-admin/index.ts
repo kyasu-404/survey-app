@@ -5,7 +5,8 @@ type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "delete-upload"; formId: string; path: string }
-  | { action: "cleanup-orphans"; olderThanHours?: number }
+  | { action: "get-cleanup-status" }
+  | { action: "cleanup-orphans" }
   | {
       action: "update-schema";
       formId: string;
@@ -38,6 +39,8 @@ function readFixedBucket(variableName: string, expected: string) {
 
 const storageBucket = readFixedBucket("SURVEY_FILES_BUCKET", "survey-files");
 const surveyAssetsBucket = readFixedBucket("SURVEY_ASSETS_BUCKET", "survey-assets");
+const storageCleanupRetentionHours = 7 * 24;
+const storageCleanupBatchLimit = 500;
 const allowedOrganizationTypes = new Set(["school", "kindergarten", "odo", "udod"]);
 
 const baseCorsHeaders = {
@@ -242,6 +245,72 @@ async function removeStorageObjectPaths(adminClient: SupabaseAdminClient, names:
   return { removedCount, error: null };
 }
 
+type StorageCleanupRunRow = {
+  id: string;
+  trigger_type: "scheduled" | "manual";
+  status: "running" | "succeeded" | "failed";
+  retention_hours: number;
+  removed_files: number;
+  removed_assets: number;
+  error: string | null;
+  started_at: string;
+  finished_at: string | null;
+};
+
+function serializeStorageCleanupRun(run: StorageCleanupRunRow | null) {
+  if (!run) return null;
+  return {
+    id: run.id,
+    triggerType: run.trigger_type,
+    status: run.status,
+    retentionHours: run.retention_hours,
+    removedFiles: run.removed_files,
+    removedAssets: run.removed_assets,
+    error: run.error,
+    startedAt: run.started_at,
+    finishedAt: run.finished_at,
+  };
+}
+
+function getStorageObjectNames(rows: unknown) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row: { name?: unknown }) => row.name)
+    .filter((name: unknown): name is string => typeof name === "string" && name.length > 0);
+}
+
+async function listConfirmedOrphanPaths(
+  adminClient: SupabaseAdminClient,
+  listFunction: "list_orphan_survey_files" | "list_orphan_survey_assets",
+  confirmFunction: "confirm_orphan_survey_files" | "confirm_orphan_survey_assets",
+  cutoff: string,
+) {
+  const { data: candidateRows, error: listError } = await adminClient.rpc(listFunction, {
+    cutoff,
+    batch_limit: storageCleanupBatchLimit,
+  });
+  if (listError) return { names: [] as string[], error: listError };
+
+  const candidates = getStorageObjectNames(candidateRows);
+  if (candidates.length === 0) return { names: [] as string[], error: null };
+
+  const { data: confirmedRows, error: confirmError } = await adminClient.rpc(confirmFunction, {
+    cutoff,
+    object_names: candidates,
+  });
+  return { names: getStorageObjectNames(confirmedRows), error: confirmError };
+}
+
+async function getLatestStorageCleanupRun(adminClient: SupabaseAdminClient) {
+  const { data, error } = await adminClient
+    .from("storage_cleanup_runs")
+    .select("id, trigger_type, status, retention_hours, removed_files, removed_assets, error, started_at, finished_at")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { run: (data ?? null) as StorageCleanupRunRow | null, error };
+}
+
 type ListedStorageEntry = {
   id?: string | null;
   name?: string;
@@ -319,64 +388,6 @@ async function removeStorageTree(
 
 async function removeSurveyAssetsForForm(adminClient: SupabaseAdminClient, formId: string) {
   return removeStorageTree(adminClient, surveyAssetsBucket, `forms/${formId}`);
-}
-
-function parseSurveyAssetObjectName(value: unknown) {
-  if (typeof value !== "string") return null;
-  const parts = value.split("/");
-  if (parts.length !== 4 || parts[0] !== "forms" || !isUuid(parts[1])) return null;
-  return { name: value, formId: parts[1] };
-}
-
-async function removeStaleDraftSurveyAssets(adminClient: SupabaseAdminClient, cutoff: string) {
-  const { entries: formEntries, error } = await listStorageEntries(adminClient, surveyAssetsBucket, "forms");
-  if (error) return { removedCount: 0, error };
-
-  const candidates: Array<{ name: string; formId: string }> = [];
-
-  for (const formEntry of formEntries) {
-    if (candidates.length >= 500 || !isSafeStorageEntryName(formEntry.name) || !isUuid(formEntry.name)) continue;
-    const formPath = `forms/${formEntry.name}`;
-    const { entries: ownerEntries, error: ownerError } = await listStorageEntries(adminClient, surveyAssetsBucket, formPath);
-    if (ownerError) return { removedCount: 0, error: ownerError };
-
-    for (const ownerEntry of ownerEntries) {
-      if (candidates.length >= 500 || !isSafeStorageEntryName(ownerEntry.name) || isListedStorageFile(ownerEntry)) continue;
-      const ownerPath = joinStoragePath(formPath, ownerEntry.name);
-      const { entries: assetEntries, error: assetError } = await listStorageEntries(adminClient, surveyAssetsBucket, ownerPath);
-      if (assetError) return { removedCount: 0, error: assetError };
-
-      for (const assetEntry of assetEntries) {
-        if (candidates.length >= 500) break;
-        if (!isListedStorageFile(assetEntry) || !isSafeStorageEntryName(assetEntry.name)) continue;
-        if (!assetEntry.created_at || assetEntry.created_at >= cutoff) continue;
-        const parsed = parseSurveyAssetObjectName(joinStoragePath(ownerPath, assetEntry.name));
-        if (parsed) candidates.push(parsed);
-      }
-    }
-  }
-
-  const formIds = [...new Set(candidates.map((item) => item.formId))];
-  if (formIds.length === 0) return { removedCount: 0, error: null };
-
-  const { data: forms, error: formsError } = await adminClient
-    .from("forms")
-    .select("id")
-    .in("id", formIds);
-  if (formsError) return { removedCount: 0, error: formsError };
-
-  const existingFormIds = new Set(
-    (forms ?? [])
-      .map((form: { id?: unknown }) => form.id)
-      .filter((id: unknown): id is string => typeof id === "string"),
-  );
-  const names = candidates
-    .filter((item) => !existingFormIds.has(item.formId))
-    .map((item) => item.name);
-  if (names.length === 0) return { removedCount: 0, error: null };
-
-  const { error: removeError } = await adminClient.storage.from(surveyAssetsBucket).remove(names);
-  return { removedCount: removeError ? 0 : names.length, error: removeError };
 }
 
 Deno.serve(async (req) => {
@@ -582,6 +593,25 @@ Deno.serve(async (req) => {
     );
   }
 
+  if (payload.action === "get-cleanup-status") {
+    const actionLogContext = {
+      ...requestLogContext,
+      operation: "form-admin.get-cleanup-status",
+      userId: requester.id,
+    };
+    if (requesterProfile.role !== "admin") {
+      return errorResponse(req, 403, "Forbidden", actionLogContext);
+    }
+
+    const { run, error } = await getLatestStorageCleanupRun(adminClient);
+    if (error) return errorResponse(req, 400, error.message, actionLogContext);
+
+    return jsonResponse(req, 200, {
+      retentionHours: storageCleanupRetentionHours,
+      lastRun: serializeStorageCleanupRun(run),
+    }, actionLogContext);
+  }
+
   if (payload.action === "cleanup-orphans") {
     const actionLogContext = {
       ...requestLogContext,
@@ -592,44 +622,81 @@ Deno.serve(async (req) => {
       return errorResponse(req, 403, "Forbidden", actionLogContext);
     }
 
-    const requestedHours = Number(payload.olderThanHours ?? 24);
-    const olderThanHours = Math.min(720, Math.max(24, Number.isFinite(requestedHours) ? requestedHours : 24));
-    const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000).toISOString();
-    const { data: orphanRows, error: orphanError } = await adminClient.rpc("list_orphan_survey_files", {
-      cutoff,
-      batch_limit: 500,
+    const workerId = `form-admin:${requestLogContext.requestId}`;
+    const { data: startedRuns, error: startError } = await adminClient.rpc("begin_storage_cleanup_run", {
+      p_trigger_type: "manual",
+      p_worker_id: workerId,
+      p_retention_hours: storageCleanupRetentionHours,
+      p_requested_by: requester.id,
+      p_min_interval_hours: 0,
     });
-    if (orphanError) {
-      return errorResponse(req, 400, orphanError.message, actionLogContext);
+    if (startError) return errorResponse(req, 400, startError.message, actionLogContext);
+
+    const run = Array.isArray(startedRuns) ? startedRuns[0] as StorageCleanupRunRow | undefined : undefined;
+    if (!run) {
+      return errorResponse(req, 409, "Очистка уже выполняется", actionLogContext);
     }
 
-    const names = (orphanRows ?? [])
-      .map((row: { name?: unknown }) => row.name)
-      .filter((name: unknown): name is string => typeof name === "string");
-    const { error: removeError } = names.length > 0
-      ? await adminClient.storage.from(storageBucket).remove(names)
-      : { error: null };
-    if (removeError) {
-      return errorResponse(req, 400, removeError.message, actionLogContext);
-    }
+    const cutoff = new Date(Date.now() - storageCleanupRetentionHours * 60 * 60 * 1000).toISOString();
+    let removedFiles = 0;
+    let removedAssets = 0;
+    let cleanupError: { message: string } | null = null;
 
-    const { removedCount: removedAssetCount, error: assetCleanupError } = await removeStaleDraftSurveyAssets(
+    const orphanFiles = await listConfirmedOrphanPaths(
       adminClient,
+      "list_orphan_survey_files",
+      "confirm_orphan_survey_files",
       cutoff,
     );
-    if (assetCleanupError) {
-      return errorResponse(req, 400, assetCleanupError.message, actionLogContext);
+    if (orphanFiles.error) {
+      cleanupError = orphanFiles.error;
+    } else if (orphanFiles.names.length > 0) {
+      const result = await adminClient.storage.from(storageBucket).remove(orphanFiles.names);
+      if (result.error) cleanupError = result.error;
+      else removedFiles = orphanFiles.names.length;
     }
+
+    if (!cleanupError) {
+      const orphanAssets = await listConfirmedOrphanPaths(
+        adminClient,
+        "list_orphan_survey_assets",
+        "confirm_orphan_survey_assets",
+        cutoff,
+      );
+      if (orphanAssets.error) {
+        cleanupError = orphanAssets.error;
+      } else if (orphanAssets.names.length > 0) {
+        const result = await adminClient.storage.from(surveyAssetsBucket).remove(orphanAssets.names);
+        if (result.error) cleanupError = result.error;
+        else removedAssets = orphanAssets.names.length;
+      }
+    }
+
+    const { data: finishedRuns, error: finishError } = await adminClient.rpc("finish_storage_cleanup_run", {
+      p_run_id: run.id,
+      p_worker_id: workerId,
+      p_success: !cleanupError,
+      p_removed_files: removedFiles,
+      p_removed_assets: removedAssets,
+      p_error: cleanupError?.message ?? null,
+    });
+    if (finishError) return errorResponse(req, 400, finishError.message, actionLogContext);
+
+    const finishedRun = Array.isArray(finishedRuns)
+      ? finishedRuns[0] as StorageCleanupRunRow | undefined
+      : undefined;
+    if (cleanupError) return errorResponse(req, 400, cleanupError.message, actionLogContext);
+    if (!finishedRun) return errorResponse(req, 409, "Не удалось завершить очистку", actionLogContext);
 
     console.info("form-admin action completed", {
       ...actionLogContext,
-      removedFiles: names.length,
-      removedAssets: removedAssetCount,
+      removedFiles,
+      removedAssets,
     });
     return jsonResponse(
       req,
       200,
-      { success: true, removedFiles: names.length, removedAssets: removedAssetCount },
+      { success: true, run: serializeStorageCleanupRun(finishedRun) },
       actionLogContext,
     );
   }

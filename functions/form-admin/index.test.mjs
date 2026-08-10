@@ -66,12 +66,16 @@ test("deletes database rows before best-effort storage cleanup", () => {
 
 test("offers an admin-only cleanup for stale unreferenced public uploads", () => {
   assert.match(source, /action: "cleanup-orphans"/);
+  assert.match(source, /action: "get-cleanup-status"/);
   assert.match(source, /requesterProfile\.role !== "admin"/);
-  assert.match(source, /\.rpc\("list_orphan_survey_files"/);
-  assert.match(source, /olderThanHours/);
-  assert.match(source, /removeStaleDraftSurveyAssets/);
-  assert.match(source, /listStorageEntries\(adminClient, surveyAssetsBucket, "forms"\)/);
-  assert.match(source, /assetEntry\.created_at >= cutoff/);
+  assert.match(source, /storageCleanupRetentionHours = 7 \* 24/);
+  assert.match(source, /\.rpc\("begin_storage_cleanup_run"/);
+  assert.match(source, /"list_orphan_survey_files"/);
+  assert.match(source, /"confirm_orphan_survey_files"/);
+  assert.match(source, /"list_orphan_survey_assets"/);
+  assert.match(source, /"confirm_orphan_survey_assets"/);
+  assert.match(source, /\.rpc\("finish_storage_cleanup_run"/);
+  assert.doesNotMatch(source, /olderThanHours/);
   assert.match(source, /removedAssets/);
 });
 

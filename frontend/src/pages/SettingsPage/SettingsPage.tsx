@@ -5,6 +5,8 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { getMailBatchActivity, getSmtpSettings, queueTestEmail, saveSmtpSettings } from "../../entities/mail/api";
 import { EMPTY_SMTP_SETTINGS, MAIL_STATUS_LABELS, validateSmtpSettings } from "../../entities/mail/model";
 import type { SmtpSettings, SmtpSettingsDraft } from "../../entities/mail/types";
+import { getStorageCleanupOverview, runStorageCleanup } from "../../entities/maintenance/api";
+import type { StorageCleanupRun } from "../../entities/maintenance/types";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
@@ -24,6 +26,16 @@ function settingsToDraft(settings: SmtpSettings | null): SmtpSettingsDraft {
   } : { ...EMPTY_SMTP_SETTINGS };
 }
 
+const CLEANUP_STATUS_LABELS: Record<StorageCleanupRun["status"], string> = {
+  running: "Выполняется",
+  succeeded: "Завершена",
+  failed: "Ошибка",
+};
+
+function formatCleanupDate(value: string | null) {
+  return value ? new Date(value).toLocaleString("ru-RU") : "—";
+}
+
 export default function SettingsPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
@@ -41,6 +53,16 @@ export default function SettingsPage() {
   const [testRecipient, setTestRecipient] = useState(profile?.email ?? "");
   const [testBatchId, setTestBatchId] = useState<string | null>(null);
   const [isQueueingTest, setIsQueueingTest] = useState(false);
+  const [isCleanupConfirmationOpen, setIsCleanupConfirmationOpen] = useState(false);
+  const [isRunningCleanup, setIsRunningCleanup] = useState(false);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+  const cleanupQuery = useQuery({
+    queryKey: ["storage-cleanup-overview"],
+    queryFn: getStorageCleanupOverview,
+    staleTime: 30_000,
+    refetchInterval: (query) => query.state.data?.lastRun?.status === "running" ? 3000 : 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (typeof settingsQuery.data === "undefined" || isDirty) return;
@@ -130,6 +152,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleRunCleanup = async () => {
+    setIsRunningCleanup(true);
+    setCleanupError(null);
+    try {
+      const run = await runStorageCleanup();
+      setIsCleanupConfirmationOpen(false);
+      await cleanupQuery.refetch();
+      showToast(
+        `Очистка завершена: файлов ответов — ${run.removedFiles}, изображений форм — ${run.removedAssets}`,
+        "success",
+      );
+    } catch (error) {
+      setCleanupError(getErrorMessage(error, "Не удалось очистить файлы"));
+    } finally {
+      setIsRunningCleanup(false);
+    }
+  };
+
   const passwordHint = useMemo(() => {
     if (draft.password) return "Новый пароль будет сохранён в зашифрованном виде.";
     if (hasStoredPassword) return "Пароль сохранён. Оставьте поле пустым, чтобы не менять его.";
@@ -138,6 +178,14 @@ export default function SettingsPage() {
   const backendError = settingsQuery.error
     ? getErrorMessage(settingsQuery.error, "Не удалось загрузить SMTP-настройки")
     : null;
+  const cleanupBackendError = cleanupQuery.error
+    ? getErrorMessage(cleanupQuery.error, "Не удалось получить состояние очистки")
+    : null;
+  const lastCleanupRun = cleanupQuery.data?.lastRun ?? null;
+  const cleanupIsActive = isRunningCleanup || lastCleanupRun?.status === "running";
+  const retentionDays = Math.round(
+    (lastCleanupRun?.retentionHours ?? cleanupQuery.data?.retentionHours ?? 168) / 24,
+  );
 
   return (
     <div className="dashboard-page">
@@ -146,25 +194,34 @@ export default function SettingsPage() {
           <div>
             <p>Администрирование</p>
             <h1>Настройки</h1>
-            <span>SMTP-коннектор для системных писем и напоминаний организациям.</span>
+            <span>Системные параметры приложения и обслуживание хранилища.</span>
           </div>
-          <label className={`smtp-enable-control ${draft.enabled ? "active" : ""}`}>
-            <input
-              type="checkbox"
-              checked={draft.enabled}
-              onChange={(event) => updateDraft("enabled", event.target.checked)}
-            />
-            <span className="smtp-enable-track" aria-hidden="true"><span /></span>
-            Коннектор включён
-          </label>
         </div>
 
-        {settingsQuery.isLoading ? (
-          <div className="settings-form-skeleton" aria-hidden="true">
-            {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="settings-field-skeleton" />)}
+        <section className="settings-area settings-smtp-area" aria-labelledby="smtp-settings-heading">
+          <div className="settings-area-heading">
+            <div>
+              <p>Почтовый модуль</p>
+              <h2 id="smtp-settings-heading">SMTP-коннектор</h2>
+              <span>Системные письма, тестовая отправка и напоминания организациям.</span>
+            </div>
+            <label className={`smtp-enable-control ${draft.enabled ? "active" : ""}`}>
+              <input
+                type="checkbox"
+                checked={draft.enabled}
+                onChange={(event) => updateDraft("enabled", event.target.checked)}
+              />
+              <span className="smtp-enable-track" aria-hidden="true"><span /></span>
+              Коннектор включён
+            </label>
           </div>
-        ) : (
-          <>
+
+          {settingsQuery.isLoading ? (
+            <div className="settings-form-skeleton" aria-hidden="true">
+              {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="settings-field-skeleton" />)}
+            </div>
+          ) : (
+            <>
             {backendError && (
               <div className="settings-backend-warning" role="alert">
                 <div>
@@ -281,8 +338,105 @@ export default function SettingsPage() {
                 </div>
               )}
             </section>
-          </>
-        )}
+            </>
+          )}
+        </section>
+
+        <section className="settings-area settings-cleanup-area" aria-labelledby="storage-cleanup-heading">
+          <div className="settings-area-heading">
+            <div>
+              <p>Обслуживание Storage</p>
+              <h2 id="storage-cleanup-heading">Очистка файлов</h2>
+              <span>
+                Раз в сутки удаляются файлы ответов без связи с отправленным ответом и изображения каталогов
+                уже удалённых форм. Минимальный возраст — {retentionDays} дней.
+              </span>
+            </div>
+            <span className="settings-cleanup-schedule-badge">Автоматически раз в сутки</span>
+          </div>
+
+          {cleanupQuery.isLoading ? (
+            <div className="settings-cleanup-skeleton" aria-hidden="true">
+              <Skeleton className="settings-field-skeleton" />
+              <Skeleton className="settings-field-skeleton" />
+            </div>
+          ) : (
+            <div className="settings-section settings-cleanup-section">
+              {cleanupBackendError && (
+                <div className="settings-backend-warning" role="alert">
+                  <div>
+                    <strong>Состояние очистки недоступно</strong>
+                    <p>{cleanupBackendError}</p>
+                  </div>
+                  <button type="button" className="users-page-retry-button" onClick={() => void cleanupQuery.refetch()}>
+                    Проверить снова
+                  </button>
+                </div>
+              )}
+
+              <div className="settings-cleanup-summary" aria-live="polite">
+                <div>
+                  <span>
+                    Последний запуск
+                    {lastCleanupRun ? ` · ${lastCleanupRun.triggerType === "scheduled" ? "автоматический" : "ручной"}` : ""}
+                  </span>
+                  <strong>{lastCleanupRun ? formatCleanupDate(lastCleanupRun.finishedAt ?? lastCleanupRun.startedAt) : "Ещё не выполнялась"}</strong>
+                </div>
+                <div>
+                  <span>Статус</span>
+                  <strong className={lastCleanupRun ? `cleanup-status-${lastCleanupRun.status}` : undefined}>
+                    {lastCleanupRun ? CLEANUP_STATUS_LABELS[lastCleanupRun.status] : "Нет данных"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Удалено файлов ответов</span>
+                  <strong>{lastCleanupRun?.removedFiles ?? 0}</strong>
+                </div>
+                <div>
+                  <span>Удалено изображений форм</span>
+                  <strong>{lastCleanupRun?.removedAssets ?? 0}</strong>
+                </div>
+              </div>
+
+              {lastCleanupRun?.error && <p className="settings-form-error" role="alert">{lastCleanupRun.error}</p>}
+              {cleanupError && <p className="settings-form-error" role="alert">{cleanupError}</p>}
+
+              <div className="settings-cleanup-actions">
+                <button
+                  type="button"
+                  className="app-button settings-cleanup-button"
+                  disabled={cleanupIsActive || Boolean(cleanupBackendError)}
+                  onClick={() => {
+                    setCleanupError(null);
+                    setIsCleanupConfirmationOpen(true);
+                  }}
+                >
+                  {cleanupIsActive && <InlineSpinner />}
+                  {cleanupIsActive ? "Очистка выполняется…" : "Запустить очистку сейчас"}
+                </button>
+                <span>Используемые файлы и общая галерея не удаляются.</span>
+              </div>
+
+              {isCleanupConfirmationOpen && (
+                <div className="settings-cleanup-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="cleanup-confirmation-title">
+                  <div>
+                    <strong id="cleanup-confirmation-title">Запустить очистку файлов?</strong>
+                    <p>Будут удалены только неподтверждённые объекты старше {retentionDays} дней.</p>
+                  </div>
+                  <div className="settings-cleanup-confirmation-actions">
+                    <button type="button" className="app-button" disabled={isRunningCleanup} onClick={() => setIsCleanupConfirmationOpen(false)}>
+                      Отмена
+                    </button>
+                    <button type="button" className="button-primary" disabled={isRunningCleanup} onClick={() => void handleRunCleanup()}>
+                      {isRunningCleanup && <InlineSpinner />}
+                      Очистить
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
