@@ -306,8 +306,8 @@ describe("FormResponsesPage", () => {
   it("uses matching light styles for report, refresh, and directory file buttons", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*color:\s*#111111;[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
-    expect(css).toMatch(/\.responses-page-toolbar button\.dashboard-refresh-button,[^{]+\{[^}]*color:\s*#111111;[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
+    expect(css).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*color:\s*var\(--theme-text\);[^}]*border-color:\s*var\(--theme-border\);[^}]*background:\s*var\(--theme-control-background\);/s);
+    expect(css).toMatch(/\.responses-page-toolbar button\.dashboard-refresh-button,[^{]+\{[^}]*color:\s*var\(--theme-text\);[^}]*border-color:\s*var\(--theme-border\);[^}]*background:\s*var\(--theme-control-background\);/s);
   });
 
   it("adds matching hover feedback to report and directory tabs", () => {
@@ -330,7 +330,7 @@ describe("FormResponsesPage", () => {
     expect(css).toMatch(/\.response-preview-drawer\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*clip;/);
     expect(css).toMatch(/\.response-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
     expect(css).toMatch(
-      /\.template-preview-drawer,\s*\.response-preview-drawer\s*\{[^}]*background:\s*#ffffff;/s,
+      /\.template-preview-drawer,\s*\.response-preview-drawer\s*\{[^}]*background:\s*var\(--theme-surface-muted\);/s,
     );
     expect(css).toMatch(
       /\.template-preview-body\.survey-page-card,\s*\.response-preview-body\.survey-page-card\s*\{[^}]*padding:\s*0;[^}]*background:\s*transparent\s*!important;/s,

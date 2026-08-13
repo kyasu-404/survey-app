@@ -91,12 +91,12 @@ describe("ThemeCycleButton", () => {
     const skyOption = screen.getByRole("menuitemradio", { name: "Голубая" });
     const tealOption = screen.getByRole("menuitemradio", { name: "Зелёная" });
 
-    expect(sandOption).toHaveStyle("--theme-option-accent: #6f5137");
-    expect(sandOption).toHaveStyle("--theme-option-surface: #eadfce");
-    expect(skyOption).toHaveStyle("--theme-option-accent: #397fbd");
-    expect(skyOption).toHaveStyle("--theme-option-surface: #d5e4ef");
-    expect(tealOption).toHaveStyle("--theme-option-accent: #3c805b");
-    expect(tealOption).toHaveStyle("--theme-option-surface: #d8e7dc");
+    expect(sandOption).toHaveStyle("--theme-option-accent: #985036");
+    expect(sandOption).toHaveStyle("--theme-option-surface: #e7ddd3");
+    expect(skyOption).toHaveStyle("--theme-option-accent: #4863b6");
+    expect(skyOption).toHaveStyle("--theme-option-surface: #dde4ed");
+    expect(tealOption).toHaveStyle("--theme-option-accent: #277052");
+    expect(tealOption).toHaveStyle("--theme-option-surface: #dce8df");
   });
 
   it("uses scheme surfaces for nested application panels", () => {
@@ -105,28 +105,28 @@ describe("ThemeCycleButton", () => {
 
     expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--theme-surface-muted:[^;]+;[^}]*--theme-control-background:[^;]+;/s);
     expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--theme-surface-muted:[^;]+;[^}]*--theme-control-background:[^;]+;/s);
-    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--sidebar-bg:[^;]*rgba\(241,\s*248,\s*252,\s*0\.98\)[^;]*;[^}]*--theme-form-card-background:[^;]*rgba\(246,\s*250,\s*253,\s*0\.98\)[^;]*;/s);
-    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--sidebar-bg:[^;]*rgba\(243,\s*249,\s*245,\s*0\.98\)[^;]*;[^}]*--theme-form-card-background:[^;]*rgba\(247,\s*251,\s*248,\s*0\.98\)[^;]*;/s);
-    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--theme-card-background:\s*linear-gradient\(180deg,\s*rgba\(255,\s*255,\s*255,\s*0\.99\)/s);
-    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--theme-card-background:\s*linear-gradient\(180deg,\s*rgba\(255,\s*255,\s*255,\s*0\.99\)/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--sidebar-bg:\s*rgba\(237,\s*241,\s*247,\s*0\.98\);[^}]*--theme-form-card-background:\s*#ffffff;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--sidebar-bg:\s*rgba\(234,\s*241,\s*236,\s*0\.98\);[^}]*--theme-form-card-background:\s*#ffffff;/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--theme-card-background:\s*#fbfcfe;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--theme-card-background:\s*#fbfdfb;/s);
     expect(surfaceOverrides).toMatch(/\.dashboard-main-card,[^{]+\{[^}]*background:\s*var\(--theme-page-surface\);/s);
     expect(surfaceOverrides).toMatch(/\.dashboard-form-card\s*\{[^}]*background:\s*var\(--theme-form-card-background\);/s);
     expect(surfaceOverrides).toMatch(/\.responses-table th\s*\{[^}]*background:\s*var\(--theme-surface\);/s);
-    expect(surfaceOverrides).toMatch(/\.responses-table tbody tr td,\s*\.responses-table tbody tr:nth-child\(even\) td\s*\{[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar input,[^{]+\{[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar select option,[^{]+\{[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.dashboard-info-button,[^{]+\{[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*border-color:\s*rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.dashboard-stats-popover\s*\{[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.dashboard-stats-item span,[^{]+\{[^}]*color:\s*#111111;/s);
-    expect(surfaceOverrides).toMatch(/\.form-menu-trigger,[^{]+\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.form-menu-trigger:hover,\s*\.form-menu-trigger:focus-visible\s*\{[^}]*transform:\s*translateY\(-2px\);[^}]*box-shadow:\s*0 12px 24px rgba\(17,\s*17,\s*17,\s*0\.14\);/s);
-    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-edit-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*#ffffff;/s);
-    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-delete-button,[^{]+\{[^}]*color:\s*#111111;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.16\);/s);
-    expect(surfaceOverrides).toMatch(/\.theme-cycle-button,[^{]+\{[^}]*border:\s*1px solid rgba\(17,\s*17,\s*17,\s*0\.38\);[^}]*background:\s*#ffffff;/s);
-    expect(css).toMatch(/:root\[data-theme="sand"\][^{]*\{[^}]*--creator-toolbar:\s*#fffdf9;[^}]*--creator-workspace:\s*#eee7dd;[^}]*--creator-accent:\s*#765137;/s);
-    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--creator-panel:\s*#f4f8fb;[^}]*--creator-workspace:\s*#e8f0f5;[^}]*--creator-accent:\s*#347db8;/s);
-    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--creator-panel:\s*#f4f8f5;[^}]*--creator-workspace:\s*#e8f0eb;[^}]*--creator-accent:\s*#337f5b;/s);
+    expect(surfaceOverrides).toMatch(/\.responses-table tbody tr:nth-child\(even\) td\s*\{[^}]*background:\s*var\(--theme-row-alt\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar input,[^{]+\{[^}]*background:\s*var\(--theme-control-background\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-toolbar select option,[^{]+\{[^}]*background:\s*var\(--theme-popover-background\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-info-button,[^{]+\{[^}]*background:\s*var\(--theme-surface-light\);/s);
+    expect(surfaceOverrides).toMatch(/\.users-page-controls \.app-button,[^{]+button\.responses-report-button:disabled\s*\{[^}]*border-color:\s*var\(--theme-border\);[^}]*background:\s*var\(--theme-control-background\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-stats-popover\s*\{[^}]*background:\s*var\(--theme-popover-background\);/s);
+    expect(surfaceOverrides).toMatch(/\.dashboard-stats-item span,[^{]+\{[^}]*color:\s*var\(--theme-text\);/s);
+    expect(surfaceOverrides).toMatch(/\.form-menu-trigger,[^{]+\{[^}]*border:\s*1px solid var\(--theme-border\);[^}]*background:\s*var\(--theme-surface-light\);/s);
+    expect(surfaceOverrides).toMatch(/\.form-menu-trigger:hover,\s*\.form-menu-trigger:focus-visible\s*\{[^}]*transform:\s*translateY\(-2px\);[^}]*box-shadow:\s*0 12px 24px var\(--theme-shadow-color\);/s);
+    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-edit-button,[^{]+\{[^}]*color:\s*var\(--theme-text\);[^}]*background:\s*var\(--theme-surface-light\);/s);
+    expect(surfaceOverrides).toMatch(/\.organizations-row-actions \.organization-delete-button,[^{]+\{[^}]*color:\s*#7f1d1d;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.16\);/s);
+    expect(surfaceOverrides).toMatch(/\.theme-cycle-button,[^{]+\{[^}]*border:\s*1px solid var\(--theme-border\);[^}]*background:\s*var\(--theme-surface-light\);/s);
+    expect(css).toMatch(/:root\[data-theme="sand"\][^{]*\{[^}]*--creator-toolbar:\s*#fcfaf7;[^}]*--creator-workspace:\s*#e3e0dc;[^}]*--creator-accent:\s*#985036;/s);
+    expect(css).toMatch(/:root\[data-theme="sky"\][^{]*\{[^}]*--creator-panel:\s*#f3f5f9;[^}]*--creator-workspace:\s*#e2e6ed;[^}]*--creator-accent:\s*#4863b6;/s);
+    expect(css).toMatch(/:root\[data-theme="teal"\][^{]*\{[^}]*--creator-panel:\s*#f1f5f2;[^}]*--creator-workspace:\s*#e0e6e2;[^}]*--creator-accent:\s*#277052;/s);
     expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-creator\s*\{[^}]*--sjs-primary-backcolor:\s*var\(--creator-accent\)\s*!important;[^}]*--sjs-general-backcolor:\s*var\(--creator-control\)\s*!important;[^}]*--ctr-surface-background-color:\s*var\(--creator-workspace\)\s*!important;/s);
     expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-tabbed-menu\s*\{[^}]*background:\s*var\(--creator-toolbar\)\s*!important;/s);
     expect(surfaceOverrides).toMatch(/\.builder-creator-shell \.svc-side-bar,[^{]+\{[^}]*background:\s*var\(--creator-panel\)\s*!important;/s);

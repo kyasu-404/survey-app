@@ -378,11 +378,11 @@ describe("SurveyBuilder", () => {
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-primary-backcolor": "#765137",
-            "--sjs-general-backcolor": "#fffdfa",
-            "--sjs-general-forecolor": "#332b24",
-            "--sjs-special-background": "#f5efe7",
-            "--sjs2-color-utility-surface-designer": "#eee7dd",
+            "--sjs-primary-backcolor": "#985036",
+            "--sjs-general-backcolor": "#ffffff",
+            "--sjs-general-forecolor": "#2f2925",
+            "--sjs-special-background": "#ece7e2",
+            "--sjs2-color-utility-surface-designer": "#e3e0dc",
           }),
         }),
       );
@@ -1231,7 +1231,7 @@ describe("SurveyBuilder", () => {
       /\.builder-creator-shell \.svc-designer-header,\s*\.builder-creator-shell \.svc-designer-header \.svc-surface-header,\s*\.builder-creator-shell \.svc-designer-header \.sd-container-modern__title\s*\{[^}]*background:\s*var\(--creator-workspace\)\s*!important;/s,
     );
     expect(appCss).toMatch(
-      /\.builder-creator-shell \.svc-tab-designer \.svc-designer-header\s*\{[^}]*border-bottom:\s*2px solid #111111;/s,
+      /\.builder-creator-shell \.svc-tab-designer \.svc-designer-header\s*\{[^}]*border-bottom:\s*2px solid var\(--creator-accent\);/s,
     );
   });
 

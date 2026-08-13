@@ -181,10 +181,10 @@ describe("SettingsPage", () => {
   it("keeps every editable settings field white in all application themes", () => {
     const css = readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 
-    expect(css).toMatch(/\.settings-page-card\s*\{[^}]*background:\s*#ffffff\s*!important;/);
+    expect(css).toMatch(/\.settings-page-card\s*\{[^}]*background:\s*var\(--theme-page-surface\)\s*!important;/);
     expect(css).toMatch(/\.settings-branding-preview-frame\s*\{[^}]*overflow:\s*visible;[^}]*border-radius:\s*0;/);
     expect(css).toMatch(
-      /\.settings-page-card \.settings-field input:not\(\[type="checkbox"\]\),[\s\S]*\.settings-page-card \.settings-field select[\s\S]*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color-scheme:\s*light;/,
+      /\.settings-page-card \.settings-field input:not\(\[type="checkbox"\]\),[\s\S]*\.settings-page-card \.settings-field select[\s\S]*\{[^}]*background:\s*var\(--theme-surface-light\)\s*!important;[^}]*color-scheme:\s*light;/,
     );
   });
 });

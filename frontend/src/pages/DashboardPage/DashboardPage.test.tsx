@@ -1232,10 +1232,10 @@ describe("DashboardPage", () => {
     expect(css).toMatch(/\.dashboard-status-pill-closed,\s*button\.dashboard-status-trigger-glossy\.dashboard-status-pill-closed,[^{]+\{[^}]*color:\s*var\(--theme-text\);[^}]*border-color:\s*var\(--theme-border\);[^}]*background:\s*linear-gradient\(180deg,\s*var\(--theme-surface-light\),\s*var\(--theme-surface\)\);/s);
   });
 
-  it("keeps the regular responses counter black in every application theme", () => {
+  it("keeps the regular responses counter readable in every application theme", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.dashboard-responses-link,\s*\.dashboard-responses-link:hover\s*\{[^}]*color:\s*#111111;/s);
+    expect(css).toMatch(/\.dashboard-responses-link,\s*\.dashboard-responses-link:hover\s*\{[^}]*color:\s*var\(--theme-text\);/s);
     expect(css).toMatch(/\.dashboard-responses-link-limit-reached,[^{]+\{[^}]*color:\s*#b91c1c;/s);
   });
 

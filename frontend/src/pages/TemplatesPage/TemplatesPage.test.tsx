@@ -596,7 +596,7 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.template-preview-drawer\s*\{[^}]*overflow-y:\s*auto;[^}]*overflow-x:\s*clip;/);
     expect(css).toMatch(/\.template-preview-body\.survey-page-card\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow:\s*visible;/);
     expect(css).toMatch(
-      /\.template-preview-drawer,\s*\.response-preview-drawer\s*\{[^}]*background:\s*#ffffff;/s,
+      /\.template-preview-drawer,\s*\.response-preview-drawer\s*\{[^}]*background:\s*var\(--theme-surface-muted\);/s,
     );
     expect(css).toMatch(
       /\.template-preview-body\.survey-page-card,\s*\.response-preview-body\.survey-page-card\s*\{[^}]*padding:\s*0;[^}]*background:\s*transparent\s*!important;/s,
@@ -612,19 +612,19 @@ describe("TemplatesPage", () => {
   it("keeps template preview controls, descriptions, and pinning affordance on the requested styling", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*#111111;[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--theme-accent-gradient\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.templates-page-kicker\s*\{[^}]*color:\s*var\(--theme-accent\);/s);
     expect(css).toMatch(/\.templates-use-button,\s*\.templates-share-button\s*\{[^}]*padding:\s*7px 10px;/);
-    expect(css).toMatch(/\.templates-use-button\s*\{[^}]*background:\s*linear-gradient\(180deg, #27272a, #111111\);[^}]*border-color:\s*rgba\(17, 17, 17, 0\.36\);[^}]*color:\s*#ffffff;/s);
+    expect(css).toMatch(/\.templates-use-button\s*\{[^}]*background:\s*var\(--theme-accent-gradient\);[^}]*border-color:\s*transparent;[^}]*color:\s*#ffffff;/s);
     expect(css).toMatch(
-      /\.templates-use-button:hover,\s*\.templates-use-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg, #3f3f46, #18181b\);[^}]*border-color:\s*rgba\(17, 17, 17, 0\.48\);[^}]*transform:\s*translateY\(-2px\);/s,
+      /\.templates-use-button:hover,\s*\.templates-use-button:focus-visible\s*\{[^}]*background:\s*var\(--theme-accent-gradient\);[^}]*border-color:\s*transparent;[^}]*transform:\s*translateY\(-2px\);/s,
     );
-    expect(css).toMatch(/\.templates-share-button\s*\{[^}]*background:\s*#ffffff;[^}]*border-color:\s*rgba\(17, 17, 17, 0\.38\);[^}]*color:\s*#111111;/s);
+    expect(css).toMatch(/\.templates-share-button\s*\{[^}]*background:\s*var\(--theme-surface-light\);[^}]*border-color:\s*var\(--theme-border\);[^}]*color:\s*var\(--theme-text\);/s);
     expect(css).toMatch(
-      /\.templates-share-button:hover,\s*\.templates-share-button:focus-visible\s*\{[^}]*background:\s*#f7f7f7;[^}]*border-color:\s*rgba\(17, 17, 17, 0\.5\);[^}]*transform:\s*translateY\(-2px\);/s,
+      /\.templates-share-button:hover,\s*\.templates-share-button:focus-visible\s*\{[^}]*background:\s*var\(--theme-container-high\);[^}]*border-color:\s*color-mix\(in srgb, var\(--theme-accent\) 36%, transparent\);[^}]*transform:\s*translateY\(-2px\);/s,
     );
     expect(css).toMatch(
-      /\.templates-share-button\.templates-share-button-muted:hover,\s*\.templates-share-button\.templates-share-button-muted:focus-visible\s*\{[^}]*background:\s*#f7f7f7;[^}]*border-color:\s*rgba\(17, 17, 17, 0\.5\);[^}]*transform:\s*translateY\(-2px\);/s,
+      /\.templates-share-button\.templates-share-button-muted:hover,\s*\.templates-share-button\.templates-share-button-muted:focus-visible\s*\{[^}]*background:\s*var\(--theme-container-high\);[^}]*border-color:\s*color-mix\(in srgb, var\(--theme-accent\) 36%, transparent\);[^}]*transform:\s*translateY\(-2px\);/s,
     );
     expect(css).toMatch(
       /\.survey-runtime-surface\.survey-page-card \.sd-question \.sd-description,\s*\.survey-runtime-surface\.survey-page-card \.sd-question__description\s*\{[^}]*width:\s*fit-content;[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/s,
