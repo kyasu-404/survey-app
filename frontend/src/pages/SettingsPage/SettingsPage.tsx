@@ -11,6 +11,7 @@ import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { BrandingSettingsSection } from "./BrandingSettingsSection";
 
 function settingsToDraft(settings: SmtpSettings | null): SmtpSettingsDraft {
   return settings ? {
@@ -197,6 +198,8 @@ export default function SettingsPage() {
             <span>Системные параметры приложения и обслуживание хранилища.</span>
           </div>
         </div>
+
+        <BrandingSettingsSection />
 
         <section className="settings-area settings-smtp-area" aria-labelledby="smtp-settings-heading">
           <div className="settings-area-heading">

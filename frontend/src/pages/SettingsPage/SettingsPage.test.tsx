@@ -11,12 +11,18 @@ const {
   saveSmtpSettings,
   getStorageCleanupOverview,
   runStorageCleanup,
+  getAppBranding,
+  uploadAppLogo,
+  resetAppLogo,
   showToast,
 } = vi.hoisted(() => ({
   getSmtpSettings: vi.fn(),
   saveSmtpSettings: vi.fn(),
   getStorageCleanupOverview: vi.fn(),
   runStorageCleanup: vi.fn(),
+  getAppBranding: vi.fn(),
+  uploadAppLogo: vi.fn(),
+  resetAppLogo: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -30,6 +36,15 @@ vi.mock("../../entities/mail/api", () => ({
 vi.mock("../../entities/maintenance/api", () => ({
   getStorageCleanupOverview,
   runStorageCleanup,
+}));
+
+vi.mock("../../entities/branding/api", () => ({
+  APP_BRANDING_QUERY_KEY: ["app-branding"],
+  APP_LOGO_ACCEPT: "image/jpeg,image/png,image/webp",
+  getAppBranding,
+  uploadAppLogo,
+  resetAppLogo,
+  validateAppLogoFile: vi.fn(),
 }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
@@ -84,6 +99,32 @@ describe("SettingsPage", () => {
       startedAt: "2026-08-10T12:00:00.000Z",
       finishedAt: "2026-08-10T12:00:01.000Z",
     });
+    getAppBranding.mockResolvedValue({
+      sidebarLogoPath: null,
+      sidebarLogoUrl: null,
+      updatedAt: null,
+    });
+    uploadAppLogo.mockResolvedValue({
+      sidebarLogoPath: "app-branding/sidebar-logo-11111111-1111-4111-8111-111111111111.png",
+      sidebarLogoUrl: "https://storage.test/logo.png",
+      updatedAt: "2026-08-13T12:00:00.000Z",
+    });
+    resetAppLogo.mockResolvedValue({ sidebarLogoPath: null, sidebarLogoUrl: null, updatedAt: null });
+  });
+
+  it("lets an administrator upload and preview the main sidebar logo", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Основной логотип" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Предпросмотр основного логотипа" })).toBeInTheDocument();
+
+    const file = new File(["logo"], "organization-logo.png", { type: "image/png" });
+    await userEvent.upload(screen.getByLabelText("Выбрать изображение"), file);
+    expect(screen.getByText("organization-logo.png")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить логотип" }));
+    await waitFor(() => expect(uploadAppLogo).toHaveBeenCalledWith(file));
+    expect(showToast).toHaveBeenCalledWith("Основной логотип обновлён", "success");
   });
 
   it("loads saved SMTP data without exposing the password and saves changes", async () => {
@@ -140,6 +181,8 @@ describe("SettingsPage", () => {
   it("keeps every editable settings field white in all application themes", () => {
     const css = readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 
+    expect(css).toMatch(/\.settings-page-card\s*\{[^}]*background:\s*#ffffff\s*!important;/);
+    expect(css).toMatch(/\.settings-branding-preview-frame\s*\{[^}]*overflow:\s*visible;[^}]*border-radius:\s*0;/);
     expect(css).toMatch(
       /\.settings-page-card \.settings-field input:not\(\[type="checkbox"\]\),[\s\S]*\.settings-page-card \.settings-field select[\s\S]*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color-scheme:\s*light;/,
     );

@@ -1,6 +1,8 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { APP_BRANDING_QUERY_KEY, getAppBranding } from "../../entities/branding/api";
 import { logout } from "../../features/auth/api";
 import blackLogo from "../../img/black_logo.png";
 import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
@@ -13,6 +15,14 @@ type SidebarProps = {
 export function Sidebar({ onToggle }: SidebarProps) {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const brandingQuery = useQuery({
+    queryKey: APP_BRANDING_QUERY_KEY,
+    queryFn: getAppBranding,
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
+  const sidebarLogo = brandingQuery.data?.sidebarLogoUrl ?? blackLogo;
 
   async function onLogout() {
     try {
@@ -26,7 +36,16 @@ export function Sidebar({ onToggle }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img src={blackLogo} alt="Логотип ИМЦ" className="logo-image" />
+        <img
+          src={sidebarLogo}
+          alt="Логотип приложения"
+          className="logo-image"
+          onError={(event) => {
+            if (event.currentTarget.dataset.fallbackApplied) return;
+            event.currentTarget.dataset.fallbackApplied = "true";
+            event.currentTarget.src = blackLogo;
+          }}
+        />
         <h3 className="brand-title">Формы</h3>
         <button type="button" className="sidebar-toggle-button" onClick={onToggle} aria-label="Скрыть меню">
           ←

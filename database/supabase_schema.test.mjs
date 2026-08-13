@@ -47,6 +47,14 @@ const storageCleanupMigration = readFileSync(
   new URL("./migrations/202608101200_storage_cleanup_automation.sql", import.meta.url),
   "utf8",
 );
+const appBrandingMigration = readFileSync(
+  new URL("./migrations/202608131200_app_branding.sql", import.meta.url),
+  "utf8",
+);
+const appBrandingUploadFixMigration = readFileSync(
+  new URL("./migrations/202608131300_fix_app_branding_upload_policy.sql", import.meta.url),
+  "utf8",
+);
 
 const safeFormsUpdateColumns =
   "title, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing";
@@ -245,6 +253,31 @@ test("survey assets separate common gallery objects from per-form uploads", () =
   assert.match(formThemesMigration, /survey_assets_authenticated_delete/i);
 });
 
+test("application branding is readable by employees and writable only through the admin gate", () => {
+  assert.match(schema, /create table public\.app_branding/i);
+  assert.match(schema, /sidebar_logo_path ~\* '\^app-branding\/sidebar-logo-/i);
+  assert.match(schema, /alter table public\.app_branding enable row level security;/i);
+  assert.match(schema, /revoke all on table public\.app_branding from anon, authenticated;/i);
+  assert.match(schema, /grant select on table public\.app_branding to authenticated;/i);
+
+  const setLogo = getFunctionDefinition("set_sidebar_logo_path");
+  const manageLogoAsset = getFunctionDefinition("can_manage_app_branding_asset");
+  assert.match(setLogo, /request_role\(\) <> 'admin'/i);
+  assert.match(setLogo, /for update/i);
+  assert.match(setLogo, /previous_sidebar_logo_path/i);
+  assert.match(manageLogoAsset, /request_role\(\) = 'admin'/i);
+  assert.match(manageLogoAsset, /app-branding\/sidebar-logo-/i);
+  const brandingUploadPolicy = getPolicyDefinition("survey_assets_branding_upload");
+  assert.match(brandingUploadPolicy, /can_manage_app_branding_asset\(name\)/i);
+  assert.doesNotMatch(brandingUploadPolicy, /metadata\s*->>\s*'size'/i);
+  assert.match(getPolicyDefinition("survey_assets_branding_delete"), /can_manage_app_branding_asset\(name\)/i);
+  assert.match(appBrandingMigration, /grant execute on function public\.set_sidebar_logo_path\(text\) to authenticated, service_role/i);
+  assert.doesNotMatch(appBrandingMigration, /grant (?:insert|update|delete).*app_branding to authenticated/i);
+  assert.match(appBrandingUploadFixMigration, /drop policy if exists "survey_assets_branding_upload"/i);
+  assert.match(appBrandingUploadFixMigration, /can_manage_app_branding_asset\(name\)/i);
+  assert.doesNotMatch(appBrandingUploadFixMigration, /metadata\s*->>\s*'size'/i);
+});
+
 test("final storage policies prevent anonymous reads and keep cleanup server-side", () => {
   assert.doesNotMatch(schema, /create policy "survey_files_public_read"/i);
   assert.doesNotMatch(schema, /create policy "survey_files_public_delete"/i);
@@ -284,9 +317,12 @@ test("storage cleanup rechecks references and never targets the shared asset gal
   assert.match(listAssets, /o\.bucket_id = 'survey-assets'/i);
   assert.match(listAssets, /o\.name ~\* '\^forms\//i);
   assert.match(listAssets, /not exists[\s\S]*public\.forms/i);
+  assert.match(listAssets, /o\.name ~\* '\^app-branding\/sidebar-logo-/i);
+  assert.match(listAssets, /not exists[\s\S]*public\.app_branding[\s\S]*sidebar_logo_path = o\.name/i);
   assert.doesNotMatch(listAssets, /gallery\//i);
   assert.match(confirmAssets, /o\.name = any\(object_names\)/i);
   assert.match(confirmAssets, /not exists[\s\S]*public\.forms/i);
+  assert.match(confirmAssets, /not exists[\s\S]*public\.app_branding[\s\S]*sidebar_logo_path = o\.name/i);
   assert.match(schema, /grant execute on function public\.confirm_orphan_survey_files\(timestamptz, text\[\]\) to service_role;/i);
   assert.match(schema, /grant execute on function public\.confirm_orphan_survey_assets\(timestamptz, text\[\]\) to service_role;/i);
 });

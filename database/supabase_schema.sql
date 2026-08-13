@@ -24,6 +24,20 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
+create table public.app_branding (
+  id smallint primary key default 1 check (id = 1),
+  sidebar_logo_path text,
+  updated_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint app_branding_sidebar_logo_path check (
+    sidebar_logo_path is null
+    or sidebar_logo_path ~* '^app-branding/sidebar-logo-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$'
+  )
+);
+
+insert into public.app_branding (id, sidebar_logo_path)
+values (1, null);
+
 create table public.education_organizations (
   id uuid primary key default gen_random_uuid(),
   organization_type text not null check (organization_type in ('school', 'kindergarten', 'odo', 'udod')),
@@ -357,6 +371,53 @@ $$;
 
 revoke all on function public.request_role() from public;
 grant execute on function public.request_role() to authenticated, service_role;
+
+create or replace function public.set_sidebar_logo_path(p_sidebar_logo_path text)
+returns table (
+  sidebar_logo_path text,
+  previous_sidebar_logo_path text,
+  updated_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  old_logo_path text;
+begin
+  if not public.request_is_enabled() or public.request_role() <> 'admin' then
+    raise exception 'Only enabled administrators can change application branding'
+      using errcode = '42501';
+  end if;
+
+  if p_sidebar_logo_path is not null and btrim(p_sidebar_logo_path) !~*
+    '^app-branding/sidebar-logo-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$'
+  then
+    raise exception 'Invalid sidebar logo path' using errcode = '22023';
+  end if;
+
+  select branding.sidebar_logo_path
+  into old_logo_path
+  from public.app_branding branding
+  where branding.id = 1
+  for update;
+
+  insert into public.app_branding (id, sidebar_logo_path, updated_by, updated_at)
+  values (1, nullif(btrim(p_sidebar_logo_path), ''), auth.uid(), now())
+  on conflict (id) do update
+  set sidebar_logo_path = excluded.sidebar_logo_path,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at;
+
+  return query
+  select branding.sidebar_logo_path, old_logo_path, branding.updated_at
+  from public.app_branding branding
+  where branding.id = 1;
+end;
+$$;
+
+revoke all on function public.set_sidebar_logo_path(text) from public;
+grant execute on function public.set_sidebar_logo_path(text) to authenticated, service_role;
 
 create or replace function public.is_existing_response_submission(
   target_form_id uuid,
@@ -1330,6 +1391,7 @@ grant execute on function public.finish_mail_job(uuid, text, boolean, text) to s
 -- =========================
 
 alter table public.profiles enable row level security;
+alter table public.app_branding enable row level security;
 alter table public.education_organizations enable row level security;
 alter table public.forms enable row level security;
 alter table public.responses enable row level security;
@@ -1346,6 +1408,9 @@ grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema extensions to anon, authenticated, service_role;
 
 grant select on table public.profiles to authenticated;
+revoke all on table public.app_branding from anon, authenticated;
+grant select on table public.app_branding to authenticated;
+grant select, insert, update, delete on table public.app_branding to service_role;
 grant select, insert, update, delete on table public.education_organizations to authenticated;
 grant select on table public.forms to anon;
 grant select on table public.forms to authenticated;
@@ -1395,6 +1460,16 @@ with check (
 
 revoke update on table public.profiles from authenticated;
 grant update (name) on table public.profiles to authenticated;
+
+-- =========================
+-- APPLICATION BRANDING
+-- =========================
+
+create policy "app_branding_select"
+on public.app_branding
+for select
+to authenticated
+using ((select public.request_is_enabled()));
 
 -- =========================
 -- EDUCATION ORGANIZATIONS
@@ -1748,10 +1823,21 @@ as $$
   from storage.objects o
   where o.bucket_id = 'survey-assets'
     and o.created_at < cutoff
-    and o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
-    and not exists (
-      select 1 from public.forms f
-      where f.id = split_part(o.name, '/', 2)::uuid
+    and (
+      (
+        o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
+        and not exists (
+          select 1 from public.forms f
+          where f.id::text = split_part(o.name, '/', 2)
+        )
+      )
+      or (
+        o.name ~* '^app-branding/sidebar-logo-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$'
+        and not exists (
+          select 1 from public.app_branding branding
+          where branding.sidebar_logo_path = o.name
+        )
+      )
     )
   order by o.created_at, o.id
   limit least(greatest(batch_limit, 1), 1000);
@@ -1773,10 +1859,21 @@ as $$
     and o.bucket_id = 'survey-assets'
     and o.name = any(object_names)
     and o.created_at < cutoff
-    and o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
-    and not exists (
-      select 1 from public.forms f
-      where f.id = split_part(o.name, '/', 2)::uuid
+    and (
+      (
+        o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
+        and not exists (
+          select 1 from public.forms f
+          where f.id::text = split_part(o.name, '/', 2)
+        )
+      )
+      or (
+        o.name ~* '^app-branding/sidebar-logo-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$'
+        and not exists (
+          select 1 from public.app_branding branding
+          where branding.sidebar_logo_path = o.name
+        )
+      )
     )
   order by o.name;
 $$;
@@ -2007,6 +2104,21 @@ $$;
 revoke all on function public.can_manage_survey_asset(text) from public;
 grant execute on function public.can_manage_survey_asset(text) to authenticated, service_role;
 
+create or replace function public.can_manage_app_branding_asset(object_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.request_is_enabled()
+    and public.request_role() = 'admin'
+    and object_name ~* '^app-branding/sidebar-logo-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$';
+$$;
+
+revoke all on function public.can_manage_app_branding_asset(text) from public;
+grant execute on function public.can_manage_app_branding_asset(text) to authenticated, service_role;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'survey-assets',
@@ -2034,6 +2146,21 @@ with check (bucket_id = 'survey-assets' and public.can_manage_survey_asset(name)
 create policy "survey_assets_authenticated_delete" on storage.objects
 for delete to authenticated
 using (bucket_id = 'survey-assets' and public.can_manage_survey_asset(name));
+
+create policy "survey_assets_branding_read" on storage.objects
+for select to authenticated
+using (bucket_id = 'survey-assets' and name like 'app-branding/%');
+
+create policy "survey_assets_branding_upload" on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'survey-assets'
+  and public.can_manage_app_branding_asset(name)
+);
+
+create policy "survey_assets_branding_delete" on storage.objects
+for delete to authenticated
+using (bucket_id = 'survey-assets' and public.can_manage_app_branding_asset(name));
 
 -- =========================
 -- INDEXES
