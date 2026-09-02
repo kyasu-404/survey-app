@@ -1113,7 +1113,7 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
-    expect(screen.getByText("Выбрано: 1")).toBeInTheDocument();
+    expect(screen.getByText("Выбрано: 1")).toHaveClass("responses-selection-count");
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
 
     await waitFor(() => {

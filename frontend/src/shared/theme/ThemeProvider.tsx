@@ -37,14 +37,23 @@ function readInitialThemeId(): ThemeId {
   return isThemeId(storedThemeId) ? storedThemeId : DEFAULT_THEME_ID;
 }
 
-export function ThemeProvider({ children }: PropsWithChildren) {
+type ThemeProviderProps = PropsWithChildren<{
+  isThemeApplied?: boolean;
+}>;
+
+export function ThemeProvider({ children, isThemeApplied = true }: ThemeProviderProps) {
   const [themeId, setThemeId] = useState<ThemeId>(() => readInitialThemeId());
   const theme = themes[themeId];
 
   useEffect(() => {
+    if (!isThemeApplied) {
+      document.documentElement.removeAttribute("data-theme");
+      return;
+    }
+
     document.documentElement.dataset.theme = themeId;
     window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
-  }, [themeId]);
+  }, [isThemeApplied, themeId]);
 
   return (
     <ThemeContext.Provider

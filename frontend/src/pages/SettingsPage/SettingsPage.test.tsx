@@ -178,13 +178,17 @@ describe("SettingsPage", () => {
     );
   });
 
-  it("keeps every editable settings field white in all application themes", () => {
+  it("separates settings areas, nested sections, and editable fields", () => {
     const css = readFileSync(join(process.cwd(), "src/app.css"), "utf8");
 
     expect(css).toMatch(/\.settings-page-card\s*\{[^}]*background:\s*var\(--theme-page-surface\)\s*!important;/);
+    expect(css).toMatch(/\.settings-area\s*\{[^}]*border:\s*1px solid var\(--theme-border\);[^}]*border-radius:\s*22px;[^}]*background:\s*var\(--theme-panel-background\);/s);
+    expect(css).toMatch(/\.settings-section\s*\{[^}]*border:\s*1px solid color-mix\(in srgb, var\(--theme-text\) 20%, transparent\);[^}]*background:\s*var\(--theme-surface-light\);[^}]*box-shadow:/s);
     expect(css).toMatch(/\.settings-branding-preview-frame\s*\{[^}]*overflow:\s*visible;[^}]*border-radius:\s*0;/);
     expect(css).toMatch(
-      /\.settings-page-card \.settings-field input:not\(\[type="checkbox"\]\),[\s\S]*\.settings-page-card \.settings-field select[\s\S]*\{[^}]*background:\s*var\(--theme-surface-light\)\s*!important;[^}]*color-scheme:\s*light;/,
+      /\.settings-page-card \.settings-field input:not\(\[type="checkbox"\]\),[\s\S]*\.settings-page-card \.settings-field select[\s\S]*\{[^}]*background:\s*var\(--theme-panel-background\)\s*!important;[^}]*color-scheme:\s*light;/,
     );
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.smtp-enable-control\.active\s*\{[^}]*border-color:\s*#4caf73;[^}]*color:\s*#b8f3cb;[^}]*background:\s*rgba\(31,\s*92,\s*58,\s*0\.32\);/s);
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.smtp-enable-control\.active \.smtp-enable-track\s*\{[^}]*background:\s*#21824f;/);
   });
 });

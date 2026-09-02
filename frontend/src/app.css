@@ -5690,6 +5690,50 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   --creator-accent: #277052;
 }
 
+:root[data-theme="graphite"] {
+  color-scheme: dark;
+  --app-bg:
+    radial-gradient(circle at 88% 0%, rgba(255, 255, 255, 0.055), transparent 32%),
+    linear-gradient(145deg, #202020 0%, #232323 52%, #272727 100%);
+  --sidebar-bg: rgba(24, 24, 24, 0.98);
+  --theme-card-background: #292929;
+  --theme-page-surface: var(--theme-card-background);
+  --theme-panel-background: #222222;
+  --theme-surface: #363636;
+  --theme-surface-light: #3a3a3a;
+  --theme-surface-muted: #303030;
+  --theme-control-background: #383838;
+  --theme-form-card-background: #2e2e2e;
+  --theme-popover-background: #3a3a3a;
+  --theme-container-high: #464646;
+  --theme-row-alt: #333333;
+  --theme-border: rgba(255, 255, 255, 0.18);
+  --theme-text: #f5f5f5;
+  --theme-muted: #c3c3c3;
+  --theme-text-muted: var(--theme-muted);
+  --theme-shadow-color: rgba(0, 0, 0, 0.3);
+  --theme-accent: #f2f2f2;
+  --theme-accent-strong: #ffffff;
+  --theme-accent-soft: rgba(255, 255, 255, 0.11);
+  --theme-accent-gradient: linear-gradient(180deg, #ffffff, #e7e7e7);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #2b2b2b;
+  --creator-panel: #303030;
+  --creator-panel-muted: #373737;
+  --creator-workspace: #242424;
+  --creator-control: #3a3a3a;
+  --creator-border: #535353;
+  --creator-border-strong: #686868;
+  --creator-hover: #424242;
+  --creator-selected: #4a4a4a;
+  --creator-text: #f5f5f5;
+  --creator-text-muted: #c3c3c3;
+  --creator-accent: #f2f2f2;
+  --surface-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 body,
 .app-shell,
 .app-shell-monochrome {
@@ -5790,12 +5834,25 @@ body,
   align-items: center;
   gap: 9px;
   width: 100%;
-  color: var(--theme-option-text);
+  border: 1px solid transparent;
+  color: var(--theme-text);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
 }
 
-.theme-cycle-menu-item:hover,
+.theme-cycle-menu-item:hover {
+  border-color: var(--theme-border);
+  background: var(--theme-surface-light) !important;
+  transform: translateX(2px);
+}
+
 .theme-cycle-menu-item-active {
-  background: var(--theme-option-surface) !important;
+  border-color: var(--theme-border);
+  background: var(--theme-container-high) !important;
+  color: var(--theme-text);
+  transform: none;
 }
 
 .theme-cycle-menu-item-swatch {
@@ -5812,7 +5869,7 @@ body,
 }
 
 .theme-cycle-menu-item-state {
-  color: var(--theme-option-accent);
+  color: var(--theme-text);
   text-align: center;
 }
 
@@ -6527,7 +6584,7 @@ button.responses-report-button:focus-visible,
 .settings-page-card {
   width: min(1040px, 100%);
   margin: 0 auto;
-  padding: 26px;
+  padding: 28px;
   background: var(--theme-page-surface) !important;
 }
 
@@ -6558,10 +6615,20 @@ button.responses-report-button:focus-visible,
   color: var(--theme-text-muted);
 }
 
+.settings-area {
+  padding: 22px;
+  border: 1px solid var(--theme-border);
+  border-radius: 22px;
+  background: var(--theme-panel-background);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-surface-light) 72%, transparent);
+}
+
+.settings-page-header + .settings-area {
+  margin-top: 22px;
+}
+
 .settings-area + .settings-area {
-  margin-top: 30px;
-  padding-top: 30px;
-  border-top: 2px solid var(--theme-border);
+  margin-top: 18px;
 }
 
 .settings-area-heading {
@@ -6680,13 +6747,14 @@ button.responses-report-button:focus-visible,
 
 .settings-section {
   padding: 20px;
-  border: 1px solid var(--theme-border);
+  border: 1px solid color-mix(in srgb, var(--theme-text) 20%, transparent);
   border-radius: 18px;
-  background: var(--theme-control-background);
+  background: var(--theme-surface-light);
+  box-shadow: 0 10px 24px var(--theme-shadow-color), var(--surface-inset);
 }
 
 .settings-section + .settings-section {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .settings-branding-section {
@@ -6853,9 +6921,18 @@ button.responses-report-button:focus-visible,
 .settings-page-card .settings-field select:focus,
 .settings-page-card .settings-field textarea:focus {
   color: var(--theme-text);
-  border-color: var(--theme-border);
-  background: var(--theme-surface-light) !important;
+  border-color: color-mix(in srgb, var(--theme-text) 24%, transparent);
+  background: var(--theme-panel-background) !important;
   color-scheme: light;
+  box-shadow: inset 0 1px 2px var(--theme-shadow-color);
+}
+
+.settings-page-card .settings-field input:not([type="checkbox"]):focus,
+.settings-page-card .settings-field select:focus,
+.settings-page-card .settings-field textarea:focus {
+  border-color: var(--theme-accent);
+  background: var(--theme-control-background) !important;
+  box-shadow: 0 0 0 3px var(--theme-accent-soft);
 }
 
 .settings-page-card .settings-field input::placeholder,
@@ -6950,7 +7027,7 @@ button.responses-report-button:focus-visible,
 }
 
 .settings-cleanup-section {
-  background: var(--theme-surface-muted);
+  background: var(--theme-surface-light);
 }
 
 .settings-cleanup-section .settings-backend-warning {
@@ -7315,13 +7392,18 @@ button.responses-report-button:disabled {
 
 .dashboard-filter-field,
 .deadline-field,
+.deadline-field span,
 .templates-segment,
+.dashboard-loading-text,
+.dashboard-form-classification,
 .dashboard-meta-item,
 .dashboard-meta-pill,
 .dashboard-owner-badge,
 .templates-card-meta-line,
 .builder-template-card-meta,
+.responses-page-meta-item,
 .responses-page-header-copy,
+.users-role-chip-static,
 .users-page-status,
 .responses-pagination,
 .organizations-page-header p {
@@ -7511,8 +7593,14 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 
 .builder-creator-shell .svc-tabbed-menu-item,
 .builder-creator-shell .svc-tabbed-menu-item__title,
-.builder-creator-shell .svc-toolbox__category-title,
-.builder-creator-shell .svc-toolbox__item-title,
+.builder-creator-shell .svc-toolbox__category-title {
+  color: var(--creator-text) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item-title {
+  color: var(--creator-text-muted) !important;
+}
+
 .builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
 .builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title {
   color: var(--creator-text) !important;
@@ -7594,6 +7682,26 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   background: var(--creator-hover) !important;
 }
 
+.builder-creator-shell .svc-toolbox__item {
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover,
+.builder-creator-shell .svc-toolbox__item:focus {
+  box-shadow: inset 3px 0 0 var(--creator-accent) !important;
+  transform: translateX(2px);
+}
+
+.builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover,
+.builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):focus {
+  color: var(--creator-text) !important;
+  background: var(--creator-hover) !important;
+  box-shadow: inset 0 -1px 0 var(--creator-border-strong) !important;
+}
+
 .builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
 .builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
   border-color: color-mix(in srgb, var(--creator-accent) 58%, transparent) !important;
@@ -7636,15 +7744,27 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 .builder-creator-shell .builder-toolbar-action-button,
-.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary {
+  color: var(--creator-text) !important;
+  border-color: color-mix(in srgb, var(--creator-text) 24%, transparent) !important;
+  background: var(--creator-control) !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--creator-text) 10%, transparent) !important;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
 .builder-creator-shell .builder-toolbar-action-button:hover,
 .builder-creator-shell .builder-toolbar-action-button:focus-visible,
 .builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:hover,
 .builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:focus-visible {
   color: var(--creator-text) !important;
-  border-color: color-mix(in srgb, var(--creator-text) 24%, transparent) !important;
-  background: var(--creator-control) !important;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--creator-text) 10%, transparent) !important;
+  border-color: var(--creator-border-strong) !important;
+  background: var(--creator-hover) !important;
+  box-shadow: 0 12px 24px var(--theme-shadow-color) !important;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 760px) {
@@ -7765,4 +7885,600 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   }
 }
 
+/* Dark mode follows a light-from-the-front elevation model: the page is the
+   darkest layer, cards are lighter, and controls/overlays are lighter again. */
+:root[data-theme="graphite"] body,
+:root[data-theme="graphite"] .app-shell,
+:root[data-theme="graphite"] .app-shell-monochrome {
+  color: var(--theme-text);
+}
+
+:root[data-theme="graphite"] a {
+  color: #ececec;
+}
+
+:root[data-theme="graphite"] .logo-image[src*="black_logo"] {
+  filter: invert(1) brightness(1.4);
+}
+
+:root[data-theme="graphite"] .sd-logo__image[src*="black_logo"] {
+  filter: invert(1) brightness(1.28) contrast(0.92);
+}
+
+/* Give normal and template cards the same lift, outline and glow in the dark
+   theme. The generic dashboard rule uses a white light-theme surface. */
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-interactive:hover,
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-interactive:focus-visible,
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-menu-open {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, transparent);
+  background: var(--theme-card-background);
+  box-shadow:
+    0 26px 54px var(--theme-shadow-color),
+    0 0 0 1px var(--theme-accent-soft),
+    var(--surface-inset);
+}
+
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-interactive:hover::before,
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-interactive:focus-visible::before,
+:root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card-menu-open::before {
+  opacity: 1;
+}
+
+/* Data rows use a clearly light-gray surface while headings retain the dark
+   surface. Keeping body cells light preserves scanability for dense tables. */
+:root[data-theme="graphite"] .organizations-table tbody td,
+:root[data-theme="graphite"] .users-table tbody td,
+:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody td,
+:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody tr:nth-child(odd) td,
+:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody tr:nth-child(even) td {
+  color: #202020;
+  border-color: #b8b8b8;
+  background: #e2e2e2;
+}
+
+:root[data-theme="graphite"] .organizations-table tbody tr:hover td,
+:root[data-theme="graphite"] .users-table tbody tr:hover td,
+:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody .responses-table-row-clickable:hover td,
+:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody .responses-table-row-clickable:focus-visible td {
+  background: #d4d4d4;
+}
+
+:root[data-theme="graphite"] .organizations-table tbody td a,
+:root[data-theme="graphite"] .users-table tbody td a {
+  color: #214f91;
+}
+
+:root[data-theme="graphite"] .users-table tbody td .users-role-chip-static {
+  color: #4b5563;
+}
+
+/* Property editors use a light-gray field surface with dark input text. This
+   keeps values legible without making the surrounding dark inspector flat. */
+:root[data-theme="graphite"] .builder-creator-shell .svc-creator {
+  --ctr-editor-background-color: #d6d6d6 !important;
+  --ctr-editor-background-color-disabled: #c2c2c2 !important;
+  --ctr-editor-content-text-color: #202020 !important;
+  --ctr-editor-content-text-color-placeholder: #666666 !important;
+  --ctr-editor-content-text-color-disabled: #5f5f5f !important;
+  --ctr-editor-border-color: #a7a7a7 !important;
+  --ctr-editor-button-icon-color: #4a4a4a !important;
+  --ctr-label-text-color: #f5f5f5 !important;
+  --ctr-actionbar-button-icon-color: #d7d7d7 !important;
+  --ctr-property-grid-chapter-caption-text-color: #f5f5f5 !important;
+  --ctr-property-grid-chapter-caption-background-color: #3d3d3d !important;
+  --ctr-property-grid-chapter-caption-background-color-hovered: #4a4a4a !important;
+  --ctr-property-grid-chapter-caption-background-color-focused: #4a4a4a !important;
+  --ctr-property-grid-chapter-caption-border-color: #686868 !important;
+  --ctr-menu-toolbar-button-text-color: #f5f5f5 !important;
+  --ctr-menu-toolbar-button-icon-color: #f5f5f5 !important;
+  --ctr-menu-toolbar-button-background-color-hovered: #454545 !important;
+  --ctr-menu-toolbar-button-background-color-selected: #4d4d4d !important;
+  --ctr-button-group-background-color: #4a4a4a !important;
+  --ctr-button-group-border-color: #787878 !important;
+  --ctr-button-group-item-text-color: #f5f5f5 !important;
+  --ctr-button-group-item-icon-color: #f5f5f5 !important;
+  --ctr-button-group-item-background-color: #383838 !important;
+  --ctr-button-group-item-background-color-hovered: #555555 !important;
+  --ctr-button-group-item-background-color-selected: #e2e2e2 !important;
+  --ctr-button-group-item-text-color-selected: #202020 !important;
+  --ctr-button-group-item-icon-color-selected: #202020 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__search-container,
+:root[data-theme="graphite"] .builder-creator-shell .svc-side-bar .svc-search,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input-container,
+:root[data-theme="graphite"] .builder-creator-shell .spg-dropdown,
+:root[data-theme="graphite"] .builder-creator-shell .spg-tagbox {
+  color: #202020 !important;
+  border-color: #a7a7a7 !important;
+  background: #d6d6d6 !important;
+  color-scheme: light;
+}
+
+/* The toolbox search shares the same surface as the question-type panel. */
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__search-container,
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox .svc-search,
+:root[data-theme="graphite"] .builder-creator-shell .svc-side-bar .svc-search {
+  color: #f5f5f5 !important;
+  border-color: #686868 !important;
+  background: #383838 !important;
+  color-scheme: dark;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-search__input,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input-container__input,
+:root[data-theme="graphite"] .builder-creator-shell .spg-dropdown__value,
+:root[data-theme="graphite"] .builder-creator-shell .spg-dropdown__filter-string-input {
+  color: #202020 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-search__input::placeholder,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input::placeholder,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input-container__input::placeholder {
+  color: #666666 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-search svg,
+:root[data-theme="graphite"] .builder-creator-shell .spg-input__edit-button svg {
+  fill: #4a4a4a !important;
+}
+
+/* Give the toolbox, inspector chapters and segmented type selectors their own
+   visible hierarchy. SurveyJS otherwise falls back to black icon tokens in
+   these slots when the Creator is in a dark color palette. */
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox {
+  border-color: #686868 !important;
+  background: #383838 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__category-header {
+  border-color: #686868 !important;
+  background: #474747 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__category-title,
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__item-title,
+:root[data-theme="graphite"] .builder-creator-shell .spg-question__title,
+:root[data-theme="graphite"] .builder-creator-shell .spg-panel__title {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title,
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item .svc-toolbox__item-title {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__item-container .sv-svg-icon {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox__item-container .sv-svg-icon use {
+  fill: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-panel__title {
+  border-color: #686868 !important;
+  background: #3d3d3d !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-panel__title:hover,
+:root[data-theme="graphite"] .builder-creator-shell .spg-panel__title:focus {
+  background: #4a4a4a !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-button-group {
+  box-shadow: inset 0 0 0 1px #787878 !important;
+  background: #4a4a4a !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-button-group__item {
+  color: #f5f5f5 !important;
+  background: #383838 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-button-group__item-icon use {
+  fill: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-button-group__item--selected {
+  color: #202020 !important;
+  border-color: #f5f5f5 !important;
+  background: #e2e2e2 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-button-group__item--selected .spg-button-group__item-icon use {
+  fill: #202020 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-top-bar .svc-toolbar__item,
+:root[data-theme="graphite"] .builder-creator-shell .svc-top-bar .sv-action-bar-item__title {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-top-bar .svc-toolbar__item use,
+:root[data-theme="graphite"] .builder-creator-shell .svc-top-bar .sv-action-bar-item__icon use {
+  fill: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-question__content {
+  border: 1px solid #a8a8a8 !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-question__content:focus,
+:root[data-theme="graphite"] .builder-creator-shell .svc-hovered > .svc-question__content {
+  border-color: #c8c8c8 !important;
+  box-shadow:
+    0 0 0 1px #c8c8c8,
+    0 8px 18px rgba(0, 0, 0, 0.26) !important;
+}
+
+:root[data-theme="graphite"] .theme-cycle-button-icon,
+:root[data-theme="graphite"] .toolbar-icon,
+:root[data-theme="graphite"] .form-menu-item-icon,
+:root[data-theme="graphite"] .dashboard-meta-icon,
+:root[data-theme="graphite"] .users-search-icon,
+:root[data-theme="graphite"] .dashboard-search-icon,
+:root[data-theme="graphite"] .organizations-row-actions img,
+:root[data-theme="graphite"] .templates-share-button .templates-action-icon {
+  filter: invert(1) brightness(1.55);
+}
+
+:root[data-theme="graphite"] .card,
+:root[data-theme="graphite"] .settings-area,
+:root[data-theme="graphite"] .settings-section,
+:root[data-theme="graphite"] .dashboard-form-card,
+:root[data-theme="graphite"] .builder-template-card {
+  backdrop-filter: none;
+}
+
+:root[data-theme="graphite"] .settings-page-card .settings-field input:not([type="checkbox"]),
+:root[data-theme="graphite"] .settings-page-card .settings-field select,
+:root[data-theme="graphite"] .settings-page-card .settings-field textarea {
+  color-scheme: dark;
+}
+
+:root[data-theme="graphite"] .settings-page-card .settings-field input::placeholder,
+:root[data-theme="graphite"] .settings-page-card .settings-field textarea::placeholder {
+  color: #8e8e8e;
+}
+
+:root[data-theme="graphite"] .settings-area-heading p {
+  color: #d0d0d0;
+}
+
+:root[data-theme="graphite"] .settings-credential-badge.saved,
+:root[data-theme="graphite"] .settings-cleanup-schedule-badge,
+:root[data-theme="graphite"] .mail-status-sent {
+  color: #9de7b2;
+  background: rgba(54, 179, 92, 0.18);
+}
+
+:root[data-theme="graphite"] .settings-credential-badge.missing,
+:root[data-theme="graphite"] .mail-status-failed,
+:root[data-theme="graphite"] .settings-form-error {
+  color: #ffb4ab;
+  border-color: rgba(255, 180, 171, 0.24);
+  background: rgba(180, 58, 55, 0.18);
+}
+
+:root[data-theme="graphite"] .settings-backend-warning,
+:root[data-theme="graphite"] .settings-cleanup-confirmation,
+:root[data-theme="graphite"] .mail-status-queued {
+  color: #ffd28f;
+  border-color: rgba(255, 190, 92, 0.28);
+  background: rgba(174, 110, 24, 0.18);
+}
+
+:root[data-theme="graphite"] .mail-status-processing {
+  color: #eeeeee;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="graphite"] .settings-cleanup-summary .cleanup-status-running {
+  color: #ffd28f;
+}
+
+:root[data-theme="graphite"] .settings-cleanup-summary .cleanup-status-succeeded {
+  color: #9de7b2;
+}
+
+:root[data-theme="graphite"] .settings-cleanup-summary .cleanup-status-failed,
+:root[data-theme="graphite"] .settings-test-status p {
+  color: #ffb4ab;
+}
+
+:root[data-theme="graphite"] .smtp-enable-track {
+  background: #565656;
+}
+
+:root[data-theme="graphite"] .smtp-enable-track > span {
+  background: #f3f5f8;
+}
+
+:root[data-theme="graphite"] .templates-use-button,
+:root[data-theme="graphite"] button.responses-export-button,
+:root[data-theme="graphite"] button.responses-export-button.responses-html-button,
+:root[data-theme="graphite"] .users-neutral-button,
+:root[data-theme="graphite"] .response-preview-close,
+:root[data-theme="graphite"] .template-preview-close {
+  color: #171717;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 12px 26px var(--theme-shadow-color);
+}
+
+:root[data-theme="graphite"] .templates-use-button:hover,
+:root[data-theme="graphite"] .templates-use-button:focus-visible,
+:root[data-theme="graphite"] button.responses-export-button:hover,
+:root[data-theme="graphite"] button.responses-export-button:focus-visible,
+:root[data-theme="graphite"] button.responses-export-button.responses-html-button:hover,
+:root[data-theme="graphite"] button.responses-export-button.responses-html-button:focus-visible,
+:root[data-theme="graphite"] .users-neutral-button:hover,
+:root[data-theme="graphite"] .users-neutral-button:focus-visible,
+:root[data-theme="graphite"] .response-preview-close:hover,
+:root[data-theme="graphite"] .response-preview-close:focus-visible,
+:root[data-theme="graphite"] .template-preview-close:hover,
+:root[data-theme="graphite"] .template-preview-close:focus-visible {
+  color: #171717;
+  border-color: transparent;
+  background: linear-gradient(180deg, #ffffff, #f1f1f1);
+}
+
+:root[data-theme="graphite"] .templates-use-button .templates-action-icon {
+  filter: brightness(0);
+}
+
+:root[data-theme="graphite"] button.responses-export-button .toolbar-icon {
+  filter: brightness(0);
+}
+
+:root[data-theme="graphite"] .button-primary,
+:root[data-theme="graphite"] .button-primary:hover,
+:root[data-theme="graphite"] .dashboard-status-pill-active,
+:root[data-theme="graphite"] button.dashboard-status-trigger-glossy.dashboard-status-pill-active,
+:root[data-theme="graphite"] button.dashboard-status-trigger-glossy.dashboard-status-pill-active:hover,
+:root[data-theme="graphite"] button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visible,
+:root[data-theme="graphite"] .organizations-type-switcher button.active,
+:root[data-theme="graphite"] .response-report-tabs button.active,
+:root[data-theme="graphite"] .templates-segment-active,
+:root[data-theme="graphite"] .templates-segment-active:hover {
+  color: #171717;
+}
+
+:root[data-theme="graphite"] .nav-link-active,
+:root[data-theme="graphite"] .nav-link-active:hover {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: #3a3a3a;
+  box-shadow: none;
+  transform: none;
+}
+
+:root[data-theme="graphite"] .nav-link:not(.nav-link-active):hover {
+  border-color: var(--theme-border);
+  background: #303030;
+}
+
+:root[data-theme="graphite"] .sidebar-toggle-button:hover,
+:root[data-theme="graphite"] .sidebar-open-button:hover,
+:root[data-theme="graphite"] .sidebar .logout-button:hover,
+:root[data-theme="graphite"] .theme-cycle-button:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--theme-container-high);
+  box-shadow: 0 12px 24px var(--theme-shadow-color);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="graphite"] .users-yellow-button,
+:root[data-theme="graphite"] .users-yellow-button:hover,
+:root[data-theme="graphite"] .users-yellow-button:focus-visible,
+:root[data-theme="graphite"] .responses-pagination-button {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-control-background);
+  box-shadow: var(--surface-inset);
+}
+
+:root[data-theme="graphite"] .form-menu-item-danger:hover,
+:root[data-theme="graphite"] .form-menu-item-danger:focus-visible {
+  color: #ffb4ab;
+  background: rgba(180, 58, 55, 0.2);
+}
+
+:root[data-theme="graphite"] .toast {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-popover-background);
+}
+
+:root[data-theme="graphite"] .toast-success {
+  color: #b7f2c5;
+  border-color: rgba(54, 179, 92, 0.3);
+  background: #193725;
+}
+
+:root[data-theme="graphite"] .toast-warning {
+  color: #ffd99f;
+  border-color: rgba(255, 190, 92, 0.3);
+  background: #3b2d18;
+}
+
+:root[data-theme="graphite"] .toast-error {
+  color: #ffc2bc;
+  border-color: rgba(255, 180, 171, 0.3);
+  background: #422321;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-creator {
+  --sjs-primary-forecolor: #171717 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-tab-designer .svc-designer-header {
+  border-bottom-color: var(--creator-accent);
+}
+
+/* Final dark-theme corrections for response management and the report. */
+:root[data-theme="graphite"] .responses-selection-count {
+  color: #b91c1c;
+}
+
+:root[data-theme="graphite"] .responses-delete-button .toolbar-icon {
+  filter: brightness(0) !important;
+}
+
+:root[data-theme="graphite"] .response-report-status.submitted {
+  color: #d8ffe3;
+  border: 1px solid #58bd7d;
+  background: #1f5c3a;
+}
+
+:root[data-theme="graphite"] .response-report-status.missing {
+  color: #ffd8d3;
+  border: 1px solid #ee948a;
+  background: #6a302c;
+}
+
+/* The toolbox search deliberately uses the same dark surface as the left
+   question-type panel, with a separate high-contrast foreground. */
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox .svc-search__input {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-side-bar .svc-search__input {
+  color: #f5f5f5 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox .svc-search__input::placeholder {
+  color: #c3c3c3 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-side-bar .svc-search__input::placeholder {
+  color: #c3c3c3 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-toolbox .svc-search svg {
+  fill: #c3c3c3 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-side-bar .svc-search svg {
+  fill: #c3c3c3 !important;
+}
+
+/* Authentication deliberately does not inherit the user's saved application
+   theme: before sign-in it stays a neutral, self-contained surface. */
+.app-shell-login,
+.app-shell-login.app-shell-monochrome,
+.app-shell-login .app-main-login {
+  color: #18181b;
+  background: linear-gradient(145deg, #f4f4f5 0%, #e4e4e7 100%) !important;
+  color-scheme: light;
+}
+
+.app-shell-login .login-card {
+  color: #18181b;
+  border-color: #d4d4d8;
+  background: #ffffff;
+  box-shadow:
+    0 24px 56px rgba(24, 24, 27, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.app-shell-login .login-card::before {
+  background: radial-gradient(circle, rgba(161, 161, 170, 0.2), transparent 66%);
+}
+
+.app-shell-login .login-title {
+  color: #18181b;
+}
+
+.app-shell-login .login-fields input {
+  color: #18181b;
+  border-color: #d4d4d8;
+  background: #fafafa;
+}
+
+.app-shell-login .login-fields input::placeholder {
+  color: #71717a;
+}
+
+.app-shell-login .button-primary,
+.app-shell-login .button-primary:hover,
+.app-shell-login .button-primary:focus-visible {
+  color: #ffffff;
+  border-color: #18181b;
+  background: linear-gradient(180deg, #27272a, #18181b);
+}
+
+/* SurveyJS applies 25% opacity to text in disabled editors. That becomes
+   nearly white against our light editor surface, so preserve a dark, readable
+   disabled text color instead. */
+:root[data-theme="graphite"] .builder-creator-shell .svc-creator {
+  --ctr-editor-content-text-opacity-disabled: 1 !important;
+  --ctr-editor-label-opacity-disabled: 0.78 !important;
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .spg-question--disabled .spg-input,
+:root[data-theme="graphite"] .builder-creator-shell input.spg-input:read-only,
+:root[data-theme="graphite"] .builder-creator-shell .spg-question--disabled .spg-input-container__input,
+:root[data-theme="graphite"] .builder-creator-shell .spg-question--disabled .spg-dropdown__value,
+:root[data-theme="graphite"] .builder-creator-shell .spg-question--disabled .spg-dropdown__filter-string-input {
+  color: #5f5f5f !important;
+  opacity: 1 !important;
+}
+
+/* A native select opens its own surface. Force the role chooser and its
+   options to a light scheme so role labels remain visible before hover. */
+:root[data-theme="graphite"] .users-table .users-role-select,
+:root[data-theme="graphite"] .users-table .users-role-select option {
+  color: #202020;
+  background: #e2e2e2;
+  color-scheme: light;
+}
+
+:root[data-theme="graphite"] .users-table .users-role-select:hover,
+:root[data-theme="graphite"] .users-table .users-role-select:focus-visible {
+  color: #202020;
+  background: #d4d4d4;
+}
+
+/* A white active track hid the switched-on state. Green makes the enabled
+   SMTP connector immediately distinguishable from its neutral off state. */
+:root[data-theme="graphite"] .smtp-enable-control.active {
+  border-color: #4caf73;
+  color: #b8f3cb;
+  background: rgba(31, 92, 58, 0.32);
+}
+
+:root[data-theme="graphite"] .smtp-enable-control.active .smtp-enable-track {
+  background: #21824f;
+  box-shadow: inset 0 0 0 1px rgba(216, 255, 227, 0.3);
+}
+
+:root[data-theme="graphite"] .smtp-enable-control.active .smtp-enable-track > span {
+  background: #f5f5f5;
+}
+
+/* The HTML response view is an intentionally light document. Pin every text
+   surface inside it to print-like colors instead of inheriting page text. */
+:root[data-theme="graphite"] .responses-html-preview .responses-html-report,
+:root[data-theme="graphite"] .responses-html-preview .report-meta dd,
+:root[data-theme="graphite"] .responses-html-preview .responses-table-wrap,
+:root[data-theme="graphite"] .responses-html-preview table,
+:root[data-theme="graphite"] .responses-html-preview td,
+:root[data-theme="graphite"] .responses-html-preview .empty-state h2 {
+  color: #111827;
+}
+
+:root[data-theme="graphite"] .responses-html-preview td {
+  border-color: #d8dee8;
+  background: #ffffff;
+}
+
+:root[data-theme="graphite"] .responses-html-preview tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
 

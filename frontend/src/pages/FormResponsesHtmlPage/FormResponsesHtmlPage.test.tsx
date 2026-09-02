@@ -96,6 +96,13 @@ describe("FormResponsesHtmlPage", () => {
     expect(css).toMatch(/\.responses-html-preview table\s*\{[^}]*font-size:\s*13px;/);
   });
 
+  it("keeps the light HTML response document readable in the graphite theme", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.responses-html-preview \.responses-html-report,[^{]+\.report-meta dd,[^{]+\.responses-table-wrap,[^{]+table,[^{]+td,[^{]+\.empty-state h2\s*\{[^}]*color:\s*#111827;/s);
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.responses-html-preview td\s*\{[^}]*border-color:\s*#d8dee8;[^}]*background:\s*#ffffff;/s);
+  });
+
   it("keeps the HTML response date column wide enough for bordered cells", () => {
     const css = readAppCss();
 

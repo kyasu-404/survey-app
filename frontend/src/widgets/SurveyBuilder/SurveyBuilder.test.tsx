@@ -1215,6 +1215,21 @@ describe("SurveyBuilder", () => {
     );
   });
 
+  it("uses brighter secondary text and distinct hover feedback in the creator", () => {
+    const appCss = readAppCss();
+
+    expect(appCss).toMatch(/\.builder-creator-shell \.svc-toolbox__item-title\s*\{[^}]*color:\s*var\(--creator-text-muted\)\s*!important;/s);
+    expect(appCss).toMatch(/\.builder-creator-shell \.svc-toolbox__item:hover,[^{]+\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--creator-accent\)\s*!important;[^}]*transform:\s*translateX\(2px\);/s);
+    expect(appCss).toMatch(/\.builder-creator-shell \.svc-tabbed-menu-item:not\(\.svc-tabbed-menu-item--selected\):hover,[^{]+\{[^}]*background:\s*var\(--creator-hover\)\s*!important;/s);
+    expect(appCss).toMatch(/\.builder-creator-shell \.builder-toolbar-action-button:hover,[^{]+\{[^}]*background:\s*var\(--creator-hover\)\s*!important;[^}]*transform:\s*translateY\(-1px\);/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-creator\s*\{[^}]*--ctr-editor-background-color:\s*#d6d6d6\s*!important;[^}]*--ctr-editor-content-text-color:\s*#202020\s*!important;[^}]*--ctr-property-grid-chapter-caption-text-color:\s*#f5f5f5\s*!important;[^}]*--ctr-menu-toolbar-button-icon-color:\s*#f5f5f5\s*!important;/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-question__content\s*\{[^}]*border:\s*1px solid #a8a8a8\s*!important;/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-toolbox__search-container,[^{]+\.svc-toolbox \.svc-search,[^{]+\.svc-side-bar \.svc-search\s*\{[^}]*background:\s*#383838\s*!important;/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-creator\s*\{[^}]*--ctr-editor-content-text-opacity-disabled:\s*1\s*!important;[^}]*--ctr-editor-label-opacity-disabled:\s*0\.78\s*!important;/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.spg-question--disabled \.spg-input,[^{]+input\.spg-input:read-only[^{]+\{[^}]*color:\s*#5f5f5f\s*!important;[^}]*opacity:\s*1\s*!important;/s);
+    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-top-bar \.svc-toolbar__item use,[^{]+\.sv-action-bar-item__icon use\s*\{[^}]*fill:\s*#f5f5f5\s*!important;/s);
+  });
+
   it("keeps the designer logo and title left-aligned", () => {
     const appCss = readAppCss();
 

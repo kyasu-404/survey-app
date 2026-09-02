@@ -545,7 +545,7 @@ export default function FormResponsesPage() {
 
         {canDeleteResponses && selectedResponseIds.size > 0 && (
           <div className="responses-selection-bar" aria-live="polite">
-            <strong>Выбрано: {selectedResponseIds.size}</strong>
+            <strong className="responses-selection-count">Выбрано: {selectedResponseIds.size}</strong>
             <button
               type="button"
               className="responses-delete-button"

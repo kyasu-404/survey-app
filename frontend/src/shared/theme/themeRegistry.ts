@@ -1,7 +1,7 @@
 import type { ITheme } from "survey-core";
 import type { ICreatorTheme } from "survey-creator-core";
 
-export type ThemeId = "sand" | "sky" | "teal";
+export type ThemeId = "sand" | "sky" | "teal" | "graphite";
 
 export type AppThemeTokens = {
   label: string;
@@ -22,7 +22,7 @@ export type SurveyThemeBundle = {
 export const THEME_STORAGE_KEY = "survey-app:theme";
 export const DEFAULT_THEME_ID: ThemeId = "sand";
 
-const themeIds = ["sand", "sky", "teal"] as const satisfies readonly ThemeId[];
+const themeIds = ["sand", "sky", "teal", "graphite"] as const satisfies readonly ThemeId[];
 
 const palettes: Record<ThemeId, AppThemeTokens> = {
   sand: {
@@ -51,6 +51,15 @@ const palettes: Record<ThemeId, AppThemeTokens> = {
     surface: "#dce8df",
     text: "#243029",
     muted: "#637068",
+  },
+  graphite: {
+    label: "Тёмная",
+    accent: "#f2f2f2",
+    accentHover: "#ffffff",
+    bg: "#242424",
+    surface: "#363636",
+    text: "#f5f5f5",
+    muted: "#c3c3c3",
   },
 };
 
@@ -104,6 +113,18 @@ const creatorPalettes: Record<ThemeId, CreatorThemeTokens> = {
     accent: "#277052",
     accentHover: "#195a40",
   },
+  graphite: {
+    toolbar: "#2b2b2b",
+    panel: "#303030",
+    panelMuted: "#373737",
+    workspace: "#242424",
+    control: "#3a3a3a",
+    border: "#535353",
+    text: "#f5f5f5",
+    textMuted: "#c3c3c3",
+    accent: "#f2f2f2",
+    accentHover: "#ffffff",
+  },
 };
 
 function hexToRgb(hex: string) {
@@ -126,10 +147,26 @@ function rgba(hex: string, alpha: number) {
   return `rgba(${hexToRgb(hex)}, ${alpha})`;
 }
 
-function createSurveyTheme(app: AppThemeTokens): ITheme {
+function createSurveyTheme(app: AppThemeTokens, isDark = false): ITheme {
+  const shadowColor = isDark ? "#000000" : app.text;
+  const shadowAlphas = isDark ? [0.18, 0.24, 0.3] : [0.06, 0.08, 0.1];
+  const editorBackground = isDark ? "#2c2c2c" : rgba(app.surface, 0.88);
+  const darkTypography: Record<string, string> = isDark
+    ? {
+      "--sjs-general-dim-forecolor": app.text,
+      "--sjs-general-dim-forecolor-light": app.muted,
+      "--sjs-font-pagetitle-color": app.text,
+      "--sjs-font-pagedescription-color": app.muted,
+      "--sjs-font-questiontitle-color": app.text,
+      "--sjs-font-questiondescription-color": app.muted,
+      "--sjs-font-surveytitle-color": app.text,
+      "--sjs-font-surveydescription-color": app.muted,
+    }
+    : {};
+
   return {
     themeName: "default",
-    colorPalette: "light",
+    colorPalette: isDark ? "dark" : "light",
     cssVariables: {
       "--sjs-primary-backcolor": app.accent,
       "--sjs-primary-backcolor-dark": app.accentHover,
@@ -137,21 +174,24 @@ function createSurveyTheme(app: AppThemeTokens): ITheme {
       "--sjs-primary-background-500": app.accent,
       "--sjs-primary-background-400": app.accentHover,
       "--sjs-primary-background-10": rgba(app.accent, 0.06),
-      "--sjs-primary-forecolor": "#ffffff",
+      "--sjs-primary-forecolor": isDark ? "#171717" : "#ffffff",
       "--sjs-header-backcolor": app.surface,
       "--sjs-general-backcolor": app.bg,
       "--sjs-general-backcolor-dim": app.surface,
-      "--sjs-general-backcolor-dim-light": rgba(app.surface, 0.88),
+      "--sjs-general-backcolor-dim-light": editorBackground,
       "--sjs-general-backcolor-dark": rgba(app.text, 0.12),
       "--sjs-general-forecolor": app.text,
       "--sjs-general-forecolor-light": app.muted,
       "--sjs-layer-1-foreground-100": app.text,
       "--sjs-layer-1-foreground-50": app.muted,
-      "--sjs-layer-1-background-500": app.bg,
+      "--sjs-layer-1-background-500": isDark ? editorBackground : app.bg,
       "--sjs-layer-3-background-500": app.surface,
-      "--sjs-shadow-small": `0 10px 22px ${rgba(app.text, 0.06)}`,
-      "--sjs-shadow-medium": `0 16px 32px ${rgba(app.text, 0.08)}`,
-      "--sjs-shadow-large": `0 24px 48px ${rgba(app.text, 0.1)}`,
+      "--sjs-editor-background": editorBackground,
+      "--sjs-editorpanel-backcolor": editorBackground,
+      "--sjs-shadow-small": `0 10px 22px ${rgba(shadowColor, shadowAlphas[0])}`,
+      "--sjs-shadow-medium": `0 16px 32px ${rgba(shadowColor, shadowAlphas[1])}`,
+      "--sjs-shadow-large": `0 24px 48px ${rgba(shadowColor, shadowAlphas[2])}`,
+      ...darkTypography,
     },
   };
 }
@@ -160,7 +200,7 @@ function createCreatorTheme(themeId: ThemeId, palette: CreatorThemeTokens): ICre
   return {
     themeName: `survey-app-creator-${themeId}`,
     iconSet: "v2",
-    isLight: true,
+    isLight: themeId !== "graphite",
     cssVariables: {
       "--sjs-primary-backcolor": palette.accent,
       "--sjs-primary-backcolor-dark": palette.accentHover,
@@ -168,7 +208,7 @@ function createCreatorTheme(themeId: ThemeId, palette: CreatorThemeTokens): ICre
       "--sjs-primary-background-500": palette.accent,
       "--sjs-primary-background-400": palette.accentHover,
       "--sjs-primary-background-10": rgba(palette.accent, 0.08),
-      "--sjs-primary-forecolor": "#ffffff",
+      "--sjs-primary-forecolor": themeId === "graphite" ? "#171717" : "#ffffff",
       "--sjs-general-backcolor": palette.control,
       "--sjs-general-backcolor-dim": palette.panel,
       "--sjs-general-backcolor-dim-light": palette.toolbar,
@@ -194,6 +234,12 @@ function createCreatorTheme(themeId: ThemeId, palette: CreatorThemeTokens): ICre
       "--ctr-editor-border-color-highlighted": rgba(palette.accent, 0.18),
       "--ctr-survey-question-panel-border-color-selected": palette.accent,
       "--ctr-survey-question-panel-border-color-hovered": rgba(palette.accent, 0.26),
+      "--ctr-toolbox-item-text-color": palette.textMuted,
+      "--ctr-toolbox-item-text-color-hovered": palette.text,
+      "--ctr-toolbox-item-icon-color": palette.textMuted,
+      "--ctr-toolbox-item-icon-color-hovered": palette.text,
+      "--ctr-menu-item-background-color": palette.toolbar,
+      "--ctr-menu-item-background-color-hovered": palette.panelMuted,
     },
   };
 }
@@ -202,6 +248,7 @@ export const creatorThemes: Record<ThemeId, ICreatorTheme> = {
   sand: createCreatorTheme("sand", creatorPalettes.sand),
   sky: createCreatorTheme("sky", creatorPalettes.sky),
   teal: createCreatorTheme("teal", creatorPalettes.teal),
+  graphite: createCreatorTheme("graphite", creatorPalettes.graphite),
 };
 
 export const themes: Record<ThemeId, SurveyThemeBundle> = {
@@ -219,6 +266,11 @@ export const themes: Record<ThemeId, SurveyThemeBundle> = {
     app: palettes.teal,
     creator: creatorThemes.teal,
     survey: createSurveyTheme(palettes.teal),
+  },
+  graphite: {
+    app: palettes.graphite,
+    creator: creatorThemes.graphite,
+    survey: createSurveyTheme(palettes.graphite, true),
   },
 };
 

@@ -1223,6 +1223,7 @@ describe("DashboardPage", () => {
     expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
     expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
     expect(css).not.toContain("border-width: 3px;");
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.dashboard-forms-grid > \.dashboard-form-card-interactive:hover,[^{]+\{[^}]*transform:\s*translateY\(-4px\);[^}]*background:\s*var\(--theme-card-background\);[^}]*0 26px 54px var\(--theme-shadow-color\),[^}]*var\(--theme-accent-soft\)/s);
   });
 
   it("styles active and closed form status controls from the selected application theme", () => {

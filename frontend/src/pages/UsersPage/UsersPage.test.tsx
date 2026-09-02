@@ -143,6 +143,13 @@ describe("UsersPage", () => {
     expect(css).toMatch(/\.users-table-shell\s*\{[^}]*border-radius:\s*0;/);
   });
 
+  it("keeps editable role selections readable in the graphite theme", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select,[^{]+\.users-role-select option\s*\{[^}]*color:\s*#202020;[^}]*background:\s*#e2e2e2;[^}]*color-scheme:\s*light;/s);
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select:hover,[^{]+\.users-role-select:focus-visible\s*\{[^}]*color:\s*#202020;[^}]*background:\s*#d4d4d4;/s);
+  });
+
   it("centers user modal headings", () => {
     const css = readAppCss();
 
