@@ -78,9 +78,9 @@ test("production proxy redirects HTTP and does not allow arbitrary remote theme 
   assert.doesNotMatch(productionProxy, /img-src[^;]*\shttps:/i);
 });
 
-test("deployment guide disables public employee registration", () => {
+test("deployment guide disables public registration while keeping email sign-in enabled", () => {
   assert.match(deploymentGuide, /`DISABLE_SIGNUP=true`/);
-  assert.match(deploymentGuide, /`ENABLE_EMAIL_SIGNUP=false`/);
+  assert.match(deploymentGuide, /`ENABLE_EMAIL_SIGNUP=true`/);
   assert.match(deploymentGuide, /`ENABLE_PHONE_SIGNUP=false`/);
   assert.match(deploymentGuide, /`ENABLE_PHONE_AUTOCONFIRM=false`/);
 });

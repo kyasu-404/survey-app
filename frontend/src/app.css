@@ -6253,6 +6253,29 @@ button.responses-report-button:focus-visible,
   font-size: 1.75rem;
 }
 
+.response-report-organization-types {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: -8px 0 24px;
+  padding: 12px 15px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-text);
+  background: var(--theme-surface-muted);
+}
+
+.response-report-organization-types span {
+  color: var(--theme-text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.response-report-organization-types strong {
+  font-size: 0.94rem;
+}
+
 .response-report-section + .response-report-section {
   margin-top: 26px;
 }

@@ -60,7 +60,15 @@ const missingOrganization = {
 
 describe("ResponseReportModal", () => {
   it("shows type-specific statistics and disables submission tracking without an organization field", () => {
-    render(<ResponseReportModal report={baseReport} formId="form-1" canSendReminders onClose={vi.fn()} />);
+    render(
+      <ResponseReportModal
+        report={baseReport}
+        formId="form-1"
+        organizationTypes={["school", "kindergarten"]}
+        canSendReminders
+        onClose={vi.fn()}
+      />,
+    );
 
     expect(screen.getByRole("tab", { name: "Статистика" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Учёт сдавших" })).toBeDisabled();
@@ -83,6 +91,7 @@ describe("ResponseReportModal", () => {
           },
         }}
         formId="form-1"
+        organizationTypes={["school", "odo"]}
         canSendReminders
         onClose={vi.fn()}
       />,
@@ -91,6 +100,8 @@ describe("ResponseReportModal", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Учёт сдавших" }));
 
     expect(screen.getByRole("heading", { name: "Статус сдачи" })).toBeInTheDocument();
+    expect(screen.getByText("Типы ОУ в учёте")).toBeInTheDocument();
+    expect(screen.getByText("Школы, ОДО")).toBeInTheDocument();
     expect(screen.getByText("Сдано")).toBeInTheDocument();
     expect(screen.getByText("Не сдано")).toBeInTheDocument();
     expect(screen.queryByText("Выберите вариант")).not.toBeInTheDocument();
@@ -110,6 +121,7 @@ describe("ResponseReportModal", () => {
           },
         }}
         formId="form-1"
+        organizationTypes={["school"]}
         canSendReminders
         onClose={vi.fn()}
       />,

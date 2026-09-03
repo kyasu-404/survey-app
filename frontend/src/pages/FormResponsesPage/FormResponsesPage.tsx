@@ -730,6 +730,7 @@ export default function FormResponsesPage() {
         <ResponseReportModal
           report={responseReport}
           formId={id}
+          organizationTypes={formOrganizationTypes}
           canSendReminders={canDeleteResponses}
           onClose={() => setResponseReport(null)}
         />

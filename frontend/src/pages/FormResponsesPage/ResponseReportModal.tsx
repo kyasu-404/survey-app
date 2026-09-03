@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "../../app/providers/ToastProvider";
 import { queueFormReminders } from "../../entities/mail/api";
 import { getOrganizationDisplayName, getOrganizationTypeLabel } from "../../entities/organization/model";
+import type { OrganizationType } from "../../entities/organization/types";
 import { getErrorMessage } from "../../shared/lib/error";
 import type {
   ResponseQuestionAnalysisKind,
@@ -74,11 +75,13 @@ function Group({ group }: { group: ResponseReportGroup }) {
 export function ResponseReportModal({
   report,
   formId,
+  organizationTypes,
   canSendReminders,
   onClose,
 }: {
   report: ResponseReport;
   formId: string;
+  organizationTypes: OrganizationType[];
   canSendReminders: boolean;
   onClose: () => void;
 }) {
@@ -190,6 +193,11 @@ export function ResponseReportModal({
               <div><span>Всего организаций</span><strong>{coverage.expectedCount}</strong></div>
               <div><span>Сдали</span><strong>{coverage.submittedCount}</strong></div>
               <div><span>Не сдали</span><strong>{coverage.missingOrganizations.length}</strong></div>
+            </div>
+
+            <div className="response-report-organization-types">
+              <span>Типы ОУ в учёте</span>
+              <strong>{organizationTypes.map((type) => getOrganizationTypeLabel(type)).join(", ")}</strong>
             </div>
 
             <section className="response-report-section">
