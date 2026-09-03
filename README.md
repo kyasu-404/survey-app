@@ -20,97 +20,49 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
 Перед публикацией self-hosted Supabase обязательно:
 
 - выполните штатные скрипты Supabase `sh utils/generate-keys.sh` и `sh utils/add-new-auth-keys.sh` и замените все демонстрационные секреты;
-- оставьте `DISABLE_SIGNUP=true`, `ENABLE_EMAIL_SIGNUP=false`, `ENABLE_PHONE_SIGNUP=false` и `ENABLE_PHONE_AUTOCONFIRM=false`: сотрудников создаёт администратор через `user-admin`;
+- оставьте `DISABLE_SIGNUP=true`, `ENABLE_EMAIL_SIGNUP=true`, `ENABLE_PHONE_SIGNUP=false` и `ENABLE_PHONE_AUTOCONFIRM=false`: сотрудников создаёт администратор через `user-admin`;
 - задайте сложные `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`, постоянный `MAIL_SETTINGS_ENCRYPTION_KEY` и точный `PUBLIC_APP_URL`;
 - публикуйте наружу только Nginx на портах 80/443; Kong, PostgreSQL, pooler, Studio и mail-worker не должны слушать публичный интерфейс.
 
-## Основной логотип
+## Edge Function для админ-операций пользователей
 
-Администратор может заменить логотип в левом меню через **«Настройки» → «Основной логотип»**. Разрешены PNG,
-JPG и WebP размером до 2 МБ. Новый файл сохраняется в bucket `survey-assets` под префиксом `app-branding/`, а
-активный путь — в единственной строке `public.app_branding`. Пользователи не могут менять эту запись или загружать
-файлы в префикс оформления. Кнопка **«Вернуть стандартный»** удаляет пользовательский файл и снова использует
-встроенный логотип приложения. Если немедленное удаление старого объекта завершится сетевой ошибкой, ежедневная
-страховочная очистка удалит его не раньше чем через 7 дней; путь активного логотипа при этом повторно проверяется.
+Создание пользователя, удаление, смена пароля пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
 
-Для уже существующей базы примените миграцию:
+Цепочка:
 
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608131200_app_branding.sql
-```
+`Frontend (React) -> Edge Function (проверка прав admin) -> Supabase auth.admin API`
 
-В Supabase SQL Editor откройте файл и запускайте его **целиком**, начиная со строки `begin;` и заканчивая
-`commit;`. Строки `end;` и `$$;` являются только завершением тела функции и отдельно не выполняются.
+### Как включить
 
-Если миграция `202608131200_app_branding.sql` уже была применена, дополнительно выполните исправление политики
-загрузки (также целиком):
+1. cp -R ./functions/user-admin ./supabase/docker/volumes/functions/
+2. cd ./supabase/docker/
+3. docker compose restart functions --no-deps
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608131300_fix_app_branding_upload_policy.sql
+supabase functions deploy user-admin
 ```
 
-Для новой пустой базы отдельная миграция не нужна: настройка уже входит в `database/supabase_schema.sql`.
+4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions (через Secrets в Supabase).
+5. Фронтенд вызывает функцию через `supabase.functions.invoke("user-admin")` и передаёт JWT текущего пользователя автоматически; функция дополнительно проверяет, что вызывающий пользователь имеет роль `admin` в `public.profiles`.
 
-## Ответы и защита структуры формы
+> Для корректного отображения статуса блокировки пользователей в таблице используется поле `public.profiles.is_disabled`.
 
-- Для каждой формы разрешён один ответ на браузер. Постоянный UUID хранится в `localStorage`, а уникальность дополнительно проверяется в Supabase по паре `form_id + browser_id`.
-- Повторная отправка возвращает существующий ответ. Если при сохранении формы включён ползунок **«Редактирование ответов»**, респондент может открыть этот ответ и сохранить изменения из того же браузера.
-- После появления первого ответа форма открывается в безопасном режиме. Тексты, оформление и порядок элементов можно менять сразу; изменения, влияющие только на новые ответы, требуют подтверждения; удаление и изменение технической структуры блокируются с предложением создать копию.
-- Автор формы (и администратор) может выбрать до 100 видимых ответов и удалить их. Edge Function `form-admin` удаляет также связанные объекты из приватного bucket `survey-files`.
+## Edge Function для удаления форм и файлов
 
-Для существующего Supabase-проекта примените миграцию управления ответами:
+Удаление формы и совместимое обновление формы с ответами выполняются через Edge Function `form-admin`. При удалении функция вместе со строкой `forms` удаляет связанные объекты из bucket `survey-files` и фоновые изображения из `survey-assets`. При обновлении она повторно сравнивает исходную и новую схемы на сервере, блокирует несовместимые изменения и требует подтверждения предупреждений. Функция принимает JWT текущего пользователя и разрешает операции автору формы или администратору.
+
+### Как включить
+
+1. `cp -R ./functions/form-admin ./supabase/docker/volumes/functions/`
+2. cd ./supabase/docker/
+3. docker compose restart functions --no-deps
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608031200_response_management.sql
+supabase functions deploy form-admin
 ```
 
-Для безопасного редактирования форм с уже полученными ответами дополнительно примените миграцию:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608061200_safe_answered_form_editing.sql
-```
-
-После миграций обязательно повторно разверните Edge Function `form-admin`: она обрабатывает действия `delete-responses` и `update-schema`. Frontend и функция должны обновляться вместе, иначе сохранение формы завершится ошибкой `Invalid delete payload`.
-
-Для обновления уже существующей базы после всех перечисленных выше миграций примените общий hardening-пакет:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608071200_security_reliability_hardening.sql
-```
-
-Он хеширует прежние идентификаторы редактирования ответов, ограничивает незакреплённые анонимные загрузки,
-исправляет статистику дедлайнов и добавляет атомарную постановку SMTP-напоминаний.
-
-## Справочник образовательных организаций
-
-Раздел **«Справочник ОУ»** доступен авторизованным пользователям. Просматривать и экспортировать справочник могут все пользователи, а добавлять, изменять, импортировать и удалять организации — только администраторы. Поддерживаются типы **«Школы»**, **«Сады»**, **«ОДО»** и **«УДОДы»**. Для УДОД номер не задаётся; отображаемое название в формах состоит из алиаса, для остальных типов — из алиаса и номера.
-
-Импорт принимает файл `.xlsx` с первой строкой заголовков:
-
-| Тип ОУ | Номер | Алиасы | Email |
-| --- | --- | --- | --- |
-| Школа | 123 | ГБОУ | school@example.ru |
-| УДОД |  | ДДТ | ddt@example.ru |
-
-Допустимы также заголовок `Алиас` и распространённые варианты названий типов (`Школы`, `Сады`, `Детский сад`, `ОДО`, `УДОДы`). Импорт проверяет обязательные поля, email, запрет номера для УДОД и ограничен 5000 строками за файл.
-
-В конструкторе SurveyJS справочник представлен отдельным защищённым элементом **«Организация»**. Внутри он работает как выпадающий список с поиском, но источник и технические свойства не доступны автору формы. При сохранении формы можно выбрать включённые типы организаций; по умолчанию выбраны школы и детские сады. После первого ответа изменение набора типов требует явного подтверждения, поскольку оно влияет на последующие ответы.
-
-Кнопка **«Отчёт»** на странице ответов рассчитывает заполненность и распределение значений по всем ответам. Если форма содержит поле организации, отчёт дополнительно сравнивает ответы с актуальным выбранным срезом справочника и показывает организации, которые не сдали ответ.
-
-Публичная форма получает через `list_form_organizations` только идентификатор, тип, номер и алиас организации. Email из справочника анонимным респондентам не передаётся.
-
-Для существующего Supabase-проекта примените миграцию после миграции управления ответами:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608031300_organization_directory.sql
-```
+4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions.
+5. Если frontend работает не на локальных origin-ах, задайте `FORM_ADMIN_ALLOWED_ORIGINS` списком origin-ов через запятую. Bucket можно переопределить переменной `SURVEY_FILES_BUCKET`; по умолчанию используется `survey-files`.
 
 ## SMTP-коннектор и напоминания
 
@@ -126,16 +78,9 @@ SMTP-настройки не хранятся в файлах frontend или п
 
 Во вкладке отчёта **«Учёт сдавших»** автор формы или администратор может поставить индивидуальные напоминания в очередь. Список адресатов заново вычисляется на сервере по актуальным ответам. Если у формы есть срок сдачи, он добавляется в письмо; без срока соответствующая строка не формируется. Статусы `В очереди`, `Отправляется`, `Отправлено` и `Ошибка` сохраняются в Supabase и обновляются через Realtime. Журнал можно закрыть и снова открыть в том же отчёте.
 
-Для существующей базы сначала примените миграцию:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202608061300_mail_reminders.sql
-```
-
 ### Развёртывание с self-hosted Supabase Docker
 
-Supabase не требуется хранить внутри приложения. Ниже `SURVEY_APP_DIR` — каталог этого репозитория, а `SUPABASE_DOCKER_DIR` — каталог `docker/` из отдельно скачанного self-hosted Supabase.
+Supabase не требуется хранить внутри приложения.
 
 1. Сгенерируйте постоянный ключ шифрования. Сохраните его в менеджере секретов: при потере ключа сохранённый SMTP-пароль нельзя будет расшифровать, и его потребуется ввести заново.
 
@@ -146,17 +91,9 @@ openssl rand -base64 32
 2. Скопируйте Edge Function, worker и compose-overlay в каталог Supabase:
 
 ```bash
-SURVEY_APP_DIR=/opt/survey-app
-SUPABASE_DOCKER_DIR=/path/to/supabase/docker
-
-mkdir -p "$SUPABASE_DOCKER_DIR/volumes/functions/mail-admin"
-cp -R "$SURVEY_APP_DIR/functions/mail-admin/." \
-  "$SUPABASE_DOCKER_DIR/volumes/functions/mail-admin/"
-mkdir -p "$SUPABASE_DOCKER_DIR/mail-worker"
-cp -R "$SURVEY_APP_DIR/mail-worker/." \
-  "$SUPABASE_DOCKER_DIR/mail-worker/"
-cp "$SURVEY_APP_DIR/mail-worker/docker-compose.mail-worker.yml" \
-  "$SUPABASE_DOCKER_DIR/docker-compose.mail-worker.yml"
+cp -R ./functions/mail-admin ./supabase/docker/volumes/functions/
+cp -R ./mail-worker ./supabase/docker/
+cp ./mail-worker/docker-compose.mail-worker.yml ./supabase/docker/docker-compose.mail-worker.yml
 ```
 
 При повторном обновлении удалять каталог не нужно: замените в этих двух копиях только файлы из новой версии приложения.
@@ -239,7 +176,26 @@ supabase secrets set \
   MAIL_ADMIN_ALLOWED_ORIGINS="https://forms.example.ru"
 ```
 
-Docker worker при этом должен получить `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` и тот же `MAIL_SETTINGS_ENCRYPTION_KEY` через секреты выбранной среды запуска.
+Docker worker при этом должен получить `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` и тот же `MAIL_SETTINGS_ENCRYPTION_KEY` через секреты выбранной среды запуска.  
+
+## Справочник образовательных организаций
+
+Раздел **«Справочник ОУ»** доступен авторизованным пользователям. Просматривать и экспортировать справочник могут все пользователи, а добавлять, изменять, импортировать и удалять организации — только администраторы. Поддерживаются типы **«Школы»**, **«Сады»**, **«ОДО»** и **«УДОДы»**. Для УДОД номер не задаётся; отображаемое название в формах состоит из алиаса, для остальных типов — из алиаса и номера.
+
+Импорт принимает файл `.xlsx` с первой строкой заголовков:
+
+| Тип ОУ | Номер | Алиасы | Email |
+| --- | --- | --- | --- |
+| Школа | 123 | ГБОУ | school@example.ru |
+| УДОД |  | ДДТ | ddt@example.ru |
+
+Допустимы также заголовок `Алиас` и распространённые варианты названий типов (`Школы`, `Сады`, `Детский сад`, `ОДО`, `УДОДы`). Импорт проверяет обязательные поля, email, запрет номера для УДОД и ограничен 5000 строками за файл.
+
+В конструкторе SurveyJS справочник представлен отдельным защищённым элементом **«Организация»**. Внутри он работает как выпадающий список с поиском, но источник и технические свойства не доступны автору формы. При сохранении формы можно выбрать включённые типы организаций; по умолчанию выбраны школы и детские сады. После первого ответа изменение набора типов требует явного подтверждения, поскольку оно влияет на последующие ответы.
+
+Кнопка **«Отчёт»** на странице ответов рассчитывает заполненность и распределение значений по всем ответам. Если форма содержит поле организации, отчёт дополнительно сравнивает ответы с актуальным выбранным срезом справочника и показывает организации, которые не сдали ответ.
+
+Публичная форма получает через `list_form_organizations` только идентификатор, тип, номер и алиас организации. Email из справочника анонимным респондентам не передаётся.
 
 ## Запуск тестов
 
@@ -325,35 +281,9 @@ MAIL_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://17
 
 Локально функции по умолчанию разрешают `http://localhost:5173`, `http://127.0.0.1:5173` и private-network origin-ы на dev-портах `3000`, `4173`, `5173`, `8000` для запуска через IP машины или WSL. Для production или нестандартного порта задайте origin точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эти переменные задаются в `supabase/docker/.env` и передаются в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.
 
-## Supabase клиент
-
-В проекте используется один способ создания клиента Supabase:
-
-- клиент создаётся в `frontend/src/shared/api/client.ts`;
-- все остальные места берут его через реэкспорт (`frontend/src/shared/api/supabase.ts` и `frontend/src/lib/supabase.ts`).
-
 ## Фоны редактора тем: bucket `survey-assets`
 
-Редактор тем использует отдельный публичный Supabase Storage bucket `survey-assets`. Это не тот же bucket, что `survey-files`: первый хранит фоновые изображения темы, второй — файлы, загруженные респондентами в вопросы формы.
-
-Имя `survey-assets` сейчас задано в коде и не зависит от `VITE_SUPABASE_STORAGE_BUCKET`. Если при загрузке своего фона интерфейс сообщает `Bucket not found`, значит миграция редактора тем ещё не применена к текущему Supabase-проекту.
-
-Для существующего проекта примените миграцию:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f database/migrations/202607171200_add_form_themes_and_assets.sql
-```
-
-Для нового пустого проекта достаточно применить `database/supabase_schema.sql`: создание bucket и необходимые политики уже включены в baseline.
-
-Миграция:
-
-- добавляет `forms.theme`;
-- создаёт публичный bucket `survey-assets`;
-- задаёт лимит 5 МБ и разрешает только `image/jpeg`, `image/png`, `image/webp`;
-- создаёт RLS-политики для просмотра, загрузки и удаления фонов;
-- разрешает пользователю управлять только фонами своей формы, а администратору — всеми пользовательскими фонами.
+Редактор тем использует отдельный публичный Supabase Storage bucket `survey-assets`. Это не тот же bucket, что `survey-files`: первый хранит фоновые изображения темы, второй — файлы, загруженные респондентами в вопросы формы. Имя `survey-assets` сейчас задано в коде и не зависит от `VITE_SUPABASE_STORAGE_BUCKET`.  
 
 Пути объектов имеют фиксированную структуру:
 
@@ -411,37 +341,6 @@ Bucket, функции проверки квот и RLS-политики уже 
 3. Используйте эти параметры в внешнем S3-клиенте (AWS SDK, MinIO client и т.д.).
 
 > Во фронтенде этого проекта используется нативный Supabase Storage SDK, поэтому S3-ключи во frontend/.env не требуются.
-
-## База данных (что ожидает фронтенд)
-
-Фронтенд работает с таблицами:
-
-- `public.profiles`
-  - `id uuid`
-  - `name text`
-  - `email text`
-  - `role text` (`admin` / `user`)
-  - `is_disabled boolean`
-  - `created_at timestamptz`
-- `public.forms`
-  - `id uuid`
-  - `title text`
-  - `form_type text`
-  - `form_reason text`
-  - `schema jsonb`
-  - `is_public boolean`
-  - `deadline_at timestamptz | null`
-  - `max_responses integer | null`
-  - `responses_count integer`
-  - `author_id uuid`
-  - `author_name text`
-  - `created_at timestamptz`
-- `public.responses`
-  - `id uuid`
-  - `form_id uuid`
-  - `user_id uuid | null`
-  - `data jsonb`
-  - `created_at timestamptz`
 
 Схема в `database/supabase_schema.sql` соответствует этим ожиданиям. Файл предназначен для нового или полностью пустого проекта и не содержит `DROP TABLE`, `TRUNCATE` или `DELETE FROM`.
 
@@ -603,65 +502,3 @@ aws s3 sync "./survey-files" "s3://survey-files" \
 S3-параметры находятся в Supabase Dashboard: **Project Settings** → **Storage** → **S3 API**. После копирования проверьте RLS-политики Storage и откройте форму с загруженным файлом.
 
 
-## Edge Function для админ-операций пользователей
-
-Создание пользователя, удаление, смена пароля пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
-
-Цепочка:
-
-`Frontend (React) -> Edge Function (проверка прав admin) -> Supabase auth.admin API`
-
-### Как включить
-
-1. cp -R ./functions/user-admin ./supabase/docker/volumes/functions/
-2. cd ./supabase/docker/
-3. docker compose restart functions --no-deps
-
-```bash
-supabase functions deploy user-admin
-```
-
-4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions (через Secrets в Supabase).
-5. Фронтенд вызывает функцию через `supabase.functions.invoke("user-admin")` и передаёт JWT текущего пользователя автоматически; функция дополнительно проверяет, что вызывающий пользователь имеет роль `admin` в `public.profiles`.
-
-> Для корректного отображения статуса блокировки пользователей в таблице используется поле `public.profiles.is_disabled`.
-
-## Edge Function для удаления форм и файлов
-
-Удаление формы и совместимое обновление формы с ответами выполняются через Edge Function `form-admin`. При удалении функция вместе со строкой `forms` удаляет связанные объекты из bucket `survey-files` и фоновые изображения из `survey-assets`. При обновлении она повторно сравнивает исходную и новую схемы на сервере, блокирует несовместимые изменения и требует подтверждения предупреждений. Функция принимает JWT текущего пользователя и разрешает операции автору формы или администратору.
-
-### Как включить
-
-1. `cp -R ./functions/form-admin ./supabase/docker/volumes/functions/`
-2. cd ./supabase/docker/
-3. docker compose restart functions --no-deps
-
-```bash
-supabase functions deploy form-admin
-```
-
-4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions.
-5. Если frontend работает не на локальных origin-ах, задайте `FORM_ADMIN_ALLOWED_ORIGINS` списком origin-ов через запятую. Bucket можно переопределить переменной `SURVEY_FILES_BUCKET`; по умолчанию используется `survey-files`.
-
-## Запуск frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Запуск unit-тестов
-
-```bash
-cd frontend
-npm install
-npm run test
-```
-
-Для запуска в watch-режиме:
-
-```bash
-cd frontend
-npm run test:watch
-```
