@@ -153,7 +153,7 @@ describe("ThemeCycleButton", () => {
     expect(surfaceOverrides).toMatch(/\.dashboard-main-card,[^{]+\{[^}]*background:\s*var\(--theme-page-surface\);/s);
     expect(surfaceOverrides).toMatch(/\.dashboard-form-card\s*\{[^}]*background:\s*var\(--theme-form-card-background\);/s);
     expect(surfaceOverrides).toMatch(/\.responses-table th\s*\{[^}]*background:\s*var\(--theme-surface\);/s);
-    expect(surfaceOverrides).toMatch(/\.responses-table tbody tr:nth-child\(even\) td\s*\{[^}]*background:\s*var\(--theme-row-alt\);/s);
+    expect(surfaceOverrides).toMatch(/\.responses-table tbody td\s*\{[^}]*background:\s*var\(--theme-surface-light\);/s);
     expect(css).toMatch(/:root\[data-theme="graphite"\] \.organizations-table tbody td,[^{]+\.users-table tbody td,[^{]+\.responses-page-table-shell \.responses-table tbody td,[^{]+\{[^}]*color:\s*#202020;[^}]*background:\s*#e2e2e2;/s);
     expect(css).toMatch(/:root\[data-theme="graphite"\] \.organizations-table tbody tr:hover td,[^{]+\.users-table tbody tr:hover td,[^{]+\{[^}]*background:\s*#d4d4d4;/s);
     expect(surfaceOverrides).toMatch(/\.dashboard-toolbar input,[^{]+\{[^}]*background:\s*var\(--theme-control-background\);/s);

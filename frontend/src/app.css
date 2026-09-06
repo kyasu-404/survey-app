@@ -1212,7 +1212,7 @@ textarea:focus {
 
 .dashboard-refresh-meta {
   margin: 0;
-  color: #64748b;
+  color: var(--theme-updated-text, #3f6f52);
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
@@ -4130,10 +4130,6 @@ button.responses-export-button:disabled {
   background: linear-gradient(180deg, rgba(242, 239, 234, 0.96), rgba(232, 227, 221, 0.96));
 }
 
-.responses-table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.34);
-}
-
 .responses-table-row-clickable {
   cursor: pointer;
 }
@@ -5712,6 +5708,7 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
   --theme-muted: #c3c3c3;
   --theme-text-muted: var(--theme-muted);
   --theme-shadow-color: rgba(0, 0, 0, 0.3);
+  --theme-updated-text: #94bba2;
   --theme-accent: #f2f2f2;
   --theme-accent-strong: #ffffff;
   --theme-accent-soft: rgba(255, 255, 255, 0.11);
@@ -6104,6 +6101,17 @@ button.responses-report-button:focus-visible,
   color: var(--theme-text);
   background: var(--theme-surface-light);
   cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.organizations-row-actions button:not(:disabled):hover,
+.organizations-row-actions button:not(:disabled):focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px var(--theme-shadow-color);
+}
+
+.organizations-row-actions button:not(:disabled):active {
+  transform: translateY(0);
 }
 
 .organizations-row-actions button.danger {
@@ -7548,12 +7556,8 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   background: var(--theme-surface-light);
 }
 
-.responses-table tbody tr:nth-child(odd) td {
+.responses-table tbody td {
   background: var(--theme-surface-light);
-}
-
-.responses-table tbody tr:nth-child(even) td {
-  background: var(--theme-row-alt);
 }
 
 .dashboard-responses-link,
@@ -7920,8 +7924,9 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   color: #ececec;
 }
 
-:root[data-theme="graphite"] .logo-image[src*="black_logo"] {
-  filter: invert(1) brightness(1.4);
+:root[data-theme="graphite"] .settings-branding-preview-frame {
+  background: #181818;
+  box-shadow: none;
 }
 
 :root[data-theme="graphite"] .sd-logo__image[src*="black_logo"] {
@@ -7948,13 +7953,18 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   opacity: 1;
 }
 
-/* Data rows use a clearly light-gray surface while headings retain the dark
-   surface. Keeping body cells light preserves scanability for dense tables. */
+/* All application tables share the sidebar's near-black heading and uniform
+   light-gray rows in dark mode, including reports and the mail delivery log. */
+:root[data-theme="graphite"] .responses-table thead th {
+  color: #f5f5f5;
+  border-color: #686868;
+  background: #181818;
+}
+
 :root[data-theme="graphite"] .organizations-table tbody td,
 :root[data-theme="graphite"] .users-table tbody td,
 :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody td,
-:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody tr:nth-child(odd) td,
-:root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody tr:nth-child(even) td {
+:root[data-theme="graphite"] .responses-table tbody td {
   color: #202020;
   border-color: #b8b8b8;
   background: #e2e2e2;
@@ -7968,12 +7978,30 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 :root[data-theme="graphite"] .organizations-table tbody td a,
-:root[data-theme="graphite"] .users-table tbody td a {
+:root[data-theme="graphite"] .users-table tbody td a,
+:root[data-theme="graphite"] .responses-table tbody td a {
   color: #214f91;
 }
 
 :root[data-theme="graphite"] .users-table tbody td .users-role-chip-static {
   color: #4b5563;
+}
+
+/* Status pills remain distinct without an outer glow or glossy overlays. */
+:root[data-theme="graphite"] .dashboard-status-pill:is(.dashboard-status-pill-active, .dashboard-status-pill-closed),
+:root[data-theme="graphite"] .dashboard-status-pill:is(.dashboard-status-pill-active, .dashboard-status-pill-closed):is(:hover, :focus-visible) {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+:root[data-theme="graphite"] .dashboard-status-trigger-glossy:is(.dashboard-status-pill-active, .dashboard-status-pill-closed)::before,
+:root[data-theme="graphite"] .dashboard-status-trigger-glossy:is(.dashboard-status-pill-active, .dashboard-status-pill-closed)::after {
+  content: none;
+}
+
+:root[data-theme="graphite"] .dashboard-status-trigger:is(.dashboard-status-pill-active, .dashboard-status-pill-closed):focus-visible {
+  outline: 2px solid var(--theme-text);
+  outline-offset: 3px;
 }
 
 /* Property editors use a light-gray field surface with dark input text. This
@@ -8501,7 +8529,54 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   background: #ffffff;
 }
 
-:root[data-theme="graphite"] .responses-html-preview tbody tr:nth-child(even) td {
-  background: #f8fafc;
+/* Match the on-screen HTML table to dark-mode tables while retaining the
+   document's existing print and downloaded HTML styles. */
+@media screen {
+  :root[data-theme="graphite"] .responses-html-preview th {
+    color: #f5f5f5;
+    border-color: #686868;
+    background: #181818;
+  }
+
+  :root[data-theme="graphite"] .responses-html-preview td {
+    color: #202020;
+    border-color: #b8b8b8;
+    background: #e2e2e2;
+  }
+}
+
+/* Keep dark-mode filters visibly separate from their surrounding toolbar. */
+:root[data-theme="graphite"] :is(.dashboard-toolbar, .users-page-controls, .users-filters-grid) :is(input, select) {
+  color: var(--theme-text);
+  border-color: #686868;
+  background: #484848;
+}
+
+:root[data-theme="graphite"] :is(.dashboard-toolbar, .users-page-controls, .users-filters-grid) input::placeholder {
+  color: var(--theme-text-muted);
+}
+
+:root[data-theme="graphite"] .builder-response-settings-modal,
+:root[data-theme="graphite"] .builder-organization-settings-modal {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-muted);
+}
+
+:root[data-theme="graphite"] .builder-response-settings-modal strong,
+:root[data-theme="graphite"] .builder-organization-settings-modal legend,
+:root[data-theme="graphite"] .builder-organization-settings-modal .builder-organization-options label,
+:root[data-theme="graphite"] .builder-organization-settings-modal .builder-organization-options label span,
+:root[data-theme="graphite"] .dashboard-qr-modal-copy {
+  color: var(--theme-text);
+}
+
+:root[data-theme="graphite"] .builder-response-settings-modal > div > span,
+:root[data-theme="graphite"] .responses-page-total {
+  color: var(--theme-text-muted);
+}
+
+:root[data-theme="graphite"] .organizations-row-actions .organization-delete-button img {
+  filter: brightness(0);
 }
 

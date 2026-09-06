@@ -9,13 +9,16 @@ import {
   uploadAppLogo,
   validateAppLogoFile,
 } from "../../entities/branding/api";
-import defaultLogo from "../../img/black_logo.png";
+import { getDefaultAppLogo } from "../../entities/branding/defaultLogo";
 import { getErrorMessage } from "../../shared/lib/error";
+import { useTheme } from "../../shared/theme/ThemeProvider";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
 
 export function BrandingSettingsSection() {
   const { showToast } = useToast();
+  const { themeId } = useTheme();
+  const defaultLogo = getDefaultAppLogo(themeId);
   const queryClient = useQueryClient();
   const brandingQuery = useQuery({
     queryKey: APP_BRANDING_QUERY_KEY,
@@ -94,7 +97,7 @@ export function BrandingSettingsSection() {
         <div>
           <p>Оформление</p>
           <h2 id="branding-settings-heading">Основной логотип</h2>
-          <span>Логотип отображается в верхней части левого меню у всех сотрудников.</span>
+          <span>Общий логотип отображается в левом меню у всех сотрудников во всех темах. Стандартный логотип в тёмной теме — белый.</span>
         </div>
       </div>
 

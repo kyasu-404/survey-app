@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { APP_BRANDING_QUERY_KEY, getAppBranding } from "../../entities/branding/api";
+import { getDefaultAppLogo } from "../../entities/branding/defaultLogo";
 import { logout } from "../../features/auth/api";
-import blackLogo from "../../img/black_logo.png";
 import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
+import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
 
 type SidebarProps = {
@@ -14,6 +16,8 @@ type SidebarProps = {
 
 export function Sidebar({ onToggle }: SidebarProps) {
   const { user, profile, loading } = useAuth();
+  const { themeId } = useTheme();
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const brandingQuery = useQuery({
     queryKey: APP_BRANDING_QUERY_KEY,
@@ -22,7 +26,9 @@ export function Sidebar({ onToggle }: SidebarProps) {
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
-  const sidebarLogo = brandingQuery.data?.sidebarLogoUrl ?? blackLogo;
+  const defaultLogo = getDefaultAppLogo(themeId);
+  const configuredLogo = brandingQuery.data?.sidebarLogoUrl;
+  const sidebarLogo = configuredLogo && configuredLogo !== failedLogoUrl ? configuredLogo : defaultLogo;
 
   async function onLogout() {
     try {
@@ -40,10 +46,8 @@ export function Sidebar({ onToggle }: SidebarProps) {
           src={sidebarLogo}
           alt="Логотип приложения"
           className="logo-image"
-          onError={(event) => {
-            if (event.currentTarget.dataset.fallbackApplied) return;
-            event.currentTarget.dataset.fallbackApplied = "true";
-            event.currentTarget.src = blackLogo;
+          onError={() => {
+            if (sidebarLogo !== defaultLogo) setFailedLogoUrl(sidebarLogo);
           }}
         />
         <h3 className="brand-title">Формы</h3>
