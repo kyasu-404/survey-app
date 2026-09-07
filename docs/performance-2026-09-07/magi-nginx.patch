@@ -1,0 +1,92 @@
+--- a/etc/nginx/sites-available/forms.imc-mosk.ru
++++ b/etc/nginx/sites-available/forms.imc-mosk.ru
+@@ -1,7 +1,26 @@
+ 
+-limit_req_zone $binary_remote_addr zone=survey_api:10m rate=20r/s;
+-limit_req_zone $binary_remote_addr zone=survey_responses:10m rate=3r/s;
+-limit_req_zone $binary_remote_addr zone=survey_uploads:10m rate=1r/s;
++# OPTIONS is a browser preflight, not an application operation. Keep aggregate
++# IP budgets (never trust a caller-supplied identity) sized for a shared office.
++map $request_method $survey_api_key {
++  default $binary_remote_addr;
++  OPTIONS "";
++}
++map $request_method $survey_upload_key {
++  default "";
++  POST $binary_remote_addr;
++  PUT $binary_remote_addr;
++  PATCH $binary_remote_addr;
++  DELETE $binary_remote_addr;
++}
++map $uri $survey_static_cache_control {
++  default "no-cache";
++  "~^/assets/.+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$" "public, max-age=31536000, immutable";
++}
++
++# New zone names allow a graceful reload from the old binary_remote_addr key.
++limit_req_zone $survey_api_key zone=survey_api_v2:10m rate=100r/s;
++limit_req_zone $survey_api_key zone=survey_responses_v2:10m rate=20r/s;
++limit_req_zone $survey_upload_key zone=survey_uploads_v2:10m rate=10r/s;
+ limit_conn_zone $binary_remote_addr zone=survey_connections:10m;
+ 
+ upstream app_api {
+@@ -41,14 +60,20 @@
+ 	add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+ 	add_header Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()" always;
+ 
++	add_header Cache-Control $survey_static_cache_control;
++
+ 	client_max_body_size 100m;
+ 	client_body_timeout 30s;
+ 	client_header_timeout 15s;
+ 	keepalive_timeout 65s;
+-	limit_conn survey_connections 30;
++	limit_conn survey_connections 256;
+ 
+ 	root /var/www/forms.imc-mosk.ru/dist;
+ 	index index.html;
++
++	location ^~ /assets/ {
++		try_files $uri =404;
++	}
+ 
+ 	location / {
+ 		try_files $uri $uri/ /index.html;
+--- a/etc/nginx/sites-available/api.forms.imc-mosk.ru
++++ b/etc/nginx/sites-available/api.forms.imc-mosk.ru
+@@ -22,7 +22,7 @@
+     ssl_certificate_key /etc/nginx/ssl/api.forms.imc-mosk.ru/key.pem;
+ 
+     location = /rest/v1/rpc/submit_form_response {
+-        limit_req zone=survey_responses burst=6 nodelay;
++        limit_req zone=survey_responses_v2 burst=200 nodelay;
+         limit_except POST OPTIONS { deny all; }
+         proxy_pass http://192.168.6.80:8000/rest/v1/rpc/submit_form_response;
+ 
+@@ -37,7 +37,7 @@
+     }
+ 
+     location ^~ /storage/v1/object/survey-files/ {
+-        limit_req zone=survey_uploads burst=5 nodelay;
++        limit_req zone=survey_uploads_v2 burst=200 nodelay;
+         proxy_pass http://192.168.6.80:8000/storage/v1/object/survey-files/;
+ 
+         proxy_http_version 1.1;
+@@ -51,7 +51,7 @@
+     }
+ 
+     location ^~ /realtime/ {
+-        limit_req zone=survey_api burst=40 nodelay;
++        limit_req zone=survey_api_v2 burst=400 nodelay;
+         proxy_pass http://192.168.6.80:8000/realtime/;
+ 
+         proxy_http_version 1.1;
+@@ -90,7 +90,7 @@
+     }
+ 
+     location / {
+-        limit_req zone=survey_api burst=40 nodelay;
++        limit_req zone=survey_api_v2 burst=400 nodelay;
+         proxy_pass http://192.168.6.80:8000;
+ 
+         # Envoy generates a different Basic realm for every Studio URL. Keep

@@ -1,0 +1,58 @@
+{
+  "graceful_reload": true,
+  "cache": [
+    {
+      "immutable_assets": true,
+      "html_revalidated": true,
+      "missing_asset_404": true,
+      "security_headers_preserved": true
+    },
+    {
+      "immutable_assets": true,
+      "html_revalidated": true,
+      "missing_asset_404": true,
+      "security_headers_preserved": true
+    }
+  ],
+  "preflight": {
+    "requests": 200,
+    "method": "OPTIONS",
+    "seconds": 0.145,
+    "statuses": {
+      "200": 200
+    }
+  },
+  "responses": {
+    "requests": 200,
+    "method": "POST",
+    "seconds": 0.152,
+    "statuses": {
+      "200": 200
+    }
+  },
+  "uploads": {
+    "requests": 200,
+    "method": "POST",
+    "seconds": 0.152,
+    "statuses": {
+      "200": 200
+    }
+  },
+  "reads": {
+    "requests": 200,
+    "method": "GET",
+    "seconds": 0.15,
+    "statuses": {
+      "200": 200
+    }
+  },
+  "overload": {
+    "requests": 400,
+    "method": "POST",
+    "seconds": 0.17,
+    "statuses": {
+      "200": 13,
+      "429": 387
+    }
+  }
+}

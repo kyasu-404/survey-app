@@ -6,6 +6,7 @@ import { gzipSync } from "node:zlib";
 const distDir = fileURLToPath(new URL("../dist", import.meta.url));
 
 const budgets = {
+  initial: { raw: 850_000, gzip: 230_000 },
   mainJs: { raw: 4_200_000, gzip: 950_000 },
   asyncJs: { raw: 1_000_000, gzip: 320_000 },
   lazySurveyCoreJs: { raw: 1_700_000, gzip: 320_000 },
@@ -64,6 +65,35 @@ if (!existsSync(distDir)) {
 }
 
 const failures = [];
+// Checking individual files misses regressions where a lazy feature becomes an
+// entry dependency. Gate the entire static import tree, including its styles.
+const manifest = JSON.parse(readFileSync(join(distDir, ".vite/manifest.json"), "utf8"));
+const initialFiles = new Set();
+const visited = new Set();
+function visitEntry(key) {
+  if (visited.has(key)) return;
+  visited.add(key);
+  const chunk = manifest[key];
+  initialFiles.add(chunk.file);
+  for (const css of chunk.css ?? []) initialFiles.add(css);
+  for (const dependency of chunk.imports ?? []) visitEntry(dependency);
+}
+for (const [key, chunk] of Object.entries(manifest)) {
+  if (chunk.isEntry) visitEntry(key);
+}
+let initialRaw = 0;
+let initialGzip = 0;
+for (const name of initialFiles) {
+  const data = readFileSync(join(distDir, name));
+  initialRaw += data.byteLength;
+  initialGzip += gzipSync(data).byteLength;
+  if (/survey-(?:core|creator|react)|exceljs|sentry/i.test(name)) {
+    failures.push(`Lazy feature unexpectedly loaded at startup: ${name}`);
+  }
+}
+if (initialRaw > budgets.initial.raw || initialGzip > budgets.initial.gzip) {
+  failures.push(`Initial JS/CSS ${formatBytes(initialRaw)} raw / ${formatBytes(initialGzip)} gzip exceeds budget`);
+}
 const files = listFiles(distDir);
 let totalBytes = 0;
 
@@ -102,3 +132,4 @@ if (failures.length > 0) {
 }
 
 console.log(`Bundle budget passed: ${files.length} files, ${formatBytes(totalBytes)} total.`);
+console.log(`Initial JS/CSS: ${initialFiles.size} files, ${formatBytes(initialRaw)} raw, ${formatBytes(initialGzip)} gzip.`);

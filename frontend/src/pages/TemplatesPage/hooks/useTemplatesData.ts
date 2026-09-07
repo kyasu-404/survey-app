@@ -1,5 +1,6 @@
+import { createBatchedFormsQuery } from "../../../shared/lib/batchedInfiniteQuery";
 import { useMemo } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getTemplateFormsPage } from "../../../entities/survey/api/surveysApi";
 import { getTemplateFormsQueryKey } from "../../../entities/survey/model/queryKeys";
 import { TEMPLATE_FORM_TYPE, isTemplateForm } from "../../../entities/survey/model/surveyModel";
@@ -23,14 +24,11 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
     [section, userId],
   );
 
-  const query = useInfiniteQuery({
-    queryKey: templatesQueryKey,
-    initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) =>
-      getTemplateFormsPage({
-        page: pageParam,
-        pageSize: TEMPLATE_PAGE_SIZE,
-        signal,
+  const queryClient = useQueryClient();
+  const fetchList = useMemo(() => createBatchedFormsQuery(
+    queryClient, templatesQueryKey, TEMPLATE_PAGE_SIZE,
+    (request) => getTemplateFormsPage({
+        ...request,
         filters:
           section === "mine"
             ? {
@@ -42,6 +40,12 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
                 isPublic: true,
               },
       }),
+  ), [queryClient, templatesQueryKey, section, userId]);
+
+  const query = useInfiniteQuery({
+    queryKey: templatesQueryKey,
+    initialPageParam: 0,
+    queryFn: fetchList,
     getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
     enabled: !isAuthLoading && (section === "public" || Boolean(userId)),
     retry: 1,

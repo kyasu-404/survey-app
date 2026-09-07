@@ -77,22 +77,23 @@ export async function queueFormReminders(formId: string) {
 const BATCH_SELECT = "id, kind, form_id, created_by, total_count, created_at";
 const JOB_SELECT = "id, batch_id, form_id, organization_id, recipient_email, recipient_name, status, attempts, max_attempts, last_error, sent_at, created_at, updated_at";
 
-export async function getFormMailActivity(formId: string): Promise<MailActivity> {
+export async function getFormMailActivity(formId: string, signal?: AbortSignal): Promise<MailActivity> {
   const { data: batchesData, error: batchesError } = await runRequest(
     "mail.activity.batches",
     (signal) => apiClient.from("mail_batches").select(BATCH_SELECT).eq("form_id", formId).order("created_at", { ascending: false }).limit(20).abortSignal(signal),
-    { context: { formId } },
+    { context: { formId }, signal },
   );
   if (batchesError) throw batchesError;
   const batches = (batchesData ?? []) as MailBatch[];
   return { batches, jobs: [] };
 }
 
-export async function getMailJobs(batchId: string): Promise<MailJob[]> {
+export async function getMailJobs(batchId: string, signal?: AbortSignal): Promise<MailJob[]> {
   const pageSize = 1000;
   const jobs: MailJob[] = [];
 
   for (let offset = 0; ; offset += pageSize) {
+    signal?.throwIfAborted();
     const { data, error } = await runRequest(
       "mail.batch.jobs",
       (signal) => apiClient
@@ -103,7 +104,7 @@ export async function getMailJobs(batchId: string): Promise<MailJob[]> {
         .order("id")
         .range(offset, offset + pageSize - 1)
         .abortSignal(signal),
-      { context: { batchId, offset } },
+      { context: { batchId, offset }, signal },
     );
     if (error) throw error;
     const page = (data ?? []) as MailJob[];

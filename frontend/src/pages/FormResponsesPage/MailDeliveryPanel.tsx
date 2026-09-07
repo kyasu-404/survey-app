@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getFormMailActivity, getMailJobs } from "../../entities/mail/api";
 import { getMailProgress, MAIL_STATUS_LABELS } from "../../entities/mail/model";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 
 export function MailDeliveryPanel({
   formId,
@@ -15,9 +16,12 @@ export function MailDeliveryPanel({
   preferredBatchId: string | null;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const activityQuery = useQuery({
     queryKey: ["form-mail-activity", formId],
-    queryFn: () => getFormMailActivity(formId),
+    queryFn: ({ signal }) => getFormMailActivity(formId, signal),
+    refetchOnMount: "always",
   });
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(preferredBatchId);
 
@@ -32,17 +36,22 @@ export function MailDeliveryPanel({
   const selectedBatch = batches.find((batch) => batch.id === effectiveBatchId) ?? null;
   const jobsQuery = useQuery({
     queryKey: ["mail-batch-jobs", effectiveBatchId],
-    queryFn: () => getMailJobs(effectiveBatchId!),
+    queryFn: ({ signal }) => getMailJobs(effectiveBatchId!, signal),
     enabled: Boolean(effectiveBatchId),
+    refetchOnMount: "always",
     refetchInterval: (query) => {
       const hasActiveJobs = query.state.data?.some((job) => job.status === "queued" || job.status === "processing");
-      return hasActiveJobs ? 5000 : false;
+      return hasActiveJobs && !isRealtimeConnected ? 5000 : false;
     },
   });
   const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
   const progress = getMailProgress(jobs);
 
   useEffect(() => {
+    setIsRealtimeConnected(false);
+    const refresh = createQueryRefreshScheduler(queryClient, `mail activity ${formId}`, 500);
+    const activityTarget = { queryKey: ["form-mail-activity", formId] };
+    const jobsTarget = effectiveBatchId ? { queryKey: ["mail-batch-jobs", effectiveBatchId] } : null;
     const channel = supabaseClient
       .channel(`form-mail-activity:${formId}`)
       .on("postgres_changes", {
@@ -50,13 +59,24 @@ export function MailDeliveryPanel({
         schema: "public",
         table: "mail_queue",
         filter: `form_id=eq.${formId}`,
-      }, () => {
-        void activityQuery.refetch();
-        void jobsQuery.refetch();
+      }, (payload) => {
+        const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+        const batchId = typeof row.batch_id === "string" ? row.batch_id : null;
+        // A delivery status change doesn't change the list of mail batches.
+        // Inserts may introduce a new batch; incomplete DELETE payloads need reconciliation.
+        const targets = payload.eventType === "UPDATE" && batchId ? [] : [activityTarget];
+        if (jobsTarget && (!batchId || batchId === effectiveBatchId)) targets.push(jobsTarget);
+        if (targets.length) refresh.schedule(targets);
       })
-      .subscribe();
-    return () => { void supabaseClient.removeChannel(channel); };
-  }, [activityQuery.refetch, formId, jobsQuery.refetch]);
+      .subscribe((status) => {
+        setIsRealtimeConnected(status === "SUBSCRIBED");
+        if (status === "SUBSCRIBED") refresh.schedule([activityTarget, ...(jobsTarget ? [jobsTarget] : [])]);
+      });
+    return () => {
+      refresh.dispose();
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [effectiveBatchId, formId, queryClient]);
 
   return (
     <section className="mail-delivery-panel" aria-labelledby="mail-delivery-title">

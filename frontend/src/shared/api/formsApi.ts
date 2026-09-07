@@ -65,6 +65,7 @@ type RawDashboardFormsStats = {
 type FetchFormsPageOptions = {
   page: number;
   pageSize: number;
+  offset?: number;
   filters?: FormsFilters;
   signal?: AbortSignal;
 };
@@ -354,7 +355,7 @@ export async function fetchForms(filters?: FormsFilters, options: RequestSignalO
 export async function fetchDashboardFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
-  const rangeFrom = Math.max(options.page, 0) * options.pageSize;
+  const rangeFrom = options.offset ?? Math.max(options.page, 0) * options.pageSize;
   const rangeTo = rangeFrom + options.pageSize;
 
   let query = apiClient
@@ -393,7 +394,7 @@ export async function fetchDashboardFormsPage(
 export async function fetchTemplateFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
-  const rangeFrom = Math.max(options.page, 0) * options.pageSize;
+  const rangeFrom = options.offset ?? Math.max(options.page, 0) * options.pageSize;
   const rangeTo = rangeFrom + options.pageSize;
 
   let query = apiClient

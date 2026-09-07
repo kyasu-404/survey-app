@@ -40,6 +40,7 @@ export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
 export async function getDashboardFormsPage(params: {
   page: number;
   pageSize: number;
+  offset?: number;
   filters?: FormsFilters;
   signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {
@@ -56,6 +57,7 @@ export async function getDashboardFormsStats(
 export async function getTemplateFormsPage(params: {
   page: number;
   pageSize: number;
+  offset?: number;
   filters?: FormsFilters;
   signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {

@@ -223,6 +223,13 @@ describe("fetchDashboardFormsPage", () => {
     vi.resetAllMocks();
   });
 
+  it.each([fetchDashboardFormsPage, fetchTemplateFormsPage])("keeps the offset of the second refresh batch below the API cap", async (fetchPage) => {
+    const listQuery = createSummaryQuery({ data: [], count: null, error: null });
+    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    await fetchPage({ page: 0, pageSize: 21, offset: 999 });
+    expect(listQuery.range).toHaveBeenCalledWith(999, 1020);
+  });
+
   it("requests one lookahead item after the first 20 newest dashboard forms", async () => {
     const listQuery = createSummaryQuery({
       data: [],

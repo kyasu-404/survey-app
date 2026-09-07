@@ -3,6 +3,8 @@ import ExcelJS from "exceljs";
 
 // All API traffic is intercepted; this scenario never writes to a real backend.
 test("200 answers remain in one scrollable list, export completely, and delete in batches", async ({ page }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   const userId = "10000000-0000-4000-8000-000000000001";
   const formId = "20000000-0000-4000-8000-000000000001";
   const user = { id: userId, aud: "authenticated", role: "authenticated", email: "test@example.test", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" };
@@ -19,6 +21,8 @@ test("200 answers remain in one scrollable list, export completely, and delete i
     schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
   };
   const deletedBatchSizes: number[] = [];
+  const listRequests: Array<{ offset: number; limit: number }> = [];
+  const forms = Array.from({ length: 220 }, (_, index) => ({ ...form, id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, title: `Карточка ${index + 1}` }));
   await page.routeWebSocket("**/*", (socket) => socket.close());
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -40,9 +44,14 @@ test("200 answers remain in one scrollable list, export completely, and delete i
       const table = url.pathname.split("/").pop();
       if (table === "profiles") return route.fulfill({ json: { ...user, name: "Тест", role: "admin", is_disabled: false } });
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
-      if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 1, active_count: 1, forms_with_deadline_count: 0 }] });
-      if (table === "forms") return route.fulfill({ json: url.searchParams.has("id")
-        ? { ...form, responses_count: responses.length } : [{ ...form, responses_count: responses.length }] });
+      if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 220, active_count: 220, forms_with_deadline_count: 0 }] });
+      if (table === "forms") {
+        if (url.searchParams.has("id")) return route.fulfill({ json: { ...form, responses_count: responses.length } });
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? 20);
+        listRequests.push({ offset, limit });
+        return route.fulfill({ json: forms.slice(offset, offset + limit) });
+      }
       if (table === "responses") {
         const offset = Number(url.searchParams.get("offset") ?? 0);
         const limit = Number(url.searchParams.get("limit") ?? 100);
@@ -61,10 +70,24 @@ test("200 answers remain in one scrollable list, export completely, and delete i
     return route.continue();
   });
   await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Войти", exact: true })).toBeVisible();
+  const startupFiles = await page.evaluate(() => performance.getEntriesByType("resource").map((resource) => new URL(resource.name).pathname));
+  expect(startupFiles.filter((path) => /survey-(core|creator|react)|exceljs|sentry/.test(path))).toEqual([]);
   await page.getByPlaceholder("Электронная почта").fill(user.email);
   await page.getByPlaceholder("Пароль").fill("test-only-password");
   await page.getByRole("button", { name: "Войти" }).click();
   await expect(page).toHaveURL(/dashboard/);
+  await expect(page.getByText("Карточка 20", { exact: true })).toBeVisible();
+  for (let count = 40; count <= 200; count += 20) {
+    await page.getByRole("button", { name: "Показать ещё", exact: true }).click();
+    await expect(page.getByText(`Карточка ${count}`, { exact: true })).toBeVisible();
+  }
+  expect(listRequests).toHaveLength(10);
+  listRequests.length = 0;
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  await expect.poll(() => listRequests.length).toBe(1);
+  expect(listRequests[0]).toEqual({ offset: 0, limit: 201 });
+  await expect(page.getByText("Карточка 200", { exact: true })).toBeVisible();
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Страницы ответов")).toHaveCount(0);
@@ -100,4 +123,10 @@ test("200 answers remain in one scrollable list, export completely, and delete i
   await page.getByRole("button", { name: "Удалить", exact: true }).click();
   await expect(page.getByText("Ответов пока нет", { exact: true })).toBeVisible();
   expect(deletedBatchSizes).toEqual([100, 100]);
+  await page.goto(`/form/${formId}`);
+  await expect(page.getByRole("textbox").first()).toBeVisible();
+  await page.goto("/builder");
+  await expect(page.locator(".builder-host")).toBeVisible();
+  await expect(page.locator(".svc-creator")).toBeVisible();
+  expect(pageErrors).toEqual([]);
 });

@@ -1,5 +1,6 @@
+import { createBatchedFormsQuery } from "../../../shared/lib/batchedInfiniteQuery";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboardFormsPage } from "../../../entities/survey/api/surveysApi";
 import {
   applyDeadlineStatePatch,
@@ -47,16 +48,19 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
     [filters.dateFrom, filters.dateTo, filters.formReason, filters.formType, filters.normalizedSearch, userId, viewMode],
   );
 
+  const queryClient = useQueryClient();
+  const fetchList = useMemo(() => createBatchedFormsQuery(
+    queryClient, formsQueryKey, DASHBOARD_PAGE_SIZE,
+    (request) => getDashboardFormsPage({
+        ...request,
+        filters: filters.listFilters,
+      }),
+  ), [queryClient, formsQueryKey, filters.listFilters]);
+
   const query = useInfiniteQuery({
     queryKey: formsQueryKey,
     initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) =>
-      getDashboardFormsPage({
-        page: pageParam,
-        pageSize: DASHBOARD_PAGE_SIZE,
-        filters: filters.listFilters,
-        signal,
-      }),
+    queryFn: fetchList,
     getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
     retry: 1,

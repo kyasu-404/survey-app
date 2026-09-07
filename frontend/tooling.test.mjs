@@ -56,15 +56,15 @@ test("CI workflow gates production releases", () => {
 });
 
 test("production proxy applies a dedicated anonymous upload rate limit", () => {
-  assert.match(productionProxy, /limit_req_zone\s+\$binary_remote_addr\s+zone=survey_uploads:\d+m\s+rate=1r\/s;/);
+  assert.match(productionProxy, /limit_req_zone\s+\$survey_upload_key\s+zone=survey_uploads_v2:\d+m\s+rate=10r\/s;/);
   assert.match(productionProxy, /location\s+\^~\s+\/api\/storage\/v1\/object\/survey-files\//);
-  assert.match(productionProxy, /limit_req\s+zone=survey_uploads\s+burst=5\s+nodelay;/);
+  assert.match(productionProxy, /limit_req\s+zone=survey_uploads_v2\s+burst=200\s+nodelay;/);
   assert.match(productionProxy, /Do not expose Kong directly in production/i);
 });
 
 test("production proxy rate-limits the actual response RPC and handles realtime upgrades", () => {
   assert.match(productionProxy, /location\s+=\s+\/api\/rest\/v1\/rpc\/submit_form_response/);
-  assert.match(productionProxy, /limit_req\s+zone=survey_responses\s+burst=6\s+nodelay;/);
+  assert.match(productionProxy, /limit_req\s+zone=survey_responses_v2\s+burst=200\s+nodelay;/);
   assert.match(productionProxy, /limit_except\s+POST\s+OPTIONS\s+\{\s*deny all;\s*\}/);
   assert.doesNotMatch(productionProxy, /location\s+=\s+\/api\/rest\/v1\/responses/);
   assert.match(productionProxy, /location\s+\^~\s+\/api\/realtime\//);

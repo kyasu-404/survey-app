@@ -1,0 +1,114 @@
+[
+  {
+    "directory": "/tmp/survey-performance-before",
+    "network": "10 Mbps / 40 ms latency",
+    "cpuThrottle": 4,
+    "initialHtmlBytes": 1148,
+    "runs": [
+      {
+        "cold": {
+          "lcpMs": 1760,
+          "domContentLoadedMs": 1576,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 1218496
+        },
+        "warm": {
+          "lcpMs": 424,
+          "domContentLoadedMs": 236,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 0
+        }
+      },
+      {
+        "cold": {
+          "lcpMs": 1516,
+          "domContentLoadedMs": 1359,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 1218496
+        },
+        "warm": {
+          "lcpMs": 428,
+          "domContentLoadedMs": 247,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 0
+        }
+      },
+      {
+        "cold": {
+          "lcpMs": 1552,
+          "domContentLoadedMs": 1404,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 1218496
+        },
+        "warm": {
+          "lcpMs": 444,
+          "domContentLoadedMs": 258,
+          "scriptStyleFiles": 10,
+          "scriptStyleDecodedBytes": 5088807,
+          "scriptStyleTransferBytes": 0
+        }
+      }
+    ]
+  },
+  {
+    "directory": "/opt/survey-app/frontend/dist",
+    "network": "10 Mbps / 40 ms latency",
+    "cpuThrottle": 4,
+    "initialHtmlBytes": 716,
+    "runs": [
+      {
+        "cold": {
+          "lcpMs": 500,
+          "domContentLoadedMs": 338,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 205360
+        },
+        "warm": {
+          "lcpMs": 236,
+          "domContentLoadedMs": 140,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 0
+        }
+      },
+      {
+        "cold": {
+          "lcpMs": 552,
+          "domContentLoadedMs": 369,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 205360
+        },
+        "warm": {
+          "lcpMs": 216,
+          "domContentLoadedMs": 123,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 0
+        }
+      },
+      {
+        "cold": {
+          "lcpMs": 492,
+          "domContentLoadedMs": 342,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 205360
+        },
+        "warm": {
+          "lcpMs": 176,
+          "domContentLoadedMs": 103,
+          "scriptStyleFiles": 5,
+          "scriptStyleDecodedBytes": 757241,
+          "scriptStyleTransferBytes": 0
+        }
+      }
+    ]
+  }
+]
