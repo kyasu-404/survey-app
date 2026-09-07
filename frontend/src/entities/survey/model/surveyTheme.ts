@@ -1,4 +1,5 @@
 import type { IHeader, ITheme } from "survey-core";
+import { getManagedSurveyAssetPath } from "../../../shared/api/surveyAssetUrls";
 
 export const DEFAULT_SURVEY_THEME: ITheme = {
   themeName: "default",
@@ -55,7 +56,8 @@ function isSafeImageUrl(value: string) {
   try {
     const url = new URL(normalized);
     if (url.protocol === "https:") {
-      return typeof window !== "undefined" && url.origin === window.location.origin;
+      return getManagedSurveyAssetPath(normalized) !== null
+        || (typeof window !== "undefined" && url.origin === window.location.origin);
     }
     if (url.protocol !== "http:") return false;
 
