@@ -29,6 +29,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const filters = useDashboardFilters(viewMode, user?.id);
   const forms = useDashboardForms({
     filters,
@@ -38,6 +39,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   });
   const stats = useDashboardStats({
     filteredForms: forms.filteredForms,
+    loadedForms: forms.loadedForms,
     filters,
     isAuthLoading,
     loadedFormsTotalCount: forms.loadedFormsTotalCount,
@@ -80,6 +82,21 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
   }, [forms.formsError, showToast]);
 
+  useEffect(() => {
+    if (stats.statsError && !isAbortError(stats.statsError)) {
+      showToast(getErrorMessage(stats.statsError, "Не удалось обновить статистику форм"), "error");
+    }
+  }, [showToast, stats.statsError]);
+
+  const refreshDashboard = async () => {
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([forms.reloadForms(), stats.reloadStats()]);
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
+
   const handleCardOpen = (form: SurveyFormSummary) => {
     if (isTemplateForm(form)) {
       return;
@@ -101,8 +118,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           formsWithDeadlineCount={stats.formsWithDeadlineCount}
           isBackgroundRefreshingForms={forms.isBackgroundRefreshingForms}
           isInitialFormsLoading={forms.isInitialFormsLoading}
-          isRefreshingForms={forms.isRefreshingForms}
-          onRefresh={() => void forms.reloadForms()}
+          isRefreshingForms={isManualRefreshing || forms.isRefreshingForms}
+          onRefresh={() => void refreshDashboard()}
           openedMenu={openedMenu}
           search={filters.search}
           setDateFrom={filters.setDateFrom}

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { InfiniteData, QueryKey, QueryClient } from "@tanstack/react-query";
 import type { PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
 import { supabaseClient } from "../../../shared/api";
-import { scheduleDebouncedQueryInvalidation } from "../../../shared/lib/queryRefresh";
+import { createQueryRefreshScheduler } from "../../../shared/lib/queryRefresh";
 import type { DashboardListFilters, DashboardViewMode } from "../types";
 import {
   shouldInvalidateDashboardForms,
@@ -48,6 +48,7 @@ export function useDashboardRealtime({
     }
 
     const formFilter = viewMode === "mine" && userId ? `author_id=eq.${userId}` : undefined;
+    const refresh = createQueryRefreshScheduler(queryClient, `dashboard realtime ${viewMode} forms`, 750);
     const channel = supabaseClient
       .channel(`dashboard-forms:${viewMode}:${userId ?? "all"}`)
       .on(
@@ -77,16 +78,13 @@ export function useDashboardRealtime({
             targets.push({ queryKey: formsStatsQueryKey });
           }
 
-          scheduleDebouncedQueryInvalidation(
-            queryClient,
-            `dashboard realtime ${viewMode} forms`,
-            targets,
-            750,
-            { cancelRefetch: false, refetchType: "active" },
-          );
+          refresh.schedule(targets);
         },
       )
       .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          refresh.schedule([{ queryKey: formsQueryKey }, { queryKey: formsStatsQueryKey }]);
+        }
         console.info("[realtime] dashboard forms channel status", {
           status,
           userId: userId ?? null,
@@ -95,6 +93,7 @@ export function useDashboardRealtime({
       });
 
     return () => {
+      refresh.dispose();
       void supabaseClient.removeChannel(channel);
     };
   }, [filters, formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, userId, viewMode]);

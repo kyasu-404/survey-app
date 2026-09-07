@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchExistingResponse, fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
+import { fetchAllResponsesByForm, fetchExistingResponse, fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
 import { apiClient } from "./client";
 
 vi.mock("./client", () => ({
@@ -148,7 +148,7 @@ describe("fetchResponsesByForm", () => {
     vi.clearAllMocks();
   });
 
-  it("loads a bounded response page with a planned total count", async () => {
+  it("loads a bounded response page with an exact total count", async () => {
     const response = {
       id: "response-1",
       form_id: "form-1",
@@ -174,7 +174,7 @@ describe("fetchResponsesByForm", () => {
 
     expect(query.select).toHaveBeenCalledWith(
       "id, form_id, data, created_at, updated_at",
-      { count: "planned" },
+      { count: "exact" },
     );
     expect(query.eq).toHaveBeenCalledWith("form_id", "form-1");
     expect(query.order).toHaveBeenCalledWith("created_at", { ascending: false });
@@ -197,5 +197,53 @@ describe("fetchResponsesByForm", () => {
 
     expect(query.abortSignal).toHaveBeenCalledOnce();
     expect(query.abortSignal.mock.calls[0]?.[0]).toMatchObject({ aborted: false });
+  });
+
+  it("rejects a missing count instead of treating one page as the complete list", async () => {
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query), abortSignal: vi.fn(() => query),
+      range: vi.fn(async () => ({ data: [], count: null, error: null })),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+    await expect(fetchResponsesByForm("form-1")).rejects.toThrow("точное количество ответов");
+  });
+});
+
+
+describe("fetchAllResponsesByForm", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  function mockRows(total: number, onPage?: (offset: number) => void) {
+    const rows = Array.from({ length: total }, (_, index) => ({ id: String(index), form_id: "form-1", data: {}, created_at: "2026-09-07T00:00:00Z" }));
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query), abortSignal: vi.fn(() => query),
+      range: vi.fn(async (from: number, to: number) => {
+        onPage?.(from);
+        if (from > 0 && from >= total) throw new Error("PGRST103: requested range not satisfiable");
+        return { data: rows.slice(from, to + 1), count: total, error: null };
+      }),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+    return { query, rows };
+  }
+
+  it.each([0, 50, 100, 200, 250])("returns all %i responses including full page boundaries", async (total) => {
+    const { rows, query } = mockRows(total);
+    expect(await fetchAllResponsesByForm("form-1")).toEqual(rows);
+    expect(query.range).toHaveBeenCalledTimes(Math.max(1, Math.ceil(total / 100)));
+  });
+
+  it("cancels between batches without returning partial results", async () => {
+    const controller = new AbortController();
+    const { query } = mockRows(200, () => controller.abort());
+    await expect(fetchAllResponsesByForm("form-1", { signal: controller.signal })).rejects.toThrow();
+    expect(query.range).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a failed later page instead of treating the first page as the full list", async () => {
+    const { query, rows } = mockRows(200);
+    query.range.mockResolvedValueOnce({ data: rows.slice(0, 100), count: 200, error: null });
+    query.range.mockRejectedValueOnce(new Error("page failed"));
+    await expect(fetchAllResponsesByForm("form-1")).rejects.toThrow("page failed");
   });
 });

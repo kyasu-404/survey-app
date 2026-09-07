@@ -11,7 +11,7 @@ export const RESPONSES_PAGE_SIZE = 50;
 export const MAX_CLIENT_RESPONSE_EXPORT = 10_000;
 const MIN_RESPONSES_PAGE_SIZE = 1;
 const MAX_RESPONSES_PAGE_SIZE = 100;
-const PAGINATED_COUNT_MODE = "planned";
+const PAGINATED_COUNT_MODE = "exact";
 const SAFE_RESPONSE_LIST_COLUMNS = "id, form_id, data, created_at, updated_at";
 
 export type FetchResponsesByFormOptions = {
@@ -275,8 +275,11 @@ export async function fetchResponsesByForm(
   );
 
   if (error) throw error;
+  if (typeof count !== "number") {
+    throw new Error("Сервер не вернул точное количество ответов");
+  }
   const responses = (data ?? []) as SurveyResponse[];
-  const totalCount = count ?? responses.length;
+  const totalCount = count;
 
   return {
     data: responses,
@@ -296,12 +299,15 @@ export async function fetchAllResponsesByForm(
   let page = 1;
 
   for (;;) {
+    options.signal?.throwIfAborted();
     const currentPage = await fetchResponsesByForm(formId, { ...options, page, pageSize });
     if (responses.length + currentPage.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
       throw new Error(`В одной клиентской выгрузке поддерживается не более ${MAX_CLIENT_RESPONSE_EXPORT} ответов`);
     }
     responses.push(...currentPage.data);
-    if (currentPage.data.length < pageSize) return responses;
+    // Do not request an offset past the exact total: PostgREST can return 416
+    // for that range, including when the last page contains exactly 100 rows.
+    if (currentPage.data.length < pageSize || responses.length >= currentPage.count) return responses;
     page += 1;
   }
 }

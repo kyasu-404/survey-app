@@ -10,8 +10,6 @@ type QueryInvalidationOptions = {
   refetchType?: "active" | "inactive" | "all" | "none";
 };
 
-const pendingInvalidations = new Map<string, ReturnType<typeof setTimeout>>();
-
 export function scheduleQueryInvalidation(
   queryClient: QueryClient,
   reason: string,
@@ -24,7 +22,7 @@ export function scheduleQueryInvalidation(
     queryKeys: targets.map((target) => target.queryKey),
   });
 
-  void Promise.allSettled(
+  return Promise.allSettled(
     targets.map((target) => {
       const queryFilters = options.refetchType
         ? { queryKey: target.queryKey, refetchType: options.refetchType }
@@ -62,24 +60,66 @@ export function scheduleQueryInvalidation(
   });
 }
 
-export function scheduleDebouncedQueryInvalidation(
+/** Bound burst coalescing by maxWaitMs; let an in-flight read finish before refreshing. */
+export function createQueryRefreshScheduler(
   queryClient: QueryClient,
   reason: string,
-  targets: RefreshTarget[],
   debounceMs: number,
-  options: QueryInvalidationOptions = {},
+  maxWaitMs = 1000,
 ) {
-  const cacheKey = `${reason}:${JSON.stringify(targets.map((target) => target.queryKey))}`;
-  const existingTimeoutId = pendingInvalidations.get(cacheKey);
+  const pendingTargets = new Map<string, RefreshTarget>();
+  let firstScheduledAt: number | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let running = false;
+  let disposed = false;
 
-  if (existingTimeoutId) {
-    clearTimeout(existingTimeoutId);
+  function armTimer() {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    const remaining = Math.max(0, maxWaitMs - (Date.now() - (firstScheduledAt ?? Date.now())));
+    timeoutId = setTimeout(() => void flush(), Math.min(debounceMs, remaining));
   }
 
-  const timeoutId = setTimeout(() => {
-    pendingInvalidations.delete(cacheKey);
-    scheduleQueryInvalidation(queryClient, reason, targets, options);
-  }, debounceMs);
+  async function flush() {
+    timeoutId = undefined;
+    if (disposed || running) return;
+    running = true;
+    const targets = [...pendingTargets.values()];
+    pendingTargets.clear();
+    firstScheduledAt = null;
 
-  pendingInvalidations.set(cacheKey, timeoutId);
+    try {
+      // A change may arrive after an in-flight request took its snapshot. Wait
+      // for that request, then read again instead of losing the invalidation.
+      const inFlight = targets.flatMap(({ queryKey }) =>
+        queryClient.getQueryCache().findAll({ queryKey, type: "active" })
+          .flatMap((query) => query.promise ? [query.promise] : []),
+      );
+      await Promise.allSettled(inFlight);
+      if (!disposed) {
+        await scheduleQueryInvalidation(queryClient, reason, targets, {
+          cancelRefetch: false,
+          refetchType: "active",
+        });
+      }
+    } finally {
+      running = false;
+      if (!disposed && pendingTargets.size > 0) armTimer();
+    }
+  }
+
+  return {
+    schedule(targets: RefreshTarget[]) {
+      if (disposed) return;
+      firstScheduledAt ??= Date.now();
+      for (const target of targets) {
+        pendingTargets.set(JSON.stringify(target.queryKey), target);
+      }
+      if (!running) armTimer();
+    },
+    dispose() {
+      disposed = true;
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      pendingTargets.clear();
+    },
+  };
 }

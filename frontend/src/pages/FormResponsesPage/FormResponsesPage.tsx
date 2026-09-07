@@ -10,7 +10,7 @@ import {
   hasOrganizationQuestion,
   normalizeOrganizationTypes,
 } from "../../entities/organization/model";
-import { deleteResponses, getResponsesByForm } from "../../entities/response/api";
+import { deleteResponses, getAllResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
@@ -20,10 +20,10 @@ import downloadIcon from "../../img/Download.svg";
 import useIcon from "../../img/use.svg";
 import deleteIcon from "../../img/delete.svg";
 import infoIcon from "../../img/info.svg";
-import { MAX_CLIENT_RESPONSE_EXPORT, supabaseClient } from "../../shared/api";
+import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
-import { scheduleDebouncedQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
 import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
@@ -37,9 +37,6 @@ type SelectedResponsePreview = {
   label: string;
   response: SurveyResponse;
 };
-
-const RESPONSES_SCROLL_PAGE_SIZE = 100;
-type ResponsesPage = Awaited<ReturnType<typeof getResponsesByForm>>;
 
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   const primaryValue = Object.entries(row).find(
@@ -130,36 +127,6 @@ function getDateCellParts(value: string) {
   return { datePart, timePart: timePart.split(":").slice(0, 2).join(":") };
 }
 
-async function getResponsePage(
-  formId: string,
-  page: number,
-  signal?: AbortSignal,
-) {
-  return getResponsesByForm(formId, {
-    page,
-    pageSize: RESPONSES_SCROLL_PAGE_SIZE,
-    signal,
-  });
-}
-
-async function getAllResponsesForExport(
-  formId: string,
-  firstPage: ResponsesPage,
-) {
-  const pageSize = firstPage.pageSize || RESPONSES_SCROLL_PAGE_SIZE;
-  const responses = [...firstPage.data];
-  let currentPage = firstPage;
-
-  for (;;) {
-    if (currentPage.data.length < pageSize) return responses;
-    currentPage = await getResponsesByForm(formId, { page: currentPage.page + 1, pageSize });
-    if (responses.length + currentPage.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
-      throw new Error(`В одной клиентской выгрузке поддерживается не более ${MAX_CLIENT_RESPONSE_EXPORT} ответов`);
-    }
-    responses.push(...currentPage.data);
-  }
-}
-
 function SelectAllResponsesCheckbox({
   checked,
   indeterminate,
@@ -181,7 +148,7 @@ function SelectAllResponsesCheckbox({
     <input
       ref={checkboxRef}
       type="checkbox"
-      aria-label="Выбрать все ответы на странице"
+      aria-label="Выбрать все ответы"
       checked={checked}
       onChange={onChange}
     />
@@ -214,18 +181,12 @@ export default function FormResponsesPage() {
   const [isDeletingResponses, setIsDeletingResponses] = useState(false);
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [responsePage, setResponsePage] = useState(1);
-  const responsesQueryKey = getFormResponsesQueryKey(
-    id,
-    "page",
-    responsePage,
-    RESPONSES_SCROLL_PAGE_SIZE,
-  );
+  const responsesQueryKey = getFormResponsesQueryKey(id, "all");
 
   useEffect(() => {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
-    setResponsePage(1);
+    setResponseReport(null);
   }, [id]);
 
   const formQuery = useQuery({
@@ -249,16 +210,10 @@ export default function FormResponsesPage() {
     queryKey: responsesQueryKey,
     queryFn: async ({ signal }) => {
       if (!id) {
-        return {
-          data: [],
-          count: 0,
-          page: 1,
-          pageSize: RESPONSES_SCROLL_PAGE_SIZE,
-          totalPages: 1,
-        };
+        return [];
       }
 
-      return getResponsePage(id, responsePage, signal);
+      return getAllResponsesByForm(id, { signal });
     },
     enabled: Boolean(id),
     retry: 1,
@@ -279,7 +234,7 @@ export default function FormResponsesPage() {
     staleTime: 30_000,
   });
 
-  const responses = responsesQuery.data?.data ?? [];
+  const responses = responsesQuery.data ?? [];
   const organizationLabels = useMemo(
     () => new Map(
       (organizationsQuery.data ?? []).map((organization) => [
@@ -307,7 +262,7 @@ export default function FormResponsesPage() {
   );
   const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
     .find((error) => error && !isAbortError(error)) ?? null;
-  const totalResponses = formQuery.data?.responses_count ?? responsesQuery.data?.count ?? 0;
+  const totalResponses = responses.length;
   const canDeleteResponses = Boolean(
     formQuery.data && (formQuery.data.author_id === user?.id || profile?.role === "admin"),
   );
@@ -331,15 +286,8 @@ export default function FormResponsesPage() {
       { queryKey: getFormQueryKey(id) },
       { queryKey: getFormResponsesQueryKey(id) },
     ];
-    const refreshResponses = () => {
-      scheduleDebouncedQueryInvalidation(
-        queryClient,
-        `form responses realtime ${id}`,
-        realtimeRefreshTargets,
-        100,
-        { cancelRefetch: false, refetchType: "active" },
-      );
-    };
+    const refresh = createQueryRefreshScheduler(queryClient, `form responses realtime ${id}`, 100);
+    const refreshResponses = () => refresh.schedule(realtimeRefreshTargets);
 
     const channel = supabaseClient
       .channel(`form-responses:${id}`)
@@ -365,6 +313,7 @@ export default function FormResponsesPage() {
         refreshResponses,
       )
       .subscribe((status) => {
+        if (status === "SUBSCRIBED") refreshResponses();
         console.info("[realtime] form responses channel status", {
           formId: id,
           status,
@@ -372,6 +321,7 @@ export default function FormResponsesPage() {
       });
 
     return () => {
+      refresh.dispose();
       void supabaseClient.removeChannel(channel);
     };
   }, [id, queryClient]);
@@ -383,7 +333,7 @@ export default function FormResponsesPage() {
     }
 
     const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
-    void Promise.resolve(getAllResponsesForExport(id, responsesQuery.data))
+    void Promise.resolve(responsesQuery.data)
       .then((exportResponses) => formatResponsesForTable(
         exportResponses,
         formQuery.data!.schema,
@@ -405,7 +355,7 @@ export default function FormResponsesPage() {
 
     setIsGeneratingReport(true);
     try {
-      const reportResponses = await getAllResponsesForExport(id, responsesQuery.data);
+      const reportResponses = responsesQuery.data;
       const reportOrganizations = usesOrganizationDirectory
         ? organizationsQuery.data ?? await getOrganizations(formOrganizationTypes)
         : [];
@@ -481,11 +431,12 @@ export default function FormResponsesPage() {
       if (selectedResponsePreview && selectedResponseIds.has(selectedResponsePreview.response.id)) {
         setSelectedResponsePreview(null);
       }
-      await Promise.all([formQuery.refetch(), responsesQuery.refetch()]);
       showToast(`Удалено ответов: ${selectedCount}`, "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось удалить ответы"), "error");
     } finally {
+      // A later batch may fail after earlier batches have already been deleted.
+      await Promise.all([formQuery.refetch(), responsesQuery.refetch()]);
       setIsDeletingResponses(false);
     }
   };
@@ -670,21 +621,6 @@ export default function FormResponsesPage() {
         {!isLoading && !combinedError && totalResponses > 0 && (
           <div className="responses-page-footer">
             <p className="responses-page-total" aria-live="polite">Ответов: {totalResponses}</p>
-            {(responsesQuery.data?.totalPages ?? 1) > 1 && (
-              <div className="responses-page-pagination" aria-label="Страницы ответов">
-                <button type="button" disabled={responsePage <= 1} onClick={() => setResponsePage((page) => page - 1)}>
-                  Назад
-                </button>
-                <span>{responsePage} из {responsesQuery.data?.totalPages}</span>
-                <button
-                  type="button"
-                  disabled={responsePage >= (responsesQuery.data?.totalPages ?? 1)}
-                  onClick={() => setResponsePage((page) => page + 1)}
-                >
-                  Далее
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

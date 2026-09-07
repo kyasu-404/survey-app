@@ -1,6 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 type UserRole = "admin" | "user";
+type ListedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_disabled: boolean;
+  created_at: string;
+};
 
 type UserAdminAction =
   | {
@@ -236,13 +244,22 @@ Deno.serve(async (req) => {
     case "list": {
       // Source of truth for Users page is `profiles`.
       // Do not depend on auth.admin.listUsers() for table rendering.
-      const { data: profileUsers, error: profilesError } = await adminClient
-        .from("profiles")
-        .select("id, name, email, role, is_disabled, created_at")
-        .order("created_at", { ascending: false });
+      const profileUsers: ListedUser[] = [];
+      const pageSize = 1000;
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await adminClient
+          .from("profiles")
+          .select("id, name, email, role, is_disabled, created_at")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
-      if (profilesError) {
-        return errorResponse(req, 400, profilesError.message, actionLogContext);
+        if (error) {
+          return errorResponse(req, 400, error.message, actionLogContext);
+        }
+        const page = (data ?? []) as ListedUser[];
+        profileUsers.push(...page);
+        if (page.length < pageSize) break;
       }
 
       console.info("user-admin action completed", {

@@ -187,7 +187,7 @@ describe("FormResponsesHtmlPage", () => {
     expect(screen.getByText("Хорошее")).toBeInTheDocument();
   });
 
-  it("loads every response page for the HTML report", async () => {
+  it.each([51, 100, 200])("loads all %i responses for the HTML report without requesting a page beyond the total", async (total) => {
     getFormById.mockResolvedValue({
       id: "form-1",
       title: "Полный отчёт",
@@ -199,27 +199,24 @@ describe("FormResponsesHtmlPage", () => {
       deadline_at: null,
       schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
     });
-    const firstPage = Array.from({ length: 50 }, (_, index): SurveyResponse => ({
+    const responses = Array.from({ length: total }, (_, index): SurveyResponse => ({
       id: `response-${index + 1}`,
       form_id: "form-1",
       created_at: "2026-04-08T11:30:00.000Z",
       data: { name: `Ответ ${index + 1}` },
     }));
-    getResponsesByForm.mockImplementation((_formId: string, options: { page?: number }) => Promise.resolve(
-      options.page === 2
-        ? createResponsesPage([{
-            id: "response-51",
-            form_id: "form-1",
-            created_at: "2026-04-08T11:31:00.000Z",
-            data: { name: "Ответ 51" },
-          }], { page: 2 })
-        : createResponsesPage(firstPage, { pageSize: 50, totalPages: 2 }),
-    ));
+    getResponsesByForm.mockImplementation(async (_formId: string, options: { page?: number }) => {
+      const page = options.page ?? 1;
+      const offset = (page - 1) * 50;
+      if (offset >= total) throw new Error("PGRST103: requested range not satisfiable");
+      return createResponsesPage(responses.slice(offset, offset + 50), { count: total, page });
+    });
 
     renderHtmlPage();
 
-    expect(await screen.findByText("Ответ 51")).toBeInTheDocument();
+    expect(await screen.findByText(`Ответ ${total}`)).toBeInTheDocument();
     expect(getResponsesByForm).toHaveBeenCalledWith("form-1", expect.objectContaining({ page: 2 }));
+    expect(getResponsesByForm).toHaveBeenCalledTimes(Math.ceil(total / 50));
   });
 
   it("resolves organization identifiers in both the HTML preview and downloaded document", async () => {

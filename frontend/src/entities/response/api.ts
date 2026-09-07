@@ -36,7 +36,10 @@ export async function editResponse(
 }
 
 export async function deleteResponses(formId: string, responseIds: string[]) {
-  return deleteResponsesRequest(formId, responseIds);
+  const ids = [...new Set(responseIds)];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    await deleteResponsesRequest(formId, ids.slice(offset, offset + 100));
+  }
 }
 
 export async function getResponsesByForm(

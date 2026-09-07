@@ -25,6 +25,7 @@ const {
   createRealtimeChannel,
   removeRealtimeChannel,
   emitRealtimeChange,
+  emitRealtimeStatus,
   resetRealtimeChannel,
 } = vi.hoisted(() => {
   type RealtimePayload = {
@@ -34,6 +35,7 @@ const {
   };
   type RealtimeChannel = {
     handlers: Array<(payload: RealtimePayload) => void>;
+    statusHandler?: (status: string) => void;
     on: ReturnType<typeof vi.fn>;
     subscribe: ReturnType<typeof vi.fn>;
   };
@@ -45,7 +47,7 @@ const {
         channel.handlers.push(callback);
         return channel;
       }),
-      subscribe: vi.fn(() => channel),
+      subscribe: vi.fn((callback?: (status: string) => void) => { channel.statusHandler = callback; return channel; }),
     };
     activeChannels.push(channel);
     return channel;
@@ -79,6 +81,7 @@ const {
         }
       }
     },
+    emitRealtimeStatus: (status: string) => activeChannels.forEach((channel) => channel.statusHandler?.(status)),
     resetRealtimeChannel: () => {
       activeChannels.length = 0;
       createRealtimeChannel.mockClear();
@@ -248,6 +251,29 @@ describe("DashboardPage", () => {
     setFormResponseLimit.mockResolvedValue(undefined);
     qrToString.mockResolvedValue('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>');
     qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
+  });
+
+
+  it("refreshes both statistics and cards on manual refresh", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));
+    renderPage();
+    await screen.findByRole("button", { name: "Обновить" });
+    await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    await waitFor(() => {
+      expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
+      expect(getDashboardFormsStats).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("reconciles cards and statistics after a websocket reconnect without a database event", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1, { title: "До обрыва" })]));
+    renderPage();
+    expect(await screen.findByText("До обрыва")).toBeInTheDocument();
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1, { title: "После обрыва" })]));
+    emitRealtimeStatus("CHANNEL_ERROR");
+    emitRealtimeStatus("SUBSCRIBED");
+    expect(await screen.findByText("После обрыва")).toBeInTheDocument();
+    expect(getDashboardFormsStats).toHaveBeenCalledTimes(2);
   });
 
   it("renders form card creation time without seconds", async () => {

@@ -30,6 +30,7 @@ async function getAllResponses(
   const data: SurveyResponse[] = [];
   let page = 1;
   for (;;) {
+    signal?.throwIfAborted();
     const result = await getResponsesByForm(formId, {
       page,
       pageSize: RESPONSES_PAGE_SIZE,
@@ -39,7 +40,7 @@ async function getAllResponses(
       throw new Error(`HTML-выгрузка ограничена ${MAX_CLIENT_RESPONSE_EXPORT} ответами`);
     }
     data.push(...result.data);
-    if (result.data.length < RESPONSES_PAGE_SIZE) return data;
+    if (result.data.length < RESPONSES_PAGE_SIZE || data.length >= result.count) return data;
     page += 1;
   }
 }

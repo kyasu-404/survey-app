@@ -9,38 +9,53 @@ import type {
 } from "./types";
 
 const ORGANIZATION_SELECT = "id, organization_type, number, alias, email, created_at, updated_at";
+const ORGANIZATIONS_PAGE_SIZE = 1000;
 
 export async function getOrganizations(types?: OrganizationType[], signal?: AbortSignal) {
-  const { data, error } = await runRequest(
-    "organizations.list",
-    (requestSignal) => {
-      let query = apiClient
-        .from("education_organizations")
-        .select(ORGANIZATION_SELECT)
-        .order("organization_type")
-        .order("number", { nullsFirst: false })
-        .order("alias");
-      if (types?.length) {
-        query = query.in("organization_type", types);
-      }
-      return query.abortSignal(requestSignal);
-    },
-    { signal, context: { types: types ?? null } },
-  );
-  if (error) throw error;
-  return (data ?? []) as EducationOrganization[];
+  const organizations: EducationOrganization[] = [];
+  for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
+    signal?.throwIfAborted();
+    const { data, error } = await runRequest(
+      "organizations.list",
+      (requestSignal) => {
+        let query = apiClient
+          .from("education_organizations")
+          .select(ORGANIZATION_SELECT)
+          .order("organization_type")
+          .order("number", { nullsFirst: false })
+          .order("alias")
+          .order("id");
+        if (types?.length) {
+          query = query.in("organization_type", types);
+        }
+        return query.range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1).abortSignal(requestSignal);
+      },
+      { signal, context: { types: types ?? null, offset } },
+    );
+    if (error) throw error;
+    const page = (data ?? []) as EducationOrganization[];
+    organizations.push(...page);
+    if (page.length < ORGANIZATIONS_PAGE_SIZE) return organizations;
+  }
 }
 
 export async function getFormOrganizations(formId: string, signal?: AbortSignal) {
-  const { data, error } = await runRequest(
-    "organizations.listForForm",
-    (requestSignal) => apiClient
-      .rpc("list_form_organizations", { p_form_id: formId })
-      .abortSignal(requestSignal),
-    { signal, context: { formId } },
-  );
-  if (error) throw error;
-  return (data ?? []) as SelectableOrganization[];
+  const organizations: SelectableOrganization[] = [];
+  for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
+    signal?.throwIfAborted();
+    const { data, error } = await runRequest(
+      "organizations.listForForm",
+      (requestSignal) => apiClient
+        .rpc("list_form_organizations", { p_form_id: formId })
+        .range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1)
+        .abortSignal(requestSignal),
+      { signal, context: { formId, offset } },
+    );
+    if (error) throw error;
+    const page = (data ?? []) as SelectableOrganization[];
+    organizations.push(...page);
+    if (page.length < ORGANIZATIONS_PAGE_SIZE) return organizations;
+  }
 }
 
 export async function createOrganization(input: EducationOrganizationInput) {
