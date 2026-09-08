@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // Exercise real SurveyJS rendering with Storage on a separate HTTPS origin.
+// The auto-started server uses the HTTPS Supabase fixture in playwright.config.ts.
 // All API requests are intercepted, including uploads and form saves.
 test("gallery and uploaded backgrounds survive saving and public rendering", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
