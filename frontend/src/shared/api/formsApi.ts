@@ -10,6 +10,7 @@ import type { OrganizationType } from "../../entities/organization/types";
 import type { ITheme } from "survey-core";
 import type {
   DashboardFormsStats,
+  FormsCursor,
   PaginatedSurveyFormSummaries,
   SurveyForm,
   SurveyFormSummary,
@@ -63,9 +64,8 @@ type RawDashboardFormsStats = {
 };
 
 type FetchFormsPageOptions = {
-  page: number;
   pageSize: number;
-  offset?: number;
+  cursor?: FormsCursor | null;
   filters?: FormsFilters;
   signal?: AbortSignal;
 };
@@ -101,14 +101,25 @@ const TEMPLATE_FORMS_SUMMARY_SELECT = `
 
 const DASHBOARD_FORMS_STATS_RPC = "get_dashboard_forms_stats";
 
+function normalizeFormsPageSize(pageSize: number) {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 999) {
+    throw new Error("Размер страницы должен быть целым числом от 1 до 999");
+  }
+  return pageSize;
+}
+
+function buildFormsCursorParams(cursor?: FormsCursor | null) {
+  // Omit nullable GET arguments to use SQL defaults on the first page.
+  return cursor ? { p_before_created_at: cursor.createdAt, p_before_id: cursor.id } : {};
+}
+
 function createPaginatedFormSummaries(
   forms: SurveyFormSummary[],
-  rangeFrom: number,
   pageSize: number,
 ): PaginatedSurveyFormSummaries {
   const hasMore = forms.length > pageSize;
   const items = forms.slice(0, pageSize);
-  const loadedCountLowerBound = rangeFrom + items.length + (hasMore ? 1 : 0);
+  const loadedCountLowerBound = items.length + (hasMore ? 1 : 0);
 
   return {
     hasMore,
@@ -355,11 +366,11 @@ export async function fetchForms(filters?: FormsFilters, options: RequestSignalO
 export async function fetchDashboardFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
-  const rangeFrom = options.offset ?? Math.max(options.page, 0) * options.pageSize;
-  const rangeTo = rangeFrom + options.pageSize;
+  const pageSize = normalizeFormsPageSize(options.pageSize);
 
+  // GET lets PostgREST inline typed cursor parameters into the index condition.
   let query = apiClient
-    .from("forms")
+    .rpc("list_forms_keyset", buildFormsCursorParams(options.cursor), { get: true })
     .select(DASHBOARD_FORMS_SUMMARY_SELECT)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
@@ -369,14 +380,14 @@ export async function fetchDashboardFormsPage(
 
   const { data, error } = await runRequest(
     "forms.fetchDashboardPage",
-    (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
+    (signal) => applyAbortSignal(query, signal).limit(pageSize + 1),
     {
       signal: options.signal,
       context: {
         authorId: options.filters?.authorId ?? null,
         hasSearch: Boolean(options.filters?.search),
-        page: options.page,
-        pageSize: options.pageSize,
+        hasCursor: Boolean(options.cursor),
+        pageSize,
       },
     },
   );
@@ -388,17 +399,17 @@ export async function fetchDashboardFormsPage(
     .map(mapRawFormSummary)
     .map((form) => syncFetchedFormState(form));
 
-  return createPaginatedFormSummaries(forms, rangeFrom, options.pageSize);
+  return createPaginatedFormSummaries(forms, pageSize);
 }
 
 export async function fetchTemplateFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
-  const rangeFrom = options.offset ?? Math.max(options.page, 0) * options.pageSize;
-  const rangeTo = rangeFrom + options.pageSize;
+  const pageSize = normalizeFormsPageSize(options.pageSize);
 
+  // GET lets PostgREST inline typed cursor parameters into the index condition.
   let query = apiClient
-    .from("forms")
+    .rpc("list_forms_keyset", buildFormsCursorParams(options.cursor), { get: true })
     .select(TEMPLATE_FORMS_SUMMARY_SELECT)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
@@ -407,14 +418,14 @@ export async function fetchTemplateFormsPage(
 
   const { data, error } = await runRequest(
     "forms.fetchTemplatePage",
-    (signal) => applyAbortSignal(query, signal).range(rangeFrom, rangeTo),
+    (signal) => applyAbortSignal(query, signal).limit(pageSize + 1),
     {
       signal: options.signal,
       context: {
         authorId: options.filters?.authorId ?? null,
         isPublic: options.filters?.isPublic ?? null,
-        page: options.page,
-        pageSize: options.pageSize,
+        hasCursor: Boolean(options.cursor),
+        pageSize,
       },
     },
   );
@@ -424,7 +435,7 @@ export async function fetchTemplateFormsPage(
 
   const forms = ((data ?? []) as RawFormSummary[]).map(mapRawFormSummary);
 
-  return createPaginatedFormSummaries(forms, rangeFrom, options.pageSize);
+  return createPaginatedFormSummaries(forms, pageSize);
 }
 
 export async function fetchDashboardFormsStats(

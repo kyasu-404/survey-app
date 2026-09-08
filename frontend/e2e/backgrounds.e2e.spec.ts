@@ -58,6 +58,7 @@ test("gallery and uploaded backgrounds survive saving and public rendering", asy
       const table = url.pathname.split("/").pop();
       if (table === "profiles") return route.fulfill({ json: { ...user, name: "Тест", role: "admin", is_disabled: false } });
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
+      if (table === "list_forms_keyset") return route.fulfill({ json: [form] });
       if (table === "forms") return route.fulfill({ json: url.searchParams.has("id") ? form : [form] });
       if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 1, active_count: 1, forms_with_deadline_count: 0 }] });
       return route.fulfill({ json: [] });

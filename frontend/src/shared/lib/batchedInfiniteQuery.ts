@@ -1,56 +1,73 @@
 import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query";
-import type { PaginatedSurveyFormSummaries } from "../../entities/survey/types";
+import type { FormsCursor, PaginatedSurveyFormSummaries } from "../../entities/survey/types";
 
-type PageRequest = { page: number; pageSize: number; offset?: number; signal?: AbortSignal };
+type PageRequest = { cursor: FormsCursor | null; pageSize: number; signal?: AbortSignal };
 
-// Preserve the infinite-query cache and its cancellation/retry behavior, but
-// read the loaded window in batches instead of making one HTTP call per UI page.
+export function getFormsNextCursor(page: PaginatedSurveyFormSummaries): FormsCursor | undefined {
+  const last = page.items[page.items.length - 1];
+  return page.hasMore && last ? { createdAt: last.created_at, id: last.id } : undefined;
+}
+
+function cursorKey(cursor: FormsCursor | null) {
+  return JSON.stringify(cursor ? [cursor.createdAt, cursor.id] : null);
+}
+
+// Refresh the loaded window in batches, preserving the infinite-query cache,
+// cancellation and retry behavior. Every database read seeks by the last key.
 export function createBatchedFormsQuery(
   client: QueryClient,
   queryKey: QueryKey,
   pageSize: number,
   fetchPage: (request: PageRequest) => Promise<PaginatedSurveyFormSummaries>,
 ) {
-  const refreshes = new WeakMap<AbortSignal, Promise<PaginatedSurveyFormSummaries[]>>();
+  const refreshes = new WeakMap<AbortSignal, Promise<Map<string, PaginatedSurveyFormSummaries>>>();
 
   async function refreshWindow(signal: AbortSignal) {
-    const cached = client.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(queryKey);
+    const cached = client.getQueryData<InfiniteData<PaginatedSurveyFormSummaries, FormsCursor | null>>(queryKey);
     const requestedCount = Math.max(1, cached?.pages.length ?? 0) * pageSize;
     const items: PaginatedSurveyFormSummaries["items"] = [];
+    let cursor: FormsCursor | null = null;
     let hasMore = false;
-    let totalCount = 0;
-    for (let offset = 0; offset < requestedCount;) {
+    while (items.length < requestedCount) {
       signal.throwIfAborted();
       // Reserve one lookahead row below PostgREST's 1000-row limit.
-      const count = Math.min(999, requestedCount - offset);
-      const result = await fetchPage({ page: 0, pageSize: count, ...(offset ? { offset } : {}), signal });
+      const count = Math.min(999, requestedCount - items.length);
+      const result = await fetchPage({ cursor, pageSize: count, signal });
       items.push(...result.items);
-      totalCount = result.totalCount;
-      hasMore = result.hasMore;
-      if (!hasMore) break;
-      offset += count;
+      const nextCursor = getFormsNextCursor(result);
+      hasMore = Boolean(nextCursor);
+      if (!nextCursor) break;
+      cursor = nextCursor;
     }
-    const pages: PaginatedSurveyFormSummaries[] = [];
-    for (let offset = 0; offset < Math.max(1, items.length); offset += pageSize) {
-      pages.push({
-        items: items.slice(offset, offset + pageSize),
-        hasMore: offset + pageSize < items.length || hasMore,
-        totalCount,
-      });
+    const pages = new Map<string, PaginatedSurveyFormSummaries>();
+    cursor = null;
+    for (let start = 0; start < Math.max(1, items.length); start += pageSize) {
+      const page = {
+        items: items.slice(start, start + pageSize),
+        hasMore: start + pageSize < items.length || hasMore,
+        totalCount: items.length + (hasMore ? 1 : 0),
+      };
+      pages.set(cursorKey(cursor), page);
+      cursor = getFormsNextCursor(page) ?? null;
     }
     return pages;
   }
 
-  return async ({ pageParam, signal }: { pageParam: number; signal: AbortSignal }) => {
-    // A new page still loads only its own rows. Refetch always starts at page 0
-    // and shares its result across subsequent calls with the same fetch signal.
-    if (pageParam === 0) refreshes.set(signal, refreshWindow(signal));
+  return async ({ pageParam, signal }: { pageParam: FormsCursor | null; signal: AbortSignal }) => {
+    // Refetch starts from the newest row and shares its freshly computed cursor
+    // chain across the subsequent calls made by TanStack with this fetch signal.
+    if (pageParam === null) refreshes.set(signal, refreshWindow(signal));
     const refresh = refreshes.get(signal);
     if (refresh) {
       const pages = await refresh;
       signal.throwIfAborted();
-      return pages[pageParam] ?? { items: [], hasMore: false, totalCount: pages[pages.length - 1]?.totalCount ?? 0 };
+      const page = pages.get(cursorKey(pageParam));
+      if (!page) throw new Error("Не найдена страница обновлённого списка форм");
+      return page;
     }
-    return fetchPage({ page: pageParam, pageSize, signal });
+    const result = await fetchPage({ cursor: pageParam, pageSize, signal });
+    const cached = client.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(queryKey);
+    const loadedCount = cached?.pages.reduce((count, page) => count + page.items.length, 0) ?? 0;
+    return { ...result, totalCount: loadedCount + result.items.length + (result.hasMore ? 1 : 0) };
   };
 }

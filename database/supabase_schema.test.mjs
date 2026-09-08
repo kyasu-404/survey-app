@@ -491,6 +491,18 @@ test("list and search indexes support stable paginated reads", () => {
   );
 });
 
+test("form keyset RPC preserves RLS and permits index-seeking through inlining", () => {
+  const rpc = getFunctionDefinition("list_forms_keyset");
+  assert.match(rpc, /security invoker/i);
+  assert.doesNotMatch(rpc, /security definer|set search_path|offset/i);
+  assert.match(rpc, /language sql\s+stable/i);
+  assert.match(rpc, /\(f\.created_at, f\.id\) < \(p_before_created_at, p_before_id\)/i);
+  assert.match(rpc, /from public\.forms f/i);
+  assert.doesNotMatch(rpc, /f\.schema|f\.theme|select f\.\*/i);
+  assert.match(schema, /revoke all on function public\.list_forms_keyset\(timestamptz, uuid\) from public, anon;/i);
+  assert.match(schema, /grant execute on function public\.list_forms_keyset\(timestamptz, uuid\) to authenticated, service_role;/i);
+});
+
 test("supabase lint migration moves pg_trgm and merges profile update policies", () => {
   assert.match(supabaseLintMigration, /create schema if not exists extensions;/i);
   assert.match(supabaseLintMigration, /create extension if not exists "pg_trgm" with schema extensions;/i);

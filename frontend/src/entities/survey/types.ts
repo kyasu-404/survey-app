@@ -59,6 +59,12 @@ export type SurveyForm = {
 
 export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme" | "allow_response_editing">;
 
+export type FormsCursor = {
+  // Keep PostgreSQL's original timestamp string, including microseconds.
+  createdAt: string;
+  id: string;
+};
+
 export type PaginatedSurveyFormSummaries = {
   hasMore: boolean;
   items: SurveyFormSummary[];

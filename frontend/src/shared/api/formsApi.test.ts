@@ -63,6 +63,7 @@ function createSummaryQuery(response: { data?: unknown[] | null; count?: number 
     not: vi.fn(() => query),
     or: vi.fn(() => query),
     range: vi.fn(() => Promise.resolve(response)),
+    limit: vi.fn(() => Promise.resolve(response)),
     then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
       Promise.resolve(response).then(resolve, reject),
   };
@@ -223,11 +224,21 @@ describe("fetchDashboardFormsPage", () => {
     vi.resetAllMocks();
   });
 
-  it.each([fetchDashboardFormsPage, fetchTemplateFormsPage])("keeps the offset of the second refresh batch below the API cap", async (fetchPage) => {
-    const listQuery = createSummaryQuery({ data: [], count: null, error: null });
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
-    await fetchPage({ page: 0, pageSize: 21, offset: 999 });
-    expect(listQuery.range).toHaveBeenCalledWith(999, 1020);
+  it.each([fetchDashboardFormsPage, fetchTemplateFormsPage])("seeks from a precise cursor and reserves a lookahead row", async (fetchPage) => {
+    const listQuery = createSummaryQuery({ data: [], error: null });
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
+    const cursor = { createdAt: "2026-09-08T10:00:00.123456+00:00", id: "10000000-0000-4000-8000-000000000001" };
+    await fetchPage({ cursor, pageSize: 21 });
+    expect(apiClient.rpc).toHaveBeenCalledWith("list_forms_keyset", {
+      p_before_created_at: cursor.createdAt, p_before_id: cursor.id,
+    }, { get: true });
+    expect(listQuery.limit).toHaveBeenCalledWith(22);
+    expect(listQuery.range).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1000, 1.5, NaN, Infinity])("rejects an invalid page size %s before requesting data", async (pageSize) => {
+    await expect(fetchDashboardFormsPage({ pageSize })).rejects.toThrow("Размер страницы");
+    expect(apiClient.rpc).not.toHaveBeenCalled();
   });
 
   it("requests one lookahead item after the first 20 newest dashboard forms", async () => {
@@ -237,11 +248,10 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await expect(
       fetchDashboardFormsPage({
-        page: 0,
         pageSize: 20,
       }),
     ).resolves.toEqual({
@@ -252,7 +262,8 @@ describe("fetchDashboardFormsPage", () => {
 
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
-    expect(listQuery.range).toHaveBeenCalledWith(0, 20);
+    expect(listQuery.limit).toHaveBeenCalledWith(21);
+    expect(apiClient.rpc).toHaveBeenCalledWith("list_forms_keyset", {}, { get: true });
   });
 
   it("uses the lookahead item to report another dashboard page without returning it", async () => {
@@ -271,9 +282,9 @@ describe("fetchDashboardFormsPage", () => {
     }));
     const listQuery = createSummaryQuery({ data, count: null, error: null });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
-    const result = await fetchDashboardFormsPage({ page: 0, pageSize: 20 });
+    const result = await fetchDashboardFormsPage({ pageSize: 20 });
 
     expect(result.hasMore).toBe(true);
     expect(result.items).toHaveLength(20);
@@ -289,10 +300,9 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await fetchDashboardFormsPage({
-      page: 0,
       pageSize: 20,
       signal,
     });
@@ -322,11 +332,11 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await expect(
       fetchDashboardFormsPage({
-        page: 1,
+        cursor: { createdAt: "2026-04-02T10:00:00Z", id: "form-previous" },
         pageSize: 20,
         filters: {
           authorId: "user-1",
@@ -342,13 +352,13 @@ describe("fetchDashboardFormsPage", () => {
           responses_count: 3,
         }),
       ],
-      totalCount: 21,
+      totalCount: 1,
     });
 
     expect(listQuery.select).toHaveBeenCalledWith(expect.stringContaining("author_name"));
     expect(listQuery.select).toHaveBeenCalledWith(expect.not.stringContaining("profiles:author_id"));
     expect(listQuery.neq).toHaveBeenCalledWith("form_type", "template");
-    expect(listQuery.range).toHaveBeenCalledWith(20, 40);
+    expect(listQuery.limit).toHaveBeenCalledWith(21);
   });
 
   it("applies both type and reason filters to dashboard queries", async () => {
@@ -358,10 +368,9 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await fetchDashboardFormsPage({
-      page: 0,
       pageSize: 20,
       filters: {
         formType: "monitoring",
@@ -394,11 +403,10 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await expect(
       fetchDashboardFormsPage({
-        page: 0,
         pageSize: 20,
       }),
     ).resolves.toEqual({
@@ -435,11 +443,10 @@ describe("fetchDashboardFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await expect(
       fetchDashboardFormsPage({
-        page: 0,
         pageSize: 20,
       }),
     ).resolves.toEqual({
@@ -480,11 +487,10 @@ describe("fetchTemplateFormsPage", () => {
       error: null,
     });
 
-    vi.mocked(apiClient.from).mockReturnValue(listQuery as never);
+    vi.mocked(apiClient.rpc).mockReturnValue(listQuery as never);
 
     await expect(
       fetchTemplateFormsPage({
-        page: 0,
         pageSize: 24,
         filters: {
           isPublic: true,
@@ -506,7 +512,7 @@ describe("fetchTemplateFormsPage", () => {
     expect(listQuery.select).toHaveBeenCalledWith(expect.not.stringContaining("profiles:author_id"));
     expect(listQuery.order).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(listQuery.order).toHaveBeenCalledWith("id", { ascending: false });
-    expect(listQuery.range).toHaveBeenCalledWith(0, 24);
+    expect(listQuery.limit).toHaveBeenCalledWith(25);
   });
 });
 

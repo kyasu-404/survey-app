@@ -18,6 +18,7 @@ import {
 } from "../../../shared/api";
 import type {
   DashboardFormsStats,
+  FormsCursor,
   PaginatedSurveyFormSummaries,
   SurveyForm,
   SurveySchema,
@@ -38,9 +39,8 @@ export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
 }
 
 export async function getDashboardFormsPage(params: {
-  page: number;
   pageSize: number;
-  offset?: number;
+  cursor?: FormsCursor | null;
   filters?: FormsFilters;
   signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {
@@ -55,9 +55,8 @@ export async function getDashboardFormsStats(
 }
 
 export async function getTemplateFormsPage(params: {
-  page: number;
   pageSize: number;
-  offset?: number;
+  cursor?: FormsCursor | null;
   filters?: FormsFilters;
   signal?: AbortSignal;
 }): Promise<PaginatedSurveyFormSummaries> {

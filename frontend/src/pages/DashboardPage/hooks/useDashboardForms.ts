@@ -1,4 +1,5 @@
-import { createBatchedFormsQuery } from "../../../shared/lib/batchedInfiniteQuery";
+import type { FormsCursor } from "../../../entities/survey/types";
+import { createBatchedFormsQuery, getFormsNextCursor } from "../../../shared/lib/batchedInfiniteQuery";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboardFormsPage } from "../../../entities/survey/api/surveysApi";
@@ -59,9 +60,9 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
 
   const query = useInfiniteQuery({
     queryKey: formsQueryKey,
-    initialPageParam: 0,
+    initialPageParam: null as FormsCursor | null,
     queryFn: fetchList,
-    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
+    getNextPageParam: getFormsNextCursor,
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
     retry: 1,
     staleTime: 30_000,

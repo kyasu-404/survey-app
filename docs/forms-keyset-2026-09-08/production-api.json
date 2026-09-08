@@ -1,0 +1,7 @@
+{
+  "endpoint": "https://api.forms.imc-mosk.ru/rest/v1/rpc/list_forms_keyset",
+  "identities_checked": 3,
+  "comparisons": 9,
+  "anonymous_rpc_denied": true,
+  "production_forms_count": 1
+}

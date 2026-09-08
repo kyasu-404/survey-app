@@ -21,8 +21,8 @@ test("200 answers remain in one scrollable list, export completely, and delete i
     schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
   };
   const deletedBatchSizes: number[] = [];
-  const listRequests: Array<{ offset: number; limit: number }> = [];
-  const forms = Array.from({ length: 220 }, (_, index) => ({ ...form, id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, title: `Карточка ${index + 1}` }));
+  const listRequests: Array<{ cursor: string | null; limit: number }> = [];
+  const forms = Array.from({ length: 220 }, (_, index) => ({ ...form, id: `20000000-0000-4000-8000-${String(220 - index).padStart(12, "0")}`, title: `Карточка ${index + 1}` }));
   await page.routeWebSocket("**/*", (socket) => socket.close());
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -45,11 +45,14 @@ test("200 answers remain in one scrollable list, export completely, and delete i
       if (table === "profiles") return route.fulfill({ json: { ...user, name: "Тест", role: "admin", is_disabled: false } });
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
       if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 220, active_count: 220, forms_with_deadline_count: 0 }] });
-      if (table === "forms") {
-        if (url.searchParams.has("id")) return route.fulfill({ json: { ...form, responses_count: responses.length } });
-        const offset = Number(url.searchParams.get("offset") ?? 0);
+      if (table === "forms") return route.fulfill({ json: { ...form, responses_count: responses.length } });
+      if (table === "list_forms_keyset") {
+        expect(url.searchParams.has("offset")).toBe(false);
+        expect(request.method()).toBe("GET");
+        const cursor = url.searchParams.get("p_before_id");
+        const offset = cursor ? forms.findIndex((row) => row.id === cursor) + 1 : 0;
         const limit = Number(url.searchParams.get("limit") ?? 20);
-        listRequests.push({ offset, limit });
+        listRequests.push({ cursor, limit });
         return route.fulfill({ json: forms.slice(offset, offset + limit) });
       }
       if (table === "responses") {
@@ -86,7 +89,7 @@ test("200 answers remain in one scrollable list, export completely, and delete i
   listRequests.length = 0;
   await page.getByRole("button", { name: "Обновить", exact: true }).click();
   await expect.poll(() => listRequests.length).toBe(1);
-  expect(listRequests[0]).toEqual({ offset: 0, limit: 201 });
+  expect(listRequests[0]).toEqual({ cursor: null, limit: 201 });
   await expect(page.getByText("Карточка 200", { exact: true })).toBeVisible();
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();

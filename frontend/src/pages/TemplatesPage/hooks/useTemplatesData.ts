@@ -1,4 +1,5 @@
-import { createBatchedFormsQuery } from "../../../shared/lib/batchedInfiniteQuery";
+import type { FormsCursor } from "../../../entities/survey/types";
+import { createBatchedFormsQuery, getFormsNextCursor } from "../../../shared/lib/batchedInfiniteQuery";
 import { useMemo } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getTemplateFormsPage } from "../../../entities/survey/api/surveysApi";
@@ -44,9 +45,9 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
 
   const query = useInfiniteQuery({
     queryKey: templatesQueryKey,
-    initialPageParam: 0,
+    initialPageParam: null as FormsCursor | null,
     queryFn: fetchList,
-    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
+    getNextPageParam: getFormsNextCursor,
     enabled: !isAuthLoading && (section === "public" || Boolean(userId)),
     retry: 1,
     staleTime: 30_000,

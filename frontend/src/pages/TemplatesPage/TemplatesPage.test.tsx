@@ -1,3 +1,5 @@
+import { getFormsNextCursor } from "../../shared/lib/batchedInfiniteQuery";
+import type { FormsCursor } from "../../entities/survey/types";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -129,7 +131,7 @@ function createTemplatesPage(items: SurveyForm[], totalCount = items.length) {
 function createInfiniteTemplatesData(...pages: Array<ReturnType<typeof createTemplatesPage>>) {
   return {
     pages,
-    pageParams: pages.map((_, index) => index),
+    pageParams: pages.map((_, index) => index === 0 ? null : getFormsNextCursor(pages[index - 1])),
   };
 }
 
@@ -199,7 +201,7 @@ describe("TemplatesPage", () => {
     expect(container.querySelector(".templates-gallery-grid")).toHaveClass("templates-gallery-grid-two-columns");
     expect(getTemplateFormsPage).toHaveBeenCalledWith(
       expect.objectContaining({
-        page: 0,
+        cursor: null,
         pageSize: 20,
       }),
     );
@@ -449,8 +451,8 @@ describe("TemplatesPage", () => {
   it("loads the next 20 templates when clicking the show more button", async () => {
     const templates = Array.from({ length: 25 }, (_, index) => createTemplate(index + 1, { title: `Шаблон ${index + 1}` }));
 
-    getTemplateFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
-      Promise.resolve(createTemplatesPage(templates.slice(page * pageSize, (page + 1) * pageSize), templates.length)),
+    getTemplateFormsPage.mockImplementation(({ cursor, pageSize }: { cursor?: FormsCursor | null; pageSize: number }) =>
+      Promise.resolve(createTemplatesPage(templates.slice(cursor ? templates.findIndex((row) => row.id === cursor.id) + 1 : 0, (cursor ? templates.findIndex((row) => row.id === cursor.id) + 1 : 0) + pageSize), templates.length)),
     );
 
     renderPage();
@@ -463,7 +465,7 @@ describe("TemplatesPage", () => {
     await waitFor(() => {
       expect(getTemplateFormsPage).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          page: 1,
+          cursor: { createdAt: templates[19].created_at, id: templates[19].id },
           pageSize: 20,
         }),
       );
@@ -477,11 +479,11 @@ describe("TemplatesPage", () => {
       createTemplate(index + 1, { title: `Шаблон ${index + 1}` }),
     );
 
-    getTemplateFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+    getTemplateFormsPage.mockImplementation(({ cursor, pageSize }: { cursor?: FormsCursor | null; pageSize: number }) =>
       Promise.resolve(
         createTemplatesPage(
-          templates.slice(page * pageSize, (page + 1) * pageSize),
-          page === 0 ? 19 : templates.length,
+          templates.slice(cursor ? templates.findIndex((row) => row.id === cursor.id) + 1 : 0, (cursor ? templates.findIndex((row) => row.id === cursor.id) + 1 : 0) + pageSize),
+          !cursor ? 19 : templates.length,
         ),
       ),
     );
@@ -496,7 +498,7 @@ describe("TemplatesPage", () => {
     await waitFor(() => {
       expect(getTemplateFormsPage).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          page: 1,
+          cursor: { createdAt: templates[19].created_at, id: templates[19].id },
           pageSize: 20,
         }),
       );

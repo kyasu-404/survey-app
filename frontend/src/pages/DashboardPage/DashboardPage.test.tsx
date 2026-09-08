@@ -1,3 +1,5 @@
+import { getFormsNextCursor } from "../../shared/lib/batchedInfiniteQuery";
+import type { FormsCursor } from "../../entities/survey/types";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -200,7 +202,7 @@ function createDashboardStats(items: SurveyForm[], totalCount = items.length) {
 function createInfiniteDashboardData(...pages: Array<ReturnType<typeof createDashboardPage>>) {
   return {
     pages,
-    pageParams: pages.map((_, index) => index),
+    pageParams: pages.map((_, index) => index === 0 ? null : getFormsNextCursor(pages[index - 1])),
   };
 }
 
@@ -521,8 +523,8 @@ describe("DashboardPage", () => {
       createDashboardStats(forms, forms.length),
     );
 
-    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
-      Promise.resolve(createDashboardPage(forms.slice(page * pageSize, (page + 1) * pageSize), forms.length)),
+    getDashboardFormsPage.mockImplementation(({ cursor, pageSize }: { cursor?: FormsCursor | null; pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0, (cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0) + pageSize), forms.length)),
     );
     getDashboardFormsStats.mockResolvedValue(createDashboardStats(forms, forms.length));
 
@@ -531,7 +533,7 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenCalledWith(
         expect.objectContaining({
-          page: 0,
+          cursor: null,
           pageSize: 20,
         }),
       );
@@ -554,7 +556,7 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          page: 1,
+          cursor: { createdAt: forms[19].created_at, id: forms[19].id },
           pageSize: 20,
         }),
       );
@@ -581,11 +583,11 @@ describe("DashboardPage", () => {
   it("keeps pagination available when planned count underestimates a full dashboard page", async () => {
     const forms = Array.from({ length: 21 }, (_, index) => createForm(index + 1));
 
-    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
+    getDashboardFormsPage.mockImplementation(({ cursor, pageSize }: { cursor?: FormsCursor | null; pageSize: number }) =>
       Promise.resolve(
         createDashboardPage(
-          forms.slice(page * pageSize, (page + 1) * pageSize),
-          page === 0 ? 19 : forms.length,
+          forms.slice(cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0, (cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0) + pageSize),
+          !cursor ? 19 : forms.length,
         ),
       ),
     );
@@ -601,7 +603,7 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          page: 1,
+          cursor: { createdAt: forms[19].created_at, id: forms[19].id },
           pageSize: 20,
         }),
       );
@@ -977,8 +979,8 @@ describe("DashboardPage", () => {
 
   it("keeps the current scroll position when showing more forms", async () => {
     const forms = Array.from({ length: 25 }, (_, index) => createForm(index + 1));
-    getDashboardFormsPage.mockImplementation(({ page, pageSize }: { page: number; pageSize: number }) =>
-      Promise.resolve(createDashboardPage(forms.slice(page * pageSize, (page + 1) * pageSize), forms.length)),
+    getDashboardFormsPage.mockImplementation(({ cursor, pageSize }: { cursor?: FormsCursor | null; pageSize: number }) =>
+      Promise.resolve(createDashboardPage(forms.slice(cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0, (cursor ? forms.findIndex((row) => row.id === cursor.id) + 1 : 0) + pageSize), forms.length)),
     );
     Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 360 });
