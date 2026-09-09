@@ -13,14 +13,21 @@ export function formatRussianDeadline(value) {
     day: "numeric",
     month: "long",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
     timeZone: MOSCOW_TIME_ZONE,
   }).formatToParts(date);
   const part = (type) => parts.find((item) => item.type === type)?.value ?? "";
   const day = part("day");
   const month = part("month");
   const year = part("year");
+  const hour = part("hour");
+  const minute = part("minute");
 
-  return day && month && year ? `${day} ${month} ${year} года` : null;
+  return day && month && year && hour && minute
+    ? `${day} ${month} ${year} года, ${hour}:${minute} (МСК)`
+    : null;
 }
 
 export function getOrganizationMailName(organization) {

@@ -9,14 +9,20 @@ test("builds an individual reminder with a Russian deadline", () => {
   const mail = buildReminderMail({
     organizationName: "ГБОУ № 123",
     formTitle: "Мониторинг сайтов",
-    deadlineAt: "2026-08-14T20:59:59.000Z",
+    deadlineAt: "2026-09-10T15:00:00.000Z",
     formUrl: "https://forms.example.ru/form/11111111-1111-4111-8111-111111111111",
   });
 
-  assert.equal(formatRussianDeadline("2026-08-14T20:59:59.000Z"), "14 августа 2026 года");
   assert.match(mail.bodyText, /Уважаемые представители ГБОУ № 123!/);
-  assert.match(mail.bodyText, /Срок сдачи: 14 августа 2026 года\./);
+  assert.match(mail.bodyText, /Срок сдачи: 10 сентября 2026 года, 18:00 \(МСК\)\./);
   assert.match(mail.bodyText, /Открыть форму: https:\/\/forms\.example\.ru\/form\//);
+});
+
+test("formats deadline minutes and midnight in Moscow regardless of the source offset", () => {
+  assert.equal(formatRussianDeadline("2026-08-14T20:59:59.000Z"), "14 августа 2026 года, 23:59 (МСК)");
+  assert.equal(formatRussianDeadline("2026-08-14T21:00:00.000Z"), "15 августа 2026 года, 00:00 (МСК)");
+  assert.equal(formatRussianDeadline("2026-09-10T18:00:00+03:00"), "10 сентября 2026 года, 18:00 (МСК)");
+  assert.equal(formatRussianDeadline("not-a-date"), null);
 });
 
 test("omits the deadline line when a form has no deadline", () => {
