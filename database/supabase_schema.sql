@@ -451,11 +451,9 @@ as $$
   select exists (
     select 1
     from public.forms f
-    join public.profiles p on p.id = f.author_id
     where f.id = target_form_id
       and f.is_public = true
       and (f.deadline_at is null or f.deadline_at > now())
-      and p.is_disabled = false
   );
 $$;
 
@@ -500,11 +498,7 @@ as $$
     and jsonb_path_exists(f.schema, '$.** ? (@.type == "organization")', '{}'::jsonb, true)
     and (
       public.is_public_active_form(f.id)
-      or (
-        auth.uid() is not null
-        and public.request_is_enabled()
-        and (f.author_id = auth.uid() or public.request_role() = 'admin')
-      )
+      or public.request_is_enabled()
     )
   order by
     case o.organization_type
@@ -731,9 +725,7 @@ begin
   select f.*
   into target_form
   from public.forms f
-  join public.profiles p on p.id = f.author_id
-  where f.id = p_form_id
-    and p.is_disabled = false;
+  where f.id = p_form_id;
 
   if target_form.id is null then
     return;
@@ -889,9 +881,7 @@ begin
   select f.*
   into target_form
   from public.forms f
-  join public.profiles p on p.id = f.author_id
-  where f.id = p_form_id
-    and p.is_disabled = false;
+  where f.id = p_form_id;
 
   if target_form.id is null then
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
@@ -976,9 +966,7 @@ begin
   select f.*
   into target_form
   from public.forms f
-  join public.profiles p on p.id = f.author_id
-  where f.id = p_form_id
-    and p.is_disabled = false;
+  where f.id = p_form_id;
 
   if target_form.id is null then
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
@@ -1071,7 +1059,6 @@ as $$
       and f.is_public = true
       and (f.deadline_at is null or f.deadline_at > now())
       and p.role = 'admin'
-      and p.is_disabled = false
   );
 $$;
 
@@ -1554,14 +1541,7 @@ create policy "forms_select"
 on public.forms
 for select
 to authenticated
-using (
-  (select public.request_is_enabled())
-  and (
-    author_id = (select auth.uid())
-    or (select public.request_role()) = 'admin'
-    or public.is_public_active_form(id)
-  )
-);
+using ((select public.request_is_enabled()));
 
 create policy "forms_select_anon"
 on public.forms
@@ -1594,23 +1574,11 @@ with check (
 -- RESPONSES
 -- =========================
 
-create policy "responses_select_author_or_admin"
+create policy "responses_select_enabled_staff"
 on public.responses
 for select
 to authenticated
-using (
-  (select public.request_is_enabled())
-  and (
-    (select public.request_role()) = 'admin'
-    OR exists (
-      select 1
-      from public.forms f
-      where f.id = form_id
-        and f.author_id = (select auth.uid())
-    )
-    OR public.is_public_active_admin_authored_form(form_id)
-  )
-);
+using ((select public.request_is_enabled()));
 
 create policy "responses_insert"
 on public.responses
@@ -1748,12 +1716,9 @@ begin
       and (
         f.author_id = auth.uid()
         or public.request_role() = 'admin'
-        or (
-          public.is_public_active_admin_authored_form(f.id)
-          and exists (
-            select 1 from public.response_file_references rf
-            where rf.form_id = f.id and rf.object_path = object_name
-          )
+        or exists (
+          select 1 from public.response_file_references rf
+          where rf.form_id = f.id and rf.object_path = object_name
         )
       )
   );

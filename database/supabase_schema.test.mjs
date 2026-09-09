@@ -203,15 +203,13 @@ test("form rows cannot be deleted directly by authenticated clients", () => {
   assert.match(restrictedClientFormDeletesMigration, /drop policy if exists "forms_delete" on public\.forms;/i);
 });
 
-test("authenticated users see own, admin-visible, or active public forms only", () => {
+test("enabled staff can read all forms while anonymous readers see active public forms only", () => {
   const selectPolicy = getPolicyDefinition("forms_select");
   const anonSelectPolicy = getPolicyDefinition("forms_select_anon");
 
   assert.match(selectPolicy, /for select\s+to authenticated/i);
   assert.match(selectPolicy, /select public\.request_is_enabled\(\)/i);
-  assert.match(selectPolicy, /author_id = \(select auth\.uid\(\)\)/i);
-  assert.match(selectPolicy, /select public\.request_role\(\).*?= 'admin'/is);
-  assert.match(selectPolicy, /public\.is_public_active_form\(id\)/i);
+  assert.doesNotMatch(selectPolicy, /author_id|request_role|is_public_active_form/i);
 
   assert.match(anonSelectPolicy, /for select\s+to anon/i);
   assert.match(anonSelectPolicy, /public\.is_public_active_form\(id\)/i);
@@ -351,36 +349,33 @@ test("response inserts are attributed to the current auth user", () => {
   assert.match(insertPolicy, /user_id is null\s+or user_id = \(select auth\.uid\(\)\)/i);
 });
 
-test("form authors and admins can read responses", () => {
-  assert.doesNotMatch(schema, /create policy "responses_select"\s+on public\.responses/i);
-
-  const selectPolicy = getPolicyDefinition("responses_select_author_or_admin");
-
-  assert.match(selectPolicy, /\(select public\.request_role\(\)\) = 'admin'/i);
-  assert.match(selectPolicy, /from public\.forms f/i);
-  assert.match(selectPolicy, /f\.id = form_id/i);
-  assert.match(selectPolicy, /f\.author_id = \(select auth\.uid\(\)\)/i);
+test("response reading is shared between enabled staff without granting writes", () => {
+  const selectPolicy = getPolicyDefinition("responses_select_enabled_staff");
+  assert.match(selectPolicy, /for select\s+to authenticated/i);
+  assert.match(selectPolicy, /using \(\(select public\.request_is_enabled\(\)\)\)/i);
+  assert.doesNotMatch(selectPolicy, /author_id|request_role|is_public_active/i);
+  assert.doesNotMatch(schema, /grant (?:update|delete) on table public\.responses to authenticated/i);
+  assert.match(getPolicyDefinition("forms_update"), /author_id = \(select auth\.uid\(\)\) OR \(select public\.request_role\(\)\) = 'admin'/i);
 });
 
-test("authenticated users can read responses for public active admin-authored forms", () => {
-  const helper = getFunctionDefinition("is_public_active_admin_authored_form");
-  const selectPolicy = getPolicyDefinition("responses_select_author_or_admin");
+test("disabling an author does not close public forms or invalidate respondent capabilities", () => {
+  const active = getFunctionDefinition("is_public_active_form");
+  assert.match(active, /f\.is_public = true/i);
+  assert.match(active, /f\.deadline_at is null or f\.deadline_at > now\(\)/i);
+  assert.doesNotMatch(active, /profiles|is_disabled/i);
+  for (const name of ["get_form_response_status", "submit_form_response", "update_form_response"]) {
+    const definition = getFunctionDefinition(name);
+    assert.match(definition, /auth\.uid\(\) is not null and not public\.request_is_enabled\(\)/i);
+    assert.doesNotMatch(definition, /join public\.profiles|p\.is_disabled/i);
+  }
+});
 
-  assert.match(helper, /security definer\s+set search_path = ''/i);
-  assert.match(helper, /from public\.forms f/i);
-  assert.match(helper, /join public\.profiles p on p\.id = f\.author_id/i);
-  assert.match(helper, /p\.role = 'admin'/i);
-  assert.match(helper, /f\.is_public = true/i);
-  assert.match(helper, /f\.deadline_at is null or f\.deadline_at > now\(\)/i);
-  assert.match(selectPolicy, /public\.is_public_active_admin_authored_form\(form_id\)/i);
-  assert.match(
-    schema,
-    /revoke all on function public\.is_public_active_admin_authored_form\(uuid\) from public;/i,
-  );
-  assert.match(
-    schema,
-    /grant execute on function public\.is_public_active_admin_authored_form\(uuid\) to authenticated, service_role;/i,
-  );
+test("staff can download submitted attachments from any author but not other upload drafts", () => {
+  const helper = getFunctionDefinition("can_read_survey_file");
+  assert.match(helper, /not public\.request_is_enabled\(\)/i);
+  assert.match(helper, /from public\.response_file_references rf/i);
+  assert.match(helper, /rf\.form_id = f\.id and rf\.object_path = object_name/i);
+  assert.doesNotMatch(helper, /is_public_active_admin_authored_form|is_disabled|deadline_at/i);
 });
 
 test("response limits use an atomic form counter instead of counting response rows", () => {
