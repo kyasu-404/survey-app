@@ -4,7 +4,7 @@ import {
   resolveManagedSurveyAssetUrl,
   serializeManagedSurveyAssetUrl,
 } from "../../../shared/api/surveyAssetUrls";
-import { sanitizeSurveySchema } from "./surveySchemaSecurity";
+import { PASSIVE_ASSET_URL_KEYS, sanitizeSurveySchema } from "./surveySchemaSecurity";
 
 export const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
 
@@ -32,6 +32,19 @@ function prepareLogoForSanitizing(schema: SurveySchema) {
 
 export function resolveDefaultSurveyLogo(schema: SurveySchema): SurveySchema {
   const next = sanitizeSurveySchema(prepareLogoForSanitizing(schema));
+
+  const pending: Array<Record<string, unknown>> = [next as unknown as Record<string, unknown>];
+  for (let index = 0; index < pending.length; index += 1) {
+    const item = pending[index];
+    for (const [key, value] of Object.entries(item)) {
+      if (value && typeof value === "object") pending.push(value as Record<string, unknown>);
+      if (PASSIVE_ASSET_URL_KEYS.has(key) && typeof value === "string") {
+        const resolved = resolveManagedSurveyAssetUrl(value);
+        if (resolved === null) delete item[key];
+        else item[key] = resolved;
+      }
+    }
+  }
 
   if (next.logo === DEFAULT_SURVEY_LOGO_TOKEN) {
     next.logo = cardLogoUrl;

@@ -1,6 +1,8 @@
 import type { SurveyResponse } from "../../entities/response/types";
 import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
 import { ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
+import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "./signatureImage";
+import { RESPONSES_HTML_LAYOUT_CSS } from "./responsesHtmlLayout";
 
 export type ResponsesTableRow = {
   [key: string]: string;
@@ -16,6 +18,8 @@ export type ResponsesTableColumn = ResponsesColumnGroup & {
   kind?: "page" | "section";
   page?: ResponsesColumnGroup;
   section?: ResponsesColumnGroup;
+  printPage?: ResponsesColumnGroup;
+  answerType?: string;
 };
 
 export type ResponsesTable = {
@@ -75,18 +79,19 @@ function getQuestionMeta(schema: SurveySchema) {
   const seenNames = new Set<string>();
   let pageGroup: ResponsesColumnGroup | undefined;
   let sectionGroup: ResponsesColumnGroup | undefined;
+  let printPage: ResponsesColumnGroup | undefined;
 
   const addQuestionMeta = (question: SurveyQuestion) => {
     if (question.name) {
       const header = question.title?.trim() || question.name;
       if (question.type === "sectiontitle") {
         sectionGroup = { key: `section:${question.name}`, header };
-        columns.push({ ...sectionGroup, kind: "section", page: pageGroup, section: sectionGroup });
+        columns.push({ ...sectionGroup, kind: "section", page: pageGroup, section: sectionGroup, printPage });
         seenNames.add(question.name);
         return;
       }
       if (!seenNames.has(question.name)) {
-        columns.push({ key: `answer:${question.name}`, header, page: pageGroup, section: sectionGroup });
+        columns.push({ key: `answer:${question.name}`, header, page: pageGroup, section: sectionGroup, printPage, answerType: question.type });
         seenNames.add(question.name);
       }
 
@@ -121,8 +126,9 @@ function getQuestionMeta(schema: SurveySchema) {
   pages.forEach((page, index) => {
     const header = page?.title?.trim();
     pageGroup = header ? { key: `page:${index}`, header } : undefined;
+    printPage = header || pages.length > 1 ? { key: `page:${index}`, header: header || `Страница ${index + 1}` } : undefined;
     sectionGroup = undefined;
-    if (pageGroup) columns.push({ ...pageGroup, kind: "page", page: pageGroup });
+    if (pageGroup) columns.push({ ...pageGroup, kind: "page", page: pageGroup, printPage });
     const elements = Array.isArray(page?.elements) ? page.elements : [];
     elements.forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
   });
@@ -280,6 +286,10 @@ export function getResponseColumnClassName(column: ResponsesTableColumn) {
 }
 
 function renderResponseHtmlCell(column: ResponsesTableColumn, value: string) {
+  if (column.answerType === "signaturepad" && value) {
+    const image = getSignatureImage(value);
+    return image ? `<img class="response-signature-image" src="${image.dataUrl}" alt="Подпись" width="${image.width}" height="${image.height}">` : SIGNATURE_UNAVAILABLE;
+  }
   if (!column.isDate) {
     return escapeHtml(value);
   }
@@ -326,14 +336,12 @@ export function formatResponsesForTable(
   return { columns, rows };
 }
 
-export function createResponsesHtmlReport({ title, columns, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
-  const generatedAtLabel = formatResponseDate(generatedAt.toISOString());
-
-  const body = rows.length
-    ? `<div class="responses-table-wrap"><table><thead><tr>${columns
+function renderHtmlTable(columns: ResponsesTableColumn[], rows: ResponsesTableRow[], groupHeaders = "") {
+  const colgroup = groupHeaders ? `<colgroup>${columns.map(column => `<col${column.isDate ? ' class="responses-table-date-column"' : ""}>`).join("")}</colgroup>` : "";
+  return `<div class="responses-table-wrap"><table>${colgroup}<thead>${groupHeaders}<tr>${columns
         .map((column) => {
           const className = getResponseColumnClassName(column);
-          return `<th${className ? ` class="${className}"` : ""}>${escapeHtml(column.header)}</th>`;
+          return `<th${className ? ` class="${className}"` : ""}>${escapeHtml(groupHeaders && column.kind ? "" : column.header)}</th>`;
         })
         .join("")}</tr></thead><tbody>${rows
         .map(
@@ -348,7 +356,64 @@ export function createResponsesHtmlReport({ title, columns, rows, generatedAt = 
               })
               .join("")}</tr>`,
         )
-        .join("")}</tbody></table></div>`
+        .join("")}</tbody></table></div>`;
+}
+
+// Non-empty groups become header rows in XLSX and print, leaving room for answers.
+// Retain a placeholder for empty groups so their titles are not lost.
+export function getResponseAnswerColumns(columns: ResponsesTableColumn[]) {
+  const populated = new Set<string>();
+  columns.forEach(column => [column.page, column.section].forEach(group => {
+    if (group && group.key !== column.key) populated.add(group.key);
+  }));
+  return columns.filter(column => !column.kind || !populated.has(column.key));
+}
+
+export const MAX_PRINT_ANSWER_COLUMNS = 8;
+
+function splitColumnGroups(columns: ResponsesTableColumn[], groupKey: (column: ResponsesTableColumn) => string | undefined) {
+  const groups: ResponsesTableColumn[][] = [];
+  columns.forEach(column => {
+    const previous = groups[groups.length - 1];
+    if (!previous || groupKey(previous[0]) !== groupKey(column)) groups.push([column]);
+    else previous.push(column);
+  });
+  return groups;
+}
+
+export function getResponsesPrintBlocks(columns: ResponsesTableColumn[]): ResponsesTableColumn[][] {
+  const dates = columns.filter(column => column.isDate);
+  const answers = getResponseAnswerColumns(columns).filter(column => !column.isDate);
+  if (answers.length <= MAX_PRINT_ANSWER_COLUMNS) return [[...dates, ...answers]];
+  const pages = splitColumnGroups(answers, column => (column.printPage ?? column.page)?.key);
+  return pages.flatMap(page => {
+    const sections = page.length <= MAX_PRINT_ANSWER_COLUMNS ? [page] : splitColumnGroups(page, column => column.section?.key);
+    return sections.flatMap(section => {
+      const blocks: ResponsesTableColumn[][] = [];
+      for (let index = 0; index < section.length; index += MAX_PRINT_ANSWER_COLUMNS) {
+        blocks.push([...dates, ...section.slice(index, index + MAX_PRINT_ANSWER_COLUMNS)]);
+      }
+      return blocks;
+    });
+  });
+}
+
+function renderPrintGroupHeaders(columns: ResponsesTableColumn[]) {
+  return (["page", "section"] as const).map(level => {
+    const groupOf = (column: ResponsesTableColumn) => level === "page" ? column.printPage ?? column.page : column.section;
+    if (!columns.some(groupOf)) return "";
+    const groups = splitColumnGroups(columns, column => groupOf(column)?.key);
+    return `<tr>${groups.map(group => `<th colspan="${group.length}" class="responses-print-${level}-heading">${escapeHtml(groupOf(group[0])?.header ?? "")}</th>`).join("")}</tr>`;
+  }).join("");
+}
+
+export function createResponsesHtmlReport({ title, columns, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
+  const generatedAtLabel = formatResponseDate(generatedAt.toISOString());
+  const blocks = getResponsesPrintBlocks(columns);
+  const body = rows.length
+    ? `<div class="responses-report-screen">${renderHtmlTable(columns, rows)}</div><div class="responses-report-print">${blocks.map((block, index) =>
+      `<section class="responses-print-block">${blocks.length > 1 ? `<h2>Таблица ${index + 1} из ${blocks.length}</h2>` : ""}${renderHtmlTable(block, rows, renderPrintGroupHeaders(block))}</section>`,
+    ).join("")}</div>`
     : `<section class="empty-state"><h2>Ответов пока нет</h2><p>Новые ответы появятся здесь после отправки формы.</p></section>`;
 
   return `<article class="responses-html-report"><header class="report-header"><p class="eyebrow">Ответы формы</p><h1>${escapeHtml(
@@ -562,6 +627,7 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
         padding: 0;
       }
     }
+    ${RESPONSES_HTML_LAYOUT_CSS}
   </style>
 </head>
 <body>

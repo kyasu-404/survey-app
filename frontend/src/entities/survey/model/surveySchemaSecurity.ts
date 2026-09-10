@@ -1,5 +1,5 @@
-import DOMPurify from "dompurify";
 import type { SurveySchema } from "../types";
+import { serializeManagedSurveyAssetUrl } from "../../../shared/api/surveyAssetUrls";
 
 export const MAX_SURVEY_SCHEMA_BYTES = 256 * 1024;
 export const MAX_SURVEY_SCHEMA_DEPTH = 32;
@@ -14,7 +14,7 @@ const BLOCKED_SCHEMA_KEYS = new Set([
   "choicesByUrl",
 ]);
 
-const PASSIVE_ASSET_URL_KEYS = new Set([
+export const PASSIVE_ASSET_URL_KEYS = new Set([
   "backgroundImage",
   "image",
   "imageLink",
@@ -27,11 +27,6 @@ const PASSIVE_ASSET_URL_KEYS = new Set([
 const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
 const SAFE_EMBEDDED_RASTER_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i;
 
-const SAFE_HTML_TAGS = [
-  "p", "br", "strong", "b", "em", "i", "u", "s", "ul", "ol", "li",
-  "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code", "pre",
-  "span", "div", "table", "thead", "tbody", "tr", "th", "td",
-];
 
 export class SurveySchemaSecurityError extends Error {
   constructor(message: string) {
@@ -92,13 +87,17 @@ export function sanitizeSurveySchema(schema: SurveySchema): SurveySchema {
       throw new SurveySchemaSecurityError("Схема формы имеет слишком большую глубину");
     }
 
-    for (const [key, value] of Object.entries(source)) {
+    for (const [key, originalValue] of Object.entries(source)) {
+      let value = originalValue;
       if (BLOCKED_SCHEMA_KEYS.has(key)) {
         continue;
       }
 
-      if (PASSIVE_ASSET_URL_KEYS.has(key) && !isSafePassiveAssetUrl(value)) {
-        continue;
+      if (PASSIVE_ASSET_URL_KEYS.has(key)) {
+        // Upload callbacks return absolute Storage URLs. Save trusted images as tokens
+        // before the general external-URL filter, including nested image picker choices.
+        if (typeof value === "string") value = serializeManagedSurveyAssetUrl(value);
+        if (!isSafePassiveAssetUrl(value)) continue;
       }
 
       if (key === "contentMode" && value !== "image") {
@@ -137,14 +136,6 @@ export function sanitizeSurveySchema(schema: SurveySchema): SurveySchema {
   return root as SurveySchema;
 }
 
-export function sanitizeSurveyHtml(html: string) {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: SAFE_HTML_TAGS,
-    ALLOWED_ATTR: ["class", "title", "aria-label", "colspan", "rowspan"],
-    ALLOW_DATA_ATTR: false,
-    ALLOW_ARIA_ATTR: true,
-  });
-}
 
 export function isSafeSurveyNavigationUrl(url: string, baseUrl = window.location.href) {
   try {

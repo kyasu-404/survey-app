@@ -45,10 +45,10 @@ describe("responsesExport", () => {
       expect(table.columns.find(c => c.key === key)?.section).toBeUndefined();
     }
     const doc = new DOMParser().parseFromString(createResponsesHtmlDocument({ title: "Ответы", ...table }), "text/html");
-    expect(doc.querySelectorAll("th.responses-table-page-column")).toHaveLength(3);
-    expect(doc.querySelectorAll("th.responses-table-section-column")).toHaveLength(3);
-    expect(doc.querySelectorAll("tbody td.responses-table-page-column, tbody td.responses-table-section-column")).toHaveLength(6);
-    expect(Array.from(doc.querySelectorAll("th"), c => c.textContent)).toEqual(table.columns.map(c => c.header));
+    expect(doc.querySelectorAll(".responses-report-screen th.responses-table-page-column")).toHaveLength(3);
+    expect(doc.querySelectorAll(".responses-report-screen th.responses-table-section-column")).toHaveLength(3);
+    expect(doc.querySelectorAll(".responses-report-screen tbody td.responses-table-page-column,  .responses-report-screen tbody td.responses-table-section-column")).toHaveLength(6);
+    expect(Array.from(doc.querySelectorAll(".responses-report-screen th"), c => c.textContent)).toEqual(table.columns.map(c => c.header));
     expect(doc.querySelector("раздел")).toBeNull();
   });
 
@@ -72,8 +72,8 @@ describe("responsesExport", () => {
     expect(table.columns.map((column) => table.rows[0][column.key])).toEqual([expect.any(String), "Первый", "", "Третий", ""]);
     expect(table.columns.map((column) => table.rows[1][column.key])).toEqual([expect.any(String), "", "Второй", "", ""]);
     const document = new DOMParser().parseFromString(createResponsesHtmlDocument({ title: "ИБ школы", ...table }), "text/html");
-    expect(Array.from(document.querySelectorAll("th"), (cell) => cell.textContent)).toEqual(["Дата ответа", header, header, header, header]);
-    expect(Array.from(document.querySelectorAll("tbody tr:first-child td"), (cell) => cell.textContent).slice(1)).toEqual(["Первый", "", "Третий", ""]);
+    expect(Array.from(document.querySelectorAll(".responses-report-screen th"), (cell) => cell.textContent)).toEqual(["Дата ответа", header, header, header, header]);
+    expect(Array.from(document.querySelectorAll(".responses-report-screen tbody tr:first-child td"), (cell) => cell.textContent).slice(1)).toEqual(["Первый", "", "Третий", ""]);
   });
 
   it("preserves identity and schema order for date, numeric, special, and colliding legacy headers", () => {
@@ -92,7 +92,7 @@ describe("responsesExport", () => {
     expect(new Set(table.columns.map((column) => column.key)).size).toBe(8);
     expect(table.columns.map((column) => table.rows[1][column.key]).slice(1)).toEqual(["", "", "", "", "", "Архивный", "Сохранённый"]);
     const document = new DOMParser().parseFromString(createResponsesHtmlDocument({ title: "Ответы", ...table }), "text/html");
-    expect(document.querySelectorAll("th.responses-table-date-column")).toHaveLength(1);
+    expect(document.querySelectorAll(".responses-report-screen th.responses-table-date-column")).toHaveLength(1);
     expect(document.querySelector("tbody tr td:nth-child(2)")?.textContent).toBe("Своя дата");
   });
 

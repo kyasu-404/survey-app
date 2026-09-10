@@ -60,8 +60,8 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   await expect(report.getByText(commentTitle, { exact: true })).toHaveCount(16);
   await report.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.goto(`/dashboard/forms/${formId}/responses/html`);
-  await expect(page.getByText("Ответ 200", { exact: true })).toBeVisible();
-  await expect(page.locator(".responses-html-preview th")).toHaveText(expectedHeaders);
+  await expect(page.locator(".responses-report-screen").getByText("Ответ 200", { exact: true })).toBeVisible();
+  await expect(page.locator(".responses-report-screen th")).toHaveText(expectedHeaders);
   const htmlDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать HTML" }).click();
   const htmlDownload = await htmlDownloadPromise;
@@ -72,8 +72,8 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   const downloadedTable = await page.evaluate((source) => {
     const document = new DOMParser().parseFromString(source, "text/html");
     return {
-      headers: Array.from(document.querySelectorAll("th"), (cell) => cell.textContent),
-      firstRow: Array.from(document.querySelectorAll("tbody tr:first-child td"), (cell) => cell.textContent),
+      headers: Array.from(document.querySelectorAll(".responses-report-screen th"), (cell) => cell.textContent),
+      firstRow: Array.from(document.querySelectorAll(".responses-report-screen tbody tr:first-child td"), (cell) => cell.textContent),
     };
   }, html);
   expect(downloadedTable.headers).toEqual(expectedHeaders);

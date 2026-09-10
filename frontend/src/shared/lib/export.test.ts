@@ -2,8 +2,40 @@ import { describe, expect, it } from "vitest";
 import { createExcelWorkbook, neutralizeSpreadsheetFormula } from "./export";
 import { formatResponsesForTable } from "./responsesExport";
 import type { SurveySchema } from "../../entities/survey/types";
+import { TEST_SIGNATURE_PNG } from "../../test/signatures";
 
 describe("export helpers", () => {
+  it("embeds signatures in their answer cells with grouping offsets and leaves empty or invalid signatures readable", async () => {
+    const schema: SurveySchema = { pages: [{ title: "Страница", elements: [
+      { type: "sectiontitle", name: "section", title: "Раздел" },
+      { type: "signaturepad", name: "sign", title: "Подпись" },
+      { type: "signaturepad", name: "other", title: "Подпись" },
+      { type: "text", name: "text", title: "Текст" },
+    ] }] };
+    const table = formatResponsesForTable([
+      { id: "1", form_id: "f", created_at: "2026-09-11T09:00:00Z", data: { sign: TEST_SIGNATURE_PNG, other: TEST_SIGNATURE_PNG, text: "=1+1" } },
+      { id: "2", form_id: "f", created_at: "2026-09-11T09:00:00Z", data: { sign: "data:image/png;base64,bad", text: "Конец" } },
+    ], schema);
+    const workbook = await createExcelWorkbook(table.rows, "Ответы", table.columns);
+    const restored = await createExcelWorkbook([]);
+    await restored.xlsx.load(await workbook.xlsx.writeBuffer());
+    const sheet = restored.worksheets[0];
+    expect(sheet.getCell("B4").text).toBe("");
+    expect(sheet.getCell("C4").text).toBe("");
+    expect(sheet.getCell("D4").value).toBe("\t=1+1");
+    expect(sheet.getCell("B5").text).toBe("Не удалось отобразить подпись");
+    expect(sheet.getCell("C5").text).toBe("");
+    expect(sheet.getCell("D5").text).toBe("Конец");
+    const images = sheet.getImages();
+    expect(images).toHaveLength(2);
+    expect(images.map(image => [image.range.tl.nativeCol, image.range.tl.nativeRow])).toEqual([[1, 3], [2, 3]]);
+    expect(sheet.getRow(4).height).toBe(78);
+    expect(sheet.getColumn(2).width).toBeGreaterThanOrEqual(28);
+    expect(restored.getImage(Number(images[0].imageId)).extension).toBe("png");
+    expect(sheet.getCell("B4").border.bottom?.style).toBe("thin");
+    expect(sheet.model.merges).toEqual([]);
+    expect(table.rows[0]["answer:sign"]).toBe(TEST_SIGNATURE_PNG);
+  });
   it("neutralizes values that spreadsheet apps can execute as formulas", () => {
     expect(neutralizeSpreadsheetFormula("=IMPORTXML('https://example.test')")).toBe(
       "\t=IMPORTXML('https://example.test')",

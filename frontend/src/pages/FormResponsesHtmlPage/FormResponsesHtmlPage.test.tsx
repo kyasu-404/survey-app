@@ -183,8 +183,8 @@ describe("FormResponsesHtmlPage", () => {
     expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-secondary");
     expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
-    expect(screen.getByText("Анна")).toBeInTheDocument();
-    expect(screen.getByText("Хорошее")).toBeInTheDocument();
+    expect(screen.getByText("Анна", { selector: ".responses-report-screen td" })).toBeInTheDocument();
+    expect(screen.getByText("Хорошее", { selector: ".responses-report-screen td" })).toBeInTheDocument();
   });
 
   it.each([51, 100, 200])("loads all %i responses for the HTML report without requesting a page beyond the total", async (total) => {
@@ -214,7 +214,7 @@ describe("FormResponsesHtmlPage", () => {
 
     renderHtmlPage();
 
-    expect(await screen.findByText(`Ответ ${total}`)).toBeInTheDocument();
+    expect(await screen.findByText(`Ответ ${total}`, { selector: ".responses-report-screen td" })).toBeInTheDocument();
     expect(getResponsesByForm).toHaveBeenCalledWith("form-1", expect.objectContaining({ page: 2 }));
     expect(getResponsesByForm).toHaveBeenCalledTimes(Math.ceil(total / 50));
   });
@@ -263,7 +263,7 @@ describe("FormResponsesHtmlPage", () => {
 
     renderHtmlPage();
 
-    expect(await screen.findByText("ИМЦ 1")).toBeInTheDocument();
+    expect(await screen.findByText("ИМЦ 1", { selector: ".responses-report-screen td" })).toBeInTheDocument();
     expect(screen.queryByText(organizationId)).not.toBeInTheDocument();
     expect(getOrganizations).toHaveBeenCalledWith(["school"], expect.any(AbortSignal));
 
@@ -305,7 +305,7 @@ describe("FormResponsesHtmlPage", () => {
 
     renderHtmlPage();
 
-    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    expect(await screen.findByText("Анна", { selector: ".responses-report-screen td" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(getFormById).toHaveBeenCalledTimes(1);

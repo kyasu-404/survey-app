@@ -63,9 +63,9 @@ test("page and section titles stay distinct in responses, HTML, and bordered Exc
   await expect(page.locator("th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(30, 58, 95)");
   await page.screenshot({ path: testInfo.outputPath("grouped-responses-dark.png"), fullPage: true });
   await page.goto(`/dashboard/forms/${formId}/responses/html`);
-  await expect(page.locator(".responses-html-preview th")).toHaveText(expectedHeaders);
-  await expect(page.locator(".responses-html-preview th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(30, 58, 95)");
-  await expect(page.locator(".responses-html-preview th.responses-table-section-column").first()).toHaveCSS("font-weight", "800");
+  await expect(page.locator(".responses-report-screen th")).toHaveText(expectedHeaders);
+  await expect(page.locator(".responses-report-screen th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(30, 58, 95)");
+  await expect(page.locator(".responses-report-screen th.responses-table-section-column").first()).toHaveCSS("font-weight", "800");
   const htmlDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать HTML" }).click();
   const htmlChunks: Buffer[] = [];

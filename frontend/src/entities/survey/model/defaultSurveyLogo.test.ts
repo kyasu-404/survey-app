@@ -70,4 +70,17 @@ describe("defaultSurveyLogo", () => {
     expect(resolveDefaultSurveyLogo(schema)).toEqual({ pages: [] });
     expect(serializeDefaultSurveyLogo(schema)).toEqual({ pages: [] });
   });
+
+  it("round-trips managed image choices through save, reload, and a second save without losing labels", () => {
+    const prefix = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/";
+    const paths = ["33333333-3333-4333-8333-333333333333.png", "44444444-4444-4444-8444-444444444444.png"].map(name => prefix + name);
+    const choices = paths.map((path, index) => ({ value: `v${index}`, text: `Логотип ${index}`, imageLink: `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${path}` }));
+    const schema: SurveySchema = { pages: [{ elements: [{ type: "panel", name: "p", elements: [{ type: "imagepicker", name: "logos", choices }] }] }] };
+    const saved = serializeDefaultSurveyLogo(schema);
+    expect(saved.pages[0].elements[0].elements![0].choices).toEqual(choices.map((choice, index) => ({ ...choice, imageLink: `__APP_SURVEY_ASSET__/${paths[index]}` })));
+    const restored = resolveDefaultSurveyLogo(saved);
+    expect(restored).toEqual(schema);
+    expect(serializeDefaultSurveyLogo(restored)).toEqual(saved);
+    expect(schema.pages[0].elements[0].elements![0].choices).toEqual(choices);
+  });
 });

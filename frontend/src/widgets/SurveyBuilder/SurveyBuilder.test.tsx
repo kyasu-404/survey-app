@@ -978,6 +978,7 @@ describe("SurveyBuilder", () => {
 
     const designerSurvey = {
       applyTheme: vi.fn(),
+      onProcessHtml: new FakeEvent(),
     };
     const logicSurvey = {
       applyTheme: vi.fn(),

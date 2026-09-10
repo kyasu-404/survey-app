@@ -1,3 +1,4 @@
+import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -305,6 +306,7 @@ function createCreatorInstance(
   registerCustomIcons();
   configureCreatorQuestionTypes();
   const patchedDesignerSurveys = new WeakSet<object>();
+  const htmlPatchedSurveys = new WeakSet<object>();
   const designerSurveys = new Set<{ applyTheme: (theme: ITheme) => void }>();
 
   const creator = new SurveyCreator({
@@ -331,6 +333,12 @@ function createCreatorInstance(
   creator.locale = "ru";
   creator.applyCreatorTheme(creatorTheme);
   creator.onSurveyInstanceCreated.add((_sender, options) => {
+    if (["designer-tab", "preview-tab", "theme-tab"].includes(options.area) && !htmlPatchedSurveys.has(options.survey)) {
+      htmlPatchedSurveys.add(options.survey);
+      options.survey.onProcessHtml.add((_survey, htmlOptions) => {
+        htmlOptions.html = sanitizeSurveyHtml(htmlOptions.html);
+      });
+    }
     if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
       patchedDesignerSurveys.add(options.survey);
       designerSurveys.add(options.survey);

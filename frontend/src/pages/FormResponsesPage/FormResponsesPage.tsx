@@ -24,7 +24,8 @@ import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
-import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
+import type { ResponsesTableRow, ResponsesTableColumn } from "../../shared/lib/responsesExport";
+import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
 import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
 import { RefreshButton } from "../../shared/ui/RefreshButton";
@@ -38,9 +39,10 @@ type SelectedResponsePreview = {
   response: SurveyResponse;
 };
 
-function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
+function getResponsePreviewLabel(row: ResponsesTableRow, index: number, columns: ResponsesTableColumn[]) {
   const primaryValue = Object.entries(row).find(
-    ([key, value]) => key !== RESPONSE_DATE_KEY && value.trim().length > 0,
+    ([key, value]) => key !== RESPONSE_DATE_KEY && value.trim().length > 0
+      && columns.find(column => column.key === key)?.answerType !== "signaturepad",
   )?.[1];
 
   return primaryValue ? `Ответ ${primaryValue}` : `Ответ ${index + 1}`;
@@ -155,8 +157,12 @@ function SelectAllResponsesCheckbox({
   );
 }
 
-function renderResponseCell(isDate: boolean, value: string) {
-  if (!isDate) {
+function renderResponseCell(column: ResponsesTableColumn, value: string) {
+  if (column.answerType === "signaturepad" && value) {
+    const image = getSignatureImage(value);
+    return image ? <img className="response-signature-image" src={image.dataUrl} alt="Подпись" /> : SIGNATURE_UNAVAILABLE;
+  }
+  if (!column.isDate) {
     return value;
   }
 
@@ -376,7 +382,7 @@ export default function FormResponsesPage() {
 
   const handleOpenResponsePreview = (response: SurveyResponse, row: ResponsesTableRow, index: number) => {
     setSelectedResponsePreview({
-      label: getResponsePreviewLabel(row, index),
+      label: getResponsePreviewLabel(row, index, columns),
       response,
     });
   };
@@ -562,7 +568,7 @@ export default function FormResponsesPage() {
                 {rows.map((row, index) => {
                   const response = responses[index];
                   const rowId = response?.id ?? `${id}-${index}`;
-                  const previewLabel = getResponsePreviewLabel(row, index);
+                  const previewLabel = getResponsePreviewLabel(row, index, columns);
                   return (
                     <tr
                       key={rowId}
@@ -603,7 +609,7 @@ export default function FormResponsesPage() {
                             key={column.key}
                             className={getResponseColumnClassName(column) || undefined}
                           >
-                            {renderResponseCell(Boolean(column.isDate), row[column.key] ?? "")}
+                            {renderResponseCell(column, row[column.key] ?? "")}
                           </td>
                         );
                       })}

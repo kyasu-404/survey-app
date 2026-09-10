@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../src/entities/survey/types";
 
 // Each call creates isolated state. All API traffic is intercepted, including mutations.
-export async function openSurveyApp(page: Page, options: { responseCount?: number; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
+export async function openSurveyApp(page: Page, options: { responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   const userId = "10000000-0000-4000-8000-000000000001";
@@ -19,7 +19,7 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
   ]).flat();
   let responses = Array.from({ length: options.responseCount ?? 200 }, (_, index) => ({
     id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-    form_id: formId, data: {
+    form_id: formId, data: options.responseData?.[index] ?? {
       // Response key order differs from schema; the last optional comment is always empty.
       ...Object.fromEntries(Array.from({ length: 16 }, (_, questionIndex) => [
         [`question${questionIndex + 1}`, "не выполнено"],

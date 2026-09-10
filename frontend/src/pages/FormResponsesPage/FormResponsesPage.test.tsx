@@ -261,7 +261,7 @@ describe("FormResponsesPage", () => {
         ],
         "ответы-Форма обратной связи",
         "Ответы",
-        expect.arrayContaining([{ key: "answer:name", header: "Имя" }]),
+        expect.arrayContaining([expect.objectContaining({ key: "answer:name", header: "Имя", answerType: "text" })]),
       );
     });
   });

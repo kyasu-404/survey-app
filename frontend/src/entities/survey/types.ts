@@ -9,7 +9,7 @@ export type SurveyQuestion = {
   showNumber?: boolean;
   hideNumber?: boolean;
   showQuestionNumbers?: string | boolean;
-  choices?: Array<string | { value: string; text: string }>;
+  choices?: Array<string | { value: string; text: string; imageLink?: string }>;
   elements?: SurveyQuestion[];
   templateElements?: SurveyQuestion[];
   pages?: SurveyPageSchema[];

@@ -1,3 +1,4 @@
+import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Model,
@@ -18,7 +19,6 @@ import { resolveSurveyTheme } from "../../entities/survey/model/surveyTheme";
 import type { SurveySchema } from "../../entities/survey/types";
 import {
   isSafeSurveyNavigationUrl,
-  sanitizeSurveyHtml,
   sanitizeSurveySchema,
 } from "../../entities/survey/model/surveySchemaSecurity";
 import { useSubmitResponseMutation, useUpdateResponseMutation } from "../submit-response/useSubmitResponse";

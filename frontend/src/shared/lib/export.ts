@@ -1,4 +1,5 @@
-import type { ResponsesTableColumn } from "./responsesExport";
+import { getResponseAnswerColumns, type ResponsesTableColumn } from "./responsesExport";
+import { getSignatureImage, getExcelSignatureImage, SIGNATURE_UNAVAILABLE } from "./signatureImage";
 
 const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const DANGEROUS_SPREADSHEET_PREFIXES = new Set(["=", "+", "-", "@"]);
@@ -44,18 +45,6 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-// Non-empty groups use a title above their first question instead of a separator column.
-// Keep a placeholder for empty groups so their titles are not lost.
-function getExcelColumns(columns: ResponsesTableColumn[]) {
-  const populatedGroups = new Set<string>();
-  columns.forEach((column) => {
-    [column.page, column.section].forEach((group) => {
-      if (group && group.key !== column.key) populatedGroups.add(group.key);
-    });
-  });
-  return columns.filter((column) => !column.kind || !populatedGroups.has(column.key));
-}
-
 export async function createExcelWorkbook(
   data: Array<Record<string, unknown>>,
   worksheetName = "Ответы",
@@ -64,7 +53,7 @@ export async function createExcelWorkbook(
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
-  const exportColumns = getExcelColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
+  const exportColumns = getResponseAnswerColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
   const groupLevels = (["page", "section"] as const).filter((level) => exportColumns.some((column) => column[level]));
   worksheet.columns = exportColumns.map(({ key }) => ({ key }));
 
@@ -98,9 +87,35 @@ export async function createExcelWorkbook(
     worksheet.pageSetup.printTitlesRow = `1:${headerRow.number}`;
   }
 
-  sanitizeRows(data).forEach((row) => {
-    worksheet.addRow(row);
-  });
+  const imageCache = new Map<string, { id: number; width: number; height: number } | null>();
+  for (const values of sanitizeRows(data)) {
+    const row = worksheet.addRow(values);
+    for (const [index, column] of exportColumns.entries()) {
+      if (column.answerType !== "signaturepad" || !values[column.key]) continue;
+      const value = String(values[column.key]);
+      if (!imageCache.has(value)) {
+        const parsed = getSignatureImage(value);
+        const image = parsed && await getExcelSignatureImage(parsed);
+        imageCache.set(value, image && image.extension !== "svg" ? {
+          id: workbook.addImage({ base64: image.dataUrl, extension: image.extension }),
+          width: image.width, height: image.height,
+        } : null);
+      }
+      const image = imageCache.get(value);
+      row.getCell(index + 1).value = image ? "" : SIGNATURE_UNAVAILABLE;
+      if (!image) continue;
+      worksheet.getColumn(index + 1).width = Math.max(28, worksheet.getColumn(index + 1).width ?? 0);
+      row.height = Math.max(78, row.height ?? 0);
+      const scale = Math.min(180 / image.width, 90 / image.height, 1);
+      // Excel images are drawings anchored inside the answer cell, with no
+      // Base64 cell text. Preserve proportions and leave room for the border.
+      worksheet.addImage(image.id, {
+        tl: { col: index + 0.04, row: row.number - 1 + 0.06 },
+        ext: { width: image.width * scale, height: image.height * scale },
+        editAs: "oneCell",
+      });
+    }
+  }
 
   const gridBorder = { style: "thin" as const, color: { argb: "FF94A3B8" } };
   const groupBorder = { style: "medium" as const, color: { argb: "FF475569" } };

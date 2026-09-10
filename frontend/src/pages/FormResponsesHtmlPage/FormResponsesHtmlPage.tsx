@@ -22,6 +22,7 @@ import {
   formatResponsesForTable,
 } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { RESPONSES_HTML_LAYOUT_CSS } from "../../shared/lib/responsesHtmlLayout";
 
 async function getAllResponses(
   formId: string,
@@ -144,6 +145,7 @@ export default function FormResponsesHtmlPage() {
 
   return (
     <main className="responses-html-page">
+      <style>{RESPONSES_HTML_LAYOUT_CSS}</style>
       <div className="responses-html-actions" aria-label="Действия HTML">
         <button type="button" className="responses-export-button" onClick={handleDownload} disabled={!canUseHtml}>
           <span>Скачать HTML</span>

@@ -4039,6 +4039,17 @@ button.responses-export-button:disabled {
   white-space: normal;
 }
 
+.responses-table .response-signature-image {
+  display: block;
+  width: 180px;
+  height: 90px;
+  object-fit: contain;
+  object-position: left center;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
 .responses-table .responses-table-checkbox-column {
   width: 48px;
   min-width: 48px;
@@ -5373,6 +5384,7 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
 }
 
 .responses-html-preview {
+  min-width: 0;
   width: min(1120px, 100%);
   margin: 0 auto;
 }
