@@ -209,6 +209,7 @@ vi.mock("survey-creator-react", () => {
     onElementAllowOperations = new FakeEvent();
     onCollectionItemAllowOperations = new FakeEvent();
     onPropertyGetReadOnly = new FakeEvent();
+    onPropertyShowing = new FakeEvent();
     onSurveyInstanceCreated = new FakeEvent();
     onModified = new FakeEvent();
     onActiveTabChanged = new FakeEvent();
@@ -843,6 +844,7 @@ describe("SurveyBuilder", () => {
     );
 
     const questionTypes = [
+      "sectiontitle",
       "text",
       "comment",
       "radiogroup",
@@ -897,7 +899,14 @@ describe("SurveyBuilder", () => {
     expect(serializerProperties["panel:showQuestionNumbers"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showNumber"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showQuestionNumbers"]?.visible).toBe(false);
-    expect(componentCollectionAdd).toHaveBeenCalledTimes(8);
+    expect(componentCollectionAdd).toHaveBeenCalledTimes(9);
+    expect(creator.toolbox.items[0]).toMatchObject({
+      name: "sectiontitle",
+      title: "Название раздела",
+      category: "basic",
+      iconName: "icon-toolbox-sectiontitle-custom",
+      json: { type: "sectiontitle" },
+    });
     expect(componentCollectionAdd).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "organization",
@@ -943,6 +952,17 @@ describe("SurveyBuilder", () => {
     expect(textOptions.allowChangeType).toBe(true);
     expect(textOptions.allowChangeInputType).toBe(false);
 
+    for (const type of ["sectiontitle", "text", "dropdown"]) {
+      const operations = { obj: { getType: () => type }, allowChangeRequired: true };
+      creator.onElementAllowOperations.fire(creator, operations);
+      expect(operations.allowChangeRequired).toBe(type !== "sectiontitle");
+      for (const name of ["isRequired", "title"]) {
+        const propertyOptions = { element: { getType: () => type }, property: { name }, show: true };
+        creator.onPropertyShowing.fire(creator, propertyOptions);
+        expect(propertyOptions.show).toBe(type !== "sectiontitle" || name !== "isRequired");
+      }
+    }
+
     const unsupportedOptions = {
       obj: {
         getType: () => "unsupported-custom-type",
@@ -958,7 +978,6 @@ describe("SurveyBuilder", () => {
 
     const designerSurvey = {
       applyTheme: vi.fn(),
-      onPageAdded: new FakeEvent(),
     };
     const logicSurvey = {
       applyTheme: vi.fn(),
@@ -1021,19 +1040,6 @@ describe("SurveyBuilder", () => {
     );
     expect(logicSurvey.applyTheme).not.toHaveBeenCalled();
 
-    const autoNamedPage = {
-      page: {
-        name: "page2",
-        title: "Страница 2",
-      },
-    };
-
-    act(() => {
-      designerSurvey.onPageAdded.fire(designerSurvey, autoNamedPage);
-    });
-
-    expect(autoNamedPage.page.title).toBe("");
-
     const question = {} as { isRequired?: boolean; descriptionLocation?: string };
 
     act(() => {
@@ -1044,6 +1050,12 @@ describe("SurveyBuilder", () => {
       isRequired: true,
       descriptionLocation: "underTitle",
     });
+    const sectionTitle = { getType: () => "sectiontitle", isRequired: true };
+    creator.onQuestionAdded.fire(creator, { question: sectionTitle });
+    expect(sectionTitle.isRequired).toBe(false);
+    const expression = { getType: () => "expression", isRequired: true };
+    creator.onQuestionAdded.fire(creator, { question: expression });
+    expect(expression.isRequired).toBe(false);
   });
 
   it("protects existing questions and technical collection values in safe editing mode", async () => {

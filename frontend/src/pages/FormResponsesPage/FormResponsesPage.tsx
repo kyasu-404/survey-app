@@ -25,7 +25,7 @@ import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
-import { formatResponsesForTable, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
+import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
 import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -551,7 +551,7 @@ export default function FormResponsesPage() {
                   )}
                   {columns.map((column) => {
                     return (
-                      <th key={column.key} className={column.isDate ? "responses-table-date-column" : undefined}>
+                      <th key={column.key} className={getResponseColumnClassName(column) || undefined}>
                         {column.header}
                       </th>
                     );
@@ -601,7 +601,7 @@ export default function FormResponsesPage() {
                         return (
                           <td
                             key={column.key}
-                            className={column.isDate ? "responses-table-date-column" : undefined}
+                            className={getResponseColumnClassName(column) || undefined}
                           >
                             {renderResponseCell(Boolean(column.isDate), row[column.key] ?? "")}
                           </td>

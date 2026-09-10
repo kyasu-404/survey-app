@@ -23,6 +23,7 @@ import integerIcon from "../../img/constructor/integer.svg?raw";
 import dateIcon from "../../img/constructor/Date.svg?raw";
 import timeIcon from "../../img/constructor/Time.svg?raw";
 import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
+import sectionTitleIcon from "../../img/constructor/Title.svg?raw";
 
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -271,6 +272,7 @@ function registerCustomIcons() {
   registerSvgIcon("icon-toolbox-date-custom", dateIcon);
   registerSvgIcon("icon-toolbox-time-custom", timeIcon);
   registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
+  registerSvgIcon("icon-toolbox-sectiontitle-custom", sectionTitleIcon);
 }
 
 function configureCreatorQuestionTypes() {
@@ -333,10 +335,6 @@ function createCreatorInstance(
       patchedDesignerSurveys.add(options.survey);
       designerSurveys.add(options.survey);
       options.survey.applyTheme(resolveBuilderDesignerTheme(creator.theme));
-
-      options.survey.onPageAdded.add((_survey, pageOptions) => {
-        clearAutoPageTitle(pageOptions.page);
-      });
     }
   });
   builderDesignerSurveys.set(creator, designerSurveys);
@@ -350,10 +348,10 @@ function createCreatorInstance(
 
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
-      options.question.isRequired = !safeEditingMode;
+      const questionType = (options.question as { getType?: () => string }).getType?.();
+      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !safeEditingMode;
       options.question.descriptionLocation = "underTitle";
       (options.question as { showNumber?: boolean }).showNumber = false;
-      const questionType = (options.question as { getType?: () => string }).getType?.();
       if (questionType === "panel" || questionType === "paneldynamic") {
         (options.question as { showQuestionNumbers?: string }).showQuestionNumbers = "off";
       }
@@ -364,6 +362,7 @@ function createCreatorInstance(
     const currentType = options.obj?.getType?.();
 
     options.allowChangeInputType = false;
+    if (currentType === "sectiontitle") options.allowChangeRequired = false;
     if (!currentType) {
       return;
     }
@@ -376,6 +375,12 @@ function createCreatorInstance(
     const elementType = options.element?.getType?.();
     if (propertyName === "name" && elementType !== "survey") {
       options.readOnly = true;
+    }
+  });
+
+  creator.onPropertyShowing.add((_sender, options) => {
+    if (options.element?.getType?.() === "sectiontitle" && options.property.name === "isRequired") {
+      options.show = false;
     }
   });
 
@@ -449,24 +454,6 @@ function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSc
 
 function createEmptyBuilderSchema(title = "Новая форма") {
   return toBuilderSchema(createEmptySurveySchema(title), title);
-}
-
-function clearAutoPageTitle(page?: { title?: string; name?: string }) {
-  if (!page) {
-    return;
-  }
-
-  const normalizedTitle = (page.title ?? "").trim();
-  const pageName = (page.name ?? "").trim();
-
-  if (
-    normalizedTitle === "" ||
-    normalizedTitle === pageName ||
-    /^Страница\s+\d+$/u.test(normalizedTitle) ||
-    /^Page\s+\d+$/u.test(normalizedTitle)
-  ) {
-    page.title = "";
-  }
 }
 
 const GUARDED_COLLECTION_PROPERTIES = ["choices", "rows", "columns", "rateValues", "items"] as const;

@@ -1,15 +1,21 @@
 import type { SurveyResponse } from "../../entities/response/types";
-import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../entities/survey/types";
+import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
 import { ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 
 export type ResponsesTableRow = {
   [key: string]: string;
 };
 
-export type ResponsesTableColumn = {
+export type ResponsesColumnGroup = {
   key: string;
   header: string;
+};
+
+export type ResponsesTableColumn = ResponsesColumnGroup & {
   isDate?: boolean;
+  kind?: "page" | "section";
+  page?: ResponsesColumnGroup;
+  section?: ResponsesColumnGroup;
 };
 
 export type ResponsesTable = {
@@ -65,13 +71,22 @@ function getQuestionMeta(schema: SurveySchema) {
   const choiceMap = new Map<string, Map<string, string>>();
   const titleMap = new Map<string, string>();
   const typeMap = new Map<string, string>();
-  const orderedNames: string[] = [];
+  const columns: ResponsesTableColumn[] = [];
   const seenNames = new Set<string>();
+  let pageGroup: ResponsesColumnGroup | undefined;
+  let sectionGroup: ResponsesColumnGroup | undefined;
 
   const addQuestionMeta = (question: SurveyQuestion) => {
     if (question.name) {
+      const header = question.title?.trim() || question.name;
+      if (question.type === "sectiontitle") {
+        sectionGroup = { key: `section:${question.name}`, header };
+        columns.push({ ...sectionGroup, kind: "section", page: pageGroup, section: sectionGroup });
+        seenNames.add(question.name);
+        return;
+      }
       if (!seenNames.has(question.name)) {
-        orderedNames.push(question.name);
+        columns.push({ key: `answer:${question.name}`, header, page: pageGroup, section: sectionGroup });
         seenNames.add(question.name);
       }
 
@@ -103,12 +118,16 @@ function getQuestionMeta(schema: SurveySchema) {
   };
 
   const pages = Array.isArray(schema.pages) ? schema.pages : [];
-  pages.forEach((page: SurveyPageSchema) => {
+  pages.forEach((page, index) => {
+    const header = page?.title?.trim();
+    pageGroup = header ? { key: `page:${index}`, header } : undefined;
+    sectionGroup = undefined;
+    if (pageGroup) columns.push({ ...pageGroup, kind: "page", page: pageGroup });
     const elements = Array.isArray(page?.elements) ? page.elements : [];
     elements.forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
   });
 
-  return { choiceMap, orderedNames, titleMap, typeMap };
+  return { choiceMap, columns, seenNames, titleMap, typeMap };
 }
 
 function isSafeExportValue(value: unknown) {
@@ -255,7 +274,8 @@ function getDateCellParts(value: string) {
   };
 }
 
-function getResponseColumnClassName(column: ResponsesTableColumn) {
+export function getResponseColumnClassName(column: ResponsesTableColumn) {
+  if (column.kind) return `responses-table-${column.kind}-column`;
   return column.isDate ? "responses-table-date-column" : "";
 }
 
@@ -276,14 +296,17 @@ export function formatResponsesForTable(
   schema: SurveySchema,
   organizationLabels?: Map<string, string>,
 ): ResponsesTable {
-  const { choiceMap, orderedNames, titleMap, typeMap } = getQuestionMeta(schema);
+  const { choiceMap, columns: schemaColumns, seenNames, titleMap, typeMap } = getQuestionMeta(schema);
   // Include legacy/extra answer keys once, across all responses, after schema columns.
-  const answerNames = new Set(orderedNames);
-  responses.forEach((response) => Object.keys(response.data).forEach((name) => answerNames.add(name)));
   const columns: ResponsesTableColumn[] = [
     { key: RESPONSE_DATE_KEY, header: RESPONSE_DATE_HEADER, isDate: true },
-    ...Array.from(answerNames, (name) => ({ key: `answer:${name}`, header: titleMap.get(name) ?? name })),
+    ...schemaColumns,
   ];
+  responses.forEach((response) => Object.keys(response.data).forEach((name) => {
+    if (seenNames.has(name)) return;
+    columns.push({ key: `answer:${name}`, header: titleMap.get(name) ?? name });
+    seenNames.add(name);
+  }));
 
   const rows = responses.map((response) => {
     const base: ResponsesTableRow = {
@@ -291,8 +314,10 @@ export function formatResponsesForTable(
     };
     const answerEntries = new Map(Object.entries(response.data));
 
-    answerNames.forEach((name) => {
-      base[`answer:${name}`] = formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels);
+    columns.forEach((column) => {
+      if (column.isDate) return;
+      const name = column.key.slice("answer:".length);
+      base[column.key] = column.kind ? "" : formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels);
     });
 
     return base;
@@ -471,6 +496,23 @@ export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
       background: #f1f3f7;
       font-size: 11px;
       text-transform: uppercase;
+    }
+
+    th.responses-table-page-column,
+    td.responses-table-page-column {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    th.responses-table-section-column {
+      font-weight: 800;
+      border-left: 3px solid #64748b;
+      background: #f1f5f9;
+    }
+
+    td.responses-table-section-column {
+      border-left: 3px solid #64748b;
+      background: #f8fafc;
     }
 
     tr:last-child td {

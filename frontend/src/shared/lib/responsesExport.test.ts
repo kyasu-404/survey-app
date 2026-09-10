@@ -10,6 +10,48 @@ function createTestHtmlDocument(input: { title: string; rows: ResponsesTableRow[
 }
 
 describe("responsesExport", () => {
+  it("keeps repeated page and section titles as blank separators with distinct identities and resets groups on each page", () => {
+    const title = "<Раздел>";
+    const table = formatResponsesForTable([
+      { id: "r1", form_id: "f1", created_at: "2026-09-10T09:00:00Z", data: { a: "Первый", b: "Второй", c: "Третий", d: "Четвёртый", s1: "Не ответ", legacy: "Архивный" } },
+    ], { pages: [
+      { title, elements: [
+        { type: "sectiontitle", name: "s1", title },
+        { type: "text", name: "a", title },
+        { type: "panel", name: "panel", elements: [
+          { type: "sectiontitle", name: "s2", title },
+          { type: "text", name: "b", title },
+        ] },
+      ] },
+      { title, elements: [
+        { type: "text", name: "c", title },
+        { type: "sectiontitle", name: "empty", title: "Пустой раздел" },
+      ] },
+      { name: "technical-name", title: "  ", elements: [{ type: "text", name: "d", title }] },
+      { title: "Пустая страница", elements: [] },
+    ] });
+
+    expect(table.columns.map(c => c.key)).toEqual([
+      RESPONSE_DATE_KEY, "page:0", "section:s1", "answer:a", "section:s2", "answer:b",
+      "page:1", "answer:c", "section:empty", "answer:d", "page:3", "answer:legacy",
+    ]);
+    expect(table.columns.map(c => table.rows[0][c.key]).slice(1)).toEqual([
+      "", "", "Первый", "", "Второй", "", "Третий", "", "Четвёртый", "", "Архивный",
+    ]);
+    expect(table.columns.find(c => c.key === "answer:b")).toMatchObject({ page: { key: "page:0" }, section: { key: "section:s2" } });
+    expect(table.columns.find(c => c.key === "answer:c")?.section).toBeUndefined();
+    for (const key of ["answer:d", "answer:legacy"]) {
+      expect(table.columns.find(c => c.key === key)?.page).toBeUndefined();
+      expect(table.columns.find(c => c.key === key)?.section).toBeUndefined();
+    }
+    const doc = new DOMParser().parseFromString(createResponsesHtmlDocument({ title: "Ответы", ...table }), "text/html");
+    expect(doc.querySelectorAll("th.responses-table-page-column")).toHaveLength(3);
+    expect(doc.querySelectorAll("th.responses-table-section-column")).toHaveLength(3);
+    expect(doc.querySelectorAll("tbody td.responses-table-page-column, tbody td.responses-table-section-column")).toHaveLength(6);
+    expect(Array.from(doc.querySelectorAll("th"), c => c.textContent)).toEqual(table.columns.map(c => c.header));
+    expect(doc.querySelector("раздел")).toBeNull();
+  });
+
   it("keeps every duplicated question and its own answer, including empty comments, across pages and panels", () => {
     const header = "КОММЕНТАРИИ. Если не выполнено, то почему?";
     const table = formatResponsesForTable([

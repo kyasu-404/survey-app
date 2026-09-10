@@ -63,7 +63,7 @@ type QuestionDescriptor = {
 };
 
 const NESTED_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
-const STRUCTURAL_TYPES = new Set(["panel", "paneldynamic", "html", "expression", "image"]);
+const STRUCTURAL_TYPES = new Set(["panel", "paneldynamic", "html", "expression", "image", "sectiontitle"]);
 const SINGLE_CHOICE_TYPES = new Set(["radiogroup", "dropdown", "boolean", "imagepicker"]);
 const MULTIPLE_CHOICE_TYPES = new Set(["checkbox", "tagbox"]);
 const MATRIX_TYPES = new Set(["matrix", "matrixdropdown", "matrixdynamic", "multipletext"]);
