@@ -6,14 +6,25 @@ export type ResponsesTableRow = {
   [key: string]: string;
 };
 
-type ResponsesHtmlInput = {
-  title: string;
+export type ResponsesTableColumn = {
+  key: string;
+  header: string;
+  isDate?: boolean;
+};
+
+export type ResponsesTable = {
+  columns: ResponsesTableColumn[];
   rows: ResponsesTableRow[];
+};
+
+type ResponsesHtmlInput = ResponsesTable & {
+  title: string;
   generatedAt?: Date;
 };
 
+export const RESPONSE_DATE_KEY = "response-date";
 const RESPONSE_DATE_HEADER = "Дата ответа";
-const NESTED_QUESTION_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
+const NON_ANSWER_TYPES = new Set(["panel", "html", "image"]);
 const MAX_EXPORT_VALUE_DEPTH = 32;
 const MAX_EXPORT_VALUE_NODES = 10_000;
 
@@ -36,19 +47,17 @@ function visitSurveyQuestion(value: unknown, visitor: (question: SurveyQuestion)
       return;
     }
 
-    if (typeof current.value.name === "string") {
+    if (typeof current.value.name === "string" && !NON_ANSWER_TYPES.has(String(current.value.type))) {
       visitor(current.value as SurveyQuestion);
     }
 
-    const currentValue = current.value;
-    NESTED_QUESTION_KEYS.forEach((key) => {
-      const nested = currentValue[key];
-      if (Array.isArray(nested)) {
-        for (let index = nested.length - 1; index >= 0; index -= 1) {
-          pending.push({ value: nested[index], depth: current.depth + 1 });
-        }
+    // Static panels group questions; compound questions store one nested answer.
+    const nested = current.value.elements;
+    if (current.value.type === "panel" && Array.isArray(nested)) {
+      for (let index = nested.length - 1; index >= 0; index -= 1) {
+        pending.push({ value: nested[index], depth: current.depth + 1 });
       }
-    });
+    }
   }
 }
 
@@ -166,11 +175,11 @@ function formatAnswerValue(
           return questionChoices.get(item) ?? item;
         }
 
-        if (item && typeof item === "object" && "name" in item && typeof item.name === "string") {
+        if (typeMap.get(questionName) === "file" && isRecord(item) && typeof item.name === "string") {
           return item.name;
         }
 
-        return String(item ?? "");
+        return formatObjectValue(item);
       })
       .filter(Boolean)
       .join(", ");
@@ -185,22 +194,24 @@ function formatAnswerValue(
   }
 
   if (typeof value === "object") {
-    if ("name" in value && typeof value.name === "string") {
+    if (typeMap.get(questionName) === "file" && "name" in value && typeof value.name === "string") {
       return value.name;
     }
 
-    if (!isSafeExportValue(value)) {
-      return "[Значение превышает допустимую сложность]";
-    }
-
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "[Не удалось отобразить значение]";
-    }
+    return formatObjectValue(value);
   }
 
   return String(value);
+}
+
+function formatObjectValue(value: unknown): string {
+  if (!isRecord(value)) return String(value ?? "");
+  if (!isSafeExportValue(value)) return "[Значение превышает допустимую сложность]";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[Не удалось отобразить значение]";
+  }
 }
 
 function escapeHtml(value: string) {
@@ -244,12 +255,12 @@ function getDateCellParts(value: string) {
   };
 }
 
-function getResponseColumnClassName(header: string) {
-  return header === RESPONSE_DATE_HEADER ? "responses-table-date-column" : "";
+function getResponseColumnClassName(column: ResponsesTableColumn) {
+  return column.isDate ? "responses-table-date-column" : "";
 }
 
-function renderResponseHtmlCell(header: string, value: string) {
-  if (header !== RESPONSE_DATE_HEADER) {
+function renderResponseHtmlCell(column: ResponsesTableColumn, value: string) {
+  if (!column.isDate) {
     return escapeHtml(value);
   }
 
@@ -264,64 +275,50 @@ export function formatResponsesForTable(
   responses: SurveyResponse[],
   schema: SurveySchema,
   organizationLabels?: Map<string, string>,
-): ResponsesTableRow[] {
+): ResponsesTable {
   const { choiceMap, orderedNames, titleMap, typeMap } = getQuestionMeta(schema);
+  // Include legacy/extra answer keys once, across all responses, after schema columns.
+  const answerNames = new Set(orderedNames);
+  responses.forEach((response) => Object.keys(response.data).forEach((name) => answerNames.add(name)));
+  const columns: ResponsesTableColumn[] = [
+    { key: RESPONSE_DATE_KEY, header: RESPONSE_DATE_HEADER, isDate: true },
+    ...Array.from(answerNames, (name) => ({ key: `answer:${name}`, header: titleMap.get(name) ?? name })),
+  ];
 
-  return responses.map((response) => {
+  const rows = responses.map((response) => {
     const base: ResponsesTableRow = {
-      [RESPONSE_DATE_HEADER]: formatResponseDate(response.created_at),
+      [RESPONSE_DATE_KEY]: formatResponseDate(response.created_at),
     };
     const answerEntries = new Map(Object.entries(response.data));
 
-    orderedNames.forEach((key) => {
-      const hasAnswer = answerEntries.has(key);
-      base[titleMap.get(key) ?? key] = hasAnswer
-        ? formatAnswerValue(key, answerEntries.get(key), choiceMap, typeMap, organizationLabels)
-        : "";
-      answerEntries.delete(key);
-    });
-
-    answerEntries.forEach((value, key) => {
-      base[titleMap.get(key) ?? key] = formatAnswerValue(key, value, choiceMap, typeMap, organizationLabels);
+    answerNames.forEach((name) => {
+      base[`answer:${name}`] = formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels);
     });
 
     return base;
   });
+
+  return { columns, rows };
 }
 
-export function getResponseTableHeaders(rows: ResponsesTableRow[]) {
-  const headers: string[] = [];
-
-  rows.forEach((row) => {
-    Object.keys(row).forEach((header) => {
-      if (!headers.includes(header)) {
-        headers.push(header);
-      }
-    });
-  });
-
-  return headers;
-}
-
-export function createResponsesHtmlReport({ title, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
-  const headers = getResponseTableHeaders(rows);
+export function createResponsesHtmlReport({ title, columns, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
   const generatedAtLabel = formatResponseDate(generatedAt.toISOString());
 
   const body = rows.length
-    ? `<div class="responses-table-wrap"><table><thead><tr>${headers
-        .map((header) => {
-          const className = getResponseColumnClassName(header);
-          return `<th${className ? ` class="${className}"` : ""}>${escapeHtml(header)}</th>`;
+    ? `<div class="responses-table-wrap"><table><thead><tr>${columns
+        .map((column) => {
+          const className = getResponseColumnClassName(column);
+          return `<th${className ? ` class="${className}"` : ""}>${escapeHtml(column.header)}</th>`;
         })
         .join("")}</tr></thead><tbody>${rows
         .map(
           (row) =>
-            `<tr>${headers
-              .map((header) => {
-                const className = getResponseColumnClassName(header);
+            `<tr>${columns
+              .map((column) => {
+                const className = getResponseColumnClassName(column);
                 return `<td${className ? ` class="${className}"` : ""}>${renderResponseHtmlCell(
-                  header,
-                  row[header] ?? "",
+                  column,
+                  row[column.key] ?? "",
                 )}</td>`;
               })
               .join("")}</tr>`,

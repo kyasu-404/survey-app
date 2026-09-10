@@ -46,17 +46,16 @@ export async function exportToExcel(
   data: Array<Record<string, unknown>>,
   fileName = "responses",
   worksheetName = "Ответы",
+  columns?: Array<{ key: string; header: string }>,
 ) {
   if (!data.length) return;
 
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
-  const headers = getHeaders(data);
-
-  worksheet.columns = headers.map((header) => ({
-    header,
-    key: header,
+  worksheet.columns = (columns ?? getHeaders(data).map((header) => ({ key: header, header }))).map(({ key, header }) => ({
+    header: String(neutralizeSpreadsheetFormula(header)),
+    key,
   }));
 
   sanitizeRows(data).forEach((row) => {

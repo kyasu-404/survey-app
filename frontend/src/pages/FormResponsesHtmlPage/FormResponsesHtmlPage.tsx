@@ -107,21 +107,21 @@ export default function FormResponsesHtmlPage() {
     ),
     [organizationsQuery.data],
   );
-  const rows = useMemo(
+  const table = useMemo(
     () => (formQuery.data
       ? formatResponsesForTable(responses, formQuery.data.schema, organizationLabels)
-      : []),
+      : { rows: [], columns: [] }),
     [formQuery.data, organizationLabels, responses],
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
-  const generatedAt = useMemo(() => new Date(), [formTitle, rows]);
+  const generatedAt = useMemo(() => new Date(), [formTitle, table]);
   const htmlDocument = useMemo(
-    () => createResponsesHtmlDocument({ title: formTitle, rows, generatedAt }),
-    [formTitle, generatedAt, rows],
+    () => createResponsesHtmlDocument({ title: formTitle, ...table, generatedAt }),
+    [formTitle, generatedAt, table],
   );
   const htmlPreview = useMemo(
-    () => createResponsesHtmlReport({ title: formTitle, rows, generatedAt }),
-    [formTitle, generatedAt, rows],
+    () => createResponsesHtmlReport({ title: formTitle, ...table, generatedAt }),
+    [formTitle, generatedAt, table],
   );
   const isLoading = formQuery.isLoading
     || responsesQuery.isLoading

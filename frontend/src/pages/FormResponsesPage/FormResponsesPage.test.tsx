@@ -256,10 +256,12 @@ describe("FormResponsesPage", () => {
       expect(exportToExcel).toHaveBeenCalledWith(
         [
           expect.objectContaining({
-            Имя: "Анна",
+            "answer:name": "Анна",
           }),
         ],
         "ответы-Форма обратной связи",
+        "Ответы",
+        expect.arrayContaining([{ key: "answer:name", header: "Имя" }]),
       );
     });
   });
@@ -861,8 +863,8 @@ describe("FormResponsesPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
     await waitFor(() => expect(exportToExcel).toHaveBeenCalledOnce());
     expect(exportToExcel.mock.calls[0][0]).toHaveLength(200);
-    expect(exportToExcel.mock.calls[0][0][0]).toMatchObject({ Имя: "Ответ 1" });
-    expect(exportToExcel.mock.calls[0][0][199]).toMatchObject({ Имя: "Ответ 200" });
+    expect(exportToExcel.mock.calls[0][0][0]).toMatchObject({ "answer:name": "Ответ 1" });
+    expect(exportToExcel.mock.calls[0][0][199]).toMatchObject({ "answer:name": "Ответ 200" });
     await userEvent.click(screen.getByRole("button", { name: "Отчёт" }));
     const report = await screen.findByRole("dialog", { name: "Отчёт по ответам" });
     expect(within(report).getByText("Всего ответов").nextElementSibling).toHaveTextContent("200");

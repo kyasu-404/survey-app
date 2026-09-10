@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import ExcelJS from "exceljs";
 
 // All API traffic is intercepted; this scenario never writes to a real backend.
-test("200 answers remain in one scrollable list, export completely, and delete in batches", async ({ page }, testInfo) => {
+test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and report, and delete in batches", async ({ page }, testInfo) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   const userId = "10000000-0000-4000-8000-000000000001";
@@ -12,13 +12,25 @@ test("200 answers remain in one scrollable list, export completely, and delete i
     { alg: "HS256", typ: "JWT" },
     { sub: userId, aud: "authenticated", role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 },
   ].map((part) => Buffer.from(JSON.stringify(part)).toString("base64url")).join(".") + ".test-signature";
+  const commentTitle = "КОММЕНТАРИИ. Если не выполнено, то почему?";
+  const questions = Array.from({ length: 16 }, (_, index) => [
+    { type: "dropdown", name: `question${index + 1}`, title: `Пункт ${index + 1}`, choices: ["выполнено", "не выполнено"] },
+    { type: "comment", name: `comment${index + 1}`, title: commentTitle },
+  ]).flat();
   let responses = Array.from({ length: 200 }, (_, index) => ({
     id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-    form_id: formId, data: { name: `Ответ ${index + 1}` }, created_at: "2026-01-01T00:00:00Z",
+    form_id: formId, data: {
+      // Response key order differs from schema; the last optional comment is always empty.
+      ...Object.fromEntries(Array.from({ length: 16 }, (_, questionIndex) => [
+        [`question${questionIndex + 1}`, "не выполнено"],
+        ...(questionIndex === 15 ? [] : [[`comment${questionIndex + 1}`, `Комментарий ${questionIndex + 1}, ответ ${index + 1}`]]),
+      ]).flat().reverse()),
+      name: `Ответ ${index + 1}`,
+    }, created_at: "2026-01-01T00:00:00Z",
   }));
   const form = { id: formId, title: "Проверка полного списка", author_id: userId, author_name: "Тест", is_public: true,
     form_type: "anketa", form_reason: "plan", deadline_at: null, max_responses: null, created_at: "2026-01-01T00:00:00Z",
-    schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }, ...questions] }] },
   };
   const deletedBatchSizes: number[] = [];
   const listRequests: Array<{ cursor: string | null; limit: number }> = [];
@@ -93,6 +105,13 @@ test("200 answers remain in one scrollable list, export completely, and delete i
   await expect(page.getByText("Карточка 200", { exact: true })).toBeVisible();
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();
+  const expectedHeaders = ["Дата ответа", "Имя", ...questions.map((question) => question.title)];
+  await expect(page.getByRole("columnheader", { name: commentTitle, exact: true })).toHaveCount(16);
+  await expect(page.locator(".responses-table th")).toHaveText(["", ...expectedHeaders]);
+  const firstCells = page.locator(".responses-table tbody tr").first().locator("td");
+  for (let index = 0; index < 16; index += 1) {
+    await expect(firstCells.nth(4 + 2 * index)).toHaveText(index === 15 ? "" : `Комментарий ${index + 1}, ответ 1`);
+  }
   await expect(page.getByLabel("Страницы ответов")).toHaveCount(0);
   const table = page.locator(".responses-page-table-shell");
   expect(await table.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -109,15 +128,41 @@ test("200 answers remain in one scrollable list, export completely, and delete i
   await workbook.xlsx.load(Buffer.concat(chunks));
   const sheet = workbook.worksheets[0];
   expect(sheet.rowCount).toBe(201);
+  expect(sheet.columnCount).toBe(expectedHeaders.length);
+  expect((sheet.getRow(1).values as unknown[]).slice(1)).toEqual(expectedHeaders);
+  for (let index = 0; index < 16; index += 1) {
+    expect(sheet.getRow(2).getCell(4 + 2 * index).text).toBe(index === 15 ? "" : `Комментарий ${index + 1}, ответ 1`);
+    expect(sheet.getRow(201).getCell(4 + 2 * index).text).toBe(index === 15 ? "" : `Комментарий ${index + 1}, ответ 200`);
+  }
   const values = sheet.getSheetValues().flat(2);
   expect(values).toContain("Ответ 1");
   expect(values).toContain("Ответ 200");
   await page.getByRole("button", { name: "Отчёт", exact: true }).click();
   const report = page.getByRole("dialog", { name: "Отчёт по ответам" });
   await expect(report.locator(".response-report-summary strong").first()).toHaveText("200");
+  await expect(report.getByText(commentTitle, { exact: true })).toHaveCount(16);
   await report.getByRole("button", { name: "Закрыть", exact: true }).click();
   await page.goto(`/dashboard/forms/${formId}/responses/html`);
   await expect(page.getByText("Ответ 200", { exact: true })).toBeVisible();
+  await expect(page.locator(".responses-html-preview th")).toHaveText(expectedHeaders);
+  const htmlDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Скачать HTML" }).click();
+  const htmlDownload = await htmlDownloadPromise;
+  const htmlChunks: Buffer[] = [];
+  const htmlStream = await htmlDownload.createReadStream();
+  for await (const chunk of htmlStream!) htmlChunks.push(Buffer.from(chunk));
+  const html = Buffer.concat(htmlChunks).toString("utf8");
+  const downloadedTable = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, "text/html");
+    return {
+      headers: Array.from(document.querySelectorAll("th"), (cell) => cell.textContent),
+      firstRow: Array.from(document.querySelectorAll("tbody tr:first-child td"), (cell) => cell.textContent),
+    };
+  }, html);
+  expect(downloadedTable.headers).toEqual(expectedHeaders);
+  for (let index = 0; index < 16; index += 1) {
+    expect(downloadedTable.firstRow[3 + 2 * index]).toBe(index === 15 ? "" : `Комментарий ${index + 1}, ответ 1`);
+  }
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "Выбрать все ответы", exact: true }).check();

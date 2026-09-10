@@ -25,7 +25,7 @@ import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow } from "../../shared/lib/responsesExport";
-import { formatResponsesForTable, getResponseTableHeaders } from "../../shared/lib/responsesExport";
+import { formatResponsesForTable, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
 import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -40,7 +40,7 @@ type SelectedResponsePreview = {
 
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number) {
   const primaryValue = Object.entries(row).find(
-    ([header, value]) => header !== "Дата ответа" && value.trim().length > 0,
+    ([key, value]) => key !== RESPONSE_DATE_KEY && value.trim().length > 0,
   )?.[1];
 
   return primaryValue ? `Ответ ${primaryValue}` : `Ответ ${index + 1}`;
@@ -155,8 +155,8 @@ function SelectAllResponsesCheckbox({
   );
 }
 
-function renderResponseCell(header: string, value: string) {
-  if (header !== "Дата ответа") {
+function renderResponseCell(isDate: boolean, value: string) {
+  if (!isDate) {
     return value;
   }
 
@@ -244,14 +244,13 @@ export default function FormResponsesPage() {
     ),
     [organizationsQuery.data],
   );
-  const rows = useMemo(
+  const { rows, columns } = useMemo(
     () => (formQuery.data
       ? formatResponsesForTable(responses, formQuery.data.schema, organizationLabels)
-      : []),
+      : { rows: [], columns: [] }),
     [formQuery.data, organizationLabels, responses],
   );
 
-  const headers = getResponseTableHeaders(rows);
   const isLoading =
     (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching || organizationsQuery.isFetching;
@@ -339,7 +338,7 @@ export default function FormResponsesPage() {
         formQuery.data!.schema,
         organizationLabels,
       ))
-      .then((exportRows) => exportToExcel(exportRows, `ответы-${formTitle}`))
+      .then((table) => exportToExcel(table.rows, `ответы-${formTitle}`, "Ответы", table.columns))
       .then(() => {
         showToast("Ответы выгружены в XLSX", "success");
       })
@@ -550,11 +549,10 @@ export default function FormResponsesPage() {
                       />
                     </th>
                   )}
-                  {headers.map((header) => {
-                    const isDateColumn = header === "Дата ответа";
+                  {columns.map((column) => {
                     return (
-                      <th key={header} className={isDateColumn ? "responses-table-date-column" : undefined}>
-                        {header}
+                      <th key={column.key} className={column.isDate ? "responses-table-date-column" : undefined}>
+                        {column.header}
                       </th>
                     );
                   })}
@@ -599,14 +597,13 @@ export default function FormResponsesPage() {
                           )}
                         </td>
                       )}
-                      {headers.map((header, columnIndex) => {
-                        const isDateColumn = header === "Дата ответа";
+                      {columns.map((column) => {
                         return (
                           <td
-                            key={`${rowId}-${header}-${columnIndex}`}
-                            className={isDateColumn ? "responses-table-date-column" : undefined}
+                            key={column.key}
+                            className={column.isDate ? "responses-table-date-column" : undefined}
                           >
-                            {renderResponseCell(header, row[header])}
+                            {renderResponseCell(Boolean(column.isDate), row[column.key] ?? "")}
                           </td>
                         );
                       })}
