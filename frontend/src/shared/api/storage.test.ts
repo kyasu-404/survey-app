@@ -34,6 +34,7 @@ describe("storage api", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("uploads files under the current user's prefix and stores the storage path", async () => {
@@ -116,14 +117,11 @@ describe("storage api", () => {
     );
   });
 
-  it("falls back to the stateless public storage client when a public form hits a stale auth session", async () => {
+  it("uses public storage without waiting for a stalled dashboard auth session", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
-      data: { user: null },
-      error: new AuthApiError("Invalid Refresh Token: Refresh Token Not Found", 400, "invalid_refresh_token"),
-    } as never);
+    vi.mocked(supabaseClient.auth.getUser).mockImplementation(() => new Promise(() => {}));
     vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
 
     const result = await uploadFileToStorage(
@@ -133,6 +131,7 @@ describe("storage api", () => {
     );
 
     expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
         path: `public/form-1/${fileId}.txt`,
@@ -154,6 +153,7 @@ describe("storage api", () => {
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", {
       body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt" },
     });
+    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
 
     await expect(
       removeFileFromStorage("public/form-2/file-id.txt", { allowAnonymous: true, formId: "form-1" }),
@@ -215,6 +215,39 @@ describe("storage api", () => {
     await expect(resolveSurveyFileValueContent({ content: "public/10000000-0000-4000-8000-000000000000/file-id.xlsx" })).resolves.toBe(
       "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBAD/",
     );
+  });
+
+  it("allows a slow upload to finish after the ordinary API timeout", async () => {
+    vi.useFakeTimers();
+    const upload = vi.fn(() => new Promise(resolve => setTimeout(() => resolve({ error: null }), 20_000)));
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const pending = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), { allowAnonymous: true });
+    const result = expect(pending).resolves.toMatchObject({ path: expect.stringMatching(/^public\/form-1\//) });
+    await vi.advanceTimersByTimeAsync(20_000);
+    await result;
+  });
+
+  it("times out a stalled upload so the respondent can retry", async () => {
+    vi.useFakeTimers();
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn(() => new Promise(() => {})) } as never);
+    const pending = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), { allowAnonymous: true });
+    const result = expect(pending).rejects.toThrow("таймаут");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await result;
+  });
+
+  it("uses public preview URLs and aborts a stalled response body after headers arrive", async () => {
+    vi.useFakeTimers();
+    const createSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: "https://storage.local/preview" }, error: null });
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ createSignedUrl } as never);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: () => new Promise(() => {}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveSurveyFileValueContent({ content: "public/10000000-0000-4000-8000-000000000000/file.txt" }, { allowAnonymous: true });
+    const result = expect(pending).rejects.toThrow("таймаут");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await result;
+    expect(supabaseClient.storage.from).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
   });
 
   it("rejects deletion outside the current user's storage prefix", async () => {

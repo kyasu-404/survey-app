@@ -92,6 +92,7 @@ vi.mock("survey-core", () => ({
     onUploadFiles = new FakeSurveyEvent();
     onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
+    onQuestionCreated = new FakeSurveyEvent();
     onOpenDropdownMenu = new FakeSurveyEvent();
     onProcessHtml = new FakeSurveyEvent();
     onNavigateToUrl = new FakeSurveyEvent();
@@ -101,6 +102,7 @@ vi.mock("survey-core", () => ({
     doComplete = vi.fn();
     clear = vi.fn();
     applyTheme = vi.fn();
+    getAllQuestions = vi.fn(() => []);
 
     constructor(schema: Record<string, unknown> & { pages?: Array<{ elements?: Array<{ type: string; name: string }> }> }) {
       this.schema = schema;
@@ -545,7 +547,7 @@ describe("SurveyFormRenderer", () => {
 
     await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
 
-    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: false });
     expect(callback).toHaveBeenCalledWith("success", "file-content");
   });
 
@@ -570,9 +572,24 @@ describe("SurveyFormRenderer", () => {
         name: "answer.xlsx",
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         content: "public/form-1/file.xlsx",
-      });
+      }, { allowAnonymous: false });
     });
     expect(downloadEventsDuringDataAssignment).toEqual(["data:application/octet-stream;base64,UEsDBA=="]);
+  });
+
+  it("keeps file previews connected after a rerender of the same public survey", async () => {
+    resolveSurveyFileValueContent.mockResolvedValue("data:text/plain;base64,aGVsbG8=");
+    const schema = { pages: [{ elements: [{ type: "file", name: "attachment", title: "Файл" }] }] };
+    const { rerender } = render(<SurveyFormRenderer formId="form-1" schema={schema} allowAnonymousUploads />);
+    const model = createdModels[0] as {
+      onDownloadFile: { fire: (sender: unknown, options: unknown) => Promise<void> };
+    };
+    rerender(<SurveyFormRenderer formId="form-1" schema={schema} allowAnonymousUploads />);
+    expect(createdModels).toHaveLength(1);
+    const callback = vi.fn();
+    await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
+    expect(callback).toHaveBeenCalledExactlyOnceWith("success", "data:text/plain;base64,aGVsbG8=");
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: true });
   });
 
   it("adds a submitting hook while the response is being sent", async () => {
@@ -1031,6 +1048,47 @@ describe("SurveyFormRenderer", () => {
       { allowAnonymous: true, formId: "form-1" },
     );
     expect(callback).toHaveBeenCalledWith("success");
+  });
+
+  it("unblocks file replacement immediately even when storage deletion fails", async () => {
+    const callback = vi.fn();
+    let rejectRemoval!: (error: Error) => void;
+    removeFileFromStorage.mockImplementation(() => new Promise((_resolve, reject) => { rejectRemoval = reject; }));
+    getStoragePathFromSurveyFileValue.mockReturnValue("public/form-1/old.txt");
+    render(<SurveyFormRenderer formId="form-1" allowAnonymousUploads schema={{ pages: [{ elements: [{ type: "file", name: "file" }] }] }} />);
+    const model = createdModels[0] as { onClearFiles: { fire: (sender: unknown, options: unknown) => Promise<void> } };
+    const pending = model.onClearFiles.fire(model, { value: [{ name: "old.txt", content: "public/form-1/old.txt" }], callback });
+    expect(callback).toHaveBeenCalledExactlyOnceWith("success");
+    rejectRemoval(new Error("Storage unavailable"));
+    await pending;
+    expect(callback).toHaveBeenCalledExactlyOnceWith("success");
+  });
+
+  it("deletes only the selected attachment in a multiple-file question", async () => {
+    getStoragePathFromSurveyFileValue.mockImplementation((value: { content: string }) => value.content);
+    render(<SurveyFormRenderer formId="form-1" allowAnonymousUploads schema={{ pages: [{ elements: [{ type: "file", name: "file" }] }] }} />);
+    const model = createdModels[0] as { onClearFiles: { fire: (sender: unknown, options: unknown) => Promise<void> } };
+    await model.onClearFiles.fire(model, {
+      value: [{ name: "keep.txt", content: "public/form-1/keep.txt" }, { name: "remove.txt", content: "public/form-1/remove.txt" }],
+      fileName: "remove.txt", callback: vi.fn(),
+    });
+    expect(removeFileFromStorage).toHaveBeenCalledExactlyOnceWith("public/form-1/remove.txt", { allowAnonymous: true, formId: "form-1" });
+  });
+
+  it("reports an upload error before waiting for cleanup of a partially uploaded batch", async () => {
+    const first = new File(["a"], "first.txt");
+    const second = new File(["b"], "second.txt");
+    uploadFileToStorage.mockResolvedValueOnce({ file: first, path: "public/form-1/first.txt" }).mockRejectedValueOnce(new Error("Connection lost"));
+    let finishRemoval!: () => void;
+    removeFileFromStorage.mockImplementation(() => new Promise<void>((resolve) => { finishRemoval = resolve; }));
+    render(<SurveyFormRenderer formId="form-1" allowAnonymousUploads schema={{ pages: [{ elements: [{ type: "file", name: "file" }] }] }} />);
+    const model = createdModels[0] as { onUploadFiles: { fire: (sender: unknown, options: unknown) => Promise<void> } };
+    const callback = vi.fn();
+    const pending = model.onUploadFiles.fire(model, { files: [first, second], callback });
+    await waitFor(() => expect(callback).toHaveBeenCalledWith([], [expect.stringContaining("Connection lost")]));
+    finishRemoval();
+    await pending;
+    expect(callback).toHaveBeenCalledTimes(1);
   });
 
   it("forces file questions to use server-side uploads instead of inline base64 storage", () => {

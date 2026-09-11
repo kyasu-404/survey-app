@@ -38,7 +38,7 @@ export const RESPONSES_HTML_LAYOUT_CSS = `
     white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top;
   }
   .responses-html-report .responses-print-block th { font-weight: 700; background: #f1f5f9; }
-  .responses-html-report .responses-print-block .responses-table-date-column { width: 23mm; white-space: normal; }
+  .responses-html-report .responses-print-block .responses-table-date-column { width: 23mm; min-width: 0; white-space: normal; }
   .responses-html-report .responses-print-block .responses-table-date-cell { width: auto; min-width: 0; }
   .responses-html-report .responses-print-block .responses-table-date-line { white-space: nowrap; }
   .responses-html-report .responses-print-block .responses-print-page-heading { background: #dbeafe; color: #1e40af; }

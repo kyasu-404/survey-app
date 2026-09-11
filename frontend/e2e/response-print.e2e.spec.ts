@@ -40,6 +40,9 @@ test("wide HTML scrolls on screen and prints all answers in A4 landscape blocks 
   await expect(standalone.locator(".responses-report-print")).toBeHidden();
   await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
   for (const target of [page, standalone]) {
+    // Print column widths must not inherit the screen's font-dependent 12ch minimum.
+    // A larger table font reproduces the CI environment; print cells still use 9pt.
+    await target.addStyleTag({ content: ".responses-print-block table { font-size: 20px; }" });
     await target.emulateMedia({ media: "print" });
     await expect(target.locator(".responses-report-screen")).toBeHidden();
     const blocks = target.locator(".responses-print-block");

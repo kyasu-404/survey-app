@@ -6,6 +6,7 @@ import { SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const PUBLIC_STORAGE_PREFIX = "public";
 const MAX_STORAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const STORAGE_TRANSFER_TIMEOUT_MS = 60_000;
 
 type StorageAuthOptions = {
   allowAnonymous?: boolean;
@@ -210,8 +211,11 @@ export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
   return [...paths];
 }
 
-async function createSignedUrlForStoragePath(path: string) {
-  const bucket = supabaseClient.storage.from(SUPABASE_STORAGE_BUCKET);
+async function createSignedUrlForStoragePath(path: string, options: StorageAuthOptions) {
+  const client = options.allowAnonymous && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)
+    ? publicSupabaseClient
+    : supabaseClient;
+  const bucket = client.storage.from(SUPABASE_STORAGE_BUCKET);
   const { data, error } = await runRequest(
     "storage.createSignedUrl",
     () => bucket.createSignedUrl(path, SIGNED_URL_EXPIRES_IN_SECONDS),
@@ -243,35 +247,36 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-async function fetchStorageFileAsDataUrl(path: string) {
-  const signedUrl = await createSignedUrlForStoragePath(path);
-  const response = await runRequest(
+async function fetchStorageFileAsDataUrl(path: string, options: StorageAuthOptions) {
+  const signedUrl = await createSignedUrlForStoragePath(path, options);
+  return runRequest(
     "storage.downloadSignedFile",
-    (signal) => fetch(signedUrl, { signal }),
+    async (signal) => {
+      const response = await fetch(signedUrl, { signal });
+      if (!response.ok) {
+        throw new Error(`Не удалось скачать файл: ${response.status} ${response.statusText}`.trim());
+      }
+      // Keep the timeout active until the body is downloaded, not just the headers.
+      const blob = await response.blob();
+      const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
+      const base64 = arrayBufferToBase64(await blob.arrayBuffer());
+      return `data:${mimeType};base64,${base64}`;
+    },
     {
+      timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,
       context: {
         bucket: SUPABASE_STORAGE_BUCKET,
         path,
       },
     },
   );
-
-  if (!response.ok) {
-    throw new Error(`Не удалось скачать файл: ${response.status} ${response.statusText}`.trim());
-  }
-
-  const blob = await response.blob();
-  const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
-  const base64 = arrayBufferToBase64(await blob.arrayBuffer());
-
-  return `data:${mimeType};base64,${base64}`;
 }
 
-export async function resolveSurveyFileValueContent(value: unknown) {
+export async function resolveSurveyFileValueContent(value: unknown, options: StorageAuthOptions = {}) {
   const storagePath = getStoragePathFromSurveyFileValue(value);
 
   if (storagePath) {
-    return fetchStorageFileAsDataUrl(storagePath);
+    return fetchStorageFileAsDataUrl(storagePath, options);
   }
 
   throw new Error("Не удалось определить содержимое файла");
@@ -282,7 +287,8 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
     throw new Error("Размер файла превышает допустимые 10 МБ");
   }
 
-  const currentUserId = await getCurrentUserId(options);
+  // Public forms must not wait for an unrelated dashboard session/token refresh.
+  const currentUserId = options.allowAnonymous ? null : await getCurrentUserId(options);
 
   if (!currentUserId && !options.allowAnonymous) {
     throw new Error("Пользователь не авторизован для загрузки файлов");
@@ -301,6 +307,7 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
         upsert: false,
       }),
     {
+      timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,
       context: {
         bucket: SUPABASE_STORAGE_BUCKET,
         formId,
@@ -322,7 +329,8 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
 }
 
 export async function removeFileFromStorage(path: string, options: RemoveFileFromStorageOptions = {}) {
-  const currentUserId = await getCurrentUserId(options);
+  const isAnonymousPath = options.allowAnonymous && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`);
+  const currentUserId = isAnonymousPath ? null : await getCurrentUserId(options);
   assertDeletablePath(path, currentUserId, options);
 
   if (path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {

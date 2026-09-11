@@ -20,6 +20,8 @@ import downloadIcon from "../../img/Download.svg";
 import useIcon from "../../img/use.svg";
 import deleteIcon from "../../img/delete.svg";
 import infoIcon from "../../img/info.svg";
+import pinBlackIcon from "../../img/Pin_black.svg";
+import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
@@ -187,12 +189,14 @@ export default function FormResponsesPage() {
   const [isDeletingResponses, setIsDeletingResponses] = useState(false);
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isHeaderPinned, setIsHeaderPinned] = useState(false);
   const responsesQueryKey = getFormResponsesQueryKey(id, "all");
 
   useEffect(() => {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
     setResponseReport(null);
+    setIsHeaderPinned(false);
   }, [id]);
 
   const formQuery = useQuery({
@@ -543,18 +547,31 @@ export default function FormResponsesPage() {
 
         {!isLoading && !combinedError && !!rows.length && (
           <div className="responses-page-table-shell">
-            <table className="responses-table">
+            <table className={`responses-table${isHeaderPinned ? " responses-table-header-pinned" : ""}`}>
               <thead>
                 <tr>
-                  {canDeleteResponses && (
-                    <th className="responses-table-checkbox-column">
-                      <SelectAllResponsesCheckbox
-                        checked={allVisibleResponsesSelected}
-                        indeterminate={selectedVisibleResponses > 0 && !allVisibleResponsesSelected}
-                        onChange={toggleAllVisibleResponses}
-                      />
-                    </th>
-                  )}
+                  <th className="responses-table-checkbox-column">
+                    <div className="responses-table-header-controls">
+                      <button
+                        type="button"
+                        className="responses-header-pin-button"
+                        aria-label={isHeaderPinned ? "Открепить заголовки" : "Закрепить заголовки"}
+                        title={isHeaderPinned ? "Открепить заголовки" : "Закрепить заголовки"}
+                        aria-pressed={isHeaderPinned}
+                        onClick={() => setIsHeaderPinned(pinned => !pinned)}
+                      >
+                        <img src={pinBlackIcon} className="responses-pin-icon-light" alt="" aria-hidden="true" />
+                        <img src={pinWhiteIcon} className="responses-pin-icon-dark" alt="" aria-hidden="true" />
+                      </button>
+                      {canDeleteResponses && (
+                        <SelectAllResponsesCheckbox
+                          checked={allVisibleResponsesSelected}
+                          indeterminate={selectedVisibleResponses > 0 && !allVisibleResponsesSelected}
+                          onChange={toggleAllVisibleResponses}
+                        />
+                      )}
+                    </div>
+                  </th>
                   {columns.map((column) => {
                     return (
                       <th key={column.key} className={getResponseColumnClassName(column) || undefined}>
@@ -587,22 +604,20 @@ export default function FormResponsesPage() {
                         }
                       }}
                     >
-                      {canDeleteResponses && (
-                        <td
-                          className="responses-table-checkbox-column"
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          {response && (
-                            <input
-                              type="checkbox"
-                              aria-label={`Выбрать ${previewLabel}`}
-                              checked={selectedResponseIds.has(response.id)}
-                              onChange={() => toggleResponseSelection(response.id)}
-                            />
-                          )}
-                        </td>
-                      )}
+                      <td
+                        className="responses-table-checkbox-column"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        {canDeleteResponses && response && (
+                          <input
+                            type="checkbox"
+                            aria-label={`Выбрать ${previewLabel}`}
+                            checked={selectedResponseIds.has(response.id)}
+                            onChange={() => toggleResponseSelection(response.id)}
+                          />
+                        )}
+                      </td>
                       {columns.map((column) => {
                         return (
                           <td

@@ -4024,6 +4024,13 @@ button.responses-export-button:disabled {
   min-width: 100%;
 }
 
+.responses-table-header-pinned thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--theme-border);
+}
+
 .responses-table th,
 .responses-table td {
   white-space: normal;
@@ -4054,14 +4061,60 @@ button.responses-export-button:disabled {
   width: 48px;
   min-width: 48px;
   max-width: 48px;
-  padding: 10px;
+  padding: 8px;
   text-align: center;
   vertical-align: middle;
 }
 
+.responses-table-header-controls {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.responses-header-pin-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.responses-header-pin-button:hover,
+.responses-header-pin-button[aria-pressed="true"] {
+  border-color: var(--theme-text-muted);
+  background: var(--theme-surface-light);
+}
+
+.responses-header-pin-button:focus-visible {
+  outline: 2px solid var(--theme-text);
+  outline-offset: 2px;
+}
+
+.responses-header-pin-button img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.responses-header-pin-button .responses-pin-icon-dark,
+:root[data-theme="graphite"] .responses-header-pin-button .responses-pin-icon-light {
+  display: none;
+}
+
+:root[data-theme="graphite"] .responses-header-pin-button .responses-pin-icon-dark {
+  display: block;
+}
+
 .responses-table-checkbox-column input {
+  display: block;
   width: 18px;
   height: 18px;
+  margin: 0 auto;
   accent-color: #f97316;
   cursor: pointer;
 }

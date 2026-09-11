@@ -7,6 +7,8 @@ import {
   type NavigateToUrlEvent,
   type OpenDropdownMenuEvent,
   type ProcessHtmlEvent,
+  type Question,
+  type QuestionFileModel,
 } from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/survey-core.css";
@@ -31,7 +33,7 @@ import {
   hasOrganizationQuestion,
 } from "../../entities/organization/model";
 import { applyOrganizationChoicesToSurvey } from "../../entities/organization/surveyQuestion";
-import { getSubmitResponseErrorMessage } from "../../shared/lib/error";
+import { getErrorMessage, getSubmitResponseErrorMessage } from "../../shared/lib/error";
 import {
   getStoragePathFromSurveyFileValue,
   getStoragePathsFromResponseData,
@@ -99,6 +101,14 @@ type SurveyModelWithOptionalUIState = Model & {
 };
 
 const disabledDropdownAutofocusSelector = ".surveyjs-dropdown-autofocus-disabled";
+
+function prepareFileQuestionActions(question: Question) {
+  if (question.getType() === "file") {
+    // SurveyJS batches the initial action list asynchronously. Flush it before
+    // React mounts, otherwise an update between render and subscription can be lost.
+    (question as QuestionFileModel).actionsContainer.flushUpdates();
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -198,9 +208,9 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
-async function handleDownloadFile(_sender: Model, options: DownloadFileOptions) {
+async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean) {
   try {
-    const fileContent = await resolveSurveyFileValueContent(options.fileValue);
+    const fileContent = await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous });
     options.callback("success", fileContent);
   } catch (error) {
     console.error(error);
@@ -256,7 +266,8 @@ export function SurveyFormRenderer({
     nextModel.onNavigateToUrl.add((_sender: Model, options: NavigateToUrlEvent) => {
       options.allow = isSafeSurveyNavigationUrl(options.url);
     });
-    nextModel.onDownloadFile.add(handleDownloadFile);
+    // Register before restoring data, and keep the handler for this model's lifetime.
+    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads));
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
@@ -284,8 +295,10 @@ export function SurveyFormRenderer({
       }
     }
     applyRenderMode(nextModel, resolvedRenderMode);
+    nextModel.onQuestionCreated.add((_sender, { question }) => prepareFileQuestionActions(question));
+    nextModel.getAllQuestions().forEach(prepareFileQuestionActions);
     return nextModel;
-  }, [initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
+  }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
 
   useEffect(() => {
     if (!existingResponse) {
@@ -333,7 +346,6 @@ export function SurveyFormRenderer({
     if (!isInteractiveMode) {
       return () => {
         model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
-        model.onDownloadFile.remove(handleDownloadFile);
       };
     }
 
@@ -366,41 +378,43 @@ export function SurveyFormRenderer({
           })),
         );
       } catch (error) {
+        console.error(error);
+        const message = getErrorMessage(error, "Не удалось загрузить файл. Выберите файл ещё раз.");
+        options.callback([], [message]);
+        showToast(message, "error");
+        // Recover the input before waiting for best-effort storage cleanup.
         await Promise.allSettled(
           uploaded.map((item) =>
             removeFileFromStorage(item.path, { allowAnonymous: allowAnonymousUploads, formId }),
           ),
         );
-        console.error(error);
-        showToast(getSubmitResponseErrorMessage(error), "error");
-        options.callback([], ["Не удалось загрузить файл"]);
       }
     };
 
     const handleClearFiles = async (
       _sender: Model,
-      options: { value: unknown; callback: (status: "success" | "error") => void }
+      options: { value: unknown; fileName?: string | null; callback: (status: "success" | "error") => void }
     ) => {
-      try {
-        if (isEditingResponse) {
-          options.callback("success");
-          return;
-        }
+      const values = Array.isArray(options.value) ? options.value : [options.value];
+      const paths = values
+        .filter((value) => !options.fileName || (isRecord(value) && value.name === options.fileName))
+        .map((value) => getStoragePathFromSurveyFileValue(value))
+        .filter((path): path is string => Boolean(path));
 
-        const values = Array.isArray(options.value) ? options.value : [options.value];
-        const paths = values
-          .map((value) => getStoragePathFromSurveyFileValue(value))
-          .filter((path): path is string => Boolean(path));
+      // Clearing the answer must not depend on deleting the stored object. SurveyJS
+      // also calls this before replacing a file, and keeps the input busy on error.
+      // Failed deletions are retried by scheduled orphan cleanup after its grace period.
+      options.callback("success");
+      if (isEditingResponse) return;
+
+      try {
         if (paths.length > 0) {
           await Promise.all(
             paths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
           );
         }
-
-        options.callback("success");
       } catch (error) {
         console.error(error);
-        options.callback("error");
       }
     };
 
@@ -493,7 +507,6 @@ export function SurveyFormRenderer({
       uiStateChangedEvent?.remove(saveCurrentDraft);
       model.onUploadFiles.remove(handleUploadFiles);
       model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
-      model.onDownloadFile.remove(handleDownloadFile);
       model.onClearFiles.remove(handleClearFiles);
       model.onCompleting.remove(handleCompleting);
     };
