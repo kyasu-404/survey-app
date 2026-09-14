@@ -25,6 +25,7 @@ import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
+import { getFileQuestions } from "../../shared/lib/responseFiles";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow, ResponsesTableColumn } from "../../shared/lib/responsesExport";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
@@ -190,6 +191,8 @@ export default function FormResponsesPage() {
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{ completed: number; total: number } | null>(null);
+  const zipControllerRef = useRef<AbortController | null>(null);
   const responsesQueryKey = getFormResponsesQueryKey(id, "all");
 
   useEffect(() => {
@@ -197,6 +200,11 @@ export default function FormResponsesPage() {
     setSelectedResponseIds(new Set());
     setResponseReport(null);
     setIsHeaderPinned(false);
+    setZipProgress(null);
+    return () => {
+      zipControllerRef.current?.abort();
+      zipControllerRef.current = null;
+    };
   }, [id]);
 
   const formQuery = useQuery({
@@ -245,6 +253,10 @@ export default function FormResponsesPage() {
   });
 
   const responses = responsesQuery.data ?? [];
+  const hasFileQuestions = useMemo(
+    () => Boolean(formQuery.data && getFileQuestions(formQuery.data.schema).length),
+    [formQuery.data],
+  );
   const organizationLabels = useMemo(
     () => new Map(
       (organizationsQuery.data ?? []).map((organization) => [
@@ -355,6 +367,33 @@ export default function FormResponsesPage() {
       .catch((error) => {
         showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
       });
+  };
+
+  const handleExportFiles = async () => {
+    if (!formQuery.data || !responsesQuery.data || zipControllerRef.current) return;
+    const controller = new AbortController();
+    zipControllerRef.current = controller;
+    setZipProgress({ completed: 0, total: 0 });
+    try {
+      const { exportResponseFilesZip } = await import("../../shared/lib/responseFilesZip");
+      const result = await exportResponseFilesZip(responsesQuery.data, formQuery.data.schema, formQuery.data.title, {
+        signal: controller.signal,
+        onProgress: (completed, total) => {
+          if (!controller.signal.aborted) setZipProgress({ completed, total });
+        },
+      });
+      if (controller.signal.aborted) return;
+      if (!result) showToast("В ответах пока нет прикреплённых файлов", "warning");
+      else if (result.failed) showToast(`В ZIP добавлено файлов: ${result.downloaded}. Не удалось скачать: ${result.failed}. Список включён в архив.`, "warning");
+      else showToast(`Файлы выгружены в ZIP: ${result.downloaded}`, "success");
+    } catch (error) {
+      if (!controller.signal.aborted) showToast(getErrorMessage(error, "Не удалось выгрузить файлы"), "error");
+    } finally {
+      if (zipControllerRef.current === controller) {
+        zipControllerRef.current = null;
+        setZipProgress(null);
+      }
+    }
   };
 
   const handleOpenReport = async () => {
@@ -472,6 +511,19 @@ export default function FormResponsesPage() {
               <span>Скачать XLSX</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
+            {hasFileQuestions && (
+              <button
+                type="button"
+                className="responses-export-button"
+                aria-label="Файлы в ZIP"
+                aria-busy={Boolean(zipProgress)}
+                onClick={() => void handleExportFiles()}
+                disabled={isLoading || Boolean(zipProgress)}
+              >
+                <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : "Файлы в ZIP"}</span>
+                <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              </button>
+            )}
             <button
               type="button"
               className="responses-export-button responses-html-button"

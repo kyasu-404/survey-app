@@ -9,11 +9,12 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import FormResponsesPage from "./FormResponsesPage";
 
-const { deleteResponses, getFormById, getAllResponsesByForm, exportToExcel, showToast } = vi.hoisted(() => ({
+const { deleteResponses, getFormById, getAllResponsesByForm, exportToExcel, exportResponseFilesZip, showToast } = vi.hoisted(() => ({
   deleteResponses: vi.fn(),
   getFormById: vi.fn(),
   getAllResponsesByForm: vi.fn(),
   exportToExcel: vi.fn(),
+  exportResponseFilesZip: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -71,6 +72,8 @@ vi.mock("../../entities/response/api", () => ({
 vi.mock("../../shared/lib/export", () => ({
   exportToExcel,
 }));
+
+vi.mock("../../shared/lib/responseFilesZip", () => ({ exportResponseFilesZip }));
 
 vi.mock("../../shared/api", () => ({
   MAX_CLIENT_RESPONSE_EXPORT: 10_000,
@@ -170,6 +173,36 @@ describe("FormResponsesPage", () => {
     resetRealtimeChannel();
   });
 
+  it("exports all answers to ZIP, shows progress and matches the XLSX button", async () => {
+    const schema = { pages: [{ elements: [{ type: "panel", name: "panel", elements: [{ type: "file", name: "files" }] }] }] };
+    getFormById.mockResolvedValue({ id: "form-1", title: "Вложения", author_id: "user-1", schema });
+    const responses = [createResponse(1), createResponse(2)];
+    getAllResponsesByForm.mockResolvedValue(responses);
+    const deferred = createDeferred<{ downloaded: number; failed: number }>();
+    exportResponseFilesZip.mockImplementation((_responses, _schema, _title, options) => {
+      options.onProgress(1, 2);
+      return deferred.promise;
+    });
+    render(<MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+    const button = await screen.findByRole("button", { name: "Файлы в ZIP" });
+    const xlsx = screen.getByRole("button", { name: "Скачать XLSX" });
+    expect(xlsx.nextElementSibling).toBe(button);
+    expect(button.className).toBe(xlsx.className);
+    expect(button.querySelector("img")?.getAttribute("src")).toBe(xlsx.querySelector("img")?.getAttribute("src"));
+    await userEvent.click(screen.getAllByRole("checkbox", { name: /^Выбрать Ответ/ })[0]);
+    await userEvent.click(button);
+    await waitFor(() => expect(button).toHaveTextContent("1/2"));
+    expect(button).toBeDisabled();
+    expect(exportResponseFilesZip).toHaveBeenCalledExactlyOnceWith(responses, schema, "Вложения", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    await act(async () => deferred.resolve({ downloaded: 1, failed: 1 }));
+    expect(button).toBeEnabled();
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Не удалось скачать: 1"), "warning");
+  });
+
   it("keeps response tables square and vertically scrollable inside the table content", () => {
     const css = readAppCss();
 
@@ -237,6 +270,7 @@ describe("FormResponsesPage", () => {
     expect(screen.getByText("Тип: Анкетирование")).toBeInTheDocument();
     expect(screen.getByText("Основание: План работ")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Скачать XLSX" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Файлы в ZIP" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Отчёт" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
     const refreshButton = screen.getByRole("button", { name: "Обновить" });

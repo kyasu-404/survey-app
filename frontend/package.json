@@ -20,6 +20,7 @@
     "css-tree": "3.2.1",
     "dompurify": "3.4.12",
     "exceljs": "^4.4.0",
+    "jszip": "3.10.1",
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",

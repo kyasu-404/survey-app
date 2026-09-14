@@ -10,6 +10,7 @@ const STORAGE_TRANSFER_TIMEOUT_MS = 60_000;
 
 type StorageAuthOptions = {
   allowAnonymous?: boolean;
+  signal?: AbortSignal;
 };
 
 type UploadFileToStorageOptions = StorageAuthOptions;
@@ -220,6 +221,7 @@ async function createSignedUrlForStoragePath(path: string, options: StorageAuthO
     "storage.createSignedUrl",
     () => bucket.createSignedUrl(path, SIGNED_URL_EXPIRES_IN_SECONDS),
     {
+      signal: options.signal,
       context: {
         bucket: SUPABASE_STORAGE_BUCKET,
         expiresInSeconds: SIGNED_URL_EXPIRES_IN_SECONDS,
@@ -248,7 +250,14 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 }
 
 async function fetchStorageFileAsDataUrl(path: string, options: StorageAuthOptions) {
+  const blob = await fetchStorageFileBlob(path, options);
+  return `data:${blob.type || "application/octet-stream"};base64,${arrayBufferToBase64(await blob.arrayBuffer())}`;
+}
+
+async function fetchStorageFileBlob(path: string, options: StorageAuthOptions) {
+  options.signal?.throwIfAborted();
   const signedUrl = await createSignedUrlForStoragePath(path, options);
+  options.signal?.throwIfAborted();
   return runRequest(
     "storage.downloadSignedFile",
     async (signal) => {
@@ -257,19 +266,32 @@ async function fetchStorageFileAsDataUrl(path: string, options: StorageAuthOptio
         throw new Error(`Не удалось скачать файл: ${response.status} ${response.statusText}`.trim());
       }
       // Keep the timeout active until the body is downloaded, not just the headers.
-      const blob = await response.blob();
-      const mimeType = blob.type || response.headers.get("Content-Type") || "application/octet-stream";
-      const base64 = arrayBufferToBase64(await blob.arrayBuffer());
-      return `data:${mimeType};base64,${base64}`;
+      return response.blob();
     },
     {
       timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,
+      signal: options.signal,
       context: {
         bucket: SUPABASE_STORAGE_BUCKET,
         path,
       },
     },
   );
+}
+
+// Download bytes for exports without expanding every attachment into Base64.
+export async function downloadSurveyFile(value: unknown, options: StorageAuthOptions = {}) {
+  options.signal?.throwIfAborted();
+  const path = getStoragePathFromSurveyFileValue(value);
+  if (path) return fetchStorageFileBlob(path, options);
+
+  const content = typeof value === "string" ? value : (value as { content?: unknown } | null)?.content;
+  if (typeof content === "string" && /^data:[^,]*;base64,/i.test(content)) {
+    const comma = content.indexOf(",");
+    const bytes = Uint8Array.from(atob(content.slice(comma + 1)), character => character.charCodeAt(0));
+    return new Blob([bytes], { type: content.slice(5, comma).split(";")[0] || "application/octet-stream" });
+  }
+  throw new Error("Не удалось определить содержимое файла");
 }
 
 export async function resolveSurveyFileValueContent(value: unknown, options: StorageAuthOptions = {}) {

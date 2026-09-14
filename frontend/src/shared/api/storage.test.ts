@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthApiError, AuthSessionMissingError } from "@supabase/supabase-js";
 import {
   getStoragePathFromSurveyFileValue,
+  downloadSurveyFile,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -256,5 +257,28 @@ describe("storage api", () => {
     await expect(removeFileFromStorage("other-user/form-1/file-id.txt")).rejects.toThrow(
       "Нельзя удалить файл другого пользователя",
     );
+  });
+
+  it("downloads archive bytes using a fresh signed URL with the cancellation signal", async () => {
+    const createSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: "https://storage.local/fresh" }, error: null });
+    vi.mocked(supabaseClient.storage.from).mockReturnValue({ createSignedUrl } as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new Uint8Array([0, 128, 255])));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const blob = await downloadSurveyFile({ content: "public/10000000-0000-4000-8000-000000000000/report.pdf" }, { signal: controller.signal });
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array([0, 128, 255]));
+    expect(fetchMock).toHaveBeenCalledWith("https://storage.local/fresh", { signal: expect.any(AbortSignal) });
+    controller.abort();
+    await expect(downloadSurveyFile({}, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("supports legacy Base64 files but never fetches arbitrary URLs in answers", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const blob = await downloadSurveyFile({ content: "data:application/pdf;base64,AP8=" });
+    expect(blob.size).toBe(2);
+    expect(blob.type).toBe("application/pdf");
+    await expect(downloadSurveyFile({ content: "https://external.test/file" })).rejects.toThrow("Не удалось определить содержимое файла");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
