@@ -302,6 +302,9 @@ function createCreatorInstance(
   creatorTheme: ICreatorTheme,
   safeEditingMode: boolean,
 ) {
+  if (!Serializer.getProperty("question", "integrationId")) {
+    Serializer.addProperty("question", { name: "integrationId", visible: false });
+  }
   configureCreatorLocalization();
   registerCustomIcons();
   configureCreatorQuestionTypes();

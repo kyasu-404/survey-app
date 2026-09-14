@@ -1,0 +1,33 @@
+{
+  "name": "Данные формы",
+  "guid": "asc.{BA7A912A-0856-4677-9AB5-390CA8D4D636}",
+  "version": "2.0.0",
+  "minVersion": "9.4.0",
+  "baseUrl": "",
+  "variations": [
+    {
+      "description": "Данные формы",
+      "url": "index.html",
+      "icons": [
+        "icon.svg",
+        "icon.svg"
+      ],
+      "type": "panelRight",
+      "isViewer": false,
+      "isVisual": true,
+      "EditorsSupport": [
+        "word",
+        "cell"
+      ],
+      "isModal": false,
+      "isInsideMode": true,
+      "initDataType": "none",
+      "initData": "",
+      "buttons": [],
+      "size": [
+        340,
+        600
+      ]
+    }
+  ]
+}

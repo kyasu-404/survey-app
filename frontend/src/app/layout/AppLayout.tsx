@@ -10,7 +10,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === routes.login;
   const isSurveyPage = location.pathname.startsWith("/form/");
-  const shouldHideSidebar = isLoginPage || isSurveyPage;
+  const isOfficePage = /^\/forms\/[^/]+\/documents\//.test(location.pathname);
+  const shouldHideSidebar = isLoginPage || isSurveyPage || isOfficePage;
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function AppLayout() {
         </button>
       )}
       {!shouldHideSidebar && !isSidebarHidden && <Sidebar onToggle={() => setIsSidebarHidden(true)} />}
-      <main className={shouldHideSidebar ? "app-main app-main-login app-main-public" : "app-main"}>
+      <main className={isOfficePage ? "app-main app-main-office" : shouldHideSidebar ? "app-main app-main-login app-main-public" : "app-main"}>
         <Outlet />
       </main>
     </div>

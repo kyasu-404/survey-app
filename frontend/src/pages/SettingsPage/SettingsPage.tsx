@@ -1,3 +1,5 @@
+import {SectionTabs} from '../../shared/ui/SectionTabs';
+import { OnlyofficeSettingsSection } from "./OnlyofficeSettingsSection";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -39,6 +41,7 @@ function formatCleanupDate(value: string | null) {
 
 export default function SettingsPage() {
   const { profile } = useAuth();
+  const [tab,setTab]=useState<'branding'|'office'|'smtp'|'cleanup'>('branding');
   const { showToast } = useToast();
   const settingsQuery = useQuery({
     queryKey: ["smtp-settings"],
@@ -199,7 +202,10 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <BrandingSettingsSection />
+        <SectionTabs id="settings" label="Разделы настроек" tabs={[{value:'branding',label:'Оформление'},{value:'office',label:'ONLYOFFICE'},{value:'smtp',label:'SMTP'},{value:'cleanup',label:'Очистка файлов'}]} value={tab} onChange={setTab}/>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-branding" aria-labelledby="settings-tab-branding" hidden={tab!=='branding'}><BrandingSettingsSection /></div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-office" aria-labelledby="settings-tab-office" hidden={tab!=='office'}><OnlyofficeSettingsSection /></div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-smtp" aria-labelledby="settings-tab-smtp" hidden={tab!=='smtp'}>
 
         <section className="settings-area settings-smtp-area" aria-labelledby="smtp-settings-heading">
           <div className="settings-area-heading">
@@ -345,6 +351,8 @@ export default function SettingsPage() {
           )}
         </section>
 
+        </div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-cleanup" aria-labelledby="settings-tab-cleanup" hidden={tab!=='cleanup'}>
         <section className="settings-area settings-cleanup-area" aria-labelledby="storage-cleanup-heading">
           <div className="settings-area-heading">
             <div>
@@ -440,6 +448,7 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
+        </div>
       </div>
     </div>
   );

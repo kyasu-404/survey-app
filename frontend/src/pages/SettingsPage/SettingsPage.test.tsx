@@ -26,6 +26,8 @@ const {
   showToast: vi.fn(),
 }));
 
+vi.mock("./OnlyofficeSettingsSection", () => ({ OnlyofficeSettingsSection: () => null }));
+
 vi.mock("../../entities/mail/api", () => ({
   getSmtpSettings,
   saveSmtpSettings,
@@ -130,6 +132,7 @@ describe("SettingsPage", () => {
   it("loads saved SMTP data without exposing the password and saves changes", async () => {
     renderPage();
 
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
     const host = await screen.findByRole("textbox", { name: "SMTP-сервер" });
     expect(host).toHaveValue("smtp.example.ru");
     expect(screen.getByText("Пароль сохранён")).toBeInTheDocument();
@@ -153,6 +156,7 @@ describe("SettingsPage", () => {
 
     renderPage();
 
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
     expect(await screen.findByRole("textbox", { name: "SMTP-сервер" })).toHaveValue("");
     expect(screen.getByRole("spinbutton", { name: "Порт" })).toHaveValue(465);
     expect(screen.getByRole("alert")).toHaveTextContent("Почтовый модуль mail-admin не развёрнут в Supabase");
@@ -162,7 +166,10 @@ describe("SettingsPage", () => {
   it("visually separates SMTP settings from storage cleanup and runs manual cleanup after confirmation", async () => {
     renderPage();
 
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
     expect(await screen.findByRole("heading", { name: "SMTP-коннектор" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Очистка файлов" }));
+    expect(screen.queryByRole("heading", { name: "SMTP-коннектор" })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Очистка файлов" })).toBeInTheDocument();
     expect(screen.getByText("Автоматически раз в сутки")).toBeInTheDocument();
     expect(screen.getByText(/Минимальный возраст — 7 дней/)).toBeInTheDocument();

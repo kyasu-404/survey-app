@@ -2,6 +2,7 @@ import type { ITheme } from "survey-core";
 import type { OrganizationType } from "../organization/types";
 
 export type SurveyQuestion = {
+  integrationId?: string;
   type: string;
   name: string;
   title?: string;

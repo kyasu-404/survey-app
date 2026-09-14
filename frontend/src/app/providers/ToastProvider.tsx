@@ -18,6 +18,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const lastToastShownAtRef = useRef<Map<string, number>>(new Map());
   const timeoutIdsRef = useRef<number[]>([]);
+  const toastLayerRef = useRef<HTMLDivElement>(null);
 
   const showToast = useCallback((message: string, type: ToastType = "warning") => {
     const key = `${type}:${message}`;
@@ -48,12 +49,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const layer = toastLayerRef.current;
+    if (typeof layer?.showPopover === "function") {
+      if (toasts.length && !layer.matches(":popover-open")) layer.showPopover();
+      else if (!toasts.length && layer.matches(":popover-open")) layer.hidePopover();
+    }
+  }, [toasts.length]);
+
   const value = useMemo(() => ({ showToast }), [showToast]);
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="toast-container">
+      <div ref={toastLayerRef} className="toast-container" {...{popover: "manual"}} aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.type}`}>
             {toast.message}

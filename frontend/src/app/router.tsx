@@ -15,6 +15,11 @@ function LegacySurveyRedirect() {
   return <Navigate to={routes.survey(id)} replace />;
 }
 
+async function loadOfficeEditorRoute() {
+  const { default: OfficeEditorPage } = await import("../pages/OfficeEditorPage/OfficeEditorPage");
+  return { Component: function OfficeEditorRoute() { return <ProtectedRoute><OfficeEditorPage /></ProtectedRoute>; } };
+}
+
 async function loadTemplatesRoute() {
   const { default: TemplatesPage } = await import("../pages/TemplatesPage/TemplatesPage");
 
@@ -165,6 +170,7 @@ export const router = createBrowserRouter([
         path: routes.formResponsesHtmlById,
         lazy: loadFormResponsesHtmlRoute,
       },
+      { path: "/forms/:formId/documents/:documentId", lazy: loadOfficeEditorRoute },
       { path: routes.surveyById, lazy: loadSurveyRoute },
       { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {

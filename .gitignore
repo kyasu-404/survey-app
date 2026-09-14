@@ -11,5 +11,6 @@ frontend/dist
 frontend/playwright-report
 frontend/test-results
 mail-worker/node_modules
+office-service/node_modules
 .worktrees
 .codex

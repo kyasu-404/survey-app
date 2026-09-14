@@ -1,0 +1,24 @@
+services:
+  office:
+    build:
+      context: /opt/survey-app/office-service
+    container_name: survey-office
+    restart: unless-stopped
+    environment:
+      SUPABASE_URL: ${OFFICE_SUPABASE_URL:-http://kong:8000}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      ONLYOFFICE_SETTINGS_ENCRYPTION_KEY: ${ONLYOFFICE_SETTINGS_ENCRYPTION_KEY}
+    ports:
+      - "${OFFICE_BIND_ADDRESS:-127.0.0.1}:8095:8095"
+    mem_limit: 768m
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]

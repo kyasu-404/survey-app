@@ -8696,3 +8696,8 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   }
 }
 
+
+.section-tabs { margin: 20px 0; }
+.settings-tab-panel[hidden], .office-tab-panel[hidden] { display: none !important; }
+
+.toast-container[popover] { inset: auto 20px 20px auto; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; }

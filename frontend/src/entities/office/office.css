@@ -1,0 +1,49 @@
+.office-dialog{width:min(1120px,calc(100vw - 40px));max-height:88dvh;overflow:auto;border:1px solid var(--theme-border);border-radius:22px;padding:26px;background:var(--theme-surface-light);color:var(--theme-text);box-shadow:0 24px 90px #0003}
+.office-dialog::backdrop{background:#0006}
+.office-dialog header,.office-dialog footer,.office-editor-page header,.office-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.office-dialog h2{margin:4px 0 0;font-size:26px}
+.office-eyebrow{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin:0;color:var(--theme-accent)}
+.office-muted,.office-document-copy span{color:var(--theme-text-muted);font-size:13px}
+.office-dialog input:not([type=file]),.office-dialog select{display:block;box-sizing:border-box;width:100%;margin-top:7px}
+.office-document-list{margin:20px 0;min-height:100px}
+.office-document-list article{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:20px;align-items:center;padding:18px 0;border-bottom:1px solid var(--theme-border)}
+.office-document-copy{display:grid;gap:6px;min-width:0}
+.office-document-copy strong{overflow-wrap:anywhere}
+.office-document-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px}
+.office-document-actions>button{white-space:nowrap}
+.office-menu-shell{position:relative}
+.office-menu-shell .form-menu-dropdown{min-width:220px}
+.office-menu-shell .form-menu-item{box-shadow:none}
+.office-empty{padding:30px;text-align:center;color:var(--theme-text-muted)}
+.office-create{padding:18px;border:1px solid var(--theme-border);background:var(--theme-panel-background);border-radius:18px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:20px}
+.office-create label{flex:1;min-width:200px}
+.office-error{color:#b42318!important;overflow-wrap:anywhere}
+.office-notice{background:var(--theme-accent-soft);padding:14px;border-radius:12px}
+.office-notice button{margin-right:8px}
+.office-actions{justify-content:flex-start;margin-top:20px}
+.office-checks{padding:0;list-style:none;display:grid;gap:12px}
+.office-checks li{display:grid;gap:3px}
+.office-checks span{font-size:13px;color:var(--theme-text-muted)}
+.office-editor-page{height:100dvh;width:100%;display:flex;flex-direction:column;background:var(--theme-surface-light)}
+.office-editor-page header{padding:12px 18px;border-bottom:1px solid var(--theme-border);flex-wrap:wrap}
+.office-editor-page header>div{display:grid;gap:4px;flex:1;min-width:220px}
+.office-editor-page header span{font-size:11px;color:var(--theme-text-muted)}
+.office-editor-page header a{font-size:13px;color:inherit;text-decoration:none}
+.office-editor-page iframe{border:0;flex:1;min-height:0;width:100%}
+.office-editor-error{padding:12px 18px;background:#fff0ee;color:#a32020}
+.office-editor-page header strong{overflow-wrap:anywhere}
+.office-generation{border:1px solid var(--theme-border);background:var(--theme-panel-background);border-radius:18px;padding:20px;margin:16px 0}
+.office-generation label{display:block;margin:12px 0}
+.office-generation button{margin:8px 8px 0 0}
+.office-result-batch{border:1px solid var(--theme-border);background:var(--theme-panel-background);padding:18px;border-radius:18px;margin:16px 0}
+.office-result-batch summary{cursor:pointer;overflow-wrap:anywhere}
+.office-result-batch summary span{display:block;margin:8px 0 0;color:var(--theme-text-muted);font-size:13px}
+.office-result-toolbar{display:flex;align-items:center;gap:12px;margin:18px 0}
+.office-result-files{list-style:none;padding:0;margin:0}
+.office-result-files li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--theme-border)}
+.office-result-files li>span{overflow-wrap:anywhere;min-width:0}
+.office-result-files button{flex-shrink:0}
+@media(max-width:900px){.office-document-list article{grid-template-columns:1fr}.office-document-actions{justify-content:flex-start}}
+@media(max-width:640px){.office-dialog{width:calc(100vw - 16px);padding:14px;max-height:94dvh}.office-editor-page header span{display:none}.office-result-files li{align-items:flex-start;flex-direction:column}.office-result-toolbar,.office-dialog footer{flex-wrap:wrap}}
+
+.office-menu-shell.form-menu{z-index:1}.office-menu-shell.office-menu-open{z-index:2}.office-menu-shell .form-menu-trigger{border-radius:14px;cursor:pointer}.office-result-files .app-button{display:inline-flex;align-items:center;gap:7px}.app-main.app-main-office{padding:0!important;min-width:0;overflow:hidden}

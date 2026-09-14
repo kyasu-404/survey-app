@@ -23,6 +23,7 @@ export default defineConfig({
     },
   },
   server: {
+    proxy: { "/api/office": "http://127.0.0.1:8095" },
     host: true,
     port: 5173,
     watch: {

@@ -1,3 +1,6 @@
+import {officeRequest} from '../../entities/office/api';
+import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
+import { DocumentsModal } from "./DocumentsModal";
 import { Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
@@ -190,6 +193,8 @@ export default function FormResponsesPage() {
   const [isDeletingResponses, setIsDeletingResponses] = useState(false);
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
+  const officeStatus=useQuery({queryKey:['office-status'],queryFn:()=>officeRequest<{enabled:boolean}>('/status'),staleTime:0,refetchOnMount:'always',refetchOnWindowFocus:true,refetchInterval:30000,retry:false});
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ completed: number; total: number } | null>(null);
   const zipControllerRef = useRef<AbortController | null>(null);
@@ -495,6 +500,7 @@ export default function FormResponsesPage() {
 
   return (
     <div className="dashboard-page">
+      {documentsOpen && <DocumentsModal formId={id} selectedResponseIds={[...selectedResponseIds]} onClose={() => setDocumentsOpen(false)} />}
       <div className="card responses-page-card">
         <div className="responses-page-header">
           <div className="responses-page-header-copy">
@@ -533,6 +539,7 @@ export default function FormResponsesPage() {
               <span>HTML</span>
               <img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
+            {officeStatus.data?.enabled && <button type="button" className="responses-export-button" onClick={() => setDocumentsOpen(true)} disabled={isLoading}><span>Документы</span><img src={onlyofficeIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>}
             <button
               type="button"
               className="responses-export-button responses-report-button"
