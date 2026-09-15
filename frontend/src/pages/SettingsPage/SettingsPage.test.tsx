@@ -97,6 +97,7 @@ describe("SettingsPage", () => {
       retentionHours: 168,
       removedFiles: 2,
       removedAssets: 1,
+      removedDocuments: 3,
       error: null,
       startedAt: "2026-08-10T12:00:00.000Z",
       finishedAt: "2026-08-10T12:00:01.000Z",
@@ -180,7 +181,7 @@ describe("SettingsPage", () => {
 
     await waitFor(() => expect(runStorageCleanup).toHaveBeenCalledTimes(1));
     expect(showToast).toHaveBeenCalledWith(
-      "Очистка завершена: файлов ответов — 2, изображений форм — 1",
+      "Очистка завершена: файлов ответов — 2, изображений форм — 1, документов ONLYOFFICE — 3",
       "success",
     );
   });

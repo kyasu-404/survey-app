@@ -13,8 +13,8 @@ const budgets = {
   lazySurveyCreatorCoreJs: { raw: 1_650_000, gzip: 400_000 },
   css: { raw: 550_000, gzip: 125_000 },
   image: { raw: 250_000 },
-  // Documents modal, settings, editor route and shared styles add about 20 KiB.
-  total: { raw: 6_890_000 },
+  // Office UI, cleanup status and account menu add about 24 KiB; no new dependencies.
+  total: { raw: 6_895_000 },
 };
 
 function formatBytes(bytes) {

@@ -28,6 +28,8 @@ test("scheduled cleanup deletes only candidates confirmed immediately before rem
   const removeCalls = [];
   const responses = new Map([
     ["begin_storage_cleanup_run", [{ id: "run-1" }]],
+    ["list_orphan_office_documents", [{name:"orphan.zip"},{name:"in-use.xlsx"}]],
+    ["confirm_orphan_office_documents", [{name:"orphan.zip"}]],
     ["list_orphan_survey_files", [{ name: "public/form/a.txt" }, { name: "public/form/in-use.txt" }]],
     ["confirm_orphan_survey_files", [{ name: "public/form/a.txt" }]],
     ["list_orphan_survey_assets", [{ name: "forms/form/owner/asset.webp" }]],
@@ -48,7 +50,9 @@ test("scheduled cleanup deletes only candidates confirmed immediately before rem
   assert.equal(result.skipped, false);
   assert.equal(result.removedFiles, 1);
   assert.equal(result.removedAssets, 1);
+  assert.equal(result.removedDocuments, 1);
   assert.deepEqual(removeCalls, [
+    { bucket: "survey-documents", names: ["orphan.zip"] },
     { bucket: "survey-files", names: ["public/form/a.txt"] },
     { bucket: "survey-assets", names: ["forms/form/owner/asset.webp"] },
   ]);
@@ -64,6 +68,7 @@ test("scheduled cleanup deletes only candidates confirmed immediately before rem
       p_success: true,
       p_removed_files: 1,
       p_removed_assets: 1,
+      p_removed_documents: 1,
       p_error: null,
     },
   );
@@ -98,6 +103,7 @@ test("scheduled cleanup records a failed run without deleting the next bucket", 
       p_success: false,
       p_removed_files: 0,
       p_removed_assets: 0,
+      p_removed_documents: 0,
       p_error: "Storage is unavailable",
     },
   );

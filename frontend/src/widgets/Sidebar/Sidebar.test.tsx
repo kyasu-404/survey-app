@@ -1,3 +1,7 @@
+import userEvent from "@testing-library/user-event";
+import exitWhite from "../../img/ExitWhite.svg";
+import { logout } from "../../features/auth/api";
+import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { readFileSync } from "node:fs";
@@ -15,7 +19,7 @@ const { authState, getAppBranding } = vi.hoisted(() => ({
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
     user: { id: "user-1" },
-    profile: { role: authState.role },
+    profile: { role: authState.role, name: "Анна Иванова" },
     loading: false,
   }),
 }));
@@ -34,7 +38,7 @@ function renderSidebar() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <Sidebar onToggle={vi.fn()} />
+        <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -62,7 +66,7 @@ describe("Sidebar", () => {
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <Sidebar onToggle={vi.fn()} />
+          <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -72,23 +76,22 @@ describe("Sidebar", () => {
     rerender(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <Sidebar onToggle={vi.fn()} />
+          <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(screen.getByRole("link", { name: "Настройки" })).toHaveAttribute("href", routes.settings);
   });
 
-  it("keeps the logout action in a separate sidebar footer", () => {
-    const { container } = renderSidebar();
-
-    const footerLogoutButton = container.querySelector(".sidebar-footer .logout-button");
-
-    expect(footerLogoutButton).toBe(screen.getByRole("button", { name: "Выйти" }));
-    expect(container.querySelector(".sidebar-footer .sidebar-theme-button")).toBe(
-      screen.getByRole("button", { name: /Сменить тему/i }),
-    );
-    expect(container.querySelector(".sidebar-nav .logout-button")).not.toBeInTheDocument();
+  it("opens account actions by name, changes theme and logs out", async () => {
+    renderSidebar();const user=userEvent.setup();const trigger=screen.getByRole('button',{name:'Анна Иванова'});
+    expect(screen.queryByRole('menuitem',{name:'Выйти'})).not.toBeInTheDocument();
+    await user.click(trigger);expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+    await user.click(screen.getByRole('menuitem',{name:'Тема'}));await user.click(screen.getByRole('menuitemradio',{name:'Тёмная'}));
+    expect(document.documentElement).toHaveAttribute('data-theme','graphite');expect(trigger).toHaveFocus();
+    await user.click(trigger);expect(screen.getByRole('menuitem',{name:'Выйти'}).querySelector('img')?.getAttribute('src')).toBe(exitWhite);
+    await user.keyboard('{Escape}');expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    await user.click(trigger);await user.click(screen.getByRole('menuitem',{name:'Выйти'}));await waitFor(()=>expect(logout).toHaveBeenCalled());
   });
 
   it("shows the configured application logo", async () => {

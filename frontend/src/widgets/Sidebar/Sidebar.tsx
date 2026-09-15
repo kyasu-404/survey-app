@@ -6,7 +6,7 @@ import { useAuth } from "../../app/providers/AuthProvider";
 import { APP_BRANDING_QUERY_KEY, getAppBranding } from "../../entities/branding/api";
 import { getDefaultAppLogo } from "../../entities/branding/defaultLogo";
 import { logout } from "../../features/auth/api";
-import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
+import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
 
@@ -105,8 +105,7 @@ export function Sidebar({ onToggle }: SidebarProps) {
 
       {!loading && user && (
         <div className="sidebar-footer">
-          <button className="logout-button" onClick={onLogout}>Выйти</button>
-          <ThemeCycleButton className="sidebar-theme-button" menuPlacement="top-right" />
+          <SidebarAccountMenu name={profile?.name?.trim() || user.email || 'Пользователь'} onLogout={onLogout}/>
         </div>
       )}
     </aside>

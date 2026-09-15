@@ -105,6 +105,7 @@ create table public.storage_cleanup_runs (
   status text not null default 'running' check (status in ('running', 'succeeded', 'failed')),
   removed_files integer not null default 0 check (removed_files >= 0),
   removed_assets integer not null default 0 check (removed_assets >= 0),
+  removed_documents integer not null default 0 check (removed_documents >= 0),
   error text,
   started_at timestamptz not null default now(),
   finished_at timestamptz,
@@ -1967,7 +1968,8 @@ create or replace function public.finish_storage_cleanup_run(
   p_success boolean,
   p_removed_files integer,
   p_removed_assets integer,
-  p_error text default null
+  p_error text default null,
+  p_removed_documents integer default 0
 )
 returns setof public.storage_cleanup_runs
 language plpgsql
@@ -1984,6 +1986,8 @@ begin
     or p_removed_files < 0
     or p_removed_assets is null
     or p_removed_assets < 0
+    or p_removed_documents is null
+    or p_removed_documents < 0
   then
     raise exception 'Invalid storage cleanup result' using errcode = '22023';
   end if;
@@ -1993,6 +1997,7 @@ begin
   set status = case when p_success then 'succeeded' else 'failed' end,
       removed_files = p_removed_files,
       removed_assets = p_removed_assets,
+      removed_documents = p_removed_documents,
       error = case
         when p_success then null
         else left(coalesce(nullif(btrim(p_error), ''), 'Неизвестная ошибка очистки'), 2000)
@@ -2014,7 +2019,7 @@ revoke all on function public.confirm_orphan_survey_files(timestamptz, text[]) f
 revoke all on function public.list_orphan_survey_assets(timestamptz, integer) from public;
 revoke all on function public.confirm_orphan_survey_assets(timestamptz, text[]) from public;
 revoke all on function public.begin_storage_cleanup_run(text, text, integer, uuid, integer) from public;
-revoke all on function public.finish_storage_cleanup_run(uuid, text, boolean, integer, integer, text) from public;
+revoke all on function public.finish_storage_cleanup_run(uuid, text, boolean, integer, integer, text, integer) from public;
 grant execute on function public.can_upload_survey_file(text, boolean, bigint) to anon, authenticated, service_role;
 grant execute on function public.can_read_survey_file(text) to authenticated, service_role;
 grant execute on function public.can_delete_survey_file(text) to authenticated, service_role;
@@ -2024,7 +2029,7 @@ grant execute on function public.confirm_orphan_survey_files(timestamptz, text[]
 grant execute on function public.list_orphan_survey_assets(timestamptz, integer) to service_role;
 grant execute on function public.confirm_orphan_survey_assets(timestamptz, text[]) to service_role;
 grant execute on function public.begin_storage_cleanup_run(text, text, integer, uuid, integer) to service_role;
-grant execute on function public.finish_storage_cleanup_run(uuid, text, boolean, integer, integer, text) to service_role;
+grant execute on function public.finish_storage_cleanup_run(uuid, text, boolean, integer, integer, text, integer) to service_role;
 
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('survey-files', 'survey-files', false, 10485760)
@@ -2335,5 +2340,35 @@ grant all on public.office_generation_results to service_role;
 create trigger office_results_cleanup after delete on public.office_generation_results
 for each row execute function public.office_queue_storage_cleanup();
 update storage.buckets set allowed_mime_types=array['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'] where id='survey-documents';
+
+create or replace function public.list_orphan_office_documents(
+  cutoff timestamptz default (now() - interval '168 hours'), batch_limit integer default 500
+)
+returns table (name text) language sql stable security definer set search_path = '' as $$
+  select o.name from storage.objects o where o.bucket_id='survey-documents'
+    and o.created_at < least(cutoff, now() - interval '168 hours')
+    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
+    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
+    -- Superseded objects can still be used by a one-hour editor capability.
+    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
+  order by o.created_at,o.id limit least(greatest(batch_limit,1),500);
+$$;
+create or replace function public.confirm_orphan_office_documents(cutoff timestamptz, object_names text[])
+returns table (name text) language sql stable security definer set search_path = '' as $$
+  select o.name from storage.objects o where o.bucket_id='survey-documents'
+    and cardinality(object_names) between 1 and 500 and o.name=any(object_names)
+    and o.created_at < least(cutoff, now() - interval '168 hours')
+    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
+    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
+    -- Superseded objects can still be used by a one-hour editor capability.
+    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
+  order by o.name;
+$$;
+revoke all on function public.list_orphan_office_documents(timestamptz,integer) from public;
+revoke all on function public.confirm_orphan_office_documents(timestamptz,text[]) from public;
+grant execute on function public.list_orphan_office_documents(timestamptz,integer) to service_role;
+grant execute on function public.confirm_orphan_office_documents(timestamptz,text[]) to service_role;
 
 commit;

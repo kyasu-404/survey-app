@@ -164,7 +164,7 @@ export default function SettingsPage() {
       setIsCleanupConfirmationOpen(false);
       await cleanupQuery.refetch();
       showToast(
-        `Очистка завершена: файлов ответов — ${run.removedFiles}, изображений форм — ${run.removedAssets}`,
+        `Очистка завершена: файлов ответов — ${run.removedFiles}, изображений форм — ${run.removedAssets}, документов ONLYOFFICE — ${run.removedDocuments ?? 0}`,
         "success",
       );
     } catch (error) {
@@ -360,7 +360,7 @@ export default function SettingsPage() {
               <h2 id="storage-cleanup-heading">Очистка файлов</h2>
               <span>
                 Раз в сутки удаляются файлы ответов без связи с отправленным ответом и изображения каталогов
-                уже удалённых форм. Минимальный возраст — {retentionDays} дней.
+                уже удалённых форм, а также осиротевшие макеты и результаты ONLYOFFICE. Минимальный возраст — {retentionDays} дней.
               </span>
             </div>
             <span className="settings-cleanup-schedule-badge">Автоматически раз в сутки</span>
@@ -407,6 +407,7 @@ export default function SettingsPage() {
                   <span>Удалено изображений форм</span>
                   <strong>{lastCleanupRun?.removedAssets ?? 0}</strong>
                 </div>
+                <div><span>Удалено документов ONLYOFFICE</span><strong>{lastCleanupRun?.removedDocuments ?? 0}</strong></div>
               </div>
 
               {lastCleanupRun?.error && <p className="settings-form-error" role="alert">{lastCleanupRun.error}</p>}

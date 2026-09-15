@@ -58,7 +58,8 @@ test("page and section titles stay distinct in responses, HTML, and bordered Exc
   expect(sheet.rowCount).toBe(5);
   expect(sheet.columnCount).toBe(34);
 
-  await page.getByRole("button", { name: /^Сменить тему/ }).click();
+  await page.locator(".sidebar-account-trigger").click();
+  await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
   await page.locator('[data-theme-option="graphite"]').click();
   await expect(page.locator("th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(30, 58, 95)");
   await page.screenshot({ path: testInfo.outputPath("grouped-responses-dark.png"), fullPage: true });

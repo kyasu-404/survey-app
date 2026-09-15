@@ -252,6 +252,7 @@ type StorageCleanupRunRow = {
   retention_hours: number;
   removed_files: number;
   removed_assets: number;
+  removed_documents: number;
   error: string | null;
   started_at: string;
   finished_at: string | null;
@@ -266,6 +267,7 @@ function serializeStorageCleanupRun(run: StorageCleanupRunRow | null) {
     retentionHours: run.retention_hours,
     removedFiles: run.removed_files,
     removedAssets: run.removed_assets,
+    removedDocuments: run.removed_documents ?? 0,
     error: run.error,
     startedAt: run.started_at,
     finishedAt: run.finished_at,
@@ -281,8 +283,8 @@ function getStorageObjectNames(rows: unknown) {
 
 async function listConfirmedOrphanPaths(
   adminClient: SupabaseAdminClient,
-  listFunction: "list_orphan_survey_files" | "list_orphan_survey_assets",
-  confirmFunction: "confirm_orphan_survey_files" | "confirm_orphan_survey_assets",
+  listFunction: "list_orphan_survey_files" | "list_orphan_survey_assets" | "list_orphan_office_documents",
+  confirmFunction: "confirm_orphan_survey_files" | "confirm_orphan_survey_assets" | "confirm_orphan_office_documents",
   cutoff: string,
 ) {
   const { data: candidateRows, error: listError } = await adminClient.rpc(listFunction, {
@@ -304,7 +306,7 @@ async function listConfirmedOrphanPaths(
 async function getLatestStorageCleanupRun(adminClient: SupabaseAdminClient) {
   const { data, error } = await adminClient
     .from("storage_cleanup_runs")
-    .select("id, trigger_type, status, retention_hours, removed_files, removed_assets, error, started_at, finished_at")
+    .select("id, trigger_type, status, retention_hours, removed_files, removed_assets, removed_documents, error, started_at, finished_at")
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -640,6 +642,7 @@ Deno.serve(async (req) => {
     const cutoff = new Date(Date.now() - storageCleanupRetentionHours * 60 * 60 * 1000).toISOString();
     let removedFiles = 0;
     let removedAssets = 0;
+    let removedDocuments = 0;
     let cleanupError: { message: string } | null = null;
 
     const orphanFiles = await listConfirmedOrphanPaths(
@@ -672,12 +675,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!cleanupError) {
+      const orphanDocuments = await listConfirmedOrphanPaths(adminClient, "list_orphan_office_documents", "confirm_orphan_office_documents", cutoff);
+      if (orphanDocuments.error) cleanupError = orphanDocuments.error;
+      else if (orphanDocuments.names.length > 0) {
+        const result = await adminClient.storage.from("survey-documents").remove(orphanDocuments.names);
+        if (result.error) cleanupError = result.error;
+        else removedDocuments = orphanDocuments.names.length;
+      }
+    }
+
     const { data: finishedRuns, error: finishError } = await adminClient.rpc("finish_storage_cleanup_run", {
       p_run_id: run.id,
       p_worker_id: workerId,
       p_success: !cleanupError,
       p_removed_files: removedFiles,
       p_removed_assets: removedAssets,
+      p_removed_documents: removedDocuments,
       p_error: cleanupError?.message ?? null,
     });
     if (finishError) return errorResponse(req, 400, finishError.message, actionLogContext);

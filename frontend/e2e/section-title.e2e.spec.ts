@@ -33,7 +33,8 @@ test("section titles save and render, while only section titles and expressions 
   await page.goto(`/builder/${formId}`);
   await expect(page.locator(".svc-creator")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("section-title-builder.png"), fullPage: true });
-  await page.getByRole("button", { name: /^Сменить тему/ }).click();
+  await page.locator(".sidebar-account-trigger").click();
+  await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
   await page.locator('[data-theme-option="graphite"]').click();
   await expect(toolbox.locator(".svc-toolbox__item").first().locator("svg")).toHaveCSS("color", "rgb(245, 245, 245)");
   await page.screenshot({ path: testInfo.outputPath("section-title-builder-dark.png"), fullPage: true });

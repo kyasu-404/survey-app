@@ -17,7 +17,7 @@ type ThemeCycleButtonProps = {
 };
 
 export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: ThemeCycleButtonProps) {
-  const { setTheme, theme, themeId, themeOptions } = useTheme();
+  const { theme, themeId } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -79,6 +79,17 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
           aria-label="Выбор темы"
           onClick={stopMenuEvent}
         >
+          <ThemeMenuItems onSelect={() => setIsOpen(false)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ThemeMenuItems({onSelect}:{onSelect:()=>void}) {
+ const {setTheme,themeId,themeOptions}=useTheme();
+ function stopMenuEvent(event: ReactMouseEvent) {event.stopPropagation();}
+ return <>
           {themeOptions.map((option) => {
             const isActive = option.id === themeId;
             const optionTheme = themes[option.id].app;
@@ -102,7 +113,7 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
                 onClick={(event) => {
                   stopMenuEvent(event);
                   setTheme(option.id);
-                  setIsOpen(false);
+                  onSelect();
                 }}
               >
                 <span className="theme-cycle-menu-item-swatch" aria-hidden="true" />
@@ -113,8 +124,5 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
               </button>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
+ </>;
 }

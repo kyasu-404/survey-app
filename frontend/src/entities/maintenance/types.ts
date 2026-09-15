@@ -8,6 +8,7 @@ export type StorageCleanupRun = {
   retentionHours: number;
   removedFiles: number;
   removedAssets: number;
+  removedDocuments: number;
   error: string | null;
   startedAt: string;
   finishedAt: string | null;

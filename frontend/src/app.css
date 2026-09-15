@@ -8701,3 +8701,11 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .settings-tab-panel[hidden], .office-tab-panel[hidden] { display: none !important; }
 
 .toast-container[popover] { inset: auto 20px 20px auto; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; }
+
+.sidebar-account{position:relative;width:100%;min-width:0}
+.sidebar-account-trigger{display:flex;align-items:center;width:100%;padding:6px 12px;border:1px solid var(--theme-border);border-radius:14px;background:var(--theme-surface-light);color:var(--theme-text);font-weight:700;cursor:pointer;box-shadow:0 6px 18px var(--theme-shadow-color);transition:background 160ms ease,box-shadow 160ms ease}
+.sidebar-account-trigger>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sidebar-account-trigger:hover,.sidebar-account-trigger:focus-visible{background:var(--theme-accent-soft);box-shadow:0 10px 24px var(--theme-shadow-color)}
+.sidebar-account .sidebar-account-menu{top:auto;bottom:calc(100% + 10px);left:0;right:0;min-width:0;width:100%;z-index:520;max-height:calc(100dvh - 100px);overflow-y:auto;transform-origin:bottom left}
+.sidebar-account-menu .form-menu-item>img{width:20px;height:20px;object-fit:contain;flex-shrink:0}
+.settings-cleanup-summary{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}

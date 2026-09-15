@@ -3,6 +3,7 @@ export const DEFAULT_STORAGE_CLEANUP_INTERVAL_HOURS = 24;
 export const STORAGE_CLEANUP_BATCH_LIMIT = 500;
 
 const cleanupBuckets = [
+  {bucket: "survey-documents", listFunction: "list_orphan_office_documents", confirmFunction: "confirm_orphan_office_documents", resultKey: "removedDocuments"},
   {
     bucket: "survey-files",
     listFunction: "list_orphan_survey_files",
@@ -36,6 +37,7 @@ async function finishRun(rpc, runId, workerId, success, result, error = null) {
     p_success: success,
     p_removed_files: result.removedFiles,
     p_removed_assets: result.removedAssets,
+    p_removed_documents: result.removedDocuments,
     p_error: error,
   });
   const run = getStartedRun(rows);
@@ -60,9 +62,9 @@ export async function runScheduledStorageCleanup({
     p_min_interval_hours: intervalHours,
   });
   const startedRun = getStartedRun(startedRows);
-  if (!startedRun) return { skipped: true, run: null, removedFiles: 0, removedAssets: 0 };
+  if (!startedRun) return { skipped: true, run: null, removedFiles: 0, removedAssets: 0, removedDocuments: 0 };
 
-  const result = { removedFiles: 0, removedAssets: 0 };
+  const result = { removedFiles: 0, removedAssets: 0, removedDocuments: 0 };
   const cutoff = new Date(now() - retentionHours * 60 * 60 * 1000).toISOString();
 
   try {
