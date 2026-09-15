@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Model } from "survey-core";
+import { Model, type QuestionCustomModel, type QuestionDropdownModel } from "survey-core";
+import { registerCustomSurveyQuestionTypes } from "../survey/model/surveyQuestionTypes";
 import { applyOrganizationChoicesToSurvey } from "./surveyQuestion";
 
 describe("applyOrganizationChoicesToSurvey", () => {
@@ -24,4 +25,27 @@ describe("applyOrganizationChoicesToSurvey", () => {
     ]);
     expect(regularContent.choices).toEqual([{ value: "keep", text: "Keep" }]);
   });
+});
+
+it("keeps a saved archive readable and selectable only in its original question", () => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [
+    { type: "organization", name: "org" },
+    { type: "organization", name: "other" },
+  ] });
+  const savedData = { org: "archived-1" };
+  model.data = savedData;
+  applyOrganizationChoicesToSurvey(model,
+    [{ id: "active-1", organization_type: "school", number: "1", alias: "ГБОУ" }],
+    [{ id: "archived-1", organization_type: "school", number: "2", alias: "ГБОУ" }],
+    savedData,
+  );
+  const org = model.getQuestionByName("org") as QuestionCustomModel;
+  const other = model.getQuestionByName("other") as QuestionCustomModel;
+  expect(org.value).toBe("archived-1");
+  expect(org.displayValue).toBe("ГБОУ 2");
+  expect((other.contentQuestion as QuestionDropdownModel).choices.map((choice) => choice.value)).toEqual(["active-1"]);
+  model.data = savedData; // Opening editing after asynchronous choice loading.
+  expect(org.displayValue).toBe("ГБОУ 2");
+  model.dispose();
 });

@@ -44,6 +44,7 @@ const baseReport: ResponseReport = {
 const submittedOrganization = {
   id: "org-1",
   organization_type: "school" as const,
+  is_archived: false,
   number: "1",
   alias: "ГБОУ",
   email: "one@example.ru",

@@ -8,6 +8,7 @@ export type EducationOrganization = {
   number: string | null;
   alias: string;
   email: string;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 };

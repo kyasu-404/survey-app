@@ -251,8 +251,8 @@ export default function FormResponsesPage() {
   );
   const formOrganizationTypes = normalizeOrganizationTypes(formQuery.data?.organization_types);
   const organizationsQuery = useQuery({
-    queryKey: ["education-organizations", "form", id, ...formOrganizationTypes],
-    queryFn: ({ signal }) => getOrganizations(formOrganizationTypes, signal),
+    queryKey: ["education-organizations", "history", id],
+    queryFn: ({ signal }) => getOrganizations(undefined, signal, true),
     enabled: Boolean(id && usesOrganizationDirectory),
     staleTime: 30_000,
   });
@@ -410,7 +410,8 @@ export default function FormResponsesPage() {
     try {
       const reportResponses = responsesQuery.data;
       const reportOrganizations = usesOrganizationDirectory
-        ? organizationsQuery.data ?? await getOrganizations(formOrganizationTypes)
+        ? (organizationsQuery.data ?? await getOrganizations(undefined, undefined, true))
+          .filter((organization) => !organization.is_archived && formOrganizationTypes.includes(organization.organization_type))
         : [];
       setResponseReport(createResponseReport(reportResponses, formQuery.data.schema, reportOrganizations));
     } catch (error) {

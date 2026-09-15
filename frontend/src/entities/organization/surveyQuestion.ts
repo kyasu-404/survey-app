@@ -5,6 +5,8 @@ import type { SelectableOrganization } from "./types";
 export function applyOrganizationChoicesToSurvey(
   model: Model,
   organizations: SelectableOrganization[],
+  savedOrganizations: SelectableOrganization[] = [],
+  savedData: Record<string, unknown> = {},
 ) {
   const choices = organizations.map((organization) => ({
     value: organization.id,
@@ -17,6 +19,9 @@ export function applyOrganizationChoicesToSurvey(
     }
 
     const contentQuestion = (question as QuestionCustomModel).contentQuestion as QuestionDropdownModel;
-    contentQuestion.choices = choices;
+    const savedOrganization = savedOrganizations.find((organization) => organization.id === savedData[question.name]);
+    contentQuestion.choices = savedOrganization && !organizations.some((organization) => organization.id === savedOrganization.id)
+      ? [...choices, { value: savedOrganization.id, text: getOrganizationDisplayName(savedOrganization) }]
+      : choices;
   });
 }

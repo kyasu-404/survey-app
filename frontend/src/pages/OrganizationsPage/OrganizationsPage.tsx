@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import {
@@ -41,6 +41,7 @@ const EMPTY_ORGANIZATION: EducationOrganizationInput = {
 
 export default function OrganizationsPage() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<OrganizationFilter>("all");
@@ -108,7 +109,7 @@ export default function OrganizationsPage() {
       }
       setEditingOrganization(null);
       setIsCreateModalOpen(false);
-      await organizationsQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["education-organizations"] });
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось сохранить организацию"), "error");
     } finally {
@@ -117,10 +118,10 @@ export default function OrganizationsPage() {
   };
 
   const handleDelete = async (organization: EducationOrganization) => {
-    if (!canManage || !window.confirm(`Удалить организацию «${organization.alias}»?`)) return;
+    if (!canManage || !window.confirm(`Удалить организацию «${organization.alias}» из действующего справочника? В сохранённых ответах она останется. Повторное добавление или импорт восстановит её.`)) return;
     try {
       await deleteOrganization(organization.id);
-      await organizationsQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["education-organizations"] });
       showToast("Организация удалена", "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось удалить организацию"), "error");
@@ -129,11 +130,11 @@ export default function OrganizationsPage() {
 
   const handleDeleteAll = async () => {
     if (!canManage || organizations.length === 0) return;
-    if (!window.confirm(`Удалить все организации (${organizations.length})? Это действие нельзя отменить.`)) return;
+    if (!window.confirm(`Удалить все организации (${organizations.length}) из действующего справочника? В сохранённых ответах они останутся. Повторный импорт восстановит совпадающие организации.`)) return;
     setIsDeletingAll(true);
     try {
       await deleteAllOrganizations();
-      await organizationsQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["education-organizations"] });
       showToast("Справочник очищен", "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось очистить справочник"), "error");
@@ -148,7 +149,7 @@ export default function OrganizationsPage() {
     try {
       const inputs = await parseOrganizationsXlsx(file);
       await importOrganizations(inputs);
-      await organizationsQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["education-organizations"] });
       showToast(`Импортировано организаций: ${inputs.length}`, "success");
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось импортировать XLSX"), "error");

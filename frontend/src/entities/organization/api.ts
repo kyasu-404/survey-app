@@ -8,10 +8,10 @@ import type {
   SelectableOrganization,
 } from "./types";
 
-const ORGANIZATION_SELECT = "id, organization_type, number, alias, email, created_at, updated_at";
+const ORGANIZATION_SELECT = "id, organization_type, number, alias, email, is_archived, created_at, updated_at";
 const ORGANIZATIONS_PAGE_SIZE = 1000;
 
-export async function getOrganizations(types?: OrganizationType[], signal?: AbortSignal) {
+export async function getOrganizations(types?: OrganizationType[], signal?: AbortSignal, includeArchived = false) {
   const organizations: EducationOrganization[] = [];
   for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
     signal?.throwIfAborted();
@@ -25,12 +25,13 @@ export async function getOrganizations(types?: OrganizationType[], signal?: Abor
           .order("number", { nullsFirst: false })
           .order("alias")
           .order("id");
+        if (!includeArchived) query = query.eq("is_archived", false);
         if (types?.length) {
           query = query.in("organization_type", types);
         }
         return query.range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1).abortSignal(requestSignal);
       },
-      { signal, context: { types: types ?? null, offset } },
+      { signal, context: { types: types ?? null, includeArchived, offset } },
     );
     if (error) throw error;
     const page = (data ?? []) as EducationOrganization[];
@@ -62,7 +63,9 @@ export async function createOrganization(input: EducationOrganizationInput) {
   const payload = normalizeOrganizationInput(input);
   const { data, error } = await runRequest(
     "organizations.create",
-    () => apiClient.from("education_organizations").insert(payload).select(ORGANIZATION_SELECT).single(),
+    () => apiClient.from("education_organizations").upsert({ ...payload, is_archived: false }, {
+      onConflict: "organization_type,number,alias",
+    }).select(ORGANIZATION_SELECT).single(),
     { context: { organizationType: payload.organization_type } },
   );
   if (error) throw error;
@@ -98,7 +101,7 @@ export async function deleteAllOrganizations() {
 }
 
 export async function importOrganizations(inputs: EducationOrganizationInput[]) {
-  const payload = inputs.map(normalizeOrganizationInput);
+  const payload = inputs.map((input) => ({ ...normalizeOrganizationInput(input), is_archived: false }));
   for (let index = 0; index < payload.length; index += 500) {
     const batch = payload.slice(index, index + 500);
     const { error } = await runRequest(
@@ -109,5 +112,25 @@ export async function importOrganizations(inputs: EducationOrganizationInput[]) 
       { context: { batchSize: batch.length } },
     );
     if (error) throw error;
+  }
+}
+
+// Returns only archived organizations referenced by saved responses the caller can read.
+export async function getSavedFormOrganizations(formId: string, browserId: string, signal?: AbortSignal) {
+  const organizations: SelectableOrganization[] = [];
+  for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
+    signal?.throwIfAborted();
+    const { data, error } = await runRequest(
+      "organizations.listSavedForForm",
+      (requestSignal) => apiClient
+        .rpc("list_saved_form_organizations", { p_form_id: formId, p_browser_id: browserId })
+        .range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1)
+        .abortSignal(requestSignal),
+      { signal, context: { formId, offset } },
+    );
+    if (error) throw error;
+    const page = (data ?? []) as SelectableOrganization[];
+    organizations.push(...page);
+    if (page.length < ORGANIZATIONS_PAGE_SIZE) return organizations;
   }
 }

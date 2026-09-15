@@ -27,7 +27,7 @@ import { useSubmitResponseMutation, useUpdateResponseMutation } from "../submit-
 import { createSubmitPayload } from "../../entities/response/model/responseModel";
 import type { ExistingResponseResult } from "../../entities/response/types";
 import { useToast } from "../../app/providers/ToastProvider";
-import { getFormOrganizations, getOrganizations } from "../../entities/organization/api";
+import { getFormOrganizations, getOrganizations, getSavedFormOrganizations } from "../../entities/organization/api";
 import {
   DEFAULT_FORM_ORGANIZATION_TYPES,
   hasOrganizationQuestion,
@@ -319,8 +319,16 @@ export function SurveyFormRenderer({
       ? getOrganizations(DEFAULT_FORM_ORGANIZATION_TYPES, controller.signal)
       : getFormOrganizations(formId, controller.signal);
 
-    void request
-      .then((organizations) => applyOrganizationChoicesToSurvey(model, organizations))
+    const savedData = isInteractiveMode ? savedResponse?.data : initialData;
+    const savedOrganizationsRequest = savedData && formId !== "__builder_preview__"
+      ? getSavedFormOrganizations(formId, browserIdRef.current, controller.signal)
+      : Promise.resolve([]);
+
+    void Promise.all([request, savedOrganizationsRequest])
+      .then(([organizations, savedOrganizations]) => {
+        if (controller.signal.aborted) return;
+        applyOrganizationChoicesToSurvey(model, organizations, savedOrganizations, savedData);
+      })
       .catch((error) => {
         if (controller.signal.aborted) return;
         console.error(error);
@@ -328,7 +336,7 @@ export function SurveyFormRenderer({
       });
 
     return () => controller.abort();
-  }, [formId, model, showToast, usesOrganizationDirectory]);
+  }, [formId, initialData, isInteractiveMode, model, savedResponse, showToast, usesOrganizationDirectory]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {

@@ -5,7 +5,6 @@ import { getOrganizations } from "../../entities/organization/api";
 import {
   getOrganizationDisplayName,
   hasOrganizationQuestion,
-  normalizeOrganizationTypes,
 } from "../../entities/organization/model";
 import { getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
@@ -86,10 +85,9 @@ export default function FormResponsesHtmlPage() {
   const usesOrganizationDirectory = Boolean(
     formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
   );
-  const formOrganizationTypes = normalizeOrganizationTypes(formQuery.data?.organization_types);
   const organizationsQuery = useQuery({
-    queryKey: ["education-organizations", "form", id, ...formOrganizationTypes],
-    queryFn: ({ signal }) => getOrganizations(formOrganizationTypes, signal),
+    queryKey: ["education-organizations", "history", id],
+    queryFn: ({ signal }) => getOrganizations(undefined, signal, true),
     enabled: Boolean(id && usesOrganizationDirectory),
     retry: 1,
     staleTime: 30_000,

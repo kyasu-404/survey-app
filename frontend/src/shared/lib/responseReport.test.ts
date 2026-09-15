@@ -6,6 +6,7 @@ import { createResponseReport } from "./responseReport";
 const organizations: EducationOrganization[] = [
   {
     id: "org-1",
+    is_archived: false,
     organization_type: "school",
     number: "1",
     alias: "ГБОУ",
@@ -15,6 +16,7 @@ const organizations: EducationOrganization[] = [
   },
   {
     id: "org-2",
+    is_archived: false,
     organization_type: "kindergarten",
     number: "2",
     alias: "ГБДОУ",

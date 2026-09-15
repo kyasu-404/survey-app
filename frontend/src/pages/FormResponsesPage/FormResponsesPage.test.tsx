@@ -9,7 +9,8 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import FormResponsesPage from "./FormResponsesPage";
 
-const { deleteResponses, getFormById, getAllResponsesByForm, exportToExcel, exportResponseFilesZip, showToast } = vi.hoisted(() => ({
+const { deleteResponses, getFormById, getAllResponsesByForm, exportToExcel, exportResponseFilesZip, showToast, getOrganizations } = vi.hoisted(() => ({
+  getOrganizations: vi.fn(),
   deleteResponses: vi.fn(),
   getFormById: vi.fn(),
   getAllResponsesByForm: vi.fn(),
@@ -68,6 +69,8 @@ vi.mock("../../entities/response/api", () => ({
   deleteResponses,
   getAllResponsesByForm,
 }));
+
+vi.mock("../../entities/organization/api", () => ({ getOrganizations }));
 
 vi.mock("../../shared/lib/export", () => ({
   exportToExcel,
@@ -958,4 +961,33 @@ describe("FormResponsesPage", () => {
     });
     confirmSpy.mockRestore();
   });
+});
+
+it("resolves archived names in tables and XLSX while reporting only active selected types", async () => {
+  const schema = { pages: [{ elements: [{ type: "organization", name: "org", title: "ОУ" }] }] };
+  getFormById.mockResolvedValue({ id: "form-1", title: "Архив", author_id: "user-1", organization_types: ["school"], schema });
+  getAllResponsesByForm.mockResolvedValue([{ ...createResponse(1), data: { org: "archive-1" } }]);
+  getOrganizations.mockResolvedValue([
+    { id: "archive-1", organization_type: "school", number: "1", alias: "Архивная", is_archived: true },
+    { id: "active-2", organization_type: "school", number: "2", alias: "Действующая", is_archived: false },
+    { id: "garden-3", organization_type: "kindergarten", number: "3", alias: "Сад", is_archived: false },
+  ]);
+  render(<MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+    <QueryClientProvider client={createQueryClient()}><Routes>
+      <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+    </Routes></QueryClientProvider>
+  </MemoryRouter>);
+  expect(await screen.findByText("Архивная 1")).toBeInTheDocument();
+  expect(getOrganizations).toHaveBeenCalledWith(undefined, expect.any(AbortSignal), true);
+  await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
+  await waitFor(() => expect(exportToExcel).toHaveBeenCalledWith(
+    [expect.objectContaining({ "answer:org": "Архивная 1" })],
+    "ответы-Архив", "Ответы", expect.any(Array),
+  ));
+  await userEvent.click(screen.getByRole("button", { name: "Отчёт" }));
+  const dialog = await screen.findByRole("dialog");
+  await userEvent.click(within(dialog).getByRole("tab", { name: "Учёт сдавших" }));
+  expect(within(dialog).getByText("Действующая 2")).toBeInTheDocument();
+  expect(within(dialog).queryByText("Архивная 1")).not.toBeInTheDocument();
+  expect(within(dialog).queryByText("Сад 3")).not.toBeInTheDocument();
 });

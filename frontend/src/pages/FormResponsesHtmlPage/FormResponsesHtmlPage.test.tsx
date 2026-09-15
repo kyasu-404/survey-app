@@ -265,7 +265,7 @@ describe("FormResponsesHtmlPage", () => {
 
     expect(await screen.findByText("ИМЦ 1", { selector: ".responses-report-screen td" })).toBeInTheDocument();
     expect(screen.queryByText(organizationId)).not.toBeInTheDocument();
-    expect(getOrganizations).toHaveBeenCalledWith(["school"], expect.any(AbortSignal));
+    expect(getOrganizations).toHaveBeenCalledWith(undefined, expect.any(AbortSignal), true);
 
     await userEvent.click(screen.getByRole("button", { name: "Скачать HTML" }));
 
