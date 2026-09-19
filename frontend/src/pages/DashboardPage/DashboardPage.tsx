@@ -5,7 +5,7 @@ import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { isTemplateForm } from "../../entities/survey/model/surveyModel";
-import type { SurveyFormSummary } from "../../entities/survey/types";
+import type { FormsSort, SurveyFormSummary } from "../../entities/survey/types";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { DashboardFormsList } from "./components/DashboardFormsList";
 import { DashboardToolbar } from "./components/DashboardToolbar";
@@ -21,17 +21,38 @@ import { useDashboardMenuDismiss } from "./hooks/useDashboardMenuDismiss";
 import { useDashboardRealtime } from "./hooks/useDashboardRealtime";
 import { useDashboardStats } from "./hooks/useDashboardStats";
 import { useQrDialog } from "./hooks/useQrDialog";
-import type { DashboardPageProps, OpenMenuState } from "./types";
+import type { DashboardLayout, DashboardPageProps, OpenMenuState } from "./types";
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [layout, setLayout] = useState<DashboardLayout>(() => {
+    try { return localStorage.getItem("survey-app:forms-layout") === "table" ? "table" : "cards"; }
+    catch { return "cards"; }
+  });
+  const [sort, setSort] = useState<FormsSort>({ field: "created_at", direction: "desc" });
+  const toggleLayout = () => {
+    const next = layout === "cards" ? "table" : "cards";
+    setLayout(next);
+    setOpenedMenu(null);
+    try { localStorage.setItem("survey-app:forms-layout", next); } catch { /* The view still works without storage. */ }
+  };
+  const changeSort = (field: FormsSort["field"]) => {
+    setOpenedMenu(null);
+    setSort((current) => ({
+      field,
+      direction: current.field === field
+        ? current.direction === "asc" ? "desc" : "asc"
+        : field === "created_at" || field === "responses_count" || field === "status" ? "desc" : "asc",
+    }));
+  };
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const filters = useDashboardFilters(viewMode, user?.id);
   const forms = useDashboardForms({
+    sort,
     filters,
     isAuthLoading,
     userId: user?.id,
@@ -109,6 +130,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     <div className="dashboard-page dashboard-shell">
       <div className="card dashboard-main-card">
         <DashboardToolbar
+          layout={layout}
+          onToggleLayout={toggleLayout}
           activeFormsCount={stats.activeFormsCount}
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
@@ -133,6 +156,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         />
 
         <DashboardFormsList
+          layout={layout}
+          sort={sort}
+          onSort={changeSort}
           currentUserId={user?.id}
           displayedForms={forms.displayedForms}
           filteredForms={forms.filteredForms}

@@ -1,5 +1,7 @@
 import type { SurveyFormSummary } from "../../entities/survey/types";
 
+export type DashboardLayout = "cards" | "table";
+
 export type DashboardViewMode = "mine" | "all";
 
 export type DashboardPageProps = {

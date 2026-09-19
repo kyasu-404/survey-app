@@ -1,0 +1,26 @@
+.survey-renderer .survey-rating-feedback {
+  margin-top: calc(1.5 * var(--sjs-base-unit, 8px));
+  color: var(--sjs-general-forecolor, #181818);
+  font-size: var(--sjs-font-size, 16px);
+  font-weight: 600;
+}
+
+/* SurveyJS replaces the focused selected star with a double outline. Keep its
+   fill consistent with the other selected stars and mark keyboard focus outside. */
+.survey-renderer .sd-rating__item-star--selected:not(.sd-rating__item-star--preview):focus-within svg {
+  stroke: transparent;
+}
+
+.survey-renderer .sd-rating__item-star--selected:not(.sd-rating__item-star--preview):focus-within .sv-star {
+  opacity: 1;
+}
+
+.survey-renderer .sd-rating__item-star--selected:not(.sd-rating__item-star--preview):focus-within .sv-star-2 {
+  opacity: 0;
+}
+
+.survey-renderer .sd-rating__item-star:has(input:focus-visible) {
+  outline: 2px solid var(--sjs-primary-backcolor, #121212);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

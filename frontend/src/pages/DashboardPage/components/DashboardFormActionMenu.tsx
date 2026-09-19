@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { DashboardMenuPortal } from "./DashboardMenuPortal";
 import type {
   Dispatch,
   KeyboardEvent as ReactKeyboardEvent,
@@ -15,6 +17,7 @@ import renameIcon from "../../../img/rename.svg";
 import type { OpenMenuState } from "../types";
 
 type DashboardFormActionMenuProps = {
+  portal?: boolean;
   actionMenuOpen: boolean;
   currentUserId?: string;
   form: SurveyFormSummary;
@@ -35,6 +38,7 @@ function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
 }
 
 export function DashboardFormActionMenu({
+  portal = false,
   actionMenuOpen,
   currentUserId,
   form,
@@ -49,12 +53,14 @@ export function DashboardFormActionMenu({
   qrGeneratingFormId,
   setOpenedMenu,
 }: DashboardFormActionMenuProps) {
+  const anchorRef = useRef<HTMLDivElement>(null);
   const title = getSurveyDisplayTitle(form);
   const isOwnForm = form.author_id === currentUserId;
   const isTemplate = isTemplateForm(form);
 
   return (
     <div
+      ref={anchorRef}
       className={`form-menu dashboard-floating-root dashboard-actions-menu-shell ${
         isFirstVisibleForm ? "dashboard-actions-menu-shell-open-down" : ""
       }`.trim()}
@@ -76,6 +82,7 @@ export function DashboardFormActionMenu({
       </button>
 
       {actionMenuOpen && (
+        <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="right">
         <div
           className="form-menu-dropdown"
           role="menu"
@@ -183,6 +190,7 @@ export function DashboardFormActionMenu({
             </button>
           )}
         </div>
+        </DashboardMenuPortal>
       )}
     </div>
   );

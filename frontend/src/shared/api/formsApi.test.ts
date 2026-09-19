@@ -873,3 +873,28 @@ describe("updateFormSchema", () => {
     expect(themeReadQuery).not.toHaveProperty("update");
   });
 });
+
+describe("server-sorted dashboard pages", () => {
+  afterEach(() => vi.resetAllMocks());
+  it("passes shared filters to the server and preserves its precise typed cursor", async () => {
+    const raw = {
+      id: "form-sort-1", title: "Last row", form_type: "anketa", form_reason: "plan",
+      is_public: true, deadline_at: null, author_id: "user-1", author_name: "Автор",
+      created_at: "2026-09-15T10:00:00.123456+00:00", responses_count: 42,
+      sort_value: "42", sort_reference_at: "2026-09-15T12:00:00.654321+00:00",
+    };
+    vi.mocked(apiClient.rpc).mockReturnValue(createSummaryQuery({ data: [raw, { ...raw, id: "lookahead" }], error: null }) as never);
+    const sort = { field: "responses_count", direction: "desc" } as const;
+    const result = await fetchDashboardFormsPage({ pageSize: 1, sort, filters: { search: "Школа", authorId: "user-1", formType: "anketa", formReason: "plan" } });
+    expect(result.items).toHaveLength(1);
+    expect(result.hasMore).toBe(true);
+    const cursor = result.items[0].list_cursor!;
+    expect(cursor).toEqual({ id: raw.id, createdAt: raw.created_at, sort, sortValue: "42", referenceTime: raw.sort_reference_at });
+    expect(apiClient.rpc).toHaveBeenLastCalledWith("list_forms_sorted", expect.objectContaining({
+      p_search: "Школа", p_author_id: "user-1", p_form_type: "anketa", p_form_reason: "plan", p_page_size: 1, p_after_id: null,
+    }));
+    await fetchDashboardFormsPage({ pageSize: 1, sort, cursor });
+    expect(apiClient.rpc).toHaveBeenLastCalledWith("list_forms_sorted", expect.objectContaining({ p_after_id: raw.id, p_after_value: "42", p_reference_time: raw.sort_reference_at }));
+    await expect(fetchDashboardFormsPage({ pageSize: 1, sort: { field: "title", direction: "asc" }, cursor })).rejects.toThrow("Сортировка изменилась");
+  });
+});

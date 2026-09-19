@@ -103,3 +103,70 @@ test("removing one of several public files preserves the other attachment", asyn
   await expect(page.locator(".sd-file label[for]")).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
+
+test("anonymous file previews and downloads work when private Storage denies reads", async ({ page }) => {
+  const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 0, pages: [
+    { name: "files", elements: [{ type: "file", name: "attachments", title: "Файлы", ...{ allowMultiple: true, needConfirmRemoveFile: false } }] },
+    { name: "next", elements: [{ type: "text", name: "comment", title: "Комментарий" }] },
+  ] });
+  await page.evaluate(() => localStorage.clear());
+  const uploads: string[] = [];
+  const readRequests: string[] = [];
+  const deleted: string[] = [];
+  await page.route("**/storage/v1/object/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes("/object/sign/")) {
+      readRequests.push(path);
+      return route.fulfill({ status: 400, json: { message: "Object not found", statusCode: "404" } });
+    }
+    expect(path).toContain(`/object/survey-files/public/${formId}/`);
+    uploads.push(path.split("/object/survey-files/")[1]);
+    return route.fulfill({ json: { Key: path.split("/object/")[1] } });
+  });
+  await page.route("**/functions/v1/form-admin", async route => {
+    deleted.push(route.request().postDataJSON().path);
+    return route.fulfill({ json: { success: true } });
+  });
+  const pdf = { name: "report.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\npreview test\n") };
+  const docx = { name: "answer.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from([0x50, 0x4b, 3, 4, 0, 255]) };
+  await page.goto(`/form/${formId}`);
+  const chooser = page.waitForEvent("filechooser");
+  await page.locator(".sd-file label[for]").click();
+  await (await chooser).setFiles([pdf, docx]);
+  await expect(page.locator(".sd-file__preview-item")).toHaveCount(2);
+  await expect(page.locator(".sd-file")).toContainText(pdf.name);
+  await expect(page.locator(".sd-file")).toContainText(docx.name);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: docx.name, exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(docx.name);
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream!) chunks.push(chunk);
+  expect(Buffer.concat(chunks)).toEqual(docx.buffer);
+
+  await chooseFiles(page, ["photo.png"]);
+  await expect(page.locator(".sd-file__preview-item")).toHaveCount(3);
+  await expect(page.locator(".sd-file img")).toHaveAttribute("src", /^data:image\/png;base64,/);
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(page.locator(".sd-file__preview-item")).toHaveCount(3);
+  await page.locator(".sd-file__preview-item").filter({ hasText: pdf.name }).locator(".sd-context-btn").click();
+  await expect(page.locator(".sd-file__preview-item")).toHaveCount(2);
+  await expect.poll(() => deleted).toEqual([uploads[0]]);
+
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/rest/v1/rpc/submit_form_response", async route => {
+    submitted = route.request().postDataJSON().p_data;
+    return route.fulfill({ json: { status: "submitted", response_id: "response-test", response_data: submitted, response_editable: false } });
+  });
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await page.getByRole("button", { name: "Отправить", exact: true }).click();
+  await expect.poll(() => submitted).toEqual({ attachments: [
+    { name: docx.name, type: docx.mimeType, content: uploads[1] },
+    { name: "photo.png", type: "image/png", content: uploads[2] },
+  ] });
+  expect(readRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});

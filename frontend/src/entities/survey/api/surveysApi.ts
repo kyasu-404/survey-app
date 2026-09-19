@@ -19,6 +19,7 @@ import {
 import type {
   DashboardFormsStats,
   FormsCursor,
+  FormsSort,
   PaginatedSurveyFormSummaries,
   SurveyForm,
   SurveySchema,
@@ -39,6 +40,7 @@ export async function getForms(filters?: FormsFilters): Promise<SurveyForm[]> {
 }
 
 export async function getDashboardFormsPage(params: {
+  sort?: FormsSort;
   pageSize: number;
   cursor?: FormsCursor | null;
   filters?: FormsFilters;

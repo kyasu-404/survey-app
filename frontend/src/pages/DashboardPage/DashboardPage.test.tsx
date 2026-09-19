@@ -238,6 +238,7 @@ function createDeferred<T>() {
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem("survey-app:forms-layout");
     resetRealtimeChannel();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
@@ -255,6 +256,48 @@ describe("DashboardPage", () => {
     qrToDataURL.mockResolvedValue("data:image/png;base64,transparent-qr");
   });
 
+
+  it("switches views without changing shared filters or reloading the loaded forms", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));
+    renderPage();
+    await screen.findByText("Форма 1");
+    await userEvent.type(screen.getByPlaceholderText("Поиск по названию и автору"), "Форма");
+    await userEvent.selectOptions(screen.getByLabelText("Тип формы"), "anketa");
+    await userEvent.selectOptions(screen.getByLabelText("Основание формы"), "plan");
+    await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ filters: expect.objectContaining({ search: "Форма" }) })));
+    const requests = getDashboardFormsPage.mock.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: "Показать таблицу" }));
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Поиск по названию и автору")).toHaveValue("Форма");
+    expect(screen.getByLabelText("Тип формы")).toHaveValue("anketa");
+    expect(screen.getByLabelText("Основание формы")).toHaveValue("plan");
+    expect(localStorage.getItem("survey-app:forms-layout")).toBe("table");
+    expect(getDashboardFormsPage).toHaveBeenCalledTimes(requests);
+    await userEvent.click(screen.getByRole("button", { name: "Показать карточки" }));
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть превью формы Форма 1" })).toBeInTheDocument();
+  });
+
+  it("requests a new globally sorted page when clicking headers and preserves row actions", async () => {
+    localStorage.setItem("survey-app:forms-layout", "table");
+    getDashboardFormsPage.mockImplementation(({ sort }) => Promise.resolve(createDashboardPage([
+      createForm(sort ? 99 : 1, { author_id: "user-1" }),
+    ])));
+    renderPage();
+    await screen.findByText("Форма 1");
+    await userEvent.click(screen.getByRole("button", { name: "Название" }));
+    expect(await screen.findByText("Форма 99")).toBeInTheDocument();
+    expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: null, sort: { field: "title", direction: "asc" } }));
+    expect(screen.getByRole("columnheader", { name: /Название/ })).toHaveAttribute("aria-sort", "ascending");
+    await userEvent.click(screen.getByRole("button", { name: "Название" }));
+    await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: null, sort: { field: "title", direction: "desc" } })));
+    await userEvent.click(screen.getByRole("button", { name: "Ответы формы Форма 99: 99 ответов" }));
+    expect(navigate).toHaveBeenCalledWith(routes.formResponses("form-99"));
+    await userEvent.click(screen.getByRole("button", { name: "Действия формы Форма 99" }));
+    expect(screen.getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
 
   it("refreshes both statistics and cards on manual refresh", async () => {
     getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));

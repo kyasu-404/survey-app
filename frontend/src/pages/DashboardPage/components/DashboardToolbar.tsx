@@ -1,11 +1,15 @@
 import type { Dispatch, SetStateAction } from "react";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entities/survey/model/formOptions";
+import viewBlack from "../../../img/FormatViewBlack.svg";
+import viewWhite from "../../../img/FormatViewWhite.svg";
 import infoIcon from "../../../img/info.svg";
 import searchIcon from "../../../img/search.svg";
 import { RefreshButton } from "../../../shared/ui/RefreshButton";
-import type { DashboardViewMode, OpenMenuState } from "../types";
+import type { DashboardLayout, DashboardViewMode, OpenMenuState } from "../types";
 
 type DashboardToolbarProps = {
+  layout: DashboardLayout;
+  onToggleLayout: () => void;
   activeFormsCount: number;
   dateFrom: string;
   dateTo: string;
@@ -30,6 +34,8 @@ type DashboardToolbarProps = {
 };
 
 export function DashboardToolbar({
+  layout,
+  onToggleLayout,
   activeFormsCount,
   dateFrom,
   dateTo,
@@ -66,6 +72,17 @@ export function DashboardToolbar({
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+        <button
+          type="button"
+          className="dashboard-info-button dashboard-layout-toggle"
+          aria-label={layout === "cards" ? "Показать таблицу" : "Показать карточки"}
+          title={layout === "cards" ? "Показать таблицу" : "Показать карточки"}
+          aria-pressed={layout === "table"}
+          onClick={onToggleLayout}
+        >
+          <img src={viewBlack} alt="" aria-hidden="true" className="dashboard-view-icon-light" />
+          <img src={viewWhite} alt="" aria-hidden="true" className="dashboard-view-icon-dark" />
+        </button>
         <div className="dashboard-floating-root dashboard-info-box">
           <button
             type="button"

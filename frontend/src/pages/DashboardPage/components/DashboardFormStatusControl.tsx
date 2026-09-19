@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { DashboardMenuPortal } from "./DashboardMenuPortal";
 import type {
   Dispatch,
   KeyboardEvent as ReactKeyboardEvent,
@@ -9,6 +11,7 @@ import type { SurveyFormSummary } from "../../../entities/survey/types";
 import type { OpenMenuState } from "../types";
 
 type DashboardFormStatusControlProps = {
+  portal?: boolean;
   form: SurveyFormSummary;
   isOwnForm: boolean;
   isPending: boolean;
@@ -24,6 +27,7 @@ function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
 }
 
 export function DashboardFormStatusControl({
+  portal = false,
   form,
   isOwnForm,
   isPending,
@@ -33,6 +37,7 @@ export function DashboardFormStatusControl({
   setOpenedMenu,
   statusMenuOpen,
 }: DashboardFormStatusControlProps) {
+  const anchorRef = useRef<HTMLDivElement>(null);
   const title = getSurveyDisplayTitle(form);
   const isTemplate = isTemplateForm(form);
   const isFormActive = form.is_public;
@@ -51,7 +56,7 @@ export function DashboardFormStatusControl({
   }
 
   return (
-    <div className="form-menu dashboard-floating-root dashboard-status-menu-shell">
+    <div ref={anchorRef} className="form-menu dashboard-floating-root dashboard-status-menu-shell">
       <button
         type="button"
         className={`dashboard-status-pill dashboard-status-trigger dashboard-status-trigger-glossy ${
@@ -70,6 +75,7 @@ export function DashboardFormStatusControl({
       </button>
 
       {statusMenuOpen && (
+        <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="left">
         <div
           className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
           role="menu"
@@ -116,6 +122,7 @@ export function DashboardFormStatusControl({
             Ограничить ответы
           </button>
         </div>
+        </DashboardMenuPortal>
       )}
     </div>
   );

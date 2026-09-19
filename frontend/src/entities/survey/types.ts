@@ -58,12 +58,22 @@ export type SurveyForm = {
   responses_count?: number;
 };
 
-export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme" | "allow_response_editing">;
+export type FormsSort = {
+  field: "status" | "title" | "classification" | "author_name" | "created_at" | "responses_count";
+  direction: "asc" | "desc";
+};
+
+export type SurveyFormSummary = Omit<SurveyForm, "schema" | "theme" | "allow_response_editing"> & {
+  list_cursor?: FormsCursor;
+};
 
 export type FormsCursor = {
   // Keep PostgreSQL's original timestamp string, including microseconds.
   createdAt: string;
   id: string;
+  sort?: FormsSort;
+  sortValue?: string;
+  referenceTime?: string;
 };
 
 export type PaginatedSurveyFormSummaries = {

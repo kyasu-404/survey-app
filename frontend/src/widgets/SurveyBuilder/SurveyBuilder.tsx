@@ -231,7 +231,7 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: definition.iconName,
       title: definition.title,
       category: definition.category,
-      json: { type: definition.name },
+      json: { type: definition.name, ...(definition.name === "file" ? { allowMultiple: true } : {}) },
     };
 
     toolbox.addItem(item, index);

@@ -49,6 +49,9 @@ import {
   saveSurveyResponseDraft,
 } from "./responseDraft";
 import { getOrCreateResponseBrowserId } from "./responseBrowserId";
+import { readLocalSurveyFile } from "./surveyFilePreview";
+import { installRatingFeedback } from "./ratingFeedback";
+import "./SurveyFormRenderer.css";
 
 surveyLocalization.defaultLocale = "ru";
 
@@ -208,9 +211,13 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
-async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean) {
+async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>) {
   try {
-    const fileContent = await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous });
+    const path = getStoragePathFromSurveyFileValue(options.fileValue);
+    const localFile = path ? uploadedFiles.get(path) : undefined;
+    const fileContent = localFile
+      ? await readLocalSurveyFile(localFile)
+      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous });
     options.callback("success", fileContent);
   } catch (error) {
     console.error(error);
@@ -252,14 +259,16 @@ export function SurveyFormRenderer({
     () => (isInteractiveMode ? getSurveyResponseDraftStorageKey(formId, respondentId) : null),
     [formId, isInteractiveMode, respondentId],
   );
-  const model = useMemo(() => {
+  const { model, uploadedFiles } = useMemo(() => {
     registerCustomSurveyQuestionTypes();
     const safeSchema = sanitizeSurveySchema(schema);
     const resolvedSchema = resolveDefaultSurveyLogo(
       normalizeSurveyQuestionNumbers(normalizeSurveyFileQuestions(safeSchema) as SurveySchema),
     );
     const nextModel = new Model(resolvedSchema);
+    const localFiles = new Map<string, File>();
     nextModel.applyTheme(resolveSurveyTheme(theme));
+    installRatingFeedback(nextModel);
     nextModel.onProcessHtml.add((_sender: Model, options: ProcessHtmlEvent) => {
       options.html = sanitizeSurveyHtml(options.html);
     });
@@ -267,7 +276,7 @@ export function SurveyFormRenderer({
       options.allow = isSafeSurveyNavigationUrl(options.url);
     });
     // Register before restoring data, and keep the handler for this model's lifetime.
-    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads));
+    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles));
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
@@ -297,7 +306,7 @@ export function SurveyFormRenderer({
     applyRenderMode(nextModel, resolvedRenderMode);
     nextModel.onQuestionCreated.add((_sender, { question }) => prepareFileQuestionActions(question));
     nextModel.getAllQuestions().forEach(prepareFileQuestionActions);
-    return nextModel;
+    return { model: nextModel, uploadedFiles: localFiles };
   }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
 
   useEffect(() => {
@@ -379,6 +388,9 @@ export function SurveyFormRenderer({
           uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads }));
         }
 
+        // Register all originals before SurveyJS requests their previews. The
+        // answer still contains only Storage paths, never Base64 file bodies.
+        uploaded.forEach((item) => uploadedFiles.set(item.path, item.file));
         options.callback(
           uploaded.map((item) => ({
             file: item.file,
@@ -388,6 +400,7 @@ export function SurveyFormRenderer({
       } catch (error) {
         console.error(error);
         const message = getErrorMessage(error, "Не удалось загрузить файл. Выберите файл ещё раз.");
+        uploaded.forEach((item) => uploadedFiles.delete(item.path));
         options.callback([], [message]);
         showToast(message, "error");
         // Recover the input before waiting for best-effort storage cleanup.
@@ -412,6 +425,7 @@ export function SurveyFormRenderer({
       // Clearing the answer must not depend on deleting the stored object. SurveyJS
       // also calls this before replacing a file, and keeps the input busy on error.
       // Failed deletions are retried by scheduled orphan cleanup after its grace period.
+      paths.forEach((path) => uploadedFiles.delete(path));
       options.callback("success");
       if (isEditingResponse) return;
 
@@ -529,6 +543,7 @@ export function SurveyFormRenderer({
     showToast,
     submitResponseMutation,
     updateResponseMutation,
+    uploadedFiles,
   ]);
 
   const canEditSavedResponse = Boolean(savedResponse?.editable && allowResponseEditing);

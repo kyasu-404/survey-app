@@ -1,4 +1,4 @@
-import type { FormsCursor } from "../../../entities/survey/types";
+import type { FormsCursor, FormsSort } from "../../../entities/survey/types";
 import { createBatchedFormsQuery, getFormsNextCursor } from "../../../shared/lib/batchedInfiniteQuery";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,13 +23,14 @@ type DashboardFilterState = {
 };
 
 type UseDashboardFormsOptions = {
+  sort?: FormsSort;
   filters: DashboardFilterState;
   isAuthLoading: boolean;
   userId?: string;
   viewMode: DashboardViewMode;
 };
 
-export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: UseDashboardFormsOptions) {
+export function useDashboardForms({ filters, isAuthLoading, userId, viewMode, sort }: UseDashboardFormsOptions) {
   const [deadlineReferenceTime, setDeadlineReferenceTime] = useState(() => new Date());
   const [isManualRefreshingForms, setIsManualRefreshingForms] = useState(false);
   const pendingLoadMoreScrollPositionRef = useRef<{ left: number; top: number } | null>(null);
@@ -37,6 +38,7 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
   const formsQueryKey = useMemo(
     () =>
       getDashboardFormsQueryKey({
+        ...(sort && (sort.field !== "created_at" || sort.direction !== "desc") ? { sort } : {}),
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         formReason: filters.formReason,
@@ -46,7 +48,7 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
         viewMode,
         userId: userId ?? null,
       }),
-    [filters.dateFrom, filters.dateTo, filters.formReason, filters.formType, filters.normalizedSearch, userId, viewMode],
+    [filters.dateFrom, filters.dateTo, filters.formReason, filters.formType, filters.normalizedSearch, userId, viewMode, sort],
   );
 
   const queryClient = useQueryClient();
@@ -55,8 +57,9 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode }: 
     (request) => getDashboardFormsPage({
         ...request,
         filters: filters.listFilters,
+        ...(sort && (sort.field !== "created_at" || sort.direction !== "desc") ? { sort } : {}),
       }),
-  ), [queryClient, formsQueryKey, filters.listFilters]);
+  ), [queryClient, formsQueryKey, filters.listFilters, sort]);
 
   const query = useInfiniteQuery({
     queryKey: formsQueryKey,

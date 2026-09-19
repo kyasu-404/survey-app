@@ -93,6 +93,7 @@ vi.mock("survey-core", () => ({
     onDownloadFile = new FakeSurveyEvent();
     onClearFiles = new FakeSurveyEvent();
     onQuestionCreated = new FakeSurveyEvent();
+    onAfterRenderQuestion = new FakeSurveyEvent();
     onOpenDropdownMenu = new FakeSurveyEvent();
     onProcessHtml = new FakeSurveyEvent();
     onNavigateToUrl = new FakeSurveyEvent();

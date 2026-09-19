@@ -878,6 +878,7 @@ describe("SurveyBuilder", () => {
 
     expect(creator.options.questionTypes).toEqual(questionTypes);
     expect(creator.toolbox.items.map((item: { name: string }) => item.name)).toEqual(questionTypes);
+    expect(creator.toolbox.getItemByName("file")?.json).toEqual({ type: "file", allowMultiple: true });
     expect(creator.toolbox.getItemByName("text")?.items).toEqual([]);
     expect(serializerGetProperty).toHaveBeenCalledWith("text", "inputType");
     expect(serializerGetProperty).toHaveBeenCalledWith("survey", "showQuestionNumbers");

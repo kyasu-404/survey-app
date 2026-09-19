@@ -1,4 +1,7 @@
+import type { FormsSort } from "../types";
+
 export type DashboardFormsQueryParams = {
+  sort?: FormsSort;
   dateFrom: string;
   dateTo: string;
   formReason: string;

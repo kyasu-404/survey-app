@@ -5,11 +5,11 @@ type PageRequest = { cursor: FormsCursor | null; pageSize: number; signal?: Abor
 
 export function getFormsNextCursor(page: PaginatedSurveyFormSummaries): FormsCursor | undefined {
   const last = page.items[page.items.length - 1];
-  return page.hasMore && last ? { createdAt: last.created_at, id: last.id } : undefined;
+  return page.hasMore && last ? last.list_cursor ?? { createdAt: last.created_at, id: last.id } : undefined;
 }
 
 function cursorKey(cursor: FormsCursor | null) {
-  return JSON.stringify(cursor ? [cursor.createdAt, cursor.id] : null);
+  return JSON.stringify(cursor);
 }
 
 // Refresh the loaded window in batches, preserving the infinite-query cache,

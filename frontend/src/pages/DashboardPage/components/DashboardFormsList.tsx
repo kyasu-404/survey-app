@@ -1,10 +1,13 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { SurveyFormSummary } from "../../../entities/survey/types";
+import type { FormsSort, SurveyFormSummary } from "../../../entities/survey/types";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
-import type { DashboardViewMode, OpenMenuState } from "../types";
+import type { DashboardLayout, DashboardViewMode, OpenMenuState } from "../types";
 import { DashboardFormCard } from "./DashboardFormCard";
 
 type DashboardFormsListProps = {
+  layout: DashboardLayout;
+  sort: FormsSort;
+  onSort: (field: FormsSort["field"]) => void;
   currentUserId?: string;
   displayedForms: SurveyFormSummary[];
   filteredForms: SurveyFormSummary[];
@@ -31,6 +34,9 @@ type DashboardFormsListProps = {
 };
 
 export function DashboardFormsList({
+  layout,
+  sort,
+  onSort,
   currentUserId,
   displayedForms,
   filteredForms,
@@ -55,26 +61,10 @@ export function DashboardFormsList({
   setOpenedMenu,
   viewMode,
 }: DashboardFormsListProps) {
-  return (
-    <>
-      {isInitialFormsLoading && (
-        <div className="dashboard-forms-loading" role="status" aria-live="polite">
-          <span>Загрузка форм</span>
-          <InlineSpinner />
-        </div>
-      )}
-
-      {!isInitialFormsLoading && filteredForms.length === 0 && (
-        <div className="dashboard-empty-state">
-          <h4>Форм пока нет</h4>
-          <p>Попробуйте изменить фильтры или создайте новую форму в конструкторе.</p>
-        </div>
-      )}
-
-      <div className="dashboard-forms-grid">
-        {displayedForms.map((form, formIndex) => (
+  const rows = displayedForms.map((form, formIndex) => (
           <DashboardFormCard
             key={form.id}
+            layout={layout}
             currentUserId={currentUserId}
             form={form}
             formIndex={formIndex}
@@ -95,8 +85,44 @@ export function DashboardFormsList({
             setOpenedMenu={setOpenedMenu}
             viewMode={viewMode}
           />
-        ))}
-      </div>
+        ));
+
+  return (
+    <>
+      {isInitialFormsLoading && (
+        <div className="dashboard-forms-loading" role="status" aria-live="polite">
+          <span>Загрузка форм</span>
+          <InlineSpinner />
+        </div>
+      )}
+
+      {!isInitialFormsLoading && filteredForms.length === 0 && (
+        <div className="dashboard-empty-state">
+          <h4>Форм пока нет</h4>
+          <p>Попробуйте изменить фильтры или создайте новую форму в конструкторе.</p>
+        </div>
+      )}
+
+      {layout === "cards" ? <div className="dashboard-forms-grid">{rows}</div> : (
+        <div className="dashboard-forms-table-shell" role="region" aria-label="Список форм" tabIndex={0}>
+          <table className="dashboard-forms-table">
+            <thead><tr>
+              {([
+                ["status", "Статус"], ["title", "Название"], ["classification", "Тип / основание"],
+                ["author_name", "Автор"], ["created_at", "Создано"], ["responses_count", "Ответы"],
+              ] as const).filter(([field]) => viewMode !== "mine" || field !== "author_name").map(([field, label]) => (
+                <th key={field} scope="col" aria-sort={sort.field === field ? sort.direction === "asc" ? "ascending" : "descending" : "none"}>
+                  <button type="button" onClick={() => onSort(field)} title={`Сортировать: ${label}`}>
+                    {label}<span className="dashboard-sort-indicator" aria-hidden="true">{sort.field === field ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span>
+                  </button>
+                </th>
+              ))}
+              <th scope="col" aria-label="Действия" />
+            </tr></thead>
+            <tbody>{rows}</tbody>
+          </table>
+        </div>
+      )}
 
       {!isInitialFormsLoading && hasMoreForms && (
         <div className="dashboard-load-more">

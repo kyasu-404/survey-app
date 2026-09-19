@@ -8709,3 +8709,41 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .sidebar-account .sidebar-account-menu{top:auto;bottom:calc(100% + 10px);left:0;right:0;min-width:0;width:100%;z-index:520;max-height:calc(100dvh - 100px);overflow-y:auto;transform-origin:bottom left}
 .sidebar-account-menu .form-menu-item>img{width:20px;height:20px;object-fit:contain;flex-shrink:0}
 .settings-cleanup-summary{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+
+/* Shared dashboard filters and compact table view. */
+.dashboard-layout-toggle { display: grid; place-items: center; flex: 0 0 44px; padding: 0; line-height: 0; }
+.dashboard-layout-toggle img { width: 24px; height: 24px; filter: none !important; }
+.dashboard-view-icon-dark { display: none; }
+:root[data-theme="graphite"] .dashboard-view-icon-light { display: none; }
+:root[data-theme="graphite"] .dashboard-view-icon-dark { display: block; }
+.dashboard-layout-toggle[aria-pressed="true"] { outline: 2px solid var(--theme-accent); outline-offset: -3px; }
+.dashboard-forms-table-shell { width: 100%; overflow-x: auto; border: 1px solid var(--theme-border); border-radius: 14px; }
+.dashboard-forms-table { width: 100%; min-width: 880px; border-collapse: collapse; text-align: left; font-size: 14px; color: var(--theme-text); }
+.dashboard-forms-table th { background: var(--theme-surface); font-weight: 700; white-space: nowrap; }
+.dashboard-forms-table th, .dashboard-forms-table td { padding: 8px 14px; border-bottom: 1px solid var(--theme-border); vertical-align: middle; }
+.dashboard-forms-table tr:last-child td { border-bottom: 0; }
+.dashboard-forms-table th:first-child, .dashboard-forms-table td:first-child { width: 1%; padding-inline: 10px; white-space: nowrap; }
+.dashboard-forms-table th:not(:last-child), .dashboard-forms-table td:not(:last-child) { border-right: 1px solid var(--theme-border); }
+.dashboard-forms-table th button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 0; border: 0; border-radius: 4px; background: transparent; box-shadow: none; color: inherit; font: inherit; text-align: left; }
+.dashboard-sort-indicator { opacity: .45; min-width: 1ch; }
+.dashboard-forms-table th[aria-sort="ascending"] .dashboard-sort-indicator,
+.dashboard-forms-table th[aria-sort="descending"] .dashboard-sort-indicator { opacity: 1; }
+.dashboard-form-table-row { cursor: pointer; background: var(--theme-surface-light); }
+.dashboard-form-table-row:hover, .dashboard-form-table-row:focus-within { background: var(--theme-surface); }
+.dashboard-form-table-title { min-width: 180px; max-width: 460px; overflow-wrap: anywhere; }
+.dashboard-form-table-title button { padding: 0; border: 0; background: transparent; box-shadow: none; font: inherit; font-weight: 650; text-align: left; color: inherit; }
+.dashboard-form-table-title button:hover { text-decoration: underline; }
+.dashboard-form-table-date { white-space: nowrap; }
+.dashboard-form-table-count { text-align: left; }
+.dashboard-table-response-summary { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.dashboard-form-table-count button { display: inline-flex; align-items: center; justify-content: flex-start; min-width: 54px; min-height: 40px; margin: -4px 0 -4px -10px; padding: 4px 10px; border-radius: 8px; font-variant-numeric: tabular-nums; }
+.dashboard-form-table-count button:hover, .dashboard-form-table-count button:focus-visible { background: var(--theme-accent-soft); }
+.dashboard-table-deadline { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 32px; flex-shrink: 0; cursor: default; border-radius: 6px; }
+.dashboard-deadline-tooltip { padding: 8px 12px; border: 1px solid var(--theme-border); border-radius: 8px; background: var(--theme-popover-background); color: var(--theme-text); font-size: 13px; line-height: 1.4; }
+.dashboard-table-deadline img { width: 16px; height: 16px; }
+.dashboard-table-deadline:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 1px; }
+.dashboard-forms-table .dashboard-status-pill { white-space: nowrap; font-size: 12px; min-height: 24px; padding: 3px 8px; }
+.dashboard-forms-table .form-menu-trigger { min-width: 32px; width: 32px; height: 32px; min-height: 32px; }
+.dashboard-table-menu { position: fixed; z-index: 600; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; }
+.dashboard-table-menu .form-menu-dropdown { position: static; margin: 0; animation: none; transform: none; }
+.dashboard-forms-table button:focus-visible, .dashboard-forms-table-shell:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }

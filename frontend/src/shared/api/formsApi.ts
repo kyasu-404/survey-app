@@ -11,6 +11,7 @@ import type { ITheme } from "survey-core";
 import type {
   DashboardFormsStats,
   FormsCursor,
+  FormsSort,
   PaginatedSurveyFormSummaries,
   SurveyForm,
   SurveyFormSummary,
@@ -64,6 +65,7 @@ type RawDashboardFormsStats = {
 };
 
 type FetchFormsPageOptions = {
+  sort?: FormsSort;
   pageSize: number;
   cursor?: FormsCursor | null;
   filters?: FormsFilters;
@@ -367,6 +369,11 @@ export async function fetchDashboardFormsPage(
   options: FetchFormsPageOptions,
 ): Promise<PaginatedSurveyFormSummaries> {
   const pageSize = normalizeFormsPageSize(options.pageSize);
+
+  // Keep the established indexed path for the default order and template lists.
+  if (options.sort && (options.sort.field !== "created_at" || options.sort.direction !== "desc")) {
+    return fetchSortedDashboardFormsPage(options, pageSize);
+  }
 
   // GET lets PostgREST inline typed cursor parameters into the index condition.
   let query = apiClient
@@ -794,4 +801,36 @@ export async function duplicateForm(form: SurveyForm, authorId: string) {
     organizationTypes: form.organization_types,
     authorId: currentUserId,
   });
+}
+
+async function fetchSortedDashboardFormsPage(options: FetchFormsPageOptions, pageSize: number) {
+  const sort = options.sort!;
+  const cursor = options.cursor;
+  if (cursor && (cursor.sort?.field !== sort.field || cursor.sort?.direction !== sort.direction)) {
+    throw new Error("Сортировка изменилась. Обновите список форм.");
+  }
+  const params = {
+    ...buildDashboardStatsParams(options.filters),
+    p_sort_field: sort.field,
+    p_sort_direction: sort.direction,
+    p_page_size: pageSize,
+    p_after_id: cursor?.id ?? null,
+    p_after_value: cursor?.sortValue ?? null,
+    p_reference_time: cursor?.referenceTime ?? null,
+  };
+  const { data, error } = await runRequest(
+    "forms.fetchSortedDashboardPage",
+    (signal) => apiClient.rpc("list_forms_sorted", params).abortSignal(signal),
+    { signal: options.signal, context: { sort, hasCursor: Boolean(cursor), pageSize } },
+  );
+  if (error) throw error;
+  type SortedRow = RawFormSummary & { sort_value: string; sort_reference_at: string };
+  const forms = ((data ?? []) as SortedRow[]).map(({ sort_value, sort_reference_at, ...row }) => ({
+    ...syncFetchedFormState(mapRawFormSummary(row)),
+    list_cursor: {
+      id: row.id, createdAt: row.created_at, sort,
+      sortValue: sort_value, referenceTime: sort_reference_at,
+    },
+  }));
+  return createPaginatedFormSummaries(forms, pageSize);
 }

@@ -116,3 +116,32 @@ it.each([0, 20, 40])("terminates exactly for %s rows without an extra page", asy
   const pages = observer.getCurrentResult().data?.pages ?? [];
   expect(pages[pages.length - 1]?.totalCount).toBe(count);
 });
+
+it("preserves server sort keys when refreshing and splitting a loaded window", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const rows = Array.from({ length: 67 }, (_, index) => {
+    const item = row(index);
+    return { ...item, list_cursor: {
+      id: item.id, createdAt: item.created_at,
+      sort: { field: "responses_count", direction: "asc" } as const,
+      sortValue: String(index), referenceTime: "2026-09-15T12:00:00.123456Z",
+    } };
+  });
+  const fetch = vi.fn(async ({ cursor, pageSize }: { cursor: FormsCursor | null; pageSize: number }) => {
+    const start = cursor ? Number(cursor.sortValue) + 1 : 0;
+    const remaining = rows.slice(start);
+    return { items: remaining.slice(0, pageSize), hasMore: remaining.length > pageSize, totalCount: remaining.length };
+  });
+  const observer = new InfiniteQueryObserver(client, {
+    queryKey: ["sorted-forms"], initialPageParam: null as FormsCursor | null,
+    queryFn: createBatchedFormsQuery(client, ["sorted-forms"], 20, fetch), getNextPageParam: getFormsNextCursor,
+  });
+  await observer.refetch();
+  await observer.fetchNextPage();
+  expect(fetch.mock.calls[1][0].cursor).toEqual(rows[19].list_cursor);
+  await observer.refetch();
+  await observer.fetchNextPage();
+  expect(fetch.mock.lastCall?.[0].cursor).toEqual(rows[39].list_cursor);
+  expect(observer.getCurrentResult().data?.pages.flatMap((page) => page.items)).toEqual(rows.slice(0,60));
+});
