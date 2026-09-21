@@ -81,8 +81,8 @@ export function DashboardFormActionMenu({
         ...
       </button>
 
-      {actionMenuOpen && (
-        <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="right">
+      <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="right">
+        {actionMenuOpen && (
         <div
           className="form-menu-dropdown"
           role="menu"
@@ -190,8 +190,8 @@ export function DashboardFormActionMenu({
             </button>
           )}
         </div>
-        </DashboardMenuPortal>
-      )}
+        )}
+      </DashboardMenuPortal>
     </div>
   );
 }

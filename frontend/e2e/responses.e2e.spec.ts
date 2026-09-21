@@ -29,7 +29,12 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   for (let index = 0; index < 16; index += 1) {
     await expect(firstCells.nth(4 + 2 * index)).toHaveText(index === 15 ? "" : `Комментарий ${index + 1}, ответ 1`);
   }
-  await expect(page.getByLabel("Страницы ответов")).toHaveCount(0);
+  await expect(page.getByLabel("Страницы ответов")).toBeVisible();
+  await expect(page.locator(".responses-table tbody tr")).toHaveCount(50);
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole("button", { name: "Далее", exact: true }).click();
+    await expect(page.getByText(`Страница ${i + 2} из 4`)).toBeVisible();
+  }
   const table = page.locator(".responses-page-table-shell");
   expect(await table.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await table.evaluate((element) => { element.scrollTop = element.scrollHeight; });
@@ -82,11 +87,11 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   }
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();
-  await page.getByRole("checkbox", { name: "Выбрать все ответы", exact: true }).check();
-  await expect(page.getByText("Выбрано: 200")).toBeVisible();
+  await page.getByRole("checkbox", { name: "Выбрать ответы на странице", exact: true }).check();
+  await expect(page.getByText("Выбрано: 50")).toBeVisible();
   page.on("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Удалить", exact: true }).click();
-  await expect(page.getByText("Ответов пока нет", { exact: true })).toBeVisible();
-  expect(deletedBatchSizes).toEqual([100, 100]);
+  await expect(page.getByText("Ответов: 150", { exact: true })).toBeVisible();
+  expect(deletedBatchSizes).toEqual([50]);
   expect(pageErrors).toEqual([]);
 });

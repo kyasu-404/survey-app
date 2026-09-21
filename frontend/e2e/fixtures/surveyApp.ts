@@ -46,6 +46,7 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
     }
     if (url.pathname.endsWith("/functions/v1/form-admin")) {
       const body = request.postDataJSON();
+      if (body.action === "reserve-upload") return route.fulfill({ json: { path: `public/${body.formId}/${crypto.randomUUID()}${body.extension}` } });
       if (body.action === "update-schema") {
         form.schema = body.schema;
         form.title = body.title;
@@ -71,6 +72,10 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
         const limit = Number(url.searchParams.get("limit") ?? 20);
         listRequests.push({ cursor, limit });
         return route.fulfill({ json: forms.slice(offset, offset + limit) });
+      }
+      if (table === "export_form_responses") {
+        const { p_response_ids } = request.postDataJSON();
+        return route.fulfill({ json: p_response_ids ? responses.filter(row => p_response_ids.includes(row.id)) : responses });
       }
       if (table === "responses") {
         const offset = Number(url.searchParams.get("offset") ?? 0);

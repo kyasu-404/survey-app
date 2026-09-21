@@ -1,9 +1,10 @@
+import { Presence } from "../../shared/ui/Presence";
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useNavigate} from 'react-router-dom';
 import {useAuth} from '../../app/providers/AuthProvider';
 import {useToast} from '../../app/providers/ToastProvider';
-import {officeRequest,downloadOfficeDocument,type OfficeDocument,type OfficeResult} from '../../entities/office/api';
+import {officeRequest,downloadOfficeDocument,type OfficeDocument,type OfficeJob} from '../../entities/office/api';
 import {getErrorMessage} from '../../shared/lib/error';
 import {SectionTabs} from '../../shared/ui/SectionTabs';
 import {GenerateDocuments} from './GenerateDocuments';
@@ -26,8 +27,8 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
  useEffect(()=>{const close=(e:MouseEvent)=>{if(!(e.target as Element).closest('.office-menu-shell'))setMenu(null);};document.addEventListener('click',close);return()=>document.removeEventListener('click',close);},[]);
  useEffect(()=>{if(!menu)return;const frame=requestAnimationFrame(()=>dialog.current?.querySelector('[role="menu"]')?.scrollIntoView({block:'nearest'}));return()=>cancelAnimationFrame(frame);},[menu]);
  async function run(fn:()=>Promise<unknown>){setBusy(true);setError('');setMenu(null);try{await fn();setMode(null);await query.refetch();}catch(e){setError(getErrorMessage(e,'Не удалось выполнить операцию'));}finally{setBusy(false);}}
- async function generated(result:OfficeResult){queryClient.setQueryData<{results:OfficeResult[]}>(['office-results',formId],old=>({results:[result,...(old?.results || []).filter(r=>r.id!==result.id)]}));setGeneration(null);setFocusResult(result.id);setTab('results');showToast('Документы сформированы','success');await queryClient.invalidateQueries({queryKey:['office-results',formId]});}
- return <dialog ref={dialog} className="office-dialog" onCancel={onClose} aria-labelledby="documents-title">
+ async function generated(job:OfficeJob){setGeneration(null);setFocusResult(job.id);setTab('results');showToast('Задание добавлено в очередь. Окно можно закрыть.','success');await queryClient.invalidateQueries({queryKey:['office-results',formId]});}
+ return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="documents-title">
   <header><div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div><button type="button" className="app-button" onClick={onClose} aria-label="Закрыть документы">×</button></header>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>
   <div className="office-tab-panel" role="tabpanel" id="documents-panel-templates" aria-labelledby="documents-tab-templates" hidden={tab!=='templates'}>
@@ -44,12 +45,12 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
       <span className="organizations-row-actions"><button type="button" className="organization-edit-button" disabled={busy || !query.data?.enabled} onClick={()=>navigate(`/forms/${formId}/documents/${doc.id}`)}>Редактировать<img src={editIcon} alt="" aria-hidden="true"/></button></span>
       <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);dialog.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>
       <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}>...</button>
-       {menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
+       <Presence kind="menu">{menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>downloadOfficeDocument(doc))}><img src={downloadIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Скачать</span></button>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>{setSelected(doc);setName(doc.name.replace(/\.(docx|xlsx)$/i,''));setMode('rename');setMenu(null);}}><img src={renameIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Переименовать</span></button>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>officeRequest(`/documents/${doc.id}/copy`,{method:'POST'}))}><img src={copyIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Создать копию</span></button>
         {(doc.created_by===user?.id || profile?.role==='admin') && <button type="button" role="menuitem" className="form-menu-item form-menu-item-danger" disabled={busy} onClick={()=>{setSelected(doc);setMode(null);setMenu(null);}}><img src={deleteIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Удалить</span></button>}
-       </div>}
+       </div>}</Presence>
       </div>
      </div>
     </article>)}

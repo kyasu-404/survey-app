@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { AuthApiError, AuthSessionMissingError } from "@supabase/supabase-js";
 import {
   getStoragePathFromSurveyFileValue,
@@ -30,6 +30,14 @@ vi.mock("./client", () => ({
 
 describe("storage api", () => {
   const fileId = "00000000-0000-4000-8000-000000000000";
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.mocked(publicSupabaseClient.functions.invoke).mockImplementation(async (_name, options) => {
+      const payload = options?.body as { action?: string; formId?: string; extension?: string };
+      return { data: payload?.action === "reserve-upload" ? { path: `public/${payload.formId}/${fileId}${payload.extension}` } : { success: true }, error: null } as never;
+    });
+  });
 
   afterEach(() => {
     vi.restoreAllMocks();

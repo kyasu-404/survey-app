@@ -38,6 +38,11 @@ describe("files ZIP export", () => {
     expect(Object.values(zip.files).filter(file => file.name.endsWith(".pdf"))).toHaveLength(1);
   });
 
+  it("rejects the entire archive when concurrent files exceed the byte budget", async () => {
+    vi.mocked(downloadSurveyFile).mockResolvedValue(bytes("123456"));
+    await expect(createResponseFilesZip(responses, schema, { maxBytes: 10 })).rejects.toThrow("64 МБ");
+  });
+
   it("does not create empty archives or disguise total failures as success", async () => {
     expect(await createResponseFilesZip([], schema)).toBeNull();
     vi.mocked(downloadSurveyFile).mockRejectedValue(new Error("403"));

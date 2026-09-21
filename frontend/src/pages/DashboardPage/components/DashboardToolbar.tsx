@@ -1,3 +1,4 @@
+import { Presence } from "../../../shared/ui/Presence";
 import type { Dispatch, SetStateAction } from "react";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entities/survey/model/formOptions";
 import viewBlack from "../../../img/FormatViewBlack.svg";
@@ -93,7 +94,7 @@ export function DashboardToolbar({
           >
             <img src={infoIcon} alt="" aria-hidden="true" className="toolbar-icon" />
           </button>
-          {openedMenu?.kind === "stats" && (
+          <Presence kind="menu">{openedMenu?.kind === "stats" && (
             <div className="dashboard-stats-popover" role="dialog" aria-label="Сводка по формам">
               <div className="dashboard-stats-item">
                 <span>Всего форм</span>
@@ -108,7 +109,7 @@ export function DashboardToolbar({
                 <strong>{formsWithDeadlineCount}</strong>
               </div>
             </div>
-          )}
+          )}</Presence>
         </div>
       </div>
 

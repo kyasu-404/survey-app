@@ -4,6 +4,7 @@ import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
+  | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string }
   | { action: "delete-upload"; formId: string; path: string }
   | { action: "get-cleanup-status" }
   | { action: "cleanup-orphans" }
@@ -426,6 +427,28 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  if (payload.action === "reserve-upload") {
+    if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !Number.isSafeInteger(payload.size)
+      || payload.size < 0 || payload.size > 10485760 || typeof payload.extension !== "string"
+      || !/^(\.[a-zA-Z0-9]{1,16})?$/.test(payload.extension)) {
+      return errorResponse(req, 400, "Некорректные параметры файла", requestLogContext);
+    }
+    // This header is overwritten at the trusted ingress; backend is private.
+    const clientIp = req.headers.get("x-survey-client-ip");
+    if (!clientIp || clientIp.length > 64 || !/^[0-9a-fA-F:.]+$/.test(clientIp)) {
+      return errorResponse(req, 503, "Не удалось определить адрес загрузки", requestLogContext);
+    }
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(supabaseServiceRoleKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(clientIp));
+    const clientHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    const { data: path, error } = await adminClient.rpc("reserve_survey_upload", {
+      p_form_id: payload.formId, p_browser_id: payload.browserId, p_client_hash: clientHash,
+      p_size: payload.size, p_extension: payload.extension,
+    });
+    if (error) return errorResponse(req, error.code === "54000" ? 429 : 400, error.message, requestLogContext);
+    return jsonResponse(req, 200, { path }, requestLogContext);
+  }
+
   if (payload.action === "delete-upload") {
     const actionLogContext = {
       ...requestLogContext,
@@ -459,6 +482,7 @@ Deno.serve(async (req) => {
       return errorResponse(req, 400, removeError.message, actionLogContext);
     }
 
+    await adminClient.from("survey_upload_reservations").update({ expires_at: new Date().toISOString() }).eq("object_path", payload.path);
     console.info("form-admin action completed", { ...actionLogContext, removedFiles: 1 });
     return jsonResponse(req, 200, { success: true, removedFiles: 1 }, actionLogContext);
   }

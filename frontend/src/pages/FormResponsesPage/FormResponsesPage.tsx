@@ -1,3 +1,4 @@
+import { Presence } from "../../shared/ui/Presence";
 import {officeRequest} from '../../entities/office/api';
 import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
@@ -13,12 +14,12 @@ import {
   hasOrganizationQuestion,
   normalizeOrganizationTypes,
 } from "../../entities/organization/model";
-import { deleteResponses, getAllResponsesByForm } from "../../entities/response/api";
+import { deleteResponses, getAllResponsesByForm, getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
-import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
+import type { SurveySchema } from "../../entities/survey/types";
 import downloadIcon from "../../img/Download.svg";
 import useIcon from "../../img/use.svg";
 import deleteIcon from "../../img/delete.svg";
@@ -156,7 +157,7 @@ function SelectAllResponsesCheckbox({
     <input
       ref={checkboxRef}
       type="checkbox"
-      aria-label="Выбрать все ответы"
+      aria-label="Выбрать ответы на странице"
       checked={checked}
       onChange={onChange}
     />
@@ -198,9 +199,13 @@ export default function FormResponsesPage() {
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ completed: number; total: number } | null>(null);
   const zipControllerRef = useRef<AbortController | null>(null);
-  const responsesQueryKey = getFormResponsesQueryKey(id, "all");
+  const [page, setPage] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
+  const pageSize = 50;
+  const responsesQueryKey = getFormResponsesQueryKey(id, "page", page, pageSize);
 
   useEffect(() => {
+    setPage(1);
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
     setResponseReport(null);
@@ -233,10 +238,10 @@ export default function FormResponsesPage() {
     queryKey: responsesQueryKey,
     queryFn: async ({ signal }) => {
       if (!id) {
-        return [];
+        return { data: [], count: 0, totalPages: 1 };
       }
 
-      return getAllResponsesByForm(id, { signal });
+      return getResponsesByForm(id, { signal, page, pageSize });
     },
     enabled: Boolean(id),
     retry: 1,
@@ -257,7 +262,7 @@ export default function FormResponsesPage() {
     staleTime: 30_000,
   });
 
-  const responses = responsesQuery.data ?? [];
+  const responses = responsesQuery.data?.data ?? [];
   const hasFileQuestions = useMemo(
     () => Boolean(formQuery.data && getFileQuestions(formQuery.data.schema).length),
     [formQuery.data],
@@ -288,7 +293,8 @@ export default function FormResponsesPage() {
   );
   const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
     .find((error) => error && !isAbortError(error)) ?? null;
-  const totalResponses = responses.length;
+  const totalResponses = responsesQuery.data?.count ?? 0;
+  const totalPages = responsesQuery.data?.totalPages ?? 1;
   const canDeleteResponses = Boolean(
     formQuery.data && (formQuery.data.author_id === user?.id || profile?.role === "admin"),
   );
@@ -352,26 +358,27 @@ export default function FormResponsesPage() {
     };
   }, [id, queryClient]);
 
-  const handleExport = () => {
-    if (!id || !formQuery.data || !responsesQuery.data || !rows.length) {
-      showToast("Нет данных для выгрузки", "warning");
-      return;
-    }
+  const loadExportResponses = (signal?: AbortSignal) => getAllResponsesByForm(id!, {
+    signal,
+    responseIds: selectedResponseIds.size ? [...selectedResponseIds] : undefined,
+  });
 
-    const formTitle = (formQuery.data as SurveyForm | null)?.title ?? "форма";
-    void Promise.resolve(responsesQuery.data)
-      .then((exportResponses) => formatResponsesForTable(
-        exportResponses,
-        formQuery.data!.schema,
-        organizationLabels,
-      ))
-      .then((table) => exportToExcel(table.rows, `ответы-${formTitle}`, "Ответы", table.columns))
-      .then(() => {
-        showToast("Ответы выгружены в XLSX", "success");
-      })
-      .catch((error) => {
-        showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
-      });
+  useEffect(() => {
+    if (responsesQuery.data && page > totalPages) setPage(totalPages);
+  }, [responsesQuery.data, page, totalPages]);
+
+  const handleExport = async () => {
+    if (!id || !formQuery.data || isExporting) return;
+    setIsExporting(true);
+    try {
+      const exportResponses = await loadExportResponses();
+      if (!exportResponses.length) { showToast("Нет данных для выгрузки", "warning"); return; }
+      const table = formatResponsesForTable(exportResponses, formQuery.data.schema, organizationLabels);
+      await exportToExcel(table.rows, `ответы-${formQuery.data.title}`, "Ответы", table.columns);
+      showToast("Ответы выгружены в XLSX", "success");
+    } catch (error) {
+      showToast(getErrorMessage(error, "Не удалось выгрузить ответы"), "error");
+    } finally { setIsExporting(false); }
   };
 
   const handleExportFiles = async () => {
@@ -381,7 +388,7 @@ export default function FormResponsesPage() {
     setZipProgress({ completed: 0, total: 0 });
     try {
       const { exportResponseFilesZip } = await import("../../shared/lib/responseFilesZip");
-      const result = await exportResponseFilesZip(responsesQuery.data, formQuery.data.schema, formQuery.data.title, {
+      const result = await exportResponseFilesZip(await loadExportResponses(controller.signal), formQuery.data.schema, formQuery.data.title, {
         signal: controller.signal,
         onProgress: (completed, total) => {
           if (!controller.signal.aborted) setZipProgress({ completed, total });
@@ -408,7 +415,7 @@ export default function FormResponsesPage() {
 
     setIsGeneratingReport(true);
     try {
-      const reportResponses = responsesQuery.data;
+      const reportResponses = await getAllResponsesByForm(id);
       const reportOrganizations = usesOrganizationDirectory
         ? (organizationsQuery.data ?? await getOrganizations(undefined, undefined, true))
           .filter((organization) => !organization.is_archived && formOrganizationTypes.includes(organization.organization_type))
@@ -501,7 +508,7 @@ export default function FormResponsesPage() {
 
   return (
     <div className="dashboard-page">
-      {documentsOpen && <DocumentsModal formId={id} selectedResponseIds={[...selectedResponseIds]} onClose={() => setDocumentsOpen(false)} />}
+      <Presence kind="modal">{documentsOpen && <DocumentsModal formId={id} selectedResponseIds={[...selectedResponseIds]} onClose={() => setDocumentsOpen(false)} />}</Presence>
       <div className="card responses-page-card">
         <div className="responses-page-header">
           <div className="responses-page-header-copy">
@@ -514,8 +521,8 @@ export default function FormResponsesPage() {
             )}
           </div>
           <div className="responses-page-toolbar">
-            <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading}>
-              <span>Скачать XLSX</span>
+            <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading || isExporting}>
+              <span>{isExporting ? "Выгрузка…" : selectedResponseIds.size ? "Скачать выбранные XLSX" : "Скачать XLSX"}</span>
               <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
             {hasFileQuestions && (
@@ -527,7 +534,7 @@ export default function FormResponsesPage() {
                 onClick={() => void handleExportFiles()}
                 disabled={isLoading || Boolean(zipProgress)}
               >
-                <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : "Файлы в ZIP"}</span>
+                <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : selectedResponseIds.size ? "Выбранные файлы в ZIP" : "Файлы в ZIP"}</span>
                 <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
               </button>
             )}
@@ -699,11 +706,18 @@ export default function FormResponsesPage() {
         {!isLoading && !combinedError && totalResponses > 0 && (
           <div className="responses-page-footer">
             <p className="responses-page-total" aria-live="polite">Ответов: {totalResponses}</p>
+            {totalPages > 1 && (
+              <nav aria-label="Страницы ответов" className="responses-pagination">
+                <button type="button" className="button" disabled={page <= 1 || isRefreshing} onClick={() => setPage(current => current - 1)}>Назад</button>
+                <span aria-live="polite">Страница {page} из {totalPages}</span>
+                <button type="button" className="button" disabled={page >= totalPages || isRefreshing} onClick={() => setPage(current => current + 1)}>Далее</button>
+              </nav>
+            )}
           </div>
         )}
       </div>
 
-      {selectedResponsePreview && formQuery.data && (
+      <Presence kind="drawer">{selectedResponsePreview && formQuery.data && (
         <div
           className="response-preview-layer"
           onMouseDown={(event) => event.target === event.currentTarget && setSelectedResponsePreview(null)}
@@ -739,8 +753,8 @@ export default function FormResponsesPage() {
             </SurveyRuntimeSurface>
           </aside>
         </div>
-      )}
-      {responseReport && (
+      )}</Presence>
+      <Presence kind="modal">{responseReport && (
         <ResponseReportModal
           report={responseReport}
           formId={id}
@@ -748,7 +762,7 @@ export default function FormResponsesPage() {
           canSendReminders={canDeleteResponses}
           onClose={() => setResponseReport(null)}
         />
-      )}
+      )}</Presence>
     </div>
   );
 }

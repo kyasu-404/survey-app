@@ -1,3 +1,4 @@
+import { Presence } from "../../shared/ui/Presence";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -148,23 +149,23 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {previewTemplateCard && (
+      <Presence kind="drawer">{previewTemplateCard && (
         <TemplatePreviewModal
           isLoading={previewQuery.isLoading}
           onClose={() => setPreviewTemplateCard(null)}
           previewTemplate={previewQuery.data}
           previewTemplateCard={previewTemplateCard}
         />
-      )}
+      )}</Presence>
 
-      {templateToDelete && (
+      <Presence kind="modal">{templateToDelete && (
         <TemplateDeleteModal
           isPending={templateActions.isTemplateActionPending(templateToDelete.id)}
           onCancel={() => setTemplateToDelete(null)}
           onConfirm={() => void confirmDelete()}
           template={templateToDelete}
         />
-      )}
+      )}</Presence>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Presence } from "../ui/Presence";
 import {
   useEffect,
   useId,
@@ -70,7 +71,7 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
         <img src={settingsIcon} alt="" aria-hidden="true" className="theme-cycle-button-icon" />
       </button>
 
-      {isOpen && (
+      <Presence kind="menu">{isOpen && (
         <div
           id={menuId}
           className="form-menu-dropdown form-menu-dropdown-inline theme-cycle-menu"
@@ -81,7 +82,7 @@ export function ThemeCycleButton({ className, menuPlacement = "bottom-end" }: Th
         >
           <ThemeMenuItems onSelect={() => setIsOpen(false)} />
         </div>
-      )}
+      )}</Presence>
     </div>
   );
 }

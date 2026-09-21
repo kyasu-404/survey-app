@@ -1,3 +1,4 @@
+import { Presence } from "../../shared/ui/Presence";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
@@ -66,9 +67,11 @@ export default function BuilderPage() {
 
   const responsesCount = formQuery.data?.responses_count ?? 0;
 
-  if (id && responsesCount > 0 && !isSafeEditingConfirmed) {
-    return (
-      <div className="builder-page">
+  const showWarning = Boolean(id && responsesCount > 0 && !isSafeEditingConfirmed);
+
+  return (
+    <div className="builder-page">
+      <Presence>{showWarning && (
         <div className="modal-backdrop builder-answered-warning-backdrop">
           <div className="modal-card card builder-answered-warning" role="alertdialog" aria-modal="true">
             <h3 className="builder-reset-title">У формы уже есть ответы</h3>
@@ -105,20 +108,15 @@ export default function BuilderPage() {
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="builder-page">
-      <div className="builder-container">
+      )}</Presence>
+      {!showWarning && <div className="builder-container">
         <SurveyBuilder
           formId={id}
           userId={user.id}
           canAdministerAllForms={profile?.role === "admin"}
           safeEditingResponseCount={responsesCount}
         />
-      </div>
+      </div>}
     </div>
   );
 }

@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore the latest forms backup in an isolated disposable database
+RequiresMountsFor=/mnt/data/forms_backup
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/survey-app/ops/backup-forms.py --restore-latest
+User=root
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

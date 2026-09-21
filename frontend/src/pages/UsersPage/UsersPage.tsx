@@ -1,3 +1,4 @@
+import { Presence } from "../../shared/ui/Presence";
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../features/users/api";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -99,7 +100,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      {actions.passwordModal && (
+      <Presence kind="modal">{actions.passwordModal && (
         <PasswordModal
           isPasswordValid={actions.isModalPasswordValid}
           isPending={actions.updatePasswordPending}
@@ -108,25 +109,25 @@ export default function UsersPage() {
           onChangePassword={() => void actions.onChangePassword()}
           onPasswordChange={actions.updatePasswordModalValue}
         />
-      )}
+      )}</Presence>
 
-      {actions.deleteUserModal && (
+      <Presence kind="modal">{actions.deleteUserModal && (
         <DeleteUserModal
           isPending={actions.deleteUserPending}
           modal={actions.deleteUserModal}
           onCancel={() => actions.setDeleteUserModal(null)}
           onConfirm={() => void actions.onDeleteUser()}
         />
-      )}
+      )}</Presence>
 
-      {actions.roleChangeModal && (
+      <Presence kind="modal">{actions.roleChangeModal && (
         <RoleChangeModal
           isPending={actions.roleChangePending}
           modal={actions.roleChangeModal}
           onCancel={() => actions.setRoleChangeModal(null)}
           onConfirm={() => void actions.onChangeRole()}
         />
-      )}
+      )}</Presence>
     </div>
   );
 }

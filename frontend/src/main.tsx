@@ -9,6 +9,7 @@ import { AppErrorBoundary } from './app/providers/AppErrorBoundary'
 import { initializeObservability } from './shared/lib/observability'
 import { ThemeProvider } from './shared/theme/ThemeProvider'
 import './app.css'
+import './motion.css'
 
 initializeObservability();
 

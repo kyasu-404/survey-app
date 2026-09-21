@@ -244,6 +244,24 @@ function scheduleCleanup() {
 
 schedulePoll();
 scheduleCleanup();
+let expiringUploads = false;
+async function cleanupExpiredUploads() {
+  if (expiringUploads) return;
+  expiringUploads = true;
+  try {
+    for (let batch = 0; batch < 5; batch++) {
+      const rows = await callRpc("list_expired_survey_uploads", { batch_limit: 100 });
+      const names = (rows ?? []).map(row => row.name);
+      if (!names.length) break;
+      await removeStorageObjects("survey-files", names);
+    }
+    // Keep recent reservations for the IP budget, including manually removed files.
+    await supabaseRequest(`/rest/v1/survey_upload_reservations?expires_at=lt.${encodeURIComponent(new Date(Date.now() - 8 * 86400000).toISOString())}`, { method: "DELETE" });
+  } catch (error) { console.error("expired upload cleanup failed", { message: error.message }); }
+  finally { expiringUploads = false; }
+}
+const expiredUploadsTimer = setInterval(() => void cleanupExpiredUploads(), 300000);
+void cleanupExpiredUploads();
 const timer = setInterval(schedulePoll, pollIntervalMs);
 const cleanupTimer = setInterval(scheduleCleanup, cleanupCheckIntervalMs);
 let shuttingDown = false;
@@ -254,6 +272,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     shuttingDown = true;
     clearInterval(timer);
     clearInterval(cleanupTimer);
+    clearInterval(expiredUploadsTimer);
     await Promise.all([activePoll, activeCleanup]);
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();

@@ -7,11 +7,14 @@ import {createApp} from '../src/app.mjs';
 import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
-const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx'};
+const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx'};
 async function setup(t,{disabled=false,role='user',result}={}){
  const statements=[];
  const query=async(sql,args=[])=>{
   statements.push({sql,args});
+  if(sql.includes('as total'))return {rows:[{total:0,own:0,bytes:0}]};
+  if(sql.startsWith('select to_jsonb(f)'))return {rows:[{form:{id:formId},responses:[{id:userId,data:{}}],organizations:[]}]};
+  if(sql.startsWith('insert into public.office_generation_jobs'))return {rows:[{id:randomUUID(),form_id:formId,state:'queued'}]};
   if(sql.includes('onlyoffice_settings'))return {rows:[settings]};
   if(sql.includes('select id,name,role,is_disabled'))return {rows:[{id:userId,role,is_disabled:disabled,name:'Test'}]};
   if(sql.startsWith('select * from public.office_generation_results'))return {rows:result?[result]:[]};
@@ -97,4 +100,17 @@ test('results require employee authentication and enforce creator/admin deletion
  assert.equal((await request(`/results/${result.id}/files/9`,{headers})).status,404);
  const admin=await setup(t,{result,role:'admin'});assert.equal((await admin.request(`/results/${result.id}`,{method:'DELETE',headers})).status,200);
  assert.ok(admin.statements.some(s=>s.sql.startsWith('delete from public.office_generation_results')));
+});
+
+test('plugin bootstrap pins its origin from server settings, not request parameters',async t=>{
+ const {request}=await setup(t);
+ const r=await request('/plugin/plugins.js?origin=https://evil.test');assert.equal(r.status,200);
+ assert.match(await r.text(),/^const SURVEY_DOCUMENT_SERVER_ORIGIN="https:\/\/docs.test";/);
+});
+
+test('valid generation queues a durable job without downloading or processing in the request',async t=>{
+ const {request,statements}=await setup(t);
+ const r=await request(`/documents/${documentId}/generate`,{method:'POST',headers:{Authorization:'Bearer employee','Content-Type':'application/json'},body:JSON.stringify({response_ids:[userId]})});
+ assert.equal(r.status,202);assert.equal((await r.json()).state,'queued');
+ assert.ok(statements.some(s=>s.sql.startsWith('insert into public.office_generation_jobs')));
 });

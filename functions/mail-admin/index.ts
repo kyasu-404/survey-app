@@ -331,7 +331,7 @@ Deno.serve(async (req) => {
 
       const appBaseUrl = getAppBaseUrl();
       if (!appBaseUrl) return json(req, 500, { error: "Для ссылок в письмах задайте PUBLIC_APP_URL" }, requestId);
-      const { data: missingData, error: missingError } = await adminClient.rpc("list_missing_form_organizations", { p_form_id: formId });
+      const { data: missingData, error: missingError } = await adminClient.rpc("list_missing_form_organizations_snapshot", { p_form_id: formId });
       if (missingError) throw missingError;
       const missing = (missingData ?? []) as OrganizationRow[];
       if (missing.length === 0) return json(req, 200, { batchId: null, queuedCount: 0 }, requestId);

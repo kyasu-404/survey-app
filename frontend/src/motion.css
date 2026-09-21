@@ -1,0 +1,148 @@
+:root {
+  --app-motion-duration: 300ms;
+  --app-motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar-region {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  flex: 0 0 auto;
+  width: 236px;
+  height: 100dvh;
+  transition: width var(--app-motion-duration) var(--app-motion-easing);
+}
+.sidebar-region .sidebar {
+  width: 236px;
+  min-width: 236px;
+  height: 100dvh;
+  max-height: 100dvh;
+  transition: transform var(--app-motion-duration) var(--app-motion-easing),
+    opacity var(--app-motion-duration) ease, visibility 0s;
+}
+.app-shell-sidebar-hidden .sidebar-region { width: 0; }
+.app-shell-sidebar-hidden .sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, 0s, var(--app-motion-duration);
+}
+.app-main { transition: padding-left var(--app-motion-duration) var(--app-motion-easing); }
+.sidebar-open-button { animation: app-control-enter 180ms ease both; }
+
+.animated-tabs { position: relative; isolation: isolate; }
+.animated-tabs[data-indicator-ready]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tab-width);
+  height: var(--tab-height);
+  transform: translate(var(--tab-x), var(--tab-y));
+  border-radius: 12px;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 8px 18px var(--theme-accent-soft);
+  pointer-events: none;
+  transition: transform var(--app-motion-duration) var(--app-motion-easing),
+    width var(--app-motion-duration) var(--app-motion-easing),
+    height var(--app-motion-duration) var(--app-motion-easing);
+}
+.animated-tabs.templates-segmented-control::before { border-radius: 8px; box-shadow: none; }
+.animated-tabs > [role="tab"] { position: relative; z-index: 1; }
+:root .animated-tabs[data-indicator-ready] > [role="tab"][aria-selected="true"] {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.template-preview-layer, .response-preview-layer {
+  animation: app-control-enter var(--app-motion-duration) ease both;
+}
+.template-preview-drawer, .response-preview-drawer {
+  animation: app-drawer-enter 360ms var(--app-motion-easing) both;
+}
+@keyframes app-control-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-drawer-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.motion-presence { display: contents; }
+.motion-presence[data-state="leaving"] { pointer-events: none; }
+.modal-backdrop { animation: app-backdrop-enter 180ms ease both; }
+.modal-card, .office-dialog[open] { animation: app-modal-enter 180ms var(--app-motion-easing) both; }
+.office-dialog[open]::backdrop { animation: app-backdrop-enter 180ms ease both; backdrop-filter: blur(10px); }
+.motion-modal[data-state="leaving"] > .modal-backdrop,
+.motion-modal[data-state="leaving"] > .office-dialog::backdrop { animation: app-backdrop-leave 180ms ease both; }
+.motion-modal[data-state="leaving"] > .modal-backdrop > .modal-card,
+.motion-modal[data-state="leaving"] > .office-dialog { animation: app-modal-leave 180ms ease both; }
+
+.motion-menu .form-menu-dropdown, .motion-menu .dashboard-stats-popover {
+  animation: app-menu-enter 180ms var(--app-motion-easing) both;
+}
+.motion-menu[data-state="leaving"] .form-menu-dropdown,
+.motion-menu[data-state="leaving"] .dashboard-stats-popover { animation: app-menu-leave 120ms ease both; }
+.dashboard-form-card:has(.motion-menu[data-state="leaving"]),
+.templates-card:has(.motion-menu[data-state="leaving"]) { z-index: 40; overflow: visible; }
+.office-menu-shell.form-menu:has(.motion-menu[data-state="leaving"]) { z-index: 2; }
+
+.motion-drawer[data-state="leaving"] > :is(.template-preview-layer, .response-preview-layer) {
+  animation: app-control-leave 240ms ease both;
+}
+.motion-drawer[data-state="leaving"] :is(.template-preview-drawer, .response-preview-drawer) {
+  animation: app-drawer-leave 240ms ease both;
+}
+
+.toast-container { gap: 0; }
+.toast-slot { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 180ms ease; }
+.toast-clip { min-height: 0; overflow: visible; padding: 8px; margin: -4px -8px; transition: padding 180ms ease, margin 180ms ease; }
+.toast-slot[data-state="leaving"] { grid-template-rows: 0fr; }
+.toast-slot[data-state="leaving"] .toast-clip { overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+.toast-slot[data-state="leaving"] .toast { animation: app-toast-leave 180ms ease both; }
+
+.animated-details { box-sizing: border-box; }
+.animated-details-body { display: flow-root; }
+.dashboard-layout-transition { view-transition-name: forms-layout; animation: app-control-enter 150ms ease both; }
+:root[data-forms-transition] .dashboard-layout-transition { animation: none; }
+:root[data-forms-transition]::view-transition-group(root),
+:root[data-forms-transition]::view-transition-old(root),
+:root[data-forms-transition]::view-transition-new(root) { animation: none; }
+:root[data-forms-transition]::view-transition-group(forms-layout) { animation-duration: 160ms; }
+:root[data-forms-transition]::view-transition-old(forms-layout) { animation: app-control-enter 110ms ease reverse both; }
+:root[data-forms-transition]::view-transition-new(forms-layout) { animation: app-control-enter 150ms ease both; }
+:root[data-forms-transition]::view-transition { pointer-events: none; }
+
+@keyframes app-backdrop-enter { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(10px); } }
+@keyframes app-modal-enter { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes app-menu-enter { from { opacity: 0; transform: translateY(-3px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes app-toast-leave { to { opacity: 0; transform: translateY(-6px); } }
+
+@media (max-width: 760px) {
+  .sidebar-region {
+    position: relative;
+    top: auto;
+    display: grid;
+    grid-template-rows: 1fr;
+    width: 100%;
+    height: auto;
+    transition: grid-template-rows var(--app-motion-duration) var(--app-motion-easing);
+  }
+  .sidebar-clip { min-height: 0; overflow: hidden; }
+  .sidebar-region .sidebar { width: 100%; min-width: 100%; height: auto; max-height: none; }
+  .app-shell-sidebar-hidden .sidebar-region { width: 100%; grid-template-rows: 0fr; }
+  .app-shell-sidebar-hidden .sidebar { transform: translateY(-24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-region, .sidebar-region .sidebar, .app-main,
+  .animated-tabs::before, .animated-tabs > [role="tab"] { transition: none !important; }
+  .sidebar-open-button, .template-preview-layer, .response-preview-layer,
+  .template-preview-drawer, .response-preview-drawer { animation: none !important; }
+  .motion-presence *, .office-dialog::backdrop, .modal-backdrop, .modal-card,
+  .toast-slot, .toast-clip, .toast, .dashboard-layout-transition {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes app-backdrop-leave { from { opacity: 1; backdrop-filter: blur(10px); } to { opacity: 0; backdrop-filter: blur(0); } }
+@keyframes app-modal-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(8px) scale(.985); } }
+@keyframes app-menu-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-3px) scale(.97); } }
+@keyframes app-control-leave { from { opacity: 1; } to { opacity: 0; } }
+@keyframes app-drawer-leave { from { transform: translateX(0); } to { transform: translateX(100%); } }

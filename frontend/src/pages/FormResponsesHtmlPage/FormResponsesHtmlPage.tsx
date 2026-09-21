@@ -6,13 +6,12 @@ import {
   getOrganizationDisplayName,
   hasOrganizationQuestion,
 } from "../../entities/organization/model";
-import { getResponsesByForm } from "../../entities/response/api";
-import type { SurveyResponse } from "../../entities/response/types";
+import { getAllResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
-import { MAX_CLIENT_RESPONSE_EXPORT, RESPONSES_PAGE_SIZE } from "../../shared/api";
+
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import {
   createResponsesHtmlDocument,
@@ -22,28 +21,6 @@ import {
 } from "../../shared/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { RESPONSES_HTML_LAYOUT_CSS } from "../../shared/lib/responsesHtmlLayout";
-
-async function getAllResponses(
-  formId: string,
-  signal?: AbortSignal,
-) {
-  const data: SurveyResponse[] = [];
-  let page = 1;
-  for (;;) {
-    signal?.throwIfAborted();
-    const result = await getResponsesByForm(formId, {
-      page,
-      pageSize: RESPONSES_PAGE_SIZE,
-      signal,
-    });
-    if (data.length + result.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
-      throw new Error(`HTML-выгрузка ограничена ${MAX_CLIENT_RESPONSE_EXPORT} ответами`);
-    }
-    data.push(...result.data);
-    if (result.data.length < RESPONSES_PAGE_SIZE || data.length >= result.count) return data;
-    page += 1;
-  }
-}
 
 export default function FormResponsesHtmlPage() {
   const { id } = useParams();
@@ -66,13 +43,13 @@ export default function FormResponsesHtmlPage() {
   });
 
   const responsesQuery = useQuery({
-    queryKey: getFormResponsesQueryKey(id, "html", RESPONSES_PAGE_SIZE),
+    queryKey: getFormResponsesQueryKey(id, "html"),
     queryFn: async ({ signal }) => {
       if (!id) {
         return [];
       }
 
-      return getAllResponses(id, signal);
+      return getAllResponsesByForm(id, { signal });
     },
     enabled: Boolean(id),
     retry: 1,

@@ -67,7 +67,6 @@ describe("ToastProvider", () => {
 
   it("clears pending timeouts on unmount", () => {
     vi.useFakeTimers();
-    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
 
     const { unmount } = render(
       <ToastProvider>
@@ -80,6 +79,6 @@ describe("ToastProvider", () => {
 
     unmount();
 
-    expect(clearTimeoutSpy).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

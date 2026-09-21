@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useViewTransition } from "../../shared/ui/useViewTransition";
+import { Presence } from "../../shared/ui/Presence";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -33,10 +35,12 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     catch { return "cards"; }
   });
   const [sort, setSort] = useState<FormsSort>({ field: "created_at", direction: "desc" });
+  const transitionView = useViewTransition();
+  const intendedLayout = useRef(layout);
   const toggleLayout = () => {
-    const next = layout === "cards" ? "table" : "cards";
-    setLayout(next);
-    setOpenedMenu(null);
+    const next = intendedLayout.current === "cards" ? "table" : "cards";
+    intendedLayout.current = next;
+    transitionView(() => { setLayout(next); setOpenedMenu(null); });
     try { localStorage.setItem("survey-app:forms-layout", next); } catch { /* The view still works without storage. */ }
   };
   const changeSort = (field: FormsSort["field"]) => {
@@ -185,7 +189,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         />
       </div>
 
-      {actions.deadlineEditor && (
+      <Presence kind="modal">{actions.deadlineEditor && (
         <DeadlineModal
           editor={actions.deadlineEditor}
           isPending={actions.isFormActionPending(actions.deadlineEditor.form.id)}
@@ -194,9 +198,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           onSave={() => void actions.saveDeadline()}
           onValueChange={actions.updateDeadlineEditorValue}
         />
-      )}
+      )}</Presence>
 
-      {actions.responseLimitEditor && (
+      <Presence kind="modal">{actions.responseLimitEditor && (
         <ResponseLimitModal
           editor={actions.responseLimitEditor}
           isPending={actions.isFormActionPending(actions.responseLimitEditor.form.id)}
@@ -205,25 +209,25 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           onSave={() => void actions.saveResponseLimit()}
           onValueChange={actions.updateResponseLimitEditorValue}
         />
-      )}
+      )}</Presence>
 
-      {actions.formToDelete && (
+      <Presence kind="modal">{actions.formToDelete && (
         <DeleteFormModal
           form={actions.formToDelete}
           isPending={actions.isFormActionPending(actions.formToDelete.id)}
           onCancel={() => actions.setFormToDelete(null)}
           onConfirm={() => void actions.confirmDelete()}
         />
-      )}
+      )}</Presence>
 
-      {qr.qrDialog && (
+      <Presence kind="modal">{qr.qrDialog && (
         <QrModal
           downloadFormat={qr.qrDownloadFormat}
           onClose={() => qr.setQrDialog(null)}
           onDownload={(format) => void qr.handleDownloadQr(format)}
           qrDialog={qr.qrDialog}
         />
-      )}
+      )}</Presence>
     </div>
   );
 }

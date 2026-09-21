@@ -1,3 +1,5 @@
+import { Presence } from "../../shared/ui/Presence";
+import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -215,7 +217,7 @@ export default function OrganizationsPage() {
           </div>
         </div>
 
-        <div className="organizations-type-switcher" role="tablist" aria-label="Типы образовательных учреждений">
+        <AnimatedTabs className="organizations-type-switcher" role="tablist" aria-label="Типы образовательных учреждений">
           <button
             type="button"
             role="tab"
@@ -237,7 +239,7 @@ export default function OrganizationsPage() {
               {option.label}
             </button>
           ))}
-        </div>
+        </AnimatedTabs>
 
         {organizationsQuery.isLoading && (
           <div className="organizations-table-skeleton" aria-hidden="true">
@@ -294,7 +296,7 @@ export default function OrganizationsPage() {
         )}
       </div>
 
-      {isModalOpen && (
+      <Presence kind="modal">{isModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-card card organization-edit-modal" role="dialog" aria-modal="true" aria-label={editingOrganization ? "Изменение организации" : "Добавление организации"}>
             <h3 className="users-modal-title">{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
@@ -351,7 +353,7 @@ export default function OrganizationsPage() {
             </div>
           </div>
         </div>
-      )}
+      )}</Presence>
     </div>
   );
 }

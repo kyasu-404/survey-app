@@ -103,6 +103,7 @@ export function DashboardFormsList({
         </div>
       )}
 
+      <div className="dashboard-layout-transition" key={layout}>
       {layout === "cards" ? <div className="dashboard-forms-grid">{rows}</div> : (
         <div className="dashboard-forms-table-shell" role="region" aria-label="Список форм" tabIndex={0}>
           <table className="dashboard-forms-table">
@@ -123,6 +124,8 @@ export function DashboardFormsList({
           </table>
         </div>
       )}
+
+      </div>
 
       {!isInitialFormsLoading && hasMoreForms && (
         <div className="dashboard-load-more">

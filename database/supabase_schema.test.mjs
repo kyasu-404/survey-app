@@ -551,13 +551,15 @@ test("public response payloads are checked against the form schema and organizat
   assert.match(updateFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
 });
 
-test("anonymous survey uploads have a small provisional orphan budget", () => {
-  const uploadGuard = getFunctionDefinition("can_upload_survey_file");
-
-  assert.match(uploadGuard, /orphan_count bigint/i);
-  assert.match(uploadGuard, /left join public\.response_file_references/i);
-  assert.match(uploadGuard, /orphan_count < 20/i);
-  assert.match(uploadGuard, /orphan_bytes \+ object_size <= 104857600/i);
+test("anonymous upload reservations isolate visitors and enforce an independent client budget", () => {
+  const guard = getFunctionDefinition("can_upload_survey_file");
+  const reserve = getFunctionDefinition("reserve_survey_upload");
+  assert.match(guard, /r.object_path = object_name/);
+  assert.match(guard, /object_size <= r.size_bytes/);
+  assert.doesNotMatch(guard, /orphan_count < 20/);
+  assert.match(reserve, /r.browser_hash = public.browser_capability_hash/);
+  assert.match(reserve, /r.client_hash = p_client_hash/);
+  assert.match(reserve, /pending_count >= 20/);
 });
 
 test("reminder batches are enqueued atomically under a per-form lock", () => {

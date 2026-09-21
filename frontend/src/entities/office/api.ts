@@ -23,8 +23,9 @@ export async function downloadOfficeDocument(doc:Pick<OfficeDocument,'id'|'name'
 }
 
 export type OfficeResult={id:string;form_id:string;template_id:string|null;name:string;file_type:'docx'|'xlsx';files:string[];size_bytes:number;created_by:string;created_at:string;author_name?:string};
-export async function generateOfficeDocuments(doc:Pick<OfficeDocument,'id'|'name'>,responseIds?:string[],nameQuestionId?:string):Promise<OfficeResult> {
-  return officeRequest<OfficeResult>(`/documents/${doc.id}/generate`,{method:'POST',body:JSON.stringify({response_ids:responseIds,name_question_id:nameQuestionId})});
+export type OfficeJob={id:string;form_id:string;name:string;state:'queued'|'running'|'succeeded'|'failed';error?:string|null;created_at:string};
+export async function generateOfficeDocuments(doc:Pick<OfficeDocument,'id'|'name'>,responseIds?:string[],nameQuestionId?:string):Promise<OfficeJob> {
+  return officeRequest<OfficeJob>(`/documents/${doc.id}/generate`,{method:'POST',body:JSON.stringify({response_ids:responseIds,name_question_id:nameQuestionId})});
 }
 export async function downloadOfficeResult(result:OfficeResult,index?:number){
   const {data:{session}}=await apiClient.auth.getCurrentSession();if(!session?.access_token)throw new Error('Сессия истекла');

@@ -74,8 +74,8 @@ export function DashboardFormStatusControl({
         {statusLabel}
       </button>
 
-      {statusMenuOpen && (
-        <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="left">
+      <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="left">
+        {statusMenuOpen && (
         <div
           className="form-menu-dropdown form-menu-dropdown-inline dashboard-status-dropdown"
           role="menu"
@@ -122,8 +122,8 @@ export function DashboardFormStatusControl({
             Ограничить ответы
           </button>
         </div>
-        </DashboardMenuPortal>
-      )}
+        )}
+      </DashboardMenuPortal>
     </div>
   );
 }

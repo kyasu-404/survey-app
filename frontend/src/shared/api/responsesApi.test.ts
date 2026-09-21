@@ -212,38 +212,21 @@ describe("fetchResponsesByForm", () => {
 
 describe("fetchAllResponsesByForm", () => {
   afterEach(() => vi.clearAllMocks());
-
-  function mockRows(total: number, onPage?: (offset: number) => void) {
-    const rows = Array.from({ length: total }, (_, index) => ({ id: String(index), form_id: "form-1", data: {}, created_at: "2026-09-07T00:00:00Z" }));
-    const query = {
-      select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query), abortSignal: vi.fn(() => query),
-      range: vi.fn(async (from: number, to: number) => {
-        onPage?.(from);
-        if (from > 0 && from >= total) throw new Error("PGRST103: requested range not satisfiable");
-        return { data: rows.slice(from, to + 1), count: total, error: null };
-      }),
-    };
-    vi.mocked(apiClient.from).mockReturnValue(query as never);
-    return { query, rows };
-  }
-
-  it.each([0, 50, 100, 200, 250])("returns all %i responses including full page boundaries", async (total) => {
-    const { rows, query } = mockRows(total);
+  it.each([0, 50, 100, 200, 1001])("receives %i rows as one scalar database snapshot", async total => {
+    const rows = Array.from({ length: total }, (_, index) => ({ id: String(index), data: {} }));
+    vi.mocked(apiClient.rpc).mockResolvedValue({ data: rows, error: null } as never);
     expect(await fetchAllResponsesByForm("form-1")).toEqual(rows);
-    expect(query.range).toHaveBeenCalledTimes(Math.max(1, Math.ceil(total / 100)));
+    expect(apiClient.rpc).toHaveBeenCalledExactlyOnceWith("export_form_responses", { p_form_id: "form-1", p_response_ids: null });
+    expect(apiClient.from).not.toHaveBeenCalled();
   });
-
-  it("cancels between batches without returning partial results", async () => {
-    const controller = new AbortController();
-    const { query } = mockRows(200, () => controller.abort());
+  it("rejects an aborted request before issuing SQL", async () => {
+    const controller = new AbortController(); controller.abort();
     await expect(fetchAllResponsesByForm("form-1", { signal: controller.signal })).rejects.toThrow();
-    expect(query.range).toHaveBeenCalledOnce();
+    expect(apiClient.rpc).not.toHaveBeenCalled();
   });
-
-  it("rejects a failed later page instead of treating the first page as the full list", async () => {
-    const { query, rows } = mockRows(200);
-    query.range.mockResolvedValueOnce({ data: rows.slice(0, 100), count: 200, error: null });
-    query.range.mockRejectedValueOnce(new Error("page failed"));
-    await expect(fetchAllResponsesByForm("form-1")).rejects.toThrow("page failed");
+  it("forwards selected IDs and never returns a partial successful export on server errors", async () => {
+    vi.mocked(apiClient.rpc).mockResolvedValue({ data: null, error: new Error("snapshot limit") } as never);
+    await expect(fetchAllResponsesByForm("form-1", { responseIds: ["r1"] })).rejects.toThrow("snapshot limit");
+    expect(apiClient.rpc).toHaveBeenCalledWith("export_form_responses", { p_form_id: "form-1", p_response_ids: ["r1"] });
   });
 });

@@ -1,3 +1,4 @@
+import { Presence } from "../../shared/ui/Presence";
 import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1424,7 +1425,7 @@ export function SurveyBuilder({
         {creator && <SurveyCreatorComponent creator={creator} />}
       </div>
 
-      {isBackgroundGalleryOpen && creator && (
+      <Presence kind="modal">{isBackgroundGalleryOpen && creator && (
         <ThemeBackgroundGallery
           currentBackground={galleryBackground}
           formId={assetFormIdRef.current}
@@ -1433,9 +1434,9 @@ export function SurveyBuilder({
           onClose={() => setIsBackgroundGalleryOpen(false)}
           onError={handleBackgroundGalleryError}
         />
-      )}
+      )}</Presence>
 
-      {isResetConfirmOpen && (
+      <Presence kind="modal">{isResetConfirmOpen && (
         <div className="modal-backdrop">
           <div className="modal-card card builder-reset-modal">
             <h3 className="builder-reset-title">Сбросить конструктор?</h3>
@@ -1462,9 +1463,9 @@ export function SurveyBuilder({
             </div>
           </div>
         </div>
-      )}
+      )}</Presence>
 
-      {compatibilityDialog && (
+      <Presence kind="modal">{compatibilityDialog && (
         <div className="modal-backdrop">
           <div
             className="modal-card card builder-compatibility-modal"
@@ -1535,9 +1536,9 @@ export function SurveyBuilder({
             </div>
           </div>
         </div>
-      )}
+      )}</Presence>
 
-      {postSaveSettings && (
+      <Presence kind="modal">{postSaveSettings && (
         <div className="modal-backdrop">
           <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
             <h3 className="deadline-modal-title">Настройки формы</h3>
@@ -1672,7 +1673,7 @@ export function SurveyBuilder({
             </div>
           </div>
         </div>
-      )}
+      )}</Presence>
     </div>
   );
 }

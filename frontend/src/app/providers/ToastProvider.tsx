@@ -6,6 +6,7 @@ type Toast = {
   id: number;
   message: string;
   type: ToastType;
+  leaving?: boolean;
 };
 
 type ToastContextValue = {
@@ -29,10 +30,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    for (const [oldKey, shownAt] of lastToastShownAtRef.current) {
+      if (now - shownAt >= 1000) lastToastShownAtRef.current.delete(oldKey);
+    }
     lastToastShownAtRef.current.set(key, now);
 
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
+
+    const leaveId = window.setTimeout(() => {
+      setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, leaving: true } : toast));
+      timeoutIdsRef.current = timeoutIdsRef.current.filter(item => item !== leaveId);
+    }, 2820);
+    timeoutIdsRef.current.push(leaveId);
 
     const timeoutId = window.setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -64,8 +74,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div ref={toastLayerRef} className="toast-container" {...{popover: "manual"}} aria-live="polite">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`toast toast-${toast.type}`}>
-            {toast.message}
+          <div key={toast.id} className="toast-slot" data-state={toast.leaving ? "leaving" : "entered"}>
+            <div className="toast-clip"><div className={`toast toast-${toast.type}`}>{toast.message}</div></div>
           </div>
         ))}
       </div>

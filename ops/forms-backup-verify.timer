@@ -1,0 +1,8 @@
+[Unit]
+Description=Weekly forms backup restore verification
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=5m
+[Install]
+WantedBy=timers.target

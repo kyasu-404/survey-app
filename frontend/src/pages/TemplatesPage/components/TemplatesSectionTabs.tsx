@@ -1,3 +1,4 @@
+import { AnimatedTabs } from "../../../shared/ui/AnimatedTabs";
 import { RefreshButton } from "../../../shared/ui/RefreshButton";
 import type { TemplatesSection } from "../types";
 
@@ -20,7 +21,7 @@ export function TemplatesSectionTabs({
 }: TemplatesSectionTabsProps) {
   return (
     <div className="templates-page-actions">
-      <div className="templates-segmented-control" role="tablist" aria-label="Раздел шаблонов">
+      <AnimatedTabs className="templates-segmented-control" role="tablist" aria-label="Раздел шаблонов">
         <button
           type="button"
           role="tab"
@@ -39,7 +40,7 @@ export function TemplatesSectionTabs({
         >
           Публичные
         </button>
-      </div>
+      </AnimatedTabs>
       <RefreshButton isRefreshing={isRefreshing} lastUpdatedAt={lastUpdatedAt} onClick={onRefresh} disabled={isInitialLoading || isRefreshing} />
     </div>
   );

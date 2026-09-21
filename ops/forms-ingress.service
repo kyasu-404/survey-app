@@ -1,0 +1,12 @@
+[Unit]
+Description=Restrict forms backend ports to the trusted frontend
+After=docker.service network-online.target
+Requires=docker.service
+PartOf=docker.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/survey-app/ops/forms-ingress.sh
+ExecStop=/opt/survey-app/ops/forms-ingress.sh --remove
+[Install]
+WantedBy=multi-user.target

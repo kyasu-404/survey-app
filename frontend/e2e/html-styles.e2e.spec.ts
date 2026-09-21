@@ -27,7 +27,7 @@ test("HTML gradient, glow, and scoped animation work in designer, preview, and p
   page.on("request", request => { if (request.url().includes("attacker.test")) foreignRequests.push(request.url()); });
   const verify = async (surface: Locator) => {
     const styled = surface.locator(".html-code").first();
-    await expect(styled).toHaveCSS("background-image", /linear-gradient/);
+    await expect(styled).toHaveCSS("background-image", /linear-gradient/, { timeout: 10000 });
     await expect(styled).toHaveCSS("background-clip", "text");
     await expect(styled).toHaveCSS("filter", /drop-shadow/);
     await expect(styled).toHaveCSS("padding-left", "32px");

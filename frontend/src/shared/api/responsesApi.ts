@@ -292,22 +292,18 @@ export async function fetchResponsesByForm(
 
 export async function fetchAllResponsesByForm(
   formId: string,
-  options: Omit<FetchResponsesByFormOptions, "page" | "pageSize"> = {},
-) {
-  const pageSize = MAX_RESPONSES_PAGE_SIZE;
-  const responses: SurveyResponse[] = [];
-  let page = 1;
-
-  for (;;) {
-    options.signal?.throwIfAborted();
-    const currentPage = await fetchResponsesByForm(formId, { ...options, page, pageSize });
-    if (responses.length + currentPage.data.length > MAX_CLIENT_RESPONSE_EXPORT) {
-      throw new Error(`В одной клиентской выгрузке поддерживается не более ${MAX_CLIENT_RESPONSE_EXPORT} ответов`);
-    }
-    responses.push(...currentPage.data);
-    // Do not request an offset past the exact total: PostgREST can return 416
-    // for that range, including when the last page contains exactly 100 rows.
-    if (currentPage.data.length < pageSize || responses.length >= currentPage.count) return responses;
-    page += 1;
-  }
+  options: { signal?: AbortSignal; responseIds?: string[] } = {},
+): Promise<SurveyResponse[]> {
+  options.signal?.throwIfAborted();
+  const { data, error } = await runRequest(
+    "responses.exportSnapshot",
+    (signal) => applyAbortSignal(apiClient.rpc("export_form_responses", {
+      p_form_id: formId,
+      p_response_ids: options.responseIds ?? null,
+    }), signal),
+    { signal: options.signal, timeoutMs: 60_000, context: { formId } },
+  );
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Сервер не вернул снимок ответов");
+  return data as SurveyResponse[];
 }

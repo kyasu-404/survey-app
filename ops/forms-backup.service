@@ -1,0 +1,13 @@
+[Unit]
+Description=Verified backup of forms database, storage and configuration
+RequiresMountsFor=/mnt/data/forms_backup
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/survey-app/ops/backup-forms.py
+User=root
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

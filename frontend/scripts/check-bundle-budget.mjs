@@ -13,8 +13,9 @@ const budgets = {
   lazySurveyCreatorCoreJs: { raw: 1_650_000, gzip: 400_000 },
   css: { raw: 550_000, gzip: 125_000 },
   image: { raw: 250_000 },
-  // Table view, themed icons and floating menus add about 9 KiB; no new dependencies.
-  total: { raw: 6_907_000 },
+  // Patched React Router 7, durable-job UI and motion add about 36 KiB.
+  // Keep the initial-load gate unchanged; allow only this measured increase.
+  total: { raw: 6_955_000 },
 };
 
 function formatBytes(bytes) {

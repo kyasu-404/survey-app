@@ -9,11 +9,11 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import FormResponsesPage from "./FormResponsesPage";
 
-const { deleteResponses, getFormById, getAllResponsesByForm, exportToExcel, exportResponseFilesZip, showToast, getOrganizations } = vi.hoisted(() => ({
+const { deleteResponses, getFormById, loadResponseRows, exportToExcel, exportResponseFilesZip, showToast, getOrganizations } = vi.hoisted(() => ({
   getOrganizations: vi.fn(),
   deleteResponses: vi.fn(),
   getFormById: vi.fn(),
-  getAllResponsesByForm: vi.fn(),
+  loadResponseRows: vi.fn(),
   exportToExcel: vi.fn(),
   exportResponseFilesZip: vi.fn(),
   showToast: vi.fn(),
@@ -65,10 +65,17 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   getFormById,
 }));
 
-vi.mock("../../entities/response/api", () => ({
-  deleteResponses,
-  getAllResponsesByForm,
-}));
+vi.mock("../../entities/response/api", () => {
+  let snapshot: SurveyResponse[] = [];
+  return {
+    deleteResponses,
+    getResponsesByForm: async (id: string, options: { page: number; pageSize: number; signal?: AbortSignal }) => {
+      snapshot = await loadResponseRows(id, options);
+      return { data: snapshot.slice((options.page - 1) * options.pageSize, options.page * options.pageSize), count: snapshot.length, totalPages: Math.max(1, Math.ceil(snapshot.length / options.pageSize)) };
+    },
+    getAllResponsesByForm: async (_id: string, options?: { responseIds?: string[] }) => options?.responseIds ? snapshot.filter(row => options.responseIds!.includes(row.id)) : snapshot,
+  };
+});
 
 vi.mock("../../entities/organization/api", () => ({ getOrganizations }));
 
@@ -176,11 +183,11 @@ describe("FormResponsesPage", () => {
     resetRealtimeChannel();
   });
 
-  it("exports all answers to ZIP, shows progress and matches the XLSX button", async () => {
+  it("exports selected answers to ZIP, shows progress and matches the XLSX button", async () => {
     const schema = { pages: [{ elements: [{ type: "panel", name: "panel", elements: [{ type: "file", name: "files" }] }] }] };
     getFormById.mockResolvedValue({ id: "form-1", title: "Вложения", author_id: "user-1", schema });
     const responses = [createResponse(1), createResponse(2)];
-    getAllResponsesByForm.mockResolvedValue(responses);
+    loadResponseRows.mockResolvedValue(responses);
     const deferred = createDeferred<{ downloaded: number; failed: number }>();
     exportResponseFilesZip.mockImplementation((_responses, _schema, _title, options) => {
       options.onProgress(1, 2);
@@ -200,7 +207,7 @@ describe("FormResponsesPage", () => {
     await userEvent.click(button);
     await waitFor(() => expect(button).toHaveTextContent("1/2"));
     expect(button).toBeDisabled();
-    expect(exportResponseFilesZip).toHaveBeenCalledExactlyOnceWith(responses, schema, "Вложения", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(exportResponseFilesZip).toHaveBeenCalledExactlyOnceWith([responses[0]], schema, "Вложения", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     await act(async () => deferred.resolve({ downloaded: 1, failed: 1 }));
     expect(button).toBeEnabled();
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Не удалось скачать: 1"), "warning");
@@ -257,7 +264,7 @@ describe("FormResponsesPage", () => {
       },
     ];
 
-    getAllResponsesByForm.mockResolvedValue(responses);
+    loadResponseRows.mockResolvedValue(responses);
 
     const { container } = render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -394,7 +401,7 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getAllResponsesByForm
+    loadResponseRows
       .mockResolvedValueOnce([
         {
           id: "response-1",
@@ -433,7 +440,7 @@ describe("FormResponsesPage", () => {
     emitRealtimeChange();
 
     await waitFor(() => {
-      expect(getAllResponsesByForm).toHaveBeenCalledTimes(2);
+      expect(loadResponseRows).toHaveBeenCalledTimes(2);
     });
 
     expect(await screen.findByText("Борис")).toBeInTheDocument();
@@ -466,7 +473,7 @@ describe("FormResponsesPage", () => {
         responses_count: 2,
       });
 
-    getAllResponsesByForm
+    loadResponseRows
       .mockResolvedValueOnce([
         {
           id: "response-1",
@@ -505,7 +512,7 @@ describe("FormResponsesPage", () => {
     emitRealtimeChange("forms");
 
     await waitFor(() => {
-      expect(getAllResponsesByForm).toHaveBeenCalledTimes(2);
+      expect(loadResponseRows).toHaveBeenCalledTimes(2);
     });
 
     expect(await screen.findByText("Борис")).toBeInTheDocument();
@@ -535,19 +542,19 @@ describe("FormResponsesPage", () => {
 
     queryClient.setQueryData(getFormQueryKey("form-1"), form);
     queryClient.setQueryData(
-      getFormResponsesQueryKey("form-1", "all"),
-      [
+      getFormResponsesQueryKey("form-1", "page", 1, 50),
+      { data: [
         {
           id: "response-1",
           form_id: "form-1",
           created_at: "2026-04-08T11:30:00.000Z",
           data: { name: "Анна" },
         },
-      ],
+      ], count: 1, totalPages: 1 },
     );
 
     getFormById.mockResolvedValue(form);
-    getAllResponsesByForm.mockResolvedValue([
+    loadResponseRows.mockResolvedValue([
       {
         id: "response-2",
         form_id: "form-1",
@@ -575,7 +582,7 @@ describe("FormResponsesPage", () => {
     expect(screen.getByText("Анна")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(getAllResponsesByForm).toHaveBeenCalledTimes(1);
+      expect(loadResponseRows).toHaveBeenCalledTimes(1);
     });
 
     expect(await screen.findByText("Борис")).toBeInTheDocument();
@@ -600,7 +607,7 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getAllResponsesByForm.mockResolvedValueOnce([
+    loadResponseRows.mockResolvedValueOnce([
       {
         id: "response-1",
         form_id: "form-1",
@@ -623,7 +630,7 @@ describe("FormResponsesPage", () => {
 
     await waitFor(() => {
       expect(getFormById).toHaveBeenCalledTimes(1);
-      expect(getAllResponsesByForm).toHaveBeenCalledTimes(1);
+      expect(loadResponseRows).toHaveBeenCalledTimes(1);
     });
 
     await act(async () => {
@@ -633,7 +640,7 @@ describe("FormResponsesPage", () => {
 
     await waitFor(() => {
       expect(getFormById).toHaveBeenCalledTimes(1);
-      expect(getAllResponsesByForm).toHaveBeenCalledTimes(1);
+      expect(loadResponseRows).toHaveBeenCalledTimes(1);
     }, { timeout: 100 });
   });
 
@@ -656,7 +663,7 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getAllResponsesByForm.mockResolvedValue([
+    loadResponseRows.mockResolvedValue([
       {
         id: "response-1",
         form_id: "form-1",
@@ -703,7 +710,7 @@ describe("FormResponsesPage", () => {
       },
     });
 
-    getAllResponsesByForm.mockResolvedValue([
+    loadResponseRows.mockResolvedValue([
       {
         id: "response-1",
         form_id: "form-1",
@@ -755,7 +762,7 @@ describe("FormResponsesPage", () => {
         ],
       },
     });
-    getAllResponsesByForm.mockResolvedValue(
+    loadResponseRows.mockResolvedValue(
       [
         {
           id: "response-1",
@@ -805,7 +812,7 @@ describe("FormResponsesPage", () => {
         },
       });
 
-    getAllResponsesByForm.mockResolvedValueOnce([
+    loadResponseRows.mockResolvedValueOnce([
       {
         id: "response-1",
         form_id: "form-1",
@@ -818,7 +825,7 @@ describe("FormResponsesPage", () => {
     const responsesDeferred = createDeferred<SurveyResponse[]>();
 
     getFormById.mockImplementationOnce(() => formDeferred.promise);
-    getAllResponsesByForm.mockImplementationOnce(() => responsesDeferred.promise);
+    loadResponseRows.mockImplementationOnce(() => responsesDeferred.promise);
 
     render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
@@ -878,25 +885,27 @@ describe("FormResponsesPage", () => {
   });
 
 
-  it("shows and exports all 200 answers in one scrollable list and includes them in the report", async () => {
+  it("paginates 200 answers and exports a full snapshot only on demand", async () => {
     getFormById.mockResolvedValue({
       id: "form-1", title: "Полная форма", author_id: "user-1", form_type: "anketa", form_reason: "plan",
       schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
     });
     const responses = [...createFullResponsePage(1), ...createFullResponsePage(2)];
-    getAllResponsesByForm.mockResolvedValue(responses);
+    loadResponseRows.mockResolvedValue(responses);
     exportToExcel.mockResolvedValue(undefined);
     render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
       <QueryClientProvider client={createQueryClient()}><Routes>
         <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
       </Routes></QueryClientProvider>
     </MemoryRouter>);
-    expect(await screen.findByText("Ответ 200")).toBeInTheDocument();
+    expect(await screen.findByText("Ответ 50")).toBeInTheDocument();
     expect(screen.getByText("Ответ 1")).toBeInTheDocument();
     expect(screen.getByText("Ответов: 200")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Страницы ответов")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать все ответы" }));
-    expect(screen.getByText("Выбрано: 200")).toBeInTheDocument();
+    expect(screen.getByLabelText("Страницы ответов")).toBeInTheDocument();
+    expect(screen.queryByText("Ответ 200")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Далее" }));
+    expect(await screen.findByText("Ответ 100")).toBeInTheDocument();
+    expect(screen.queryByText("Ответ 1", { exact: true })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Скачать XLSX" }));
     await waitFor(() => expect(exportToExcel).toHaveBeenCalledOnce());
     expect(exportToExcel.mock.calls[0][0]).toHaveLength(200);
@@ -905,24 +914,24 @@ describe("FormResponsesPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Отчёт" }));
     const report = await screen.findByRole("dialog", { name: "Отчёт по ответам" });
     expect(within(report).getByText("Всего ответов").nextElementSibling).toHaveTextContent("200");
-    expect(getAllResponsesByForm).toHaveBeenCalledOnce();
+    expect(loadResponseRows).toHaveBeenCalledTimes(2);
   });
 
   it("reconciles responses after the realtime subscription reconnects", async () => {
     getFormById.mockResolvedValue({ id: "form-1", author_id: "user-1", title: "Форма", schema: {
       pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }],
     } });
-    getAllResponsesByForm.mockResolvedValue([createResponse(1)]);
+    loadResponseRows.mockResolvedValue([createResponse(1)]);
     render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
       <QueryClientProvider client={createQueryClient()}><Routes>
         <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
       </Routes></QueryClientProvider>
     </MemoryRouter>);
     expect(await screen.findByText("Ответ 1")).toBeInTheDocument();
-    getAllResponsesByForm.mockResolvedValue([createResponse(1), createResponse(2)]);
+    loadResponseRows.mockResolvedValue([createResponse(1), createResponse(2)]);
     act(() => { emitRealtimeStatus("CHANNEL_ERROR"); emitRealtimeStatus("SUBSCRIBED"); });
     expect(await screen.findByText("Ответ 2")).toBeInTheDocument();
-    expect(getAllResponsesByForm).toHaveBeenCalledTimes(2);
+    expect(loadResponseRows).toHaveBeenCalledTimes(2);
   });
 
   it("deletes selected answers", async () => {
@@ -938,7 +947,7 @@ describe("FormResponsesPage", () => {
       responses_count: 1,
       schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
     });
-    getAllResponsesByForm.mockResolvedValue([createResponse(1, "Анна")]);
+    loadResponseRows.mockResolvedValue([createResponse(1, "Анна")]);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(
@@ -966,7 +975,7 @@ describe("FormResponsesPage", () => {
 it("resolves archived names in tables and XLSX while reporting only active selected types", async () => {
   const schema = { pages: [{ elements: [{ type: "organization", name: "org", title: "ОУ" }] }] };
   getFormById.mockResolvedValue({ id: "form-1", title: "Архив", author_id: "user-1", organization_types: ["school"], schema });
-  getAllResponsesByForm.mockResolvedValue([{ ...createResponse(1), data: { org: "archive-1" } }]);
+  loadResponseRows.mockResolvedValue([{ ...createResponse(1), data: { org: "archive-1" } }]);
   getOrganizations.mockResolvedValue([
     { id: "archive-1", organization_type: "school", number: "1", alias: "Архивная", is_archived: true },
     { id: "active-2", organization_type: "school", number: "2", alias: "Действующая", is_archived: false },

@@ -51,7 +51,7 @@ export async function getResponsesByForm(
 
 export async function getAllResponsesByForm(
   formId: string,
-  options?: Omit<FetchResponsesByFormOptions, "page" | "pageSize">,
+  options?: { signal?: AbortSignal; responseIds?: string[] },
 ) {
   return fetchAllResponsesByForm(formId, options);
 }

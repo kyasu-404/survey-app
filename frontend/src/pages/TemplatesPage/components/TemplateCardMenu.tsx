@@ -1,3 +1,4 @@
+import { Presence } from "../../../shared/ui/Presence";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { routes } from "../../../app/routes";
 import deleteIcon from "../../../img/delete.svg";
@@ -48,7 +49,7 @@ export function TemplateCardMenu({
         ...
       </button>
 
-      {actionMenuOpen && (
+      <Presence kind="menu">{actionMenuOpen && (
         <div className="form-menu-dropdown templates-menu-dropdown" role="menu" aria-label={`Меню действий шаблона ${title}`} onClick={stopCardEvent}>
           <button
             type="button"
@@ -93,7 +94,7 @@ export function TemplateCardMenu({
             <span className="form-menu-item-label">Удалить</span>
           </button>
         </div>
-      )}
+      )}</Presence>
     </div>
   );
 }

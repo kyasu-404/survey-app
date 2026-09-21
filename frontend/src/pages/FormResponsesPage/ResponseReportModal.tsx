@@ -1,3 +1,5 @@
+import { Presence } from "../../shared/ui/Presence";
+import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
 import { useState } from "react";
 import { useToast } from "../../app/providers/ToastProvider";
 import { queueFormReminders } from "../../entities/mail/api";
@@ -124,7 +126,7 @@ export function ResponseReportModal({
           <button type="button" className="response-preview-close" onClick={onClose}>Закрыть</button>
         </div>
 
-        <div className="response-report-tabs" role="tablist" aria-label="Разделы отчёта">
+        <AnimatedTabs className="response-report-tabs" role="tablist" aria-label="Разделы отчёта">
           <button
             type="button"
             role="tab"
@@ -145,7 +147,7 @@ export function ResponseReportModal({
           >
             Учёт сдавших
           </button>
-        </div>
+        </AnimatedTabs>
 
         {activeTab === "statistics" && (
           <div role="tabpanel" className="response-report-tab-panel">
@@ -262,13 +264,13 @@ export function ResponseReportModal({
           </div>
         )}
       </div>
-      {isConfirmationOpen && (
+      <Presence kind="modal">{isConfirmationOpen && (
         <ReminderConfirmationModal
           isPending={isQueueingReminders}
           onCancel={() => setIsConfirmationOpen(false)}
           onConfirm={() => void handleQueueReminders()}
         />
-      )}
+      )}</Presence>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import {unzipSync} from 'fflate';
-import { Worker } from 'node:worker_threads';
+import { enqueueGeneration } from './generation-jobs.mjs';
+import { runOfficeTask } from './office-tasks.mjs';
 import { readFile } from 'node:fs/promises';
 import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, saveUrl, readLimited, fetchLimited, documentName, documentKey } from './security.mjs';
-import { DOCX_MIME, blankDocx, validateOffice } from './docx.mjs';
-import {XLSX_MIME,mimeFor,blankXlsx,templateSources,systemFields,readTemplate,checkTemplate} from './templates.mjs';
+import { DOCX_MIME, blankDocx } from './docx.mjs';
+import {XLSX_MIME,mimeFor,blankXlsx,templateSources,systemFields} from './templates.mjs';
 export const PLUGIN_GUID = 'asc.{BA7A912A-0856-4677-9AB5-390CA8D4D636}';
 const BUCKET = 'survey-documents';
 const now = () => Math.floor(Date.now()/1000);
@@ -14,7 +14,6 @@ export function createApp({pool, supabase, env = process.env}) {
   const tokenKey = Buffer.from(key).toString('hex') + ':survey-office-capability-v1';
   const appUrl = baseUrl(env.PUBLIC_APP_URL);
   const store = supabase.storage.from(BUCKET);
-  let generating=false;
   const query = async (sql,args=[]) => (await pool.query(sql,args)).rows;
   const settings = async () => (await query('select * from public.onlyoffice_settings where id=1'))[0];
   const publicSettings = s => { const {jwt_secret_encrypted, ...safe} = s; return {...safe,has_secret:Boolean(jwt_secret_encrypted)}; };
@@ -69,7 +68,7 @@ export function createApp({pool, supabase, env = process.env}) {
     finally {db.release();}
   }
   async function createDocument(form,auth,name,bytes,format='docx') {
-    const fieldCount=readTemplate(bytes,format).bindings.length;
+    const {fieldCount}=await runOfficeTask({task:'inspect',bytes,format});
     const id=randomUUID(), storagePath=`forms/${form.id}/documents/${id}/${randomUUID()}.${format}`;
     await upload(storagePath,bytes,format);
     try {
@@ -112,9 +111,8 @@ export function createApp({pool, supabase, env = process.env}) {
         const forceTime=Number(payload.lastsave || 0);
         if(payload.status===6 && forceTime && forceTime<Number(doc.last_force_save_at)) return;
         const bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
-        validateOffice(bytes,s.max_file_mb*1024*1024,doc.file_type || 'docx');
         const path=`forms/${doc.form_id}/documents/${id}/${randomUUID()}.${doc.file_type || "docx"}`;
-        const fieldCount=readTemplate(bytes,doc.file_type || 'docx').bindings.length;
+        const {fieldCount}=await runOfficeTask({task:'inspect',bytes,format:doc.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024});
         await upload(path,bytes,doc.file_type || 'docx');
         try {
           const userId=Array.isArray(payload.users) && uuid(payload.users[0]) ? payload.users[0] : null;
@@ -175,7 +173,9 @@ export function createApp({pool, supabase, env = process.env}) {
       const name=path.slice('/plugin/'.length);
       const mime={'config.json':'application/json','index.html':'text/html; charset=utf-8','plugin.js':'text/javascript','plugin.css':'text/css','plugins.js':'text/javascript','icon.svg':'image/svg+xml'}[name];
       requireValue(mime,'Файл не найден',404);
-      return send(res,200,await readFile(new URL(`plugin/${name}`,staticRoot)),{'Content-Type':mime,'Access-Control-Allow-Origin':'*',
+      const source=await readFile(new URL(`plugin/${name}`,staticRoot));
+      const content=name==='plugins.js' ? `const SURVEY_DOCUMENT_SERVER_ORIGIN=${JSON.stringify(s.public_url ? new URL(s.public_url).origin : null)};\n${source}` : source;
+      return send(res,200,content,{'Content-Type':mime,'Access-Control-Allow-Origin':'*',
         'Content-Security-Policy':`default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'self' ${dsOrigin}; base-uri 'none'; form-action 'none'`});
     }
     if(path==='/probe' && req.method==='GET') {capability(url.searchParams.get('token') || '','probe');return send(res,200,blankDocx(),{'Content-Type':DOCX_MIME});}
@@ -225,7 +225,8 @@ export function createApp({pool, supabase, env = process.env}) {
       employeeOnly(auth);
       if(formMatch[2]==='results' && req.method==='GET') {
         const results=await query('select r.id,r.form_id,r.template_id,r.name,r.file_type,r.files,r.size_bytes,r.created_by,r.created_at,p.name as author_name from public.office_generation_results r left join public.profiles p on p.id=r.created_by where r.form_id=$1 order by r.created_at desc limit 100',[form.id]);
-        return send(res,200,{results});
+        const jobs=await query("select id,form_id,name,state,error,created_at from public.office_generation_jobs where form_id=$1 and (state in ('queued','running') or (state='failed' and created_at>now()-interval '1 day')) order by created_at desc limit 100",[form.id]);
+        return send(res,200,{results,jobs});
       }
       requireValue(formMatch[2]==='documents','Метод не поддерживается',405);
       if(req.method==='GET') {
@@ -240,7 +241,7 @@ export function createApp({pool, supabase, env = process.env}) {
         else {
           requireValue([DOCX_MIME,XLSX_MIME,'application/octet-stream','application/zip'].includes(contentType),'Недопустимый MIME type');
           const supplied=url.searchParams.get('name'); requireValue(/\.(docx|xlsx)$/i.test(supplied || ''),'Выберите DOCX или XLSX');format=supplied.split('.').pop().toLowerCase();
-          name=documentName(supplied,format);bytes=await readLimited(req,s.max_file_mb*1024*1024);validateOffice(bytes,s.max_file_mb*1024*1024,format);
+          name=documentName(supplied,format);bytes=await readLimited(req,s.max_file_mb*1024*1024);
         }
         return send(res,201,await createDocument(form,auth,name,bytes,format));
       }
@@ -256,7 +257,7 @@ export function createApp({pool, supabase, env = process.env}) {
       requireValue(req.method==='GET' && resultMatch[2],'Метод не поддерживается',405);
       const archive=await download(result.storage_path);
       let bytes=archive,name=result.name,contentType='application/zip';
-      if(resultMatch[3]!==undefined){const index=Number(resultMatch[3]);requireValue(Number.isSafeInteger(index)&&index>=0&&index<result.files.length,'Файл не найден',404);name=result.files[index];const files=unzipSync(archive,{filter:entry=>entry.name===name});requireValue(files[name],'Файл не найден',404);bytes=Buffer.from(files[name]);contentType=mimeFor(result.file_type);}
+      if(resultMatch[3]!==undefined){const index=Number(resultMatch[3]);requireValue(Number.isSafeInteger(index)&&index>=0&&index<result.files.length,'Файл не найден',404);name=result.files[index];bytes=Buffer.from((await runOfficeTask({task:'extract',bytes:archive,filename:name})).bytes);contentType=mimeFor(result.file_type);}
       return send(res,200,bytes,{'Content-Type':contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`});
     }
     const match=path.match(/^\/documents\/([^/]+)(?:\/(.*))?$/);
@@ -313,38 +314,18 @@ export function createApp({pool, supabase, env = process.env}) {
         return send(res,200,{token:issue('plugin',{formId:doc.form_id,documentId:doc.id,sub:auth.profile.id,sessionEnd:auth.claims.sessionEnd},Math.min(900,auth.claims.sessionEnd-now()))});
       }
       if(action==='check-template' && req.method==='GET') {
-        const form=await formFor(doc.form_id,auth),template=readTemplate(await download(doc.storage_path),doc.file_type);
-        return send(res,200,{fields:checkTemplate(template,form)});
+        const form=await formFor(doc.form_id,auth);
+        const {fields}=await runOfficeTask({task:'inspect',bytes:await download(doc.storage_path),format:doc.file_type,form});
+        return send(res,200,{fields});
       }
       if(action==='generate' && req.method==='POST') {
         employeeOnly(auth);
-        requireValue(!generating,'Другая выгрузка уже формируется. Повторите через минуту.',429);
         requireValue(!doc.last_save_error,'У макета есть ошибка сохранения. Откройте его и сохраните ещё раз.',409);
         const ids=body.response_ids;
         requireValue(ids===undefined || (Array.isArray(ids) && ids.length>0 && ids.length<=500 && ids.every(uuid) && new Set(ids).size===ids.length),'Выберите от 1 до 500 ответов');
-        generating=true;
-        try {
-          const form=await formFor(doc.form_id,auth);
-          const responses=await query('select id,data,created_at,updated_at from public.responses where form_id=$1'+(ids ? ' and id=any($2::uuid[])':'')+' order by created_at,id limit 501',ids?[form.id,ids]:[form.id]);
-          requireValue(responses.length && responses.length<=500,'Для одной выгрузки выберите от 1 до 500 ответов');
-          requireValue(!ids || responses.length===ids.length,'Некоторые выбранные ответы удалены или относятся к другой форме');
-          const organizations=await query('select id,alias,number from public.education_organizations');
-          const bytes=await download(doc.storage_path);
-          const output=await new Promise((resolve,reject)=>{
-            const worker=new Worker(new URL('./generation-worker.mjs',import.meta.url),{workerData:{bytes,format:doc.file_type,form,responses,organizations,nameQuestionId:body.name_question_id,name:doc.name},resourceLimits:{maxOldGenerationSizeMb:192}});
-            const timer=setTimeout(()=>{void worker.terminate();reject(new HttpError(504,'Выгрузка занимает слишком долго. Выберите меньше ответов.'));},75000);
-            worker.once('message',result=>{clearTimeout(timer);if(result.error)reject(new HttpError(422,result.error));else resolve({bytes:Buffer.from(result.bytes),files:result.files});});
-            worker.once('error',()=>{clearTimeout(timer);reject(new HttpError(422,'Не удалось обработать макет. Попробуйте уменьшить выборку.'));});
-            worker.once('exit',code=>{clearTimeout(timer);if(code)reject(new HttpError(422,'Формирование прервано. Попробуйте уменьшить выборку.'));});
-          });
-          const resultId=randomUUID(),path=`forms/${form.id}/results/${resultId}.zip`,name=doc.name.replace(/\.(docx|xlsx)$/i,'')+'.zip';
-          await upload(path,output.bytes,'zip');
-          try {
-            const result=(await query('insert into public.office_generation_results(id,form_id,template_id,name,file_type,storage_path,files,size_bytes,created_by) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id,form_id,template_id,name,file_type,files,size_bytes,created_by,created_at',[resultId,form.id,doc.id,name,doc.file_type,path,JSON.stringify(output.files),output.bytes.length,auth.profile.id]))[0];
-            return send(res,201,result);
-          } catch(error){await store.remove([path]);throw error;}
-
-        } finally {generating=false;}
+        requireValue(body.name_question_id===undefined || (typeof body.name_question_id==='string' && body.name_question_id.length<=200),'Некорректное поле имени файла');
+        const job=await enqueueGeneration(pool,doc.id,auth.profile.id,ids,body.name_question_id);
+        return send(res,202,job);
       }
     }
     throw new HttpError(404,'Метод Office API не найден');

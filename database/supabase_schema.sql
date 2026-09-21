@@ -1062,6 +1062,15 @@ begin
       and split_part(candidate_path, '/', 2) = new.form_id::text
       and candidate_path ~* '^(public|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[^/]+$'
     then
+      if exists (select 1 from public.survey_upload_reservations r where r.object_path = candidate_path) then
+        -- Row update serializes attachment against the cleanup claim. Either
+        -- attachment wins and cleanup skips it, or submission rejects the file.
+        update public.survey_upload_reservations r set attached = true
+        where r.object_path = candidate_path and not r.cleanup_claimed
+          and (r.expires_at > clock_timestamp() or (tg_op = 'UPDATE' and
+            jsonb_path_exists(old.data, '$.** ? (@ == $path)', jsonb_build_object('path', candidate_path))));
+        if not found then raise exception 'Срок загрузки файла истёк. Прикрепите файл заново.' using errcode = '22023'; end if;
+      end if;
       insert into public.response_file_references (response_id, form_id, object_path)
       values (new.id, new.form_id, candidate_path)
       on conflict do nothing;
@@ -1633,6 +1642,81 @@ with check (
 -- PRIVATE SURVEY FILES
 -- =========================
 
+create table public.survey_upload_reservations (
+  object_path text primary key,
+  form_id uuid not null references public.forms(id) on delete cascade,
+  browser_hash uuid not null,
+  client_hash text not null check (client_hash ~ '^[a-f0-9]{64}$'),
+  size_bytes bigint not null check (size_bytes between 0 and 10485760),
+  attached boolean not null default false,
+  cleanup_claimed boolean not null default false,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '8 hours')
+);
+alter table public.survey_upload_reservations enable row level security;
+revoke all on table public.survey_upload_reservations from anon, authenticated;
+grant all on table public.survey_upload_reservations to service_role, postgres;
+create index survey_upload_reservations_browser on public.survey_upload_reservations(form_id, browser_hash, expires_at);
+create index survey_upload_reservations_client on public.survey_upload_reservations(client_hash, created_at);
+create index survey_upload_reservations_expiry on public.survey_upload_reservations(expires_at);
+create index survey_files_form_quota on storage.objects ((split_part(name, '/', 2))) where bucket_id = 'survey-files';
+
+create or replace function public.reserve_survey_upload(p_form_id uuid, p_browser_id uuid, p_client_hash text, p_size bigint, p_extension text)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  object_path text;
+  pending_count bigint;
+  pending_bytes bigint;
+  total_count bigint;
+  total_bytes bigint;
+begin
+  if p_browser_id is null or p_client_hash is null or p_client_hash !~ '^[a-f0-9]{64}$'
+    or p_size is null or p_size not between 0 and 10485760
+    or p_extension is null or p_extension !~ '^([.][a-zA-Z0-9]{1,16})?$'
+  then raise exception 'Некорректные параметры файла' using errcode = '22023'; end if;
+  if not public.is_public_active_form(p_form_id) then
+    raise exception 'Форма закрыта для загрузки' using errcode = '42501';
+  end if;
+  -- Always take locks in this order. The client budget spans forms and browsers.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('survey-upload-client/' || p_client_hash, 0));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('survey-files/' || p_form_id::text, 0));
+  select count(*), coalesce(sum(r.size_bytes), 0) into pending_count, pending_bytes
+  from public.survey_upload_reservations r
+  where r.client_hash = p_client_hash and r.created_at > now() - interval '8 hours';
+  if pending_count >= 500 or pending_bytes + p_size > 104857600 then
+    raise exception 'Лимит загрузок с вашего адреса исчерпан. Повторите позже.' using errcode = '54000';
+  end if;
+  select count(*), coalesce(sum(r.size_bytes), 0) into pending_count, pending_bytes
+  from public.survey_upload_reservations r
+  where r.form_id = p_form_id and r.browser_hash = public.browser_capability_hash(p_browser_id)
+    and r.expires_at > now()
+    and not exists (select 1 from public.response_file_references rf where rf.object_path = r.object_path);
+  if pending_count >= 20 or pending_bytes + p_size > 104857600 then
+    raise exception 'Сначала отправьте ответ или удалите ненужные файлы.' using errcode = '54000';
+  end if;
+  select count(*), coalesce(sum(coalesce((o.metadata->>'size')::bigint, 10485760)), 0)
+    into total_count, total_bytes from storage.objects o
+    where o.bucket_id = 'survey-files' and split_part(o.name, '/', 2) = p_form_id::text;
+  select count(*), coalesce(sum(r.size_bytes), 0) into pending_count, pending_bytes
+    from public.survey_upload_reservations r
+    where r.form_id = p_form_id and r.expires_at > now()
+      and not exists (select 1 from storage.objects o where o.bucket_id = 'survey-files' and o.name = r.object_path);
+  if total_count + pending_count >= 2000 or total_bytes + pending_bytes + p_size > 2147483648 then
+    raise exception 'Хранилище формы заполнено. Обратитесь к автору формы.' using errcode = '54000';
+  end if;
+  object_path := 'public/' || p_form_id::text || '/' || gen_random_uuid()::text || lower(p_extension);
+  insert into public.survey_upload_reservations(object_path, form_id, browser_hash, client_hash, size_bytes)
+    values (object_path, p_form_id, public.browser_capability_hash(p_browser_id), p_client_hash, p_size);
+  return object_path;
+end;
+$$;
+revoke all on function public.reserve_survey_upload(uuid,uuid,text,bigint,text) from public, anon, authenticated;
+grant execute on function public.reserve_survey_upload(uuid,uuid,text,bigint,text) to service_role;
 create or replace function public.can_upload_survey_file(
   object_name text,
   anonymous_request boolean,
@@ -1649,8 +1733,8 @@ declare
   target_form_id uuid;
   existing_count bigint;
   existing_bytes bigint;
-  orphan_count bigint := 0;
-  orphan_bytes bigint := 0;
+  reserved_count bigint := 0;
+  reserved_bytes bigint := 0;
 begin
   if array_length(path_parts, 1) <> 3
     or length(path_parts[3]) > 512
@@ -1697,29 +1781,18 @@ begin
   where o.bucket_id = 'survey-files'
     and split_part(o.name, '/', 2) = target_form_id::text;
 
-  if anonymous_request then
-    select count(*), coalesce(sum(
-      case
-        when coalesce(o.metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-          then least((o.metadata ->> 'size')::numeric, 10485760)::bigint
-        else 10485760
-      end
-    ), 0)
-    into orphan_count, orphan_bytes
-    from storage.objects o
-    left join public.response_file_references reference on reference.object_path = o.name
-    where o.bucket_id = 'survey-files'
-      and split_part(o.name, '/', 1) = 'public'
-      and split_part(o.name, '/', 2) = target_form_id::text
-      and reference.object_path is null;
-  end if;
-
-  return existing_count < 2000
-    and existing_bytes + object_size <= 2147483648
-    and (
-      not anonymous_request
-      or (orphan_count < 20 and orphan_bytes + object_size <= 104857600)
-    );
+  -- New anonymous objects must hold an opaque reservation minted by the server.
+  -- Reading/deleting already attached legacy objects keeps its existing policy.
+  if anonymous_request and not exists (
+    select 1 from public.survey_upload_reservations r where r.object_path = object_name
+      and r.form_id = target_form_id and r.expires_at > now() and object_size <= r.size_bytes
+  ) then return false; end if;
+  select count(*), coalesce(sum(r.size_bytes), 0) into reserved_count, reserved_bytes
+  from public.survey_upload_reservations r
+  where r.form_id = target_form_id and r.expires_at > now() and r.object_path <> object_name
+    and not exists (select 1 from storage.objects o where o.bucket_id = 'survey-files' and o.name = r.object_path);
+  return existing_count + reserved_count < 2000
+    and existing_bytes + reserved_bytes + object_size <= 2147483648;
 end;
 $$;
 
@@ -2552,5 +2625,152 @@ $$;
 
 revoke all on function public.list_forms_sorted(text, text, integer, uuid, text, timestamptz, text, timestamptz, timestamptz, uuid, text, text, boolean) from public, anon;
 grant execute on function public.list_forms_sorted(text, text, integer, uuid, text, timestamptz, text, timestamptz, timestamptz, uuid, text, text, boolean) to authenticated, service_role;
+
+-- A scalar JSON result is not truncated by PostgREST db-max-rows. STABLE uses
+-- one MVCC snapshot for size checks and payload, including concurrent deletes.
+create or replace function public.export_form_responses(p_form_id uuid, p_response_ids uuid[] default null)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+declare
+  row_count bigint;
+  byte_count bigint;
+  result jsonb;
+begin
+  if not public.request_is_enabled() then
+    raise exception 'Требуется действующая учётная запись' using errcode = '42501';
+  end if;
+  if p_response_ids is not null and cardinality(p_response_ids) not between 1 and 10000 then
+    raise exception 'Выберите от 1 до 10000 ответов' using errcode = '22023';
+  end if;
+  select count(*), coalesce(sum(octet_length(r.data::text) + 256), 0)
+  into row_count, byte_count
+  from public.responses r where r.form_id = p_form_id
+    and (p_response_ids is null or r.id = any(p_response_ids));
+  if row_count > 10000 or byte_count > 33554432 then
+    raise exception 'Слишком большая выгрузка. Выберите до 10000 ответов общим объёмом до 32 МБ.' using errcode = '54000';
+  end if;
+  select coalesce(jsonb_agg(to_jsonb(r) order by r.created_at desc, r.id desc), '[]'::jsonb)
+  into result
+  from (select id, form_id, data, created_at, updated_at from public.responses
+    where form_id = p_form_id and (p_response_ids is null or id = any(p_response_ids))) r;
+  return result;
+end;
+$$;
+revoke all on function public.export_form_responses(uuid,uuid[]) from public, anon;
+grant execute on function public.export_form_responses(uuid,uuid[]) to authenticated, service_role;
+
+-- Preserve the entire reminder audience (or reject >5000) in one SQL snapshot.
+create or replace function public.list_missing_form_organizations_snapshot(p_form_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(to_jsonb(o)), '[]'::jsonb)
+  from (select * from public.list_missing_form_organizations(p_form_id) limit 5001) o;
+$$;
+revoke all on function public.list_missing_form_organizations_snapshot(uuid) from public, anon, authenticated;
+grant execute on function public.list_missing_form_organizations_snapshot(uuid) to service_role;
+
+
+create or replace function public.list_expired_survey_uploads(batch_limit integer default 100)
+returns table (name text)
+language sql volatile security definer set search_path = ''
+as $$
+  with candidates as (
+    select r.object_path from public.survey_upload_reservations r
+    where r.expires_at < now() and not r.attached
+      and exists (select 1 from storage.objects o where o.bucket_id = 'survey-files' and o.name = r.object_path)
+      and not exists (select 1 from public.response_file_references rf where rf.object_path = r.object_path)
+    order by r.expires_at, r.object_path limit least(greatest(batch_limit, 1), 500)
+    for update skip locked
+  )
+  update public.survey_upload_reservations r set cleanup_claimed = true
+  from candidates c where r.object_path = c.object_path and not r.attached
+  returning r.object_path;
+$$;
+revoke all on function public.list_expired_survey_uploads(integer) from public, anon, authenticated;
+grant execute on function public.list_expired_survey_uploads(integer) to service_role;
+
+
+create table public.office_generation_jobs (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.forms(id) on delete cascade,
+  template_id uuid references public.office_documents(id) on delete set null,
+  created_by uuid references public.profiles(id) on delete set null,
+  name text not null,
+  file_type text not null check(file_type in ('docx','xlsx')),
+  storage_path text not null,
+  state text not null default 'queued' check(state in ('queued','running','succeeded','failed')),
+  payload jsonb,
+  payload_bytes integer not null check(payload_bytes between 0 and 8388608),
+  attempts integer not null default 0,
+  attempt_token uuid,
+  available_at timestamptz not null default now(),
+  error text,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz
+);
+create index office_jobs_pending on public.office_generation_jobs(created_at,id) where state in ('queued','running');
+create index office_jobs_storage on public.office_generation_jobs(storage_path) where state in ('queued','running');
+create index office_jobs_form on public.office_generation_jobs(form_id,created_at desc);
+alter table public.office_generation_jobs enable row level security;
+revoke all on public.office_generation_jobs from anon,authenticated;
+grant all on public.office_generation_jobs to service_role, postgres;
+create or replace function public.list_orphan_office_documents(
+  cutoff timestamptz default (now() - interval '168 hours'), batch_limit integer default 500
+)
+returns table (name text) language sql stable security definer set search_path = '' as $$
+  select o.name from storage.objects o where o.bucket_id='survey-documents'
+    and o.created_at < least(cutoff, now() - interval '168 hours')
+    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
+    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_jobs j where j.storage_path=o.name and j.state in ('queued','running'))
+    -- Superseded objects can still be used by a one-hour editor capability.
+    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
+  order by o.created_at,o.id limit least(greatest(batch_limit,1),500);
+$$;
+create or replace function public.confirm_orphan_office_documents(cutoff timestamptz, object_names text[])
+returns table (name text) language sql stable security definer set search_path = '' as $$
+  select o.name from storage.objects o where o.bucket_id='survey-documents'
+    and cardinality(object_names) between 1 and 500 and o.name=any(object_names)
+    and o.created_at < least(cutoff, now() - interval '168 hours')
+    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
+    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
+    and not exists (select 1 from public.office_generation_jobs j where j.storage_path=o.name and j.state in ('queued','running'))
+    -- Superseded objects can still be used by a one-hour editor capability.
+    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
+  order by o.name;
+$$;
+
+
+
+-- Storage may first authorize an empty metadata placeholder and write the actual
+-- length later as its service role. Enforce the reservation on that final write.
+create or replace function public.enforce_survey_upload_size()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare reserved_size bigint;
+begin
+  if new.bucket_id='survey-files' and split_part(new.name,'/',1)='public' then
+    select r.size_bytes into reserved_size from public.survey_upload_reservations r where r.object_path=new.name;
+    if found and new.metadata ? 'size' and
+      (coalesce(new.metadata->>'size','') !~ '^[0-9]{1,20}$' or (new.metadata->>'size')::numeric>reserved_size) then
+      raise exception 'Размер файла превышает разрешённый для этой загрузки' using errcode='22023';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_survey_upload_size() from public,anon,authenticated;
+create trigger survey_upload_reserved_size before insert or update of metadata,name,bucket_id on storage.objects
+for each row execute function public.enforce_survey_upload_size();
 
 commit;

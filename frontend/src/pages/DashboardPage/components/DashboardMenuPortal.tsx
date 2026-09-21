@@ -1,3 +1,4 @@
+import { Presence } from "../../../shared/ui/Presence";
 import { useLayoutEffect, useRef, type PropsWithChildren, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -9,7 +10,7 @@ export function DashboardMenuPortal({ children, anchor, enabled, align = "right"
 }>) {
   const menuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !children) return;
     const position = () => {
       const menu = menuRef.current;
       const target = anchor.current;
@@ -29,11 +30,11 @@ export function DashboardMenuPortal({ children, anchor, enabled, align = "right"
       window.removeEventListener("resize", position);
       window.removeEventListener("scroll", position, true);
     };
-  }, [align, anchor, enabled]);
-  if (!enabled) return children;
+  }, [align, anchor, enabled, children]);
+  if (!enabled) return <Presence kind="menu">{children}</Presence>;
   return createPortal(
-    <div ref={menuRef} className="dashboard-floating-root dashboard-table-menu" onClick={(event) => event.stopPropagation()}>
+    <Presence kind="menu">{children && <div ref={menuRef} className="dashboard-floating-root dashboard-table-menu" onClick={(event) => event.stopPropagation()}>
       {children}
-    </div>, document.body,
+    </div>}</Presence>, document.body,
   );
 }

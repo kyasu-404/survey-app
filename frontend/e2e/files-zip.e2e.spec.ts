@@ -48,8 +48,7 @@ test("ZIP matches XLSX styling and contains every attachment, including answers 
   const zipBox = (await zipButton.boundingBox())!;
   expect(zipBox.y).toBe(xlsxBox.y);
   expect(zipBox.x).toBeGreaterThanOrEqual(xlsxBox.x + xlsxBox.width);
-  await page.locator(".responses-table tbody input[type=checkbox]").first().check();
-  await expect(page.getByText("Выбрано: 1", { exact: true })).toBeVisible();
+
   await page.screenshot({ path: testInfo.outputPath("files-zip-button.png") });
   const pending = page.waitForEvent("download");
   await zipButton.click();

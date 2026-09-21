@@ -20,6 +20,8 @@ test("public file upload recovers from failed deletion and upload without refres
   const deletionGate = new Promise<void>(resolve => { releaseDeletion = resolve; });
   let deletionStarted = false;
   await page.route("**/functions/v1/form-admin", async route => {
+    const payload = route.request().postDataJSON();
+    if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     expect(route.request().postDataJSON().action).toBe("delete-upload");
     deletionStarted = true;
     await deletionGate;
@@ -77,6 +79,8 @@ test("removing one of several public files preserves the other attachment", asyn
   const uploads: string[] = [];
   const deleted: string[] = [];
   await page.route("**/functions/v1/form-admin", async route => {
+    const payload = route.request().postDataJSON();
+    if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     const body = route.request().postDataJSON();
     expect(body.action).toBe("delete-upload");
     deleted.push(body.path);
@@ -124,6 +128,8 @@ test("anonymous file previews and downloads work when private Storage denies rea
     return route.fulfill({ json: { Key: path.split("/object/")[1] } });
   });
   await page.route("**/functions/v1/form-admin", async route => {
+    const payload = route.request().postDataJSON();
+    if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     deleted.push(route.request().postDataJSON().path);
     return route.fulfill({ json: { success: true } });
   });

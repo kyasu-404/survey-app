@@ -1,5 +1,6 @@
 import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { publicSupabaseClient, supabaseClient } from "./client";
+import { getOrCreateResponseBrowserId } from "../lib/responseBrowserId";
 import { runRequest } from "./request";
 import { SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 
@@ -28,7 +29,8 @@ function getFileExtension(fileName: string) {
     return "";
   }
 
-  return cleanName.slice(dotIndex).replace(/[^a-zA-Z0-9.]/g, "");
+  const extension = cleanName.slice(dotIndex).replace(/[^a-zA-Z0-9.]/g, "");
+  return /^\.[a-zA-Z0-9]{1,12}$/.test(extension) ? extension : "";
 }
 
 function generateStorageObjectId() {
@@ -53,8 +55,19 @@ function buildUserStoragePath(userId: string, formId: string, fileName: string) 
   return `${userId}/${formId}/${generateStorageObjectId()}${getFileExtension(fileName)}`;
 }
 
-function buildPublicStoragePath(formId: string, fileName: string) {
-  return `${PUBLIC_STORAGE_PREFIX}/${formId}/${generateStorageObjectId()}${getFileExtension(fileName)}`;
+async function reservePublicStoragePath(formId: string, file: File, signal?: AbortSignal) {
+  const { data, error } = await runRequest(
+    "storage.reserveUpload",
+    (requestSignal) => publicSupabaseClient.functions.invoke("form-admin", {
+      body: { action: "reserve-upload", formId, browserId: getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name) },
+      signal: requestSignal,
+    }),
+    { signal },
+  );
+  if (error || typeof data?.path !== "string" || !data.path.startsWith(`public/${formId}/`)) {
+    throw new Error(data?.error || "Не удалось подготовить загрузку. Повторите позже.");
+  }
+  return data.path as string;
 }
 
 async function getCurrentUserId(options: StorageAuthOptions = {}) {
@@ -318,7 +331,7 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
 
   const filePath = currentUserId
     ? buildUserStoragePath(currentUserId, formId, file.name)
-    : buildPublicStoragePath(formId, file.name);
+    : await reservePublicStoragePath(formId, file, options.signal);
   const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
   const bucket = bucketClient.storage.from(SUPABASE_STORAGE_BUCKET);
 
