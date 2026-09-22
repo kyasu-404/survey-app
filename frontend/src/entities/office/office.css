@@ -1,4 +1,7 @@
-.office-dialog{width:min(1120px,calc(100vw - 40px));max-height:88dvh;overflow:auto;border:1px solid var(--theme-border);border-radius:22px;padding:26px;background:var(--theme-surface-light);color:var(--theme-text);box-shadow:0 24px 90px #0003}
+.office-dialog{width:min(1120px,calc(100vw - 40px));height:min(88dvh,900px);max-height:94dvh;overflow:hidden;border:1px solid var(--theme-border);border-radius:22px;padding:26px;background:var(--theme-surface-light);color:var(--theme-text);box-shadow:0 24px 90px #0003}
+.office-dialog[open]{display:flex;flex-direction:column}
+.office-dialog>header,.office-dialog>.section-tabs{flex-shrink:0}
+.office-tab-panel{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}
 .office-dialog::backdrop{background:#0006}
 .office-dialog header,.office-dialog footer,.office-editor-page header,.office-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .office-dialog h2{margin:4px 0 0;font-size:26px}

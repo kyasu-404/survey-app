@@ -21,17 +21,29 @@ describe("Presence", () => {
   it("cancels an exit when reopened, uses current handlers, and clears timers on unmount", () => {
     vi.useFakeTimers();
     const oldAction = vi.fn(), newAction = vi.fn();
-    const { rerender, unmount } = render(<Presence kind="menu"><button onClick={oldAction}>Old</button></Presence>);
-    rerender(<Presence kind="menu">{false}</Presence>);
+    const { rerender, unmount } = render(<Presence><button onClick={oldAction}>Old</button></Presence>);
+    rerender(<Presence>{false}</Presence>);
     act(() => vi.advanceTimersByTime(60));
-    rerender(<Presence kind="menu"><button onClick={newAction}>New</button></Presence>);
+    rerender(<Presence><button onClick={newAction}>New</button></Presence>);
     act(() => vi.advanceTimersByTime(200));
     fireEvent.click(screen.getByRole("button", { name: "New" }));
     expect(newAction).toHaveBeenCalledOnce();
     expect(oldAction).not.toHaveBeenCalled();
-    rerender(<Presence kind="menu">{false}</Presence>);
+    rerender(<Presence>{false}</Presence>);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("removes menus immediately, including during rapid reopen and close", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Presence kind="menu"><button>Old</button></Presence>);
+    rerender(<Presence kind="menu">{false}</Presence>);
+    expect(screen.queryByText("Old")).toBeNull();
+    rerender(<Presence kind="menu"><button>New</button></Presence>);
+    act(() => vi.runAllTimers());
+    expect(screen.getByRole("button", { name: "New" })).toBeVisible();
+    rerender(<Presence kind="menu">{false}</Presence>);
+    expect(screen.queryByText("New")).toBeNull();
   });
 
   it("does not retain content when reduced motion is requested", () => {

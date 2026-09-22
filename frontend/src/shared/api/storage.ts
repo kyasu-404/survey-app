@@ -6,7 +6,7 @@ import { SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const PUBLIC_STORAGE_PREFIX = "public";
-const MAX_STORAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_STORAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const STORAGE_TRANSFER_TIMEOUT_MS = 60_000;
 
 type StorageAuthOptions = {

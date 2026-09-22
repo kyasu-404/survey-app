@@ -76,6 +76,16 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   })).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("forms-table-narrow-menu.png") });
   await page.keyboard.press("Escape"); await expect(menu).toHaveCount(0);
+  const sourceUrl = page.url();
+  await table.locator("tbody tr").last().getByRole("button", { name: "Форма 48", exact: true }).click();
+  await page.locator(".survey-preview-toolbar").getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(page).toHaveURL(sourceUrl);
+  await expect(table.locator("tbody tr")).toHaveCount(20);
+  await expect(table.locator("tbody tr").first()).toContainText("Форма 67");
+  await expect(table.locator('th[aria-sort="descending"]')).toContainText("Название");
+  await expect(page.getByPlaceholder(/^Поиск по названию/)).toHaveValue("Форма");
+  await expect(page.getByLabel("Тип формы", { exact: true })).toHaveValue("anketa");
+  await expect(page.getByLabel("Основание формы", { exact: true })).toHaveValue("plan");
   await page.reload();
   await expect(page.getByRole("table")).toBeVisible();
   await page.getByRole("link", { name: "Все формы", exact: true }).click();

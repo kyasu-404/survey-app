@@ -1042,6 +1042,8 @@ describe("DashboardPage", () => {
   });
 
   it("opens preview from the card and responses from the counter button", async () => {
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 360 });
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
         createForm(1, {
@@ -1064,8 +1066,19 @@ describe("DashboardPage", () => {
     navigate.mockClear();
 
     await userEvent.click(previewCard);
+    expect(navigate).toHaveBeenNthCalledWith(1, "/", {
+      replace: true,
+      preventScrollReset: true,
+      state: {
+        dashboardView: expect.objectContaining({
+          layout: "cards",
+          loadedCount: 1,
+          scroll: { left: 12, top: 360 },
+        }),
+      },
+    });
     expect(navigate).toHaveBeenCalledWith(routes.survey("form-1"), {
-      state: { renderMode: "preview-interactive" },
+      state: { renderMode: "preview-interactive", previewReturnTo: "/" },
     });
   });
 

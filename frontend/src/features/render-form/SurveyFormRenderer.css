@@ -5,6 +5,17 @@
   font-weight: 600;
 }
 
+/* The combobox owns its border and focus ring. Its text/search input is inline. */
+:is(.survey-renderer, .builder-creator-shell) :is(.sd-dropdown, .sd-tagbox) input.sd-dropdown__filter-string-input,
+:is(.survey-renderer, .builder-creator-shell) :is(.sd-dropdown, .sd-tagbox) input.sd-dropdown__filter-string-input:focus {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+}
+
 /* SurveyJS replaces the focused selected star with a double outline. Keep its
    fill consistent with the other selected stars and mark keyboard focus outside. */
 .survey-renderer .sd-rating__item-star--selected:not(.sd-rating__item-star--preview):focus-within svg {

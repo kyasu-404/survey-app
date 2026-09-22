@@ -36,6 +36,7 @@ import { applyOrganizationChoicesToSurvey } from "../../entities/organization/su
 import { getErrorMessage, getSubmitResponseErrorMessage } from "../../shared/lib/error";
 import {
   getStoragePathFromSurveyFileValue,
+  MAX_STORAGE_FILE_SIZE_BYTES,
   getStoragePathsFromResponseData,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
@@ -213,6 +214,12 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
 
 async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>) {
   try {
+    const content = isRecord(options.fileValue) ? options.fileValue.content : options.fileValue;
+    if (typeof content === "string" && content.startsWith("blob:")) {
+      if (!uploadedFiles.has(content)) throw new Error("Выберите файл для предпросмотра ещё раз.");
+      options.callback("success", content);
+      return;
+    }
     const path = getStoragePathFromSurveyFileValue(options.fileValue);
     const localFile = path ? uploadedFiles.get(path) : undefined;
     const fileContent = localFile
@@ -308,6 +315,41 @@ export function SurveyFormRenderer({
     nextModel.getAllQuestions().forEach(prepareFileQuestionActions);
     return { model: nextModel, uploadedFiles: localFiles };
   }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
+
+  useEffect(() => {
+    if (resolvedRenderMode !== "preview-interactive") return;
+    const upload: Parameters<typeof model.onUploadFiles.add>[0] = (_sender, options) => {
+      if (options.files.some(file => file.size > MAX_STORAGE_FILE_SIZE_BYTES)) {
+        options.callback([], ["Размер файла не должен превышать 10 МБ."]);
+        return;
+      }
+      const files = options.files.map(file => {
+        const content = URL.createObjectURL(file);
+        uploadedFiles.set(content, file);
+        return { file, content };
+      });
+      options.callback(files);
+    };
+    const clear: Parameters<typeof model.onClearFiles.add>[0] = (_sender, options) => {
+      const values = Array.isArray(options.value) ? options.value : [options.value];
+      for (const value of values) {
+        if (!isRecord(value) || (options.fileName && value.name !== options.fileName)) continue;
+        if (typeof value.content === "string" && uploadedFiles.has(value.content)) {
+          URL.revokeObjectURL(value.content);
+          uploadedFiles.delete(value.content);
+        }
+      }
+      options.callback("success");
+    };
+    model.onUploadFiles.add(upload);
+    model.onClearFiles.add(clear);
+    return () => {
+      model.onUploadFiles.remove(upload);
+      model.onClearFiles.remove(clear);
+      uploadedFiles.forEach((_file, url) => URL.revokeObjectURL(url));
+      uploadedFiles.clear();
+    };
+  }, [model, resolvedRenderMode, uploadedFiles]);
 
   useEffect(() => {
     if (!existingResponse) {

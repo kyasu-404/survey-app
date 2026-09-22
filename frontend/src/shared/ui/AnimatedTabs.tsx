@@ -6,7 +6,8 @@ export function AnimatedTabs({ className = "", children, ...props }: HTMLAttribu
   const measure = () => {
     const list = root.current;
     const active = list?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if (!list || !active) return;
+    // Native dialogs and hidden panels have no layout until they are shown.
+    if (!list || !active || !active.offsetWidth || !active.offsetHeight) return;
     list.style.setProperty("--tab-x", `${active.offsetLeft}px`);
     list.style.setProperty("--tab-y", `${active.offsetTop}px`);
     list.style.setProperty("--tab-width", `${active.offsetWidth}px`);

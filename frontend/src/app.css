@@ -1339,6 +1339,23 @@ textarea:focus {
   padding: 24px 20px 32px;
 }
 
+.survey-page.survey-page-preview { flex-direction: column; align-items: center; justify-content: flex-start; gap: 14px; }
+.survey-preview-toolbar { position: relative; z-index: 1; width: min(1060px, 100%); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 0 8px; }
+.survey-preview-toolbar span { color: #6d655f; font-size: 14px; }
+.survey-preview-toolbar .survey-preview-back-button {
+  min-height: 42px;
+  border-color: rgba(17, 17, 17, 0.36);
+  background: linear-gradient(180deg, #27272a, #111111);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 14px 28px rgba(17, 17, 17, 0.18);
+}
+.survey-preview-toolbar .survey-preview-back-button:hover,
+.survey-preview-toolbar .survey-preview-back-button:focus-visible {
+  border-color: rgba(17, 17, 17, 0.48);
+  background: linear-gradient(180deg, #3f3f46, #18181b);
+  color: #ffffff;
+}
+
 .survey-not-found-page {
   width: 100%;
   min-height: 100vh;
@@ -6233,8 +6250,22 @@ button.responses-report-button:focus-visible,
 
 .response-report-modal {
   width: min(1080px, calc(100vw - 32px));
-  max-height: min(90vh, 900px);
+  height: min(90dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.response-report-header,
+.response-report-tabs {
+  flex-shrink: 0;
+}
+
+.response-report-tab-panel {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .response-report-tabs {

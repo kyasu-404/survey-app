@@ -14,3 +14,4 @@ mail-worker/node_modules
 office-service/node_modules
 .worktrees
 .codex
+__pycache__/

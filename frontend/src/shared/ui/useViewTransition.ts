@@ -13,16 +13,28 @@ export function useViewTransition() {
   }, []);
   return (update: () => void) => {
     const current = ++request.current;
+    const element = document.querySelector(".dashboard-layout-transition");
+    const opacity = element ? getComputedStyle(element).opacity : "1";
     active.current?.skipTransition();
     fallback.current?.cancel();
     if (prefersReducedMotion()) { update(); return; }
     const commit = () => { if (request.current === current) flushSync(update); };
     if (!document.startViewTransition) {
-      const element = document.querySelector(".dashboard-layout-transition");
       if (!element?.animate) { update(); return; }
-      const motion = element.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, fill: "forwards" });
+      const motion = element.animate([{ opacity }, { opacity: 0 }], { duration: 110, fill: "forwards" });
       fallback.current = motion;
-      motion.onfinish = () => { commit(); motion.cancel(); fallback.current = undefined; };
+      motion.onfinish = () => {
+        commit();
+        motion.cancel();
+        if (request.current !== current) return;
+        const nextElement = document.querySelector(".dashboard-layout-transition");
+        const entering = nextElement?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease-out", fill: "both" });
+        fallback.current = entering;
+        if (entering) entering.onfinish = () => {
+          entering.cancel();
+          if (fallback.current === entering) fallback.current = undefined;
+        };
+      };
       return;
     }
     const transition = document.startViewTransition(commit);

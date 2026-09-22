@@ -1,6 +1,8 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { routes } from "../../app/routes";
+import { useToast } from "../../app/providers/ToastProvider";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { getExistingResponse } from "../../entities/response/api";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
@@ -70,6 +72,9 @@ function getRouteRenderMode(state: unknown): SurveyRenderMode {
 export default function SurveyPage() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const announcedPreview = useRef<string>();
   const { user, loading: isAuthLoading } = useAuth();
   const renderMode = getRouteRenderMode(location.state);
   const isPreview = renderMode !== "interactive";
@@ -97,6 +102,16 @@ export default function SurveyPage() {
     refetchOnReconnect: true,
   });
   const form = surveyQuery.data;
+  useEffect(() => {
+    if (!isPreview || !form || announcedPreview.current === location.key) return;
+    announcedPreview.current = location.key;
+    showToast("Открыт предпросмотр формы", "warning");
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [form, isPreview, location.key, showToast]);
+  const goBack = () => {
+    if (typeof location.state?.previewReturnTo === "string") navigate(-1);
+    else navigate(routes.dashboardMy, { replace: true });
+  };
   const existingResponseQuery = useQuery({
     queryKey: ["form-response-status", id, responseBrowserId],
     queryFn: ({ signal }) => {
@@ -156,7 +171,11 @@ export default function SurveyPage() {
   if (isPrivatePreview && !user?.id) return <SurveyNotFound />;
   if (!form || (!form.is_public && !isPreview)) return <SurveyNotFound />;
   return (
-    <div className="survey-page survey-page-shell">
+    <div className={`survey-page survey-page-shell${isPreview ? " survey-page-preview" : ""}`}>
+      {isPreview && <div className="survey-preview-toolbar">
+        <button type="button" className="app-button survey-preview-back-button" onClick={goBack}>Назад</button>
+        <span>Предпросмотр. Ответы и выбранные файлы не отправляются.</span>
+      </div>}
       <SurveyRuntimeSurface className="card">
         <Suspense fallback={<SurveyRendererFallback />}>
           <LazySurveyRenderer

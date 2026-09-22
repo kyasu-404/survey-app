@@ -9,7 +9,7 @@ export function Presence({ children, kind = "modal" }: { children: ReactNode; ki
   const present = Boolean(children);
   const [retained, setRetained] = useState(children);
   const root = useRef<HTMLDivElement>(null);
-  const duration = kind === "menu" ? 120 : kind === "drawer" ? 240 : 180;
+  const duration = kind === "menu" ? 0 : kind === "drawer" ? 240 : 180;
   if (present && retained !== children) setRetained(children);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function Presence({ children, kind = "modal" }: { children: ReactNode; ki
     if (!present && element.contains(document.activeElement)) (document.activeElement as HTMLElement)?.blur();
   });
 
-  if (!present && (!retained || prefersReducedMotion())) return null;
+  if (!present && (!duration || !retained || prefersReducedMotion())) return null;
   return <div ref={root} className={`motion-presence motion-${kind}`} data-state={present ? "entered" : "leaving"} aria-hidden={!present || undefined}>
     {present ? children : retained}
   </div>;

@@ -1,10 +1,126 @@
 #!/usr/bin/env python3
 """Online PostgreSQL snapshot + versioned Storage backup; never stop production."""
-import argparse, datetime, fcntl, hashlib, json, os, pathlib, shutil, subprocess, tarfile, time
+import argparse, datetime, fcntl, gzip, hashlib, json, os, pathlib, re, shutil, subprocess, tarfile, time
+from contextlib import contextmanager
+from zoneinfo import ZoneInfo
 BASE = pathlib.Path('/mnt/data/forms_backup')
 ROOT = pathlib.Path('/opt/survey-app')
 DB = 'supabase-db'
 USER = 'supabase_admin'
+RETENTION_COUNT = 5
+BACKUP_TIMEZONE = ZoneInfo('Europe/Moscow')
+STAMP_FORMAT = '%Y%m%dT%H%M%SZ'
+LEGACY_NAME = re.compile(r'(?:(deploy(?:-[a-z0-9-]+)?)-)?(\d{8}T\d{6}Z)')
+DATED_NAME = re.compile(r'(\d{2}-\d{2}-\d{2})-(full|deploy(?:-[a-z0-9-]+)?)')
+
+@contextmanager
+def backup_lock(shared=False):
+    if not os.path.ismount('/mnt/data'): raise RuntimeError('/mnt/data must be mounted; refusing to use the system disk')
+    BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(BASE, 0o700)
+    with (BASE / '.lock').open('a') as lock:
+        fcntl.flock(lock, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+        yield
+
+def write_backup_readme():
+    text = pathlib.Path(__file__).with_name('BACKUP_FILES.md').read_text()
+    temporary = BASE / '.README.md.tmp'
+    temporary.write_text(text)
+    os.chmod(temporary, 0o600)
+    temporary.replace(BASE / 'README.md')
+
+def backup_location(created_at, label='full'):
+    local = created_at.astimezone(BACKUP_TIMEZONE)
+    return BASE / local.strftime('%Y-%m-%d') / (local.strftime('%H-%M-%S') + '-' + label)
+
+def backup_catalog(kind):
+    entries = []
+    for parent in BASE.iterdir():
+        if not parent.is_dir() or parent.is_symlink(): continue
+        legacy = LEGACY_NAME.fullmatch(parent.name)
+        if legacy:
+            created = datetime.datetime.strptime(legacy[2], STAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
+            candidates = [(parent, created, legacy[1] or 'full')]
+        elif re.fullmatch(r'\d{4}-\d{2}-\d{2}', parent.name):
+            candidates = []
+            for path in parent.iterdir():
+                match = DATED_NAME.fullmatch(path.name)
+                if not match or not path.is_dir() or path.is_symlink(): continue
+                created = datetime.datetime.strptime(parent.name + ' ' + match[1], '%Y-%m-%d %H-%M-%S').replace(tzinfo=BACKUP_TIMEZONE)
+                candidates.append((path, created, match[2]))
+        else: continue
+        for path, created, label in candidates:
+            actual_kind = 'full' if label == 'full' else 'deploy'
+            if actual_kind != kind: continue
+            if kind == 'full':
+                manifest_file = path / 'manifest.json'
+                if not manifest_file.is_file() or manifest_file.is_symlink(): continue
+                manifest = json.loads(manifest_file.read_text())
+                created = datetime.datetime.strptime(manifest['createdAt'], STAMP_FORMAT).replace(tzinfo=datetime.timezone.utc)
+            elif not any(path.glob('*.tar.gz')): continue
+            entries.append((created, path, label))
+    return sorted(entries, key=lambda entry: (entry[0], str(entry[1])))
+
+def validate_deployment(path):
+    archives = sorted(path.glob('*.tar.gz'))
+    if not archives: raise RuntimeError('No deployment archives: ' + str(path))
+    for archive in archives:
+        if archive.is_symlink(): raise RuntimeError('Deployment archive must not be a symlink')
+        # Read every file to check gzip integrity, without extracting archive paths.
+        with gzip.open(archive, 'rb') as compressed:
+            with tarfile.open(fileobj=compressed, mode='r|') as tar:
+                for member in tar:
+                    if member.isfile():
+                        with tar.extractfile(member) as stream:
+                            while stream.read(1024 * 1024): pass
+            # A tar reader may stop at its end marker before reading the gzip trailer.
+            while compressed.read(1024 * 1024): pass
+    metadata = path / 'deployment.json'
+    if metadata.is_file():
+        expected = json.loads(metadata.read_text()).get('frontendBackupSha256')
+        if expected and digest(path / 'magi-before.tar.gz') != expected:
+            raise RuntimeError('Deployment checksum mismatch: ' + str(path))
+    checksums = path / 'SHA256SUMS'
+    if checksums.is_file():
+        for line in checksums.read_text().splitlines():
+            expected, name = line.split(maxsplit=1)
+            name = name.lstrip('*')
+            if pathlib.Path(name).name != name or digest(path / name) != expected:
+                raise RuntimeError('Deployment checksum mismatch: ' + name)
+
+def prune_backups(kind):
+    entries = backup_catalog(kind)
+    if len(entries) <= RETENTION_COUNT: return
+    # Deployment archives come from the publisher, not the pg_dump workflow.
+    # Verify the retained archive set before removing any older publication.
+    if kind == 'deploy':
+        for _, path, _ in entries[-RETENTION_COUNT:]: validate_deployment(path)
+    for _, path, _ in entries[:-RETENTION_COUNT]:
+        shutil.rmtree(path)
+        print(json.dumps({'removed': str(path), 'kind': kind}))
+        if path.parent != BASE and not any(path.parent.iterdir()): path.parent.rmdir()
+
+def organize_backups():
+    entries = backup_catalog('full') + backup_catalog('deploy')
+    moves = []
+    for created, path, label in entries:
+        target = backup_location(created, label)
+        if path != target:
+            if target.exists() or any(target == planned[1] for planned in moves):
+                raise RuntimeError('Backup destination already exists: ' + str(target))
+            moves.append((path, target))
+    # Complete verification precedes renames and pruning; a failed check keeps all copies.
+    for _, path, label in entries:
+        if label == 'full': validate(path)
+        else: validate_deployment(path)
+    for path, target in moves:
+        target.parent.mkdir(mode=0o700, exist_ok=True)
+        path.rename(target)
+        print(json.dumps({'movedFrom': str(path), 'movedTo': str(target)}))
+    write_backup_readme()
+    prune_backups('full')
+    prune_backups('deploy')
+
 def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 def db(args, **kwargs):
@@ -27,15 +143,16 @@ def validate(path):
     return manifest
 
 def backup():
-    if not os.path.ismount('/mnt/data'): raise RuntimeError('/mnt/data must be mounted; refusing to use the system disk')
-    BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(BASE, 0o700)
-    with (BASE / '.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-        work = BASE / ('.partial-' + stamp)
+    with backup_lock():
+        write_backup_readme()
+        created = datetime.datetime.now(datetime.timezone.utc)
+        stamp = created.strftime(STAMP_FORMAT)
+        final = backup_location(created)
+        final.parent.mkdir(mode=0o700, exist_ok=True)
+        if final.exists(): raise RuntimeError('Backup destination already exists: ' + str(final))
+        work = final.with_name('.partial-' + final.name)
         work.mkdir(mode=0o700)
-        snapshots = sorted(p for p in BASE.glob('20*T*Z') if p.is_dir() and (p/'manifest.json').is_file())
+        snapshots = [entry[1] for entry in backup_catalog('full')]
         storage = ROOT / 'supabase/docker/volumes/storage'
         target = work / 'storage'
         target.mkdir()
@@ -88,10 +205,10 @@ def backup():
                         'sha256': {str(f.relative_to(work)): digest(f) for f in sorted(work.rglob('*')) if f.is_file()}}
             (work / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
             validate(work)
-            final = BASE / stamp
             work.rename(final)
             # Only verified, completed snapshots participate in retention.
-            for old in snapshots[:-13]: shutil.rmtree(old)
+            prune_backups('full')
+            prune_backups('deploy')
             print(json.dumps({'status':'complete','path':str(final)}))
         finally:
             if holder is not None:
@@ -135,11 +252,26 @@ if __name__ == '__main__':
     parser.add_argument('--verify',type=pathlib.Path)
     parser.add_argument('--restore-check',type=pathlib.Path)
     parser.add_argument('--restore-latest',action='store_true')
+    parser.add_argument('--organize',action='store_true',help='Verify, move legacy backups to dated folders, and retain five of each kind')
+    parser.add_argument('--deployment-dir',metavar='LABEL',help='Create a dated directory for a deployment; run --organize after copying archives')
     args=parser.parse_args()
-    if args.verify: validate(args.verify)
-    elif args.restore_check: restore_check(args.restore_check)
+    if args.verify:
+        with backup_lock(shared=True): validate(args.verify)
+    elif args.restore_check:
+        with backup_lock(shared=True): restore_check(args.restore_check)
     elif args.restore_latest:
-        snapshots=sorted(p for p in BASE.glob('20*T*Z') if (p/'manifest.json').is_file())
-        if not snapshots: raise RuntimeError('No completed backup to restore')
-        restore_check(snapshots[-1])
+        with backup_lock(shared=True):
+            snapshots=backup_catalog('full')
+            if not snapshots: raise RuntimeError('No completed backup to restore')
+            restore_check(snapshots[-1][1])
+    elif args.organize:
+        with backup_lock(): organize_backups()
+    elif args.deployment_dir:
+        if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.deployment_dir): parser.error('Deployment label must contain lowercase letters, digits and hyphens')
+        with backup_lock():
+            write_backup_readme()
+            path=backup_location(datetime.datetime.now(datetime.timezone.utc), 'deploy-' + args.deployment_dir)
+            path.parent.mkdir(mode=0o700, exist_ok=True)
+            path.mkdir(mode=0o700)
+            print(path)
     else: backup()

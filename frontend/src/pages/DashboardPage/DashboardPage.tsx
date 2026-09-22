@@ -1,8 +1,8 @@
 import { useViewTransition } from "../../shared/ui/useViewTransition";
 import { Presence } from "../../shared/ui/Presence";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -16,7 +16,7 @@ import { DeleteFormModal } from "./components/DeleteFormModal";
 import { QrModal } from "./components/QrModal";
 import { ResponseLimitModal } from "./components/ResponseLimitModal";
 import { useDashboardActions } from "./hooks/useDashboardActions";
-import { useDashboardFilters } from "./hooks/useDashboardFilters";
+import { useDashboardFilters, type DashboardFilterValues } from "./hooks/useDashboardFilters";
 import { useDashboardForms } from "./hooks/useDashboardForms";
 import { useDashboardListRefresh } from "./hooks/useDashboardListRefresh";
 import { useDashboardMenuDismiss } from "./hooks/useDashboardMenuDismiss";
@@ -25,16 +25,29 @@ import { useDashboardStats } from "./hooks/useDashboardStats";
 import { useQrDialog } from "./hooks/useQrDialog";
 import type { DashboardLayout, DashboardPageProps, OpenMenuState } from "./types";
 
+type DashboardViewSnapshot = {
+  filters: DashboardFilterValues;
+  layout: DashboardLayout;
+  sort: FormsSort;
+  scroll: { left: number; top: number };
+  loadedCount: number;
+};
+
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const { user, loading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialView = useRef((location.state as { dashboardView?: DashboardViewSnapshot } | null)?.dashboardView);
+  const restorePending = useRef(Boolean(initialView.current));
+  const openingPreview = useRef(false);
   const [layout, setLayout] = useState<DashboardLayout>(() => {
+    if (initialView.current) return initialView.current.layout;
     try { return localStorage.getItem("survey-app:forms-layout") === "table" ? "table" : "cards"; }
     catch { return "cards"; }
   });
-  const [sort, setSort] = useState<FormsSort>({ field: "created_at", direction: "desc" });
+  const [sort, setSort] = useState<FormsSort>(initialView.current?.sort ?? { field: "created_at", direction: "desc" });
   const transitionView = useViewTransition();
   const intendedLayout = useRef(layout);
   const toggleLayout = () => {
@@ -54,7 +67,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   };
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
-  const filters = useDashboardFilters(viewMode, user?.id);
+  const filters = useDashboardFilters(viewMode, user?.id, initialView.current?.filters);
   const forms = useDashboardForms({
     sort,
     filters,
@@ -122,12 +135,38 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
   };
 
-  const handleCardOpen = (form: SurveyFormSummary) => {
-    if (isTemplateForm(form)) {
+  useLayoutEffect(() => {
+    const snapshot = initialView.current;
+    // The syncing label can wrap the toolbar, changing the list's vertical offset.
+    if (!restorePending.current || !snapshot || forms.isInitialFormsLoading || forms.isBackgroundRefreshingForms || isAuthLoading) return;
+    if (forms.loadedForms.length < snapshot.loadedCount && forms.hasMoreForms && !forms.formsError) {
+      if (!forms.isFetchingNextFormsPage && !forms.isBackgroundRefreshingForms) forms.handleLoadMoreForms();
       return;
     }
+    const frame = requestAnimationFrame(() => {
+      restorePending.current = false;
+      window.scrollTo({ ...snapshot.scroll, behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [forms, isAuthLoading]);
 
-    navigate(routes.survey(form.id), { state: { renderMode: "preview-interactive" } });
+  const handleCardOpen = async (form: SurveyFormSummary) => {
+    if (isTemplateForm(form) || openingPreview.current) {
+      return;
+    }
+    openingPreview.current = true;
+    const dashboardView: DashboardViewSnapshot = {
+      filters: { search: filters.search, dateFrom: filters.dateFrom, dateTo: filters.dateTo, formType: filters.formType, formReason: filters.formReason },
+      layout, sort, loadedCount: forms.loadedForms.length,
+      scroll: { left: window.scrollX, top: window.scrollY },
+    };
+    try {
+      // Update this history entry before pushing preview: Back restores its view.
+      await navigate(location.pathname + location.search + location.hash, {
+        replace: true, preventScrollReset: true, state: { ...location.state, dashboardView },
+      });
+      await navigate(routes.survey(form.id), { state: { renderMode: "preview-interactive", previewReturnTo: location.pathname + location.search + location.hash } });
+    } finally { openingPreview.current = false; }
   };
 
   return (

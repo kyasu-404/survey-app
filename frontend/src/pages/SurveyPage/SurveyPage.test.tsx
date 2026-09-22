@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import SurveyPage from "./SurveyPage";
 
-const { authState, getExistingResponse, getFormById, getPublicFormById } = vi.hoisted(() => ({
+const { authState, getExistingResponse, getFormById, getPublicFormById, showToast } = vi.hoisted(() => ({
   authState: {
     user: null as { id: string } | null,
     loading: false,
@@ -14,7 +14,10 @@ const { authState, getExistingResponse, getFormById, getPublicFormById } = vi.ho
   getFormById: vi.fn(),
   getPublicFormById: vi.fn(),
   getExistingResponse: vi.fn(),
+  showToast: vi.fn(),
 }));
+
+vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => authState,
@@ -80,6 +83,7 @@ function renderSurveyPage({
 describe("SurveyPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     authState.user = null;
     authState.loading = false;
     getExistingResponse.mockResolvedValue(null);
@@ -196,6 +200,7 @@ describe("SurveyPage", () => {
     });
 
     expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-render-mode", "preview-interactive");
+    expect(showToast).toHaveBeenCalledExactlyOnceWith("Открыт предпросмотр формы", "warning");
     expect(getFormById).toHaveBeenCalledWith("form-1", expect.objectContaining({ signal: expect.any(Object) }));
     expect(getPublicFormById).not.toHaveBeenCalled();
   });

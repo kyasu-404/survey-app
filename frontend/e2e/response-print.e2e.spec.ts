@@ -1,6 +1,25 @@
 import { expect, test } from "@playwright/test";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
+test("a compact report starts on its only printed page with the sidebar open or collapsed", async ({ page }, testInfo) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 2, responseData: [{ name: "Анна" }, { name: "Иван" }], elements: [{ type: "text", name: "name", title: "Имя" }] });
+  await page.goto(`/dashboard/forms/${formId}/responses/html`);
+  await expect(page.locator(".responses-report-screen tbody tr")).toHaveCount(2);
+  for (const collapsed of [false, true]) {
+    if (collapsed) {
+      await page.emulateMedia({ media: "screen" });
+      await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
+    }
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".sidebar-region")).toBeHidden();
+    const pdf = await page.pdf({ path: testInfo.outputPath(`compact-${collapsed}.pdf`), preferCSSPageSize: true, printBackground: true });
+    const pages = [...pdf.toString("latin1").matchAll(/\/MediaBox\s*\[0 0 ([\d.]+) ([\d.]+)\]/g)];
+    expect(pages).toHaveLength(1);
+    expect(Number(pages[0][1])).toBeCloseTo(842, -1);
+    expect(Number(pages[0][2])).toBeCloseTo(595, -1);
+  }
+});
+
 test("wide HTML scrolls on screen and prints all answers in A4 landscape blocks with repeated dates", async ({ page }, testInfo) => {
   const questions = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
     type: "text", name: `q${start + index}`, title: `Вопрос ${start + index}. Комментарий, если не выполнено`,

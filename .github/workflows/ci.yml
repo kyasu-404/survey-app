@@ -52,6 +52,9 @@ jobs:
       - name: Validate repository policies and migrations
         run: node --test database/supabase_schema.test.mjs database/migrations.test.mjs functions/user-admin/index.test.mjs functions/form-admin/index.test.mjs functions/mail-admin/index.test.mjs frontend/tooling.test.mjs frontend/Dockerfile.test.mjs mail-worker/Dockerfile.test.mjs
 
+      - name: Test backup layout and retention
+        run: python3 -m unittest discover -s ops -p 'test_*.py'
+
       - name: Install, audit and test Office service
         working-directory: office-service
         run: npm ci && npm audit --omit=dev --audit-level=high && npm test

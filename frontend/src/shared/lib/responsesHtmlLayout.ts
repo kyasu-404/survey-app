@@ -15,7 +15,8 @@ export const RESPONSES_HTML_LAYOUT_CSS = `
 @page responses-report { size: A4 landscape; margin: 10mm; }
 @media print {
   :root:has(.responses-html-report) { background: #fff; color-scheme: light; }
-  body:has(.responses-html-report) { background: #fff; }
+  body:has(.responses-html-report) { page: responses-report; margin: 0; padding: 0; background: #fff; }
+  body:has(.responses-html-report) :is(.sidebar-region, .sidebar-open-button, .toast-container) { display: none !important; }
   .app-shell:has(.responses-html-report), .app-main:has(.responses-html-report) {
     display: block; margin: 0; padding: 0; min-height: 0; background: #fff;
   }

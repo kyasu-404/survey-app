@@ -18,7 +18,7 @@ import deleteIcon from '../../img/delete.svg';
 import '../../entities/office/office.css';
 export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:string;onClose:()=>void;selectedResponseIds?:string[]}){
  const navigate=useNavigate(),queryClient=useQueryClient(),{showToast}=useToast(),{user,profile}=useAuth();
- const dialog=useRef<HTMLDialogElement>(null),file=useRef<HTMLInputElement>(null);
+ const dialog=useRef<HTMLDialogElement>(null),templatesPanel=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null);
  const [search,setSearch]=useState(''),[name,setName]=useState('Новый макет'),[tab,setTab]=useState<'templates'|'results'>('templates'),[focusResult,setFocusResult]=useState<string>();
  const [mode,setMode]=useState<'create'|'rename'|null>(null),[selected,setSelected]=useState<OfficeDocument|null>(null),[menu,setMenu]=useState<string|null>(null);
  const [format,setFormat]=useState<'xlsx'|'docx'>('xlsx'),[generation,setGeneration]=useState<OfficeDocument|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -31,7 +31,7 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
  return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="documents-title">
   <header><div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div><button type="button" className="app-button" onClick={onClose} aria-label="Закрыть документы">×</button></header>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>
-  <div className="office-tab-panel" role="tabpanel" id="documents-panel-templates" aria-labelledby="documents-tab-templates" hidden={tab!=='templates'}>
+  <div ref={templatesPanel} className="office-tab-panel" role="tabpanel" id="documents-panel-templates" aria-labelledby="documents-tab-templates" hidden={tab!=='templates'}>
    <p className="office-muted">Загрузите XLSX или DOCX и выберите места для ответов. Каждый ответ станет отдельным документом.</p>
    <input aria-label="Поиск документов" placeholder="Поиск макетов…" value={search} onChange={e=>setSearch(e.target.value)}/>
    {(error || query.error) && <p role="alert" className="office-error">{error || getErrorMessage(query.error,'Не удалось загрузить макеты')}</p>}
@@ -43,7 +43,7 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
      <div className="office-document-copy"><strong>{doc.name}</strong><span>{doc.author_name || 'Сотрудник'} · {new Date(doc.updated_at).toLocaleString('ru-RU')}</span><span>Полей макета: {doc.binding_count} · {(doc.size_bytes/1024).toLocaleString('ru-RU',{maximumFractionDigits:0})} КБ</span>{doc.last_save_error && <span className="office-error">{doc.last_save_error}</span>}</div>
      <div className="office-document-actions">
       <span className="organizations-row-actions"><button type="button" className="organization-edit-button" disabled={busy || !query.data?.enabled} onClick={()=>navigate(`/forms/${formId}/documents/${doc.id}`)}>Редактировать<img src={editIcon} alt="" aria-hidden="true"/></button></span>
-      <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);dialog.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>
+      <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);templatesPanel.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>
       <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}>...</button>
        <Presence kind="menu">{menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>downloadOfficeDocument(doc))}><img src={downloadIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Скачать</span></button>

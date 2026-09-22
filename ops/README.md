@@ -6,11 +6,13 @@
 
 Копии находятся **на STSS** в `/mnt/data/forms_backup/`, на отдельном RAID. Каталог и файлы доступны только root: архив содержит ключи, пароли и пользовательские данные. Скрипт отказывается работать, если `/mnt/data` не смонтирован. RAID защищает от отказа диска, но не заменяет независимую копию вне сервера.
 
-- `forms-backup.timer`: ежедневно в 03:15 по времени STSS, случайная задержка до 5 минут; сохраняются последние 14 завершённых копий.
+- `forms-backup.timer`: ежедневно в 03:15 по времени STSS, случайная задержка до 5 минут; сохраняются последние 5 завершённых полных копий (включая ручные).
 - `forms-backup-verify.timer`: по воскресеньям в 04:30, задержка до 5 минут; восстановление последней копии в отдельный временный PostgreSQL без сети и опубликованных портов.
-- Имена каталогов `YYYYMMDDTHHMMSSZ` используют UTC. `.partial-*` означает незавершённую копию; такие каталоги не участвуют в ротации. `deploy-*` — отдельные архивы перед публикацией, автоматическая ротация к ним не применяется.
+- Каталоги имеют вид `YYYY-MM-DD/HH-MM-SS-full` или `YYYY-MM-DD/HH-MM-SS-deploy-название`, время московское. `.partial-*` означает незавершённую копию; такие каталоги не участвуют в ротации. Для архивов публикаций действует отдельный лимит 5. Старейшие удаляются, пустые папки дат убираются. Прежние имена с UTC поддерживаются при поиске; `--organize` проверяет и переносит их в новую структуру.
 
-Содержимое: `postgres.dump`, `supabase-internal.dump`, `globals.sql`, versioned Storage, `configuration.tar.gz` с исходниками/compose/env/Edge Functions, `db-config` с конфигурацией PostgreSQL и ключом шифрования, `manifest.json` с SHA-256 и перечнем Storage-объектов. Сборка frontend на STSS синхронизируется с MAGI при публикации и входит в архив конфигурации. Активные конфигурации nginx MAGI и прежняя сборка дополнительно находятся в архиве соответствующей публикации `deploy-*/magi-before.tar.gz`.
+Описание файлов и восстановления находится в [BACKUP_FILES.md](BACKUP_FILES.md); скрипт автоматически кладёт его в корень хранилища как `README.md`.
+
+Содержимое: `postgres.dump`, `supabase-internal.dump`, `globals.sql`, versioned Storage, `configuration.tar.gz` с исходниками/compose/env/Edge Functions, `db-config` с конфигурацией PostgreSQL и ключом шифрования, `manifest.json` с SHA-256 и перечнем Storage-объектов. Сборка frontend на STSS синхронизируется с MAGI при публикации и входит в архив конфигурации. Активные конфигурации nginx MAGI и прежняя сборка дополнительно находятся в архиве соответствующей публикации `YYYY-MM-DD/HH-MM-SS-deploy-*/magi-before.tar.gz`.
 
 Основная база и перечень объектов Storage читаются из одного PostgreSQL snapshot. Storage копируется до и после выгрузки; отсутствующая версия или неверный размер останавливают копирование. Повторные копии неизменённых файлов используют hard links; **не редактируйте файлы внутри готовых копий**. SHA-256 проверяется до объявления копии завершённой. `restore-check.json` появляется только после успешного восстановления обеих баз и сверки Storage.
 
@@ -21,8 +23,9 @@ sudo systemctl list-timers forms-backup.timer forms-backup-verify.timer
 sudo systemctl start forms-backup.service
 sudo systemctl start forms-backup-verify.service
 sudo journalctl -u forms-backup.service -u forms-backup-verify.service --since yesterday
-sudo python3 /opt/survey-app/ops/backup-forms.py --verify /mnt/data/forms_backup/YYYYMMDDTHHMMSSZ
-sudo python3 /opt/survey-app/ops/backup-forms.py --restore-check /mnt/data/forms_backup/YYYYMMDDTHHMMSSZ
+sudo python3 /opt/survey-app/ops/backup-forms.py --verify /mnt/data/forms_backup/YYYY-MM-DD/HH-MM-SS-full
+sudo python3 /opt/survey-app/ops/backup-forms.py --restore-check /mnt/data/forms_backup/YYYY-MM-DD/HH-MM-SS-full
+sudo python3 /opt/survey-app/ops/backup-forms.py --organize
 ```
 
 Проверка восстановления не затрагивает рабочую БД. Она использует тот же Docker image ID PostgreSQL, что указан в manifest; не удаляйте этот образ, пока на него ссылаются нужные копии. При переносе на другой сервер понадобится соответствующий образ Supabase PostgreSQL. Проверка восстанавливает данные и схему без владельцев и ACL; это не имитация полного аварийного переключения приложения.
@@ -46,8 +49,8 @@ sudo python3 /opt/survey-app/ops/backup-forms.py --restore-check /mnt/data/forms
 
 ## Публикация и откат
 
-Перед изменениями создавайте копию на STSS. Миграции `202609202200_consistent_exports.sql`, `202609202210_upload_reservations.sql`, `202609212200_office_generation_jobs.sql` уже применены; не применяйте их повторно без проверки состояния БД.
+Перед изменениями создавайте копию на STSS. Для архива публикации получите папку командой `sudo python3 /opt/survey-app/ops/backup-forms.py --deployment-dir frontend`, сохраните туда архивы и после окончания записи вызовите `--organize`: проверка и ротация оставят 5 последних архивов публикаций. Миграции `202609202200_consistent_exports.sql`, `202609202210_upload_reservations.sql`, `202609212200_office_generation_jobs.sql` уже применены; не применяйте их повторно без проверки состояния БД.
 
-Frontend собирается Node 22 с production `VITE_*`. Загружайте файлы сборки на MAGI сначала, затем атомарно заменяйте `dist/index.html`. Старые assets сохраняются для открытых вкладок. При откате только frontend верните проверенный прежний index и соответствующие assets из `deploy-*/magi-before.tar.gz`. Для отката backend учитывайте совместимость API и новых таблиц; не удаляйте новые данные очереди/резерваций простым откатом схемы.
+Frontend собирается Node 22 с production `VITE_*`. Загружайте файлы сборки на MAGI сначала, затем атомарно заменяйте `dist/index.html`. Старые assets сохраняются для открытых вкладок. При откате только frontend верните проверенный прежний index и соответствующие assets из `YYYY-MM-DD/HH-MM-SS-deploy-*/magi-before.tar.gz`. Для отката backend учитывайте совместимость API и новых таблиц; не удаляйте новые данные очереди/резерваций простым откатом схемы.
 
 Исходники, копии конфигурации и текущую сборку frontend синхронизируйте на STSS перед следующим ежедневным backup. Диагностика Office/mail: `docker logs survey-office`, `docker logs survey-mail-worker`; состояние резервного копирования — systemd/journal, успешная проверка — `restore-check.json`.
