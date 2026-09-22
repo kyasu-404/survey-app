@@ -9,7 +9,7 @@ export function Presence({ children, kind = "modal" }: { children: ReactNode; ki
   const present = Boolean(children);
   const [retained, setRetained] = useState(children);
   const root = useRef<HTMLDivElement>(null);
-  const duration = kind === "menu" ? 0 : kind === "drawer" ? 240 : 180;
+  const duration = kind === "menu" ? 0 : kind === "drawer" ? 150 : 180;
   if (present && retained !== children) setRetained(children);
 
   useEffect(() => {

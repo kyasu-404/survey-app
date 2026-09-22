@@ -123,7 +123,7 @@ export function ResponseReportModal({
             <p>Аналитика формы</p>
             <h2>Отчёт по ответам</h2>
           </div>
-          <button type="button" className="response-preview-close" onClick={onClose}>Закрыть</button>
+          <button type="button" className="responses-export-button" onClick={onClose}>Закрыть</button>
         </div>
 
         <AnimatedTabs className="response-report-tabs" role="tablist" aria-label="Разделы отчёта">

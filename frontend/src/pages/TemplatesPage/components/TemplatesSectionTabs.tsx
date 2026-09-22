@@ -1,21 +1,12 @@
 import { AnimatedTabs } from "../../../shared/ui/AnimatedTabs";
-import { RefreshButton } from "../../../shared/ui/RefreshButton";
 import type { TemplatesSection } from "../types";
 
 type TemplatesSectionTabsProps = {
-  isInitialLoading: boolean;
-  isRefreshing: boolean;
-  lastUpdatedAt: number;
-  onRefresh: () => void;
   onSectionChange: (section: TemplatesSection) => void;
   section: TemplatesSection;
 };
 
 export function TemplatesSectionTabs({
-  isInitialLoading,
-  isRefreshing,
-  lastUpdatedAt,
-  onRefresh,
   onSectionChange,
   section,
 }: TemplatesSectionTabsProps) {
@@ -41,7 +32,6 @@ export function TemplatesSectionTabs({
           Публичные
         </button>
       </AnimatedTabs>
-      <RefreshButton isRefreshing={isRefreshing} lastUpdatedAt={lastUpdatedAt} onClick={onRefresh} disabled={isInitialLoading || isRefreshing} />
     </div>
   );
 }

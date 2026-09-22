@@ -92,10 +92,6 @@ export default function TemplatesPage() {
           </div>
 
           <TemplatesSectionTabs
-            isInitialLoading={templatesData.isInitialTemplatesLoading}
-            isRefreshing={templatesData.isRefreshingTemplates}
-            lastUpdatedAt={templatesData.templatesUpdatedAt}
-            onRefresh={() => void templatesData.reloadTemplates()}
             onSectionChange={setSection}
             section={section}
           />

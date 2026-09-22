@@ -38,6 +38,12 @@ const {
   showToast: vi.fn(),
 }));
 
+const realtime = vi.hoisted(() => ({ change: undefined as undefined | ((payload: unknown) => void) }));
+vi.mock("../../shared/api", () => ({ supabaseClient: {
+  channel: () => { const channel = { on: (_event: string, _config: unknown, callback: (payload: unknown) => void) => { realtime.change = callback; return channel; }, subscribe: () => channel }; return channel; },
+  removeChannel: vi.fn(),
+} }));
+
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => authState,
 }));
@@ -431,17 +437,9 @@ describe("TemplatesPage", () => {
     const { container } = renderPage();
 
     expect(await screen.findByText("Тяжёлый шаблон")).toBeInTheDocument();
-    expect(screen.getByText(/Обновлено \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
-
-    const refreshButton = screen.getByRole("button", { name: "Обновить" });
-    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
-    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
-
-    await userEvent.click(refreshButton);
-
-    const refreshingButton = screen.getByRole("button", { name: "Обновляется..." });
-    expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
-    expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
+    act(() => realtime.change?.({ eventType: "UPDATE", new: { form_type: "template" }, old: {} }));
+    await waitFor(() => expect(getTemplateFormsPage).toHaveBeenCalledTimes(2));
     expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
     expect(screen.getByText("Тяжёлый шаблон")).toBeInTheDocument();
 
@@ -614,7 +612,6 @@ describe("TemplatesPage", () => {
   it("keeps template preview controls, descriptions, and pinning affordance on the requested styling", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.template-preview-close\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--theme-accent-gradient\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/\.templates-page-kicker\s*\{[^}]*color:\s*var\(--theme-accent\);/s);
     expect(css).toMatch(/\.templates-use-button,\s*\.templates-share-button\s*\{[^}]*padding:\s*7px 10px;/);
     expect(css).toMatch(/\.templates-use-button\s*\{[^}]*background:\s*var\(--theme-accent-gradient\);[^}]*border-color:\s*transparent;[^}]*color:\s*#ffffff;/s);
@@ -653,7 +650,7 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.templates-gallery-grid > \.templates-card\s*\{[^}]*border:\s*2px solid rgba\(20,\s*20,\s*20,\s*0\.14\);/);
   });
 
-  it("aligns the template section tabs with the refresh button row", () => {
+  it("aligns template tabs within the header", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.templates-page-actions\s*\{[^}]*align-items:\s*flex-end;/);

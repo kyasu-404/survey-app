@@ -299,11 +299,12 @@ describe("DashboardPage", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("refreshes both statistics and cards on manual refresh", async () => {
+  it("refreshes both statistics and cards on subscription", async () => {
     getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));
     renderPage();
-    await screen.findByRole("button", { name: "Обновить" });
-    await userEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    await screen.findByText("Форма 1");
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
+    emitRealtimeStatus("SUBSCRIBED");
     await waitFor(() => {
       expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
       expect(getDashboardFormsStats).toHaveBeenCalledTimes(2);
@@ -384,7 +385,7 @@ describe("DashboardPage", () => {
     expect(getDashboardFormsStats).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the refresh button idle during a realtime background refresh", async () => {
+  it("keeps the toolbar unchanged during a realtime background refresh", async () => {
     const deferred = createDeferred<ReturnType<typeof createDashboardPage>>();
 
     getDashboardFormsPage
@@ -405,10 +406,8 @@ describe("DashboardPage", () => {
       expect(getDashboardFormsPage).toHaveBeenCalledTimes(2);
     });
 
-    const refreshButton = screen.getByRole("button", { name: "Обновить" });
-    expect(screen.getByText(/синхронизация/i)).toBeInTheDocument();
-    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
-    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/синхронизация/i)).not.toBeInTheDocument();
 
     deferred.resolve(createDashboardPage([createForm(1, { title: "Форма до realtime", responses_count: 2 })]));
   });
@@ -742,17 +741,9 @@ describe("DashboardPage", () => {
     const { container } = renderPage();
 
     expect(await screen.findByText("Обновляемая форма")).toBeInTheDocument();
-    expect(screen.getByText(/Обновлено \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
-
-    const refreshButton = screen.getByRole("button", { name: "Обновить" });
-    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
-    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
-
-    await userEvent.click(refreshButton);
-
-    const refreshingButton = screen.getByRole("button", { name: "Обновляется..." });
-    expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
-    expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
+    emitRealtimeStatus("SUBSCRIBED");
+    await waitFor(() => expect(getDashboardFormsPage).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Загрузка форм")).not.toBeInTheDocument();
     expect(container.querySelector(".dashboard-form-skeleton")).not.toBeInTheDocument();
     expect(container.querySelector(".dashboard-forms-grid-refreshing")).not.toBeInTheDocument();
@@ -762,9 +753,7 @@ describe("DashboardPage", () => {
       deferred.resolve(createDashboardPage([createForm(1, { title: "Обновляемая форма" })]));
     });
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Обновить|Обновлено/ })).not.toBeDisabled();
-    });
+    expect(screen.getByText("Обновляемая форма")).toBeInTheDocument();
   });
 
   it("shows type and reason on form cards and filters the list by both fields", async () => {

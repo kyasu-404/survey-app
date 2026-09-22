@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { useToast } from "../../../app/providers/ToastProvider";
+import { createRealtimeRecovery } from "../../../shared/lib/realtimeRecovery";
 import type { InfiniteData, QueryKey, QueryClient } from "@tanstack/react-query";
 import type { PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
 import { supabaseClient } from "../../../shared/api";
@@ -42,6 +44,7 @@ export function useDashboardRealtime({
   userId,
   viewMode,
 }: UseDashboardRealtimeOptions) {
+  const { showToast } = useToast();
   useEffect(() => {
     if (isAuthLoading || (viewMode === "mine" && !userId)) {
       return;
@@ -49,6 +52,7 @@ export function useDashboardRealtime({
 
     const formFilter = viewMode === "mine" && userId ? `author_id=eq.${userId}` : undefined;
     const refresh = createQueryRefreshScheduler(queryClient, `dashboard realtime ${viewMode} forms`, 750);
+    const recovery = createRealtimeRecovery(() => refresh.schedule([{ queryKey: formsQueryKey }, { queryKey: formsStatsQueryKey }]), showToast);
     const channel = supabaseClient
       .channel(`dashboard-forms:${viewMode}:${userId ?? "all"}`)
       .on(
@@ -82,9 +86,7 @@ export function useDashboardRealtime({
         },
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          refresh.schedule([{ queryKey: formsQueryKey }, { queryKey: formsStatsQueryKey }]);
-        }
+        recovery.status(status);
         console.info("[realtime] dashboard forms channel status", {
           status,
           userId: userId ?? null,
@@ -93,8 +95,9 @@ export function useDashboardRealtime({
       });
 
     return () => {
+      recovery.dispose();
       refresh.dispose();
       void supabaseClient.removeChannel(channel);
     };
-  }, [filters, formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, userId, viewMode]);
+  }, [filters, formsQueryKey, formsStatsQueryKey, isAuthLoading, queryClient, userId, viewMode, showToast]);
 }

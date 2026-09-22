@@ -283,10 +283,7 @@ describe("FormResponsesPage", () => {
     expect(screen.queryByRole("button", { name: "Файлы в ZIP" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Отчёт" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "HTML" })).toBeInTheDocument();
-    const refreshButton = screen.getByRole("button", { name: "Обновить" });
-    expect(refreshButton).toBeInTheDocument();
-    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
-    expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
     expect(await screen.findByText("Анна")).toBeInTheDocument();
     expect(container.querySelector(".responses-page-header-copy")).toBeInTheDocument();
     expect(container.querySelector(".responses-export-button .toolbar-icon")).toBeInTheDocument();
@@ -792,7 +789,7 @@ describe("FormResponsesPage", () => {
     expect(renderer).toHaveAttribute("data-initial-page-no", "1");
   });
 
-  it("disables the refresh button while responses are being updated", async () => {
+  it("keeps rows available during automatic refresh", async () => {
     getFormById
       .mockResolvedValueOnce({
         id: "form-1",
@@ -837,17 +834,10 @@ describe("FormResponsesPage", () => {
       </MemoryRouter>,
     );
 
-    const refreshButton = await screen.findByRole("button", { name: "Обновить" });
-    expect(screen.getByText(/Обновлено \d{2}:\d{2}:\d{2}/)).toBeInTheDocument();
-
-    await userEvent.click(refreshButton);
-
-    await waitFor(() => {
-      const refreshingButton = screen.getByRole("button", { name: "Обновляется..." });
-      expect(refreshingButton).toBeDisabled();
-      expect(refreshingButton.querySelector(".inline-spinner")).toBeInTheDocument();
-      expect(refreshingButton.querySelector("img.toolbar-icon")).not.toBeInTheDocument();
-    });
+    expect(await screen.findByText("Анна")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить" })).not.toBeInTheDocument();
+    act(() => emitRealtimeStatus("SUBSCRIBED"));
+    await waitFor(() => expect(loadResponseRows).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Анна")).toBeInTheDocument();
 
     formDeferred.resolve({
@@ -876,14 +866,8 @@ describe("FormResponsesPage", () => {
       },
     ]);
 
-    await waitFor(() => {
-      const refreshButton = screen.getByRole("button", { name: "Обновить" });
-      expect(refreshButton).not.toBeDisabled();
-      expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
-      expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText("Анна")).toBeInTheDocument());
   });
-
 
   it("paginates 200 answers and exports a full snapshot only on demand", async () => {
     getFormById.mockResolvedValue({

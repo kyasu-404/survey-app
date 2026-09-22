@@ -11,7 +11,10 @@ test("200 loaded form cards refresh with one keyset request", async ({ page }) =
   }
   expect(listRequests).toHaveLength(10);
   listRequests.length = 0;
-  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  await page.getByRole("link", { name: "Шаблоны", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Шаблоны", exact: true })).toBeVisible();
+  listRequests.length = 0;
+  await page.getByRole("link", { name: "Мои формы", exact: true }).click();
   await expect.poll(() => listRequests.length).toBe(1);
   expect(listRequests[0]).toEqual({ cursor: null, limit: 201 });
   await expect(page.getByText("Карточка 200", { exact: true })).toBeVisible();

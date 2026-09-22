@@ -5,7 +5,6 @@ import viewBlack from "../../../img/FormatViewBlack.svg";
 import viewWhite from "../../../img/FormatViewWhite.svg";
 import infoIcon from "../../../img/info.svg";
 import searchIcon from "../../../img/search.svg";
-import { RefreshButton } from "../../../shared/ui/RefreshButton";
 import type { DashboardLayout, DashboardViewMode, OpenMenuState } from "../types";
 
 type DashboardToolbarProps = {
@@ -16,12 +15,7 @@ type DashboardToolbarProps = {
   dateTo: string;
   formReason: string;
   formType: string;
-  formsUpdatedAt: number;
   formsWithDeadlineCount: number;
-  isBackgroundRefreshingForms: boolean;
-  isInitialFormsLoading: boolean;
-  isRefreshingForms: boolean;
-  onRefresh: () => void;
   openedMenu: OpenMenuState;
   search: string;
   setDateFrom: Dispatch<SetStateAction<string>>;
@@ -42,12 +36,7 @@ export function DashboardToolbar({
   dateTo,
   formReason,
   formType,
-  formsUpdatedAt,
   formsWithDeadlineCount,
-  isBackgroundRefreshingForms,
-  isInitialFormsLoading,
-  isRefreshingForms,
-  onRefresh,
   openedMenu,
   search,
   setDateFrom,
@@ -144,13 +133,6 @@ export function DashboardToolbar({
             ))}
           </select>
         </label>
-        <RefreshButton
-          isRefreshing={isRefreshingForms}
-          isSyncing={isBackgroundRefreshingForms}
-          lastUpdatedAt={formsUpdatedAt}
-          onClick={onRefresh}
-          disabled={isInitialFormsLoading || isRefreshingForms}
-        />
       </div>
     </div>
   );

@@ -78,7 +78,7 @@ export function RefreshButton({
 
   return (
     <div className="dashboard-refresh-control">
-      {refreshMetaLabel ? <p className="dashboard-refresh-meta">{refreshMetaLabel}</p> : null}
+      <p className="dashboard-refresh-meta" title={refreshMetaLabel ?? undefined}>{refreshMetaLabel}</p>
       <button
         type="button"
         className="dashboard-refresh-button"

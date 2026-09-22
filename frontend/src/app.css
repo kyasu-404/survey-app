@@ -1132,11 +1132,6 @@ textarea:focus {
   color: #b91c1c;
 }
 
-.dashboard-status-pill-template {
-  background: rgba(167, 139, 250, 0.18);
-  color: #7c3aed;
-}
-
 .dashboard-owner-badge {
   background: rgba(37, 99, 235, 0.12);
   color: #1d4ed8;
@@ -2275,11 +2270,6 @@ textarea:focus {
   color: #b91c1c;
 }
 
-.dashboard-status-pill-template {
-  background: rgba(168, 85, 247, 0.14);
-  color: #7c3aed;
-}
-
 .dashboard-form-title {
   min-width: 0;
   font-size: 1.08rem;
@@ -3207,12 +3197,6 @@ textarea {
   border-color: rgba(20, 20, 20, 0.12);
 }
 
-.dashboard-status-pill-template {
-  background: rgba(167, 139, 250, 0.18);
-  color: #7c3aed;
-  border-color: rgba(167, 139, 250, 0.22);
-}
-
 .dashboard-owner-badge {
   background: rgba(255, 255, 255, 0.72);
   color: #56514b;
@@ -3656,23 +3640,6 @@ button.dashboard-status-trigger-glossy:focus-visible {
   font-size: 1.35rem;
   line-height: 1.18;
   letter-spacing: -0.03em;
-}
-
-.template-preview-close {
-  border: 0;
-  border-radius: 8px;
-  background: var(--theme-accent-gradient);
-  color: #ffffff;
-  box-shadow: none;
-}
-
-.template-preview-close:hover,
-.template-preview-close:focus-visible {
-  border: 0;
-  background: var(--theme-accent-gradient);
-  color: #ffffff;
-  box-shadow: none;
-  filter: brightness(1.06);
 }
 
 .template-preview-body {
@@ -8785,4 +8752,11 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.dashboard-status-pill.dashboard-status-pill-template {
+  color: #374151;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  box-shadow: none;
 }

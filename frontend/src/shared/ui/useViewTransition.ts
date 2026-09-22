@@ -21,14 +21,14 @@ export function useViewTransition() {
     const commit = () => { if (request.current === current) flushSync(update); };
     if (!document.startViewTransition) {
       if (!element?.animate) { update(); return; }
-      const motion = element.animate([{ opacity }, { opacity: 0 }], { duration: 110, fill: "forwards" });
+      const motion = element.animate([{ opacity }, { opacity: 0 }], { duration: 60, fill: "forwards" });
       fallback.current = motion;
       motion.onfinish = () => {
         commit();
         motion.cancel();
         if (request.current !== current) return;
         const nextElement = document.querySelector(".dashboard-layout-transition");
-        const entering = nextElement?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: "ease-out", fill: "both" });
+        const entering = nextElement?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "ease-out", fill: "both" });
         fallback.current = entering;
         if (entering) entering.onfinish = () => {
           entering.cancel();

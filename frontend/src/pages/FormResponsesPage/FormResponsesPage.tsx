@@ -35,11 +35,12 @@ import type { ResponsesTableRow, ResponsesTableColumn } from "../../shared/lib/r
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
 import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
-import { RefreshButton } from "../../shared/ui/RefreshButton";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
 import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 import { ResponseReportModal } from "./ResponseReportModal";
+import { useNewResponseHighlights } from "./useNewResponseHighlights";
+import { createRealtimeRecovery } from "../../shared/lib/realtimeRecovery";
 
 type SelectedResponsePreview = {
   label: string;
@@ -263,6 +264,7 @@ export default function FormResponsesPage() {
   });
 
   const responses = responsesQuery.data?.data ?? [];
+  const highlightedResponses = useNewResponseHighlights(id, page, responsesQuery.data?.data, responsesQuery.data?.count ?? 0);
   const hasFileQuestions = useMemo(
     () => Boolean(formQuery.data && getFileQuestions(formQuery.data.schema).length),
     [formQuery.data],
@@ -286,11 +288,6 @@ export default function FormResponsesPage() {
   const isLoading =
     (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
   const isRefreshing = formQuery.isFetching || responsesQuery.isFetching || organizationsQuery.isFetching;
-  const lastUpdatedAt = Math.max(
-    formQuery.dataUpdatedAt ?? 0,
-    responsesQuery.dataUpdatedAt ?? 0,
-    organizationsQuery.dataUpdatedAt ?? 0,
-  );
   const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
     .find((error) => error && !isAbortError(error)) ?? null;
   const totalResponses = responsesQuery.data?.count ?? 0;
@@ -320,6 +317,7 @@ export default function FormResponsesPage() {
     ];
     const refresh = createQueryRefreshScheduler(queryClient, `form responses realtime ${id}`, 100);
     const refreshResponses = () => refresh.schedule(realtimeRefreshTargets);
+    const recovery = createRealtimeRecovery(refreshResponses, showToast);
 
     const channel = supabaseClient
       .channel(`form-responses:${id}`)
@@ -345,7 +343,7 @@ export default function FormResponsesPage() {
         refreshResponses,
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") refreshResponses();
+        recovery.status(status);
         console.info("[realtime] form responses channel status", {
           formId: id,
           status,
@@ -353,10 +351,11 @@ export default function FormResponsesPage() {
       });
 
     return () => {
+      recovery.dispose();
       refresh.dispose();
       void supabaseClient.removeChannel(channel);
     };
-  }, [id, queryClient]);
+  }, [id, queryClient, showToast]);
 
   const loadExportResponses = (signal?: AbortSignal) => getAllResponsesByForm(id!, {
     signal,
@@ -557,16 +556,6 @@ export default function FormResponsesPage() {
               <span>{isGeneratingReport ? "Формирование…" : "Отчёт"}</span>
               <img src={infoIcon} alt="" aria-hidden="true" className="toolbar-icon" />
             </button>
-            <RefreshButton
-              isRefreshing={isRefreshing}
-              lastUpdatedAt={lastUpdatedAt}
-              onClick={() => {
-                void formQuery.refetch();
-                void responsesQuery.refetch();
-                if (usesOrganizationDirectory) void organizationsQuery.refetch();
-              }}
-              disabled={isRefreshing}
-            />
           </div>
         </div>
 
@@ -656,7 +645,7 @@ export default function FormResponsesPage() {
                   return (
                     <tr
                       key={rowId}
-                      className="responses-table-row-clickable"
+                      className={`responses-table-row-clickable${highlightedResponses.has(rowId) ? " response-row-new" : ""}`}
                       role={response ? "button" : undefined}
                       tabIndex={response ? 0 : undefined}
                       aria-label={response ? `Открыть ${previewLabel}` : undefined}
@@ -732,7 +721,7 @@ export default function FormResponsesPage() {
               <div>
                 <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
               </div>
-              <button type="button" className="response-preview-close" onClick={() => setSelectedResponsePreview(null)}>
+              <button type="button" className="responses-export-button" onClick={() => setSelectedResponsePreview(null)}>
                 Закрыть
               </button>
             </div>

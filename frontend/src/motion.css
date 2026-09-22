@@ -31,6 +31,13 @@
 .app-main { transition: padding-left var(--app-motion-duration) var(--app-motion-easing); }
 .sidebar-open-button { animation: app-control-enter 180ms ease both; }
 
+@media (min-width: 761px) {
+  /* Long lists get one final layout; useSidebarMotion animates only translation. */
+  .app-shell:has(.dashboard-page) { overflow-x: clip; }
+  .app-shell:has(.dashboard-page) .sidebar-region,
+  .app-shell:has(.dashboard-page) .app-main { transition: none; }
+}
+
 .animated-tabs { position: relative; isolation: isolate; }
 .animated-tabs[data-indicator-ready]::before {
   content: "";
@@ -56,10 +63,10 @@
   transform: none;
 }
 .template-preview-layer, .response-preview-layer {
-  animation: app-control-enter 260ms ease both;
+  animation: app-control-enter 150ms ease both;
 }
 .template-preview-drawer, .response-preview-drawer {
-  animation: app-drawer-enter 260ms var(--app-motion-easing) both;
+  animation: app-drawer-enter 150ms var(--app-motion-easing) both;
 }
 @keyframes app-control-enter { from { opacity: 0; } to { opacity: 1; } }
 @keyframes app-drawer-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
@@ -79,10 +86,10 @@
 }
 
 .motion-drawer[data-state="leaving"] > :is(.template-preview-layer, .response-preview-layer) {
-  animation: app-control-leave 240ms ease both;
+  animation: app-control-leave 150ms ease both;
 }
 .motion-drawer[data-state="leaving"] :is(.template-preview-drawer, .response-preview-drawer) {
-  animation: app-drawer-leave 240ms ease both;
+  animation: app-drawer-leave 150ms ease both;
 }
 
 .toast-container { gap: 0; }
@@ -94,15 +101,20 @@
 
 .animated-details { box-sizing: border-box; }
 .animated-details-body { display: flow-root; }
+.responses-table .response-row-new > td { animation: response-arrival 1s ease-out; }
+@keyframes response-arrival {
+  from { background-color: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-surface-light)); }
+  to { background-color: var(--theme-surface-light); }
+}
 /* Keep list width stable and don't restart a CSS fade when the snapshot ends. */
-:root:has(.dashboard-layout-transition) { scrollbar-gutter: stable; }
+:root:has(.dashboard-layout-transition, .templates-page) { scrollbar-gutter: stable; }
 .dashboard-layout-transition { view-transition-name: forms-layout; }
 :root[data-forms-transition]::view-transition-group(root),
 :root[data-forms-transition]::view-transition-old(root),
 :root[data-forms-transition]::view-transition-new(root) { animation: none; }
 :root[data-forms-transition]::view-transition-group(forms-layout) { animation: none; }
-:root[data-forms-transition]::view-transition-old(forms-layout) { animation: app-control-enter 110ms ease reverse both; }
-:root[data-forms-transition]::view-transition-new(forms-layout) { animation: app-control-enter 150ms ease both; }
+:root[data-forms-transition]::view-transition-old(forms-layout) { animation: app-control-enter 100ms ease-out reverse both; }
+:root[data-forms-transition]::view-transition-new(forms-layout) { animation: app-control-enter 120ms ease-out both; }
 :root[data-forms-transition]::view-transition { pointer-events: none; }
 
 @keyframes app-backdrop-enter { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(10px); } }
@@ -134,6 +146,10 @@
   .toast-slot, .toast-clip, .toast, .dashboard-layout-transition {
     animation: none !important;
     transition: none !important;
+  }
+  .responses-table .response-row-new > td {
+    animation: none;
+    background-color: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-surface-light));
   }
 }
 

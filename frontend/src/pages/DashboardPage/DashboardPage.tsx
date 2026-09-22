@@ -66,7 +66,6 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }));
   };
   const [openedMenu, setOpenedMenu] = useState<OpenMenuState>(null);
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const filters = useDashboardFilters(viewMode, user?.id, initialView.current?.filters);
   const forms = useDashboardForms({
     sort,
@@ -126,18 +125,9 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     }
   }, [showToast, stats.statsError]);
 
-  const refreshDashboard = async () => {
-    setIsManualRefreshing(true);
-    try {
-      await Promise.all([forms.reloadForms(), stats.reloadStats()]);
-    } finally {
-      setIsManualRefreshing(false);
-    }
-  };
-
   useLayoutEffect(() => {
     const snapshot = initialView.current;
-    // The syncing label can wrap the toolbar, changing the list's vertical offset.
+    // Restore after the background refresh settles the loaded list.
     if (!restorePending.current || !snapshot || forms.isInitialFormsLoading || forms.isBackgroundRefreshingForms || isAuthLoading) return;
     if (forms.loadedForms.length < snapshot.loadedCount && forms.hasMoreForms && !forms.formsError) {
       if (!forms.isFetchingNextFormsPage && !forms.isBackgroundRefreshingForms) forms.handleLoadMoreForms();
@@ -180,12 +170,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           dateTo={filters.dateTo}
           formReason={filters.formReason}
           formType={filters.formType}
-          formsUpdatedAt={forms.formsUpdatedAt}
           formsWithDeadlineCount={stats.formsWithDeadlineCount}
-          isBackgroundRefreshingForms={forms.isBackgroundRefreshingForms}
-          isInitialFormsLoading={forms.isInitialFormsLoading}
-          isRefreshingForms={isManualRefreshing || forms.isRefreshingForms}
-          onRefresh={() => void refreshDashboard()}
           openedMenu={openedMenu}
           search={filters.search}
           setDateFrom={filters.setDateFrom}
