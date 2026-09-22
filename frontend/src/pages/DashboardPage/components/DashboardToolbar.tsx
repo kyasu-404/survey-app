@@ -1,5 +1,6 @@
 import { Presence } from "../../../shared/ui/Presence";
-import type { Dispatch, SetStateAction } from "react";
+import { useId, useState, type Dispatch, type SetStateAction } from "react";
+import { useMobileLayout } from "../../../shared/ui/useMobileLayout";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entities/survey/model/formOptions";
 import viewBlack from "../../../img/FormatViewBlack.svg";
 import viewWhite from "../../../img/FormatViewWhite.svg";
@@ -49,6 +50,10 @@ export function DashboardToolbar({
   viewMode,
 }: DashboardToolbarProps) {
   const searchPlaceholder = viewMode === "mine" ? "Поиск по названию" : "Поиск по названию и автору";
+  const isMobile = useMobileLayout();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
+  const activeFilterCount = [dateFrom, dateTo, formType, formReason].filter(Boolean).length;
 
   return (
     <div className="dashboard-toolbar">
@@ -58,6 +63,7 @@ export function DashboardToolbar({
           <input
             className="dashboard-search-input"
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -102,7 +108,17 @@ export function DashboardToolbar({
         </div>
       </div>
 
-      <div className="dashboard-filter-group">
+      {isMobile && <button
+        type="button"
+        className="app-button dashboard-filters-toggle"
+        aria-expanded={filtersOpen}
+        aria-controls={filtersId}
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        <span aria-hidden="true">{filtersOpen ? "−" : "+"}</span>
+      </button>}
+      <div id={filtersId} className="dashboard-filter-group" hidden={isMobile && !filtersOpen}>
         <label className="dashboard-filter-field">
           <span>Дата с</span>
           <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />

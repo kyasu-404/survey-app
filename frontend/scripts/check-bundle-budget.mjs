@@ -14,8 +14,9 @@ const budgets = {
   css: { raw: 550_000, gzip: 125_000 },
   image: { raw: 250_000 },
   // Patched React Router 7, durable-job UI and motion add about 36 KiB.
+  // Responsive navigation, styles and editor controls add another 14 KiB.
   // Keep the initial-load gate unchanged; allow only this measured increase.
-  total: { raw: 6_955_000 },
+  total: { raw: 6_970_000 },
 };
 
 function formatBytes(bytes) {

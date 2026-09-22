@@ -12,9 +12,10 @@ import { Skeleton } from "../../shared/ui/Skeleton";
 
 type SidebarProps = {
   onToggle: () => void;
+  onNavigate?: () => void;
 };
 
-export function Sidebar({ onToggle }: SidebarProps) {
+export function Sidebar({ onToggle, onNavigate }: SidebarProps) {
   const { user, profile, loading } = useAuth();
   const { themeId } = useTheme();
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
@@ -56,7 +57,9 @@ export function Sidebar({ onToggle }: SidebarProps) {
         </button>
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Основная навигация" onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a")) onNavigate?.();
+      }}>
         {loading && (
           <div className="sidebar-skeleton" aria-hidden="true">
             <Skeleton className="sidebar-skeleton-item" />

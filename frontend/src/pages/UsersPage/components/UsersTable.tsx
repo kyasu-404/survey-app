@@ -33,7 +33,7 @@ export function UsersTable({
   users,
 }: UsersTableProps) {
   return (
-    <div className="users-table-shell">
+    <div className="users-table-shell" role="region" aria-label="Таблица пользователей, прокрутка по горизонтали" tabIndex={0}>
       <table className="responses-table users-table">
         <thead>
           <tr>

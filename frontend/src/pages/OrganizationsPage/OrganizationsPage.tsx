@@ -256,7 +256,7 @@ export default function OrganizationsPage() {
           </div>
         )}
         {filteredOrganizations.length > 0 && (
-          <div className="users-table-shell organizations-table-shell">
+          <div className="users-table-shell organizations-table-shell" role="region" aria-label="Справочник ОУ, прокрутка по горизонтали" tabIndex={0}>
             <table className="responses-table organizations-table">
               <thead>
                 <tr>

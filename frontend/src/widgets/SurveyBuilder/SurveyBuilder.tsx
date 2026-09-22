@@ -93,6 +93,8 @@ import {
 import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
+import { MobileBuilderToolbar } from "./MobileBuilderToolbar";
+import { MOBILE_LAYOUT_QUERY, useMobileLayout } from "../../shared/ui/useMobileLayout";
 
 registerSurveyTheme(SurveyTheme);
 registerCreatorTheme(...Object.values(creatorThemes));
@@ -353,7 +355,7 @@ function createCreatorInstance(
   creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
   creator.JSON = resolveDefaultSurveyLogo(createEmptyBuilderSchema());
   creator.allowCollapseSidebar = true;
-  creator.showSidebar = true;
+  creator.showSidebar = !(window.matchMedia?.(MOBILE_LAYOUT_QUERY).matches ?? false);
 
   configureCreatorToolbox(creator);
   registerBuilderPreviewTab(creator, formId);
@@ -525,8 +527,16 @@ export function SurveyBuilder({
   safeEditingResponseCount = 0,
   userId,
 }: SurveyBuilderProps) {
+  const isMobile = useMobileLayout();
   const [isSaving, setIsSaving] = useState(false);
   const [creator, setCreator] = useState<SurveyCreator | null>(null);
+  useEffect(() => {
+    if (!creator) return;
+    // The desktop toolbox is hidden by SurveyJS on narrow screens. Keep its
+    // tap-to-add alternative available and start with the form canvas visible.
+    creator.showAddQuestionButton = isMobile;
+    if (isMobile) creator.showSidebar = false;
+  }, [creator, isMobile]);
   const [isTemplateActionLoading, setIsTemplateActionLoading] = useState<"save" | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [postSaveSettings, setPostSaveSettings] = useState<PostSaveSettingsState | null>(null);
@@ -1406,6 +1416,17 @@ export function SurveyBuilder({
 
   return (
     <div className="builder-host">
+      {isMobile && creator && <MobileBuilderToolbar
+        creator={creator}
+        busy={isSurveyMutationBusy || isTemplateBusy}
+        safeEditing={isSafeEditingMode}
+        onSaveTemplate={() => saveTemplateHandlerRef.current()}
+        onGallery={() => {
+          setGalleryBackground(creator.theme.backgroundImage ?? "");
+          setIsBackgroundGalleryOpen(true);
+        }}
+        onReset={() => setIsResetConfirmOpen(true)}
+      />}
       <div className="builder-status-stack">
         {isSafeEditingMode && (
           <p className="builder-safe-editing-banner" role="status">
@@ -1677,4 +1698,3 @@ export function SurveyBuilder({
     </div>
   );
 }
-

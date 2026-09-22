@@ -10,6 +10,7 @@ import { initializeObservability } from './shared/lib/observability'
 import { ThemeProvider } from './shared/theme/ThemeProvider'
 import './app.css'
 import './motion.css'
+import './responsive.css'
 
 initializeObservability();
 

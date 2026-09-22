@@ -602,7 +602,7 @@ export default function FormResponsesPage() {
         )}
 
         {!isLoading && !combinedError && !!rows.length && (
-          <div className="responses-page-table-shell">
+          <div className="responses-page-table-shell" role="region" aria-label="Таблица ответов, прокрутка по горизонтали" tabIndex={0}>
             <table className={`responses-table${isHeaderPinned ? " responses-table-header-pinned" : ""}`}>
               <thead>
                 <tr>

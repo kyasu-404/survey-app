@@ -88,6 +88,7 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   await expect(page.getByLabel("Основание формы", { exact: true })).toHaveValue("plan");
   await page.reload();
   await expect(page.getByRole("table")).toBeVisible();
+  await page.getByRole("button", { name: "Показать меню", exact: true }).click();
   await page.getByRole("link", { name: "Все формы", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByPlaceholder("Поиск по названию и автору")).toBeVisible();
