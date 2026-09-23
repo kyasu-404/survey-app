@@ -2217,6 +2217,8 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: fit-content;
+  max-width: 100%;
   min-height: 34px;
   padding: 6px 12px;
   border-radius: 999px;

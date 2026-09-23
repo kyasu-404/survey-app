@@ -337,6 +337,8 @@ function createCreatorInstance(
   });
 
   creator.locale = "ru";
+  // Keep the add button compact and its type picker reachable on phones.
+  creator.rememberLastQuestionType = false;
   creator.applyCreatorTheme(creatorTheme);
   creator.onSurveyInstanceCreated.add((_sender, options) => {
     if (["designer-tab", "preview-tab", "theme-tab"].includes(options.area) && !htmlPatchedSurveys.has(options.survey)) {

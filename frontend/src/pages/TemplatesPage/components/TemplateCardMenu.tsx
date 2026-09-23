@@ -1,5 +1,6 @@
-import { Presence } from "../../../shared/ui/Presence";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import { ViewportMenu } from "../../../shared/ui/ViewportMenu";
+import { useMobileLayout } from "../../../shared/ui/useMobileLayout";
+import { useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { routes } from "../../../app/routes";
 import deleteIcon from "../../../img/delete.svg";
 import editIcon from "../../../img/edit.svg";
@@ -33,9 +34,12 @@ export function TemplateCardMenu({
   template,
   title,
 }: TemplateCardMenuProps) {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const isMobile = useMobileLayout();
   return (
     <div className="form-menu templates-floating-root templates-actions-menu-shell">
       <button
+        ref={anchor}
         type="button"
         className="form-menu-trigger"
         aria-label={`Действия шаблона ${title}`}
@@ -49,7 +53,7 @@ export function TemplateCardMenu({
         ...
       </button>
 
-      <Presence kind="menu">{actionMenuOpen && (
+      <ViewportMenu anchor={anchor} enabled={isMobile}>{actionMenuOpen && (
         <div className="form-menu-dropdown templates-menu-dropdown" role="menu" aria-label={`Меню действий шаблона ${title}`} onClick={stopCardEvent}>
           <button
             type="button"
@@ -94,7 +98,7 @@ export function TemplateCardMenu({
             <span className="form-menu-item-label">Удалить</span>
           </button>
         </div>
-      )}</Presence>
+      )}</ViewportMenu>
     </div>
   );
 }

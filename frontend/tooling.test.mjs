@@ -34,10 +34,15 @@ test("frontend exposes production release-gate scripts", () => {
   assert.equal(packageJson.scripts?.["test:e2e"], "playwright test");
 });
 
-test("frontend document declares mobile viewport baseline", () => {
+test("frontend document declares mobile viewport baseline and safe-area support", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/)?.[1];
+  assert.ok(viewport, "frontend/index.html should declare the viewport");
 
-  assert.match(html, /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1"\s*\/?>/);
+  const directives = new Map(viewport.split(",").map((directive) => directive.trim().split(/\s*=\s*/)));
+  assert.equal(directives.get("width"), "device-width");
+  assert.equal(directives.get("initial-scale"), "1");
+  assert.equal(directives.get("viewport-fit"), "cover");
 });
 
 test("CI workflow gates production releases", () => {

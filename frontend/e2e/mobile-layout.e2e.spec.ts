@@ -7,6 +7,14 @@ async function expectPageFits(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 }
 
+async function expectMenuFits(page: Page) {
+  await expect.poll(() => page.getByRole("menu").evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
+  })).toBe(true);
+  await expectPageFits(page);
+}
+
 async function navigateFromMenu(page: Page, name: string) {
   await page.getByRole("button", { name: "Показать меню", exact: true }).click();
   await page.getByRole("navigation", { name: "Основная навигация" }).getByRole("link", { name, exact: true }).click();
@@ -75,6 +83,13 @@ for (const width of [320, 390]) {
     await expect(page.locator(".users-table tbody tr")).toHaveCount(1);
     await expectPageFits(page);
     expect(await page.locator(".users-table th").first().evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(60);
+    const status = page.locator(".users-status-button");
+    await status.scrollIntoViewIfNeeded();
+    expect(await status.evaluate(el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return range.getClientRects().length;
+    })).toBe(1);
     await page.screenshot({ path: testInfo.outputPath("users.png") });
     await page.getByRole("button", { name: "Сменить пароль", exact: true }).click();
     await expectPageFits(page);
@@ -121,6 +136,12 @@ test("mobile builder keeps panels bounded and custom tabs and save available", a
   await tabs.selectOption("runtime-preview");
   await expect(page.getByTestId("builder-preview-tab").getByRole("textbox", { name: "Ваше имя", exact: true })).toBeVisible();
   await page.getByTestId("builder-preview-tab").getByRole("textbox", { name: "Ваше имя", exact: true }).fill("Проверка");
+  const preview = page.getByTestId("builder-preview-tab");
+  expect(await preview.evaluate(el => {
+    const outer = el.parentElement!.getBoundingClientRect();
+    const inner = el.querySelector(".builder-preview-tab-surface")!.getBoundingClientRect();
+    return Math.abs(inner.left - outer.left) + Math.abs(inner.right - outer.right);
+  })).toBeLessThan(2);
   await expectPageFits(page);
   await page.screenshot({ path: testInfo.outputPath("builder-preview.png") });
   await tabs.selectOption("theme");
@@ -148,3 +169,60 @@ test("mobile builder keeps panels bounded and custom tabs and save available", a
   await expect(page).toHaveURL(/dashboard/);
   expect(pageErrors).toEqual([]);
 });
+
+for (const width of [320, 390]) {
+  test(`shared template and document menus stay within the viewport at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const app = await openSurveyApp(page, { responseCount: 2 });
+    const template = { ...app.form, title: "Мобильный шаблон", form_type: "template", is_public: false };
+    await page.route("**/list_forms_keyset*", route => route.fulfill({ json: [template] }));
+    await page.route("**/rest/v1/forms?*", route => {
+      if (route.request().method() === "PATCH") Object.assign(template, route.request().postDataJSON());
+      return route.fulfill({ json: template });
+    });
+    await page.goto("/templates");
+    const templateTrigger = page.getByRole("button", { name: "Действия шаблона Мобильный шаблон", exact: true });
+    await templateTrigger.tap();
+    await expectMenuFits(page);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Поделиться шаблоном Мобильный шаблон", exact: true }).tap();
+    await expect(page.locator(".templates-share-button")).toHaveText("Не показывать другим");
+    await expect(page.locator(".templates-share-button")).toBeEnabled();
+    await templateTrigger.tap();
+    await expectMenuFits(page);
+    await page.screenshot({ path: testInfo.outputPath("shared-template-menu.png") });
+    const renamePrompt = page.waitForEvent("dialog");
+    page.once("dialog", dialog => dialog.dismiss());
+    await page.getByRole("menuitem", { name: "Переименовать", exact: true }).tap();
+    expect((await renamePrompt).message()).toBe("Введите новое название шаблона");
+
+    await page.route("**/api/office/**", route => route.fulfill({ json: {
+      enabled: true, max_file_mb: 25, response_count: 2,
+      documents: Array.from({ length: 3 }, (_, i) => ({
+        id: `document-${i}`, form_id: app.formId, name: `Макет ${i}.xlsx`, file_type: "xlsx",
+        created_by: app.form.author_id, updated_at: "2026-09-22T12:00:00Z", binding_count: 1, size_bytes: 1024,
+      })),
+    } }));
+    await page.goto(`/dashboard/forms/${app.formId}/responses`);
+    await page.getByRole("button", { name: "Документы", exact: true }).tap();
+    const dialog = page.getByRole("dialog", { name: "Документы", exact: true });
+    const panel = dialog.getByRole("tabpanel");
+    const trigger = dialog.getByRole("button", { name: "Действия: Макет 2.xlsx", exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    const before = await panel.evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop, width: el.scrollWidth }));
+    expect(await panel.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await trigger.tap();
+    await expectMenuFits(page);
+    expect(await panel.evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop, width: el.scrollWidth }))).toEqual(before);
+    await page.screenshot({ path: testInfo.outputPath("document-menu.png") });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await trigger.tap();
+    await page.setViewportSize({ width, height: 568 });
+    await expectMenuFits(page);
+    await page.getByRole("menuitem", { name: "Переименовать", exact: true }).tap();
+    await expect(page.getByLabel("Название документа", { exact: true })).toHaveValue("Макет 2");
+    expect(app.pageErrors).toEqual([]);
+  });
+}

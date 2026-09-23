@@ -29,6 +29,41 @@
   max-width: 100%;
 }
 
+.users-status-button {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  flex-shrink: 0;
+}
+
+.viewport-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  background: transparent;
+  color: inherit;
+  z-index: 600;
+}
+
+.viewport-menu > .form-menu-dropdown {
+  position: static;
+  inset: auto;
+  margin: 0;
+  min-width: 0;
+  width: 236px;
+  max-width: 100%;
+  transform: none;
+  animation: none;
+}
+
+.viewport-menu::backdrop { background: transparent; pointer-events: none; }
+
 @media (max-width: 1024px) {
   .users-table { min-width: 880px; }
   .organizations-table { min-width: 680px; }
@@ -151,6 +186,17 @@
   }
 
   .builder-creator-shell .svc-creator { border-radius: 14px; }
+  .survey-page.builder-preview-tab-shell { padding: 0; }
+  .builder-preview-tab-shell .builder-preview-tab-surface {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .builder-preview-tab-surface :is(.sd-root-modern, .sd-root-modern__wrapper) { min-height: 0; }
+  .builder-preview-tab-surface.survey-page-card :is(.sd-root-modern, .sd-root-modern__wrapper, .sd-container-modern, .sd-root_background-image, .sd-container-modern__title, .sv-header) { border-radius: 0; }
   .builder-mobile-toolbar { position: relative; z-index: 20; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 0 0 6px; }
   .builder-mobile-toolbar select { min-width: 0; flex: 1; min-height: 44px; padding: 8px; }
   .builder-mobile-actions { position: relative; }
@@ -264,6 +310,8 @@
   .dashboard-delete-modal-actions > * { flex: 1 1 120px; min-height: 44px; }
   .template-preview-drawer,
   .response-preview-drawer { width: 100%; max-width: 100%; }
+  .office-dialog { max-width: calc(100vw - 16px); }
+  .office-document-actions > button { max-width: 100%; white-space: normal; }
   .toast-container { max-width: calc(100vw - 24px); right: 12px; }
 
   /* 16px avoids automatic zoom when focusing native fields on iOS. */

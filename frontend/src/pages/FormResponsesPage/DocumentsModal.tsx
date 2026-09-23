@@ -1,4 +1,4 @@
-import { Presence } from "../../shared/ui/Presence";
+import { ViewportMenu } from "../../shared/ui/ViewportMenu";
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useNavigate} from 'react-router-dom';
@@ -19,16 +19,16 @@ import '../../entities/office/office.css';
 export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:string;onClose:()=>void;selectedResponseIds?:string[]}){
  const navigate=useNavigate(),queryClient=useQueryClient(),{showToast}=useToast(),{user,profile}=useAuth();
  const dialog=useRef<HTMLDialogElement>(null),templatesPanel=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null);
+ const menuAnchor=useRef<HTMLButtonElement>(null);
  const [search,setSearch]=useState(''),[name,setName]=useState('Новый макет'),[tab,setTab]=useState<'templates'|'results'>('templates'),[focusResult,setFocusResult]=useState<string>();
  const [mode,setMode]=useState<'create'|'rename'|null>(null),[selected,setSelected]=useState<OfficeDocument|null>(null),[menu,setMenu]=useState<string|null>(null);
  const [format,setFormat]=useState<'xlsx'|'docx'>('xlsx'),[generation,setGeneration]=useState<OfficeDocument|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const query=useQuery({queryKey:['office-documents',formId],queryFn:()=>officeRequest<{documents:OfficeDocument[];enabled:boolean;max_file_mb:number;response_count:number}>(`/forms/${formId}/documents`),staleTime:0,refetchOnMount:'always'});
  useEffect(()=>{dialog.current?.showModal();},[]);
  useEffect(()=>{const close=(e:MouseEvent)=>{if(!(e.target as Element).closest('.office-menu-shell'))setMenu(null);};document.addEventListener('click',close);return()=>document.removeEventListener('click',close);},[]);
- useEffect(()=>{if(!menu)return;const frame=requestAnimationFrame(()=>dialog.current?.querySelector('[role="menu"]')?.scrollIntoView({block:'nearest'}));return()=>cancelAnimationFrame(frame);},[menu]);
  async function run(fn:()=>Promise<unknown>){setBusy(true);setError('');setMenu(null);try{await fn();setMode(null);await query.refetch();}catch(e){setError(getErrorMessage(e,'Не удалось выполнить операцию'));}finally{setBusy(false);}}
  async function generated(job:OfficeJob){setGeneration(null);setFocusResult(job.id);setTab('results');showToast('Задание добавлено в очередь. Окно можно закрыть.','success');await queryClient.invalidateQueries({queryKey:['office-results',formId]});}
- return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="documents-title">
+ return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();if(menu)setMenu(null);else onClose();}} aria-labelledby="documents-title">
   <header><div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div><button type="button" className="app-button" onClick={onClose} aria-label="Закрыть документы">×</button></header>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>
   <div ref={templatesPanel} className="office-tab-panel" role="tabpanel" id="documents-panel-templates" aria-labelledby="documents-tab-templates" hidden={tab!=='templates'}>
@@ -44,13 +44,13 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
      <div className="office-document-actions">
       <span className="organizations-row-actions"><button type="button" className="organization-edit-button" disabled={busy || !query.data?.enabled} onClick={()=>navigate(`/forms/${formId}/documents/${doc.id}`)}>Редактировать<img src={editIcon} alt="" aria-hidden="true"/></button></span>
       <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);templatesPanel.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>
-      <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}>...</button>
-       <Presence kind="menu">{menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
+      <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button ref={menu===doc.id?menuAnchor:undefined} type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}>...</button>
+       <ViewportMenu anchor={menuAnchor}>{menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>downloadOfficeDocument(doc))}><img src={downloadIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Скачать</span></button>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>{setSelected(doc);setName(doc.name.replace(/\.(docx|xlsx)$/i,''));setMode('rename');setMenu(null);}}><img src={renameIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Переименовать</span></button>
         <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>officeRequest(`/documents/${doc.id}/copy`,{method:'POST'}))}><img src={copyIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Создать копию</span></button>
         {(doc.created_by===user?.id || profile?.role==='admin') && <button type="button" role="menuitem" className="form-menu-item form-menu-item-danger" disabled={busy} onClick={()=>{setSelected(doc);setMode(null);setMenu(null);}}><img src={deleteIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Удалить</span></button>}
-       </div>}</Presence>
+       </div>}</ViewportMenu>
       </div>
      </div>
     </article>)}
