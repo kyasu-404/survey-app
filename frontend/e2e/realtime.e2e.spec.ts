@@ -1,10 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { openSurveyApp } from "./fixtures/surveyApp";
-import { mockRealtime } from "./fixtures/realtime";
 
 test("new answers highlight once; reconnect and HTTP fallback preserve automatic updates", async ({ page }, testInfo) => {
   const app = await openSurveyApp(page, { responseCount: 1, elements: [{ type: "text", name: "name", title: "Имя" }] });
-  const realtime = await mockRealtime(page);
+  const { realtime } = app;
   const row = (n: number) => ({ id: `30000000-0000-4000-8000-${String(n).padStart(12, "0")}`, form_id: app.formId, created_at: `2026-09-22T10:00:${String(n).padStart(2, "0")}Z`, data: { name: `Новый ответ ${n}` } });
   const rows = [row(1)];
   let reads = 0;
@@ -42,7 +41,7 @@ test("new answers highlight once; reconnect and HTTP fallback preserve automatic
 
 test("templates update through realtime without a refresh button", async ({ page }) => {
   const app = await openSurveyApp(page);
-  const realtime = await mockRealtime(page);
+  const { realtime } = app;
   const template = { ...app.form, form_type: "template", title: "Исходный шаблон" };
   let reads = 0;
   await page.route("**/list_forms_keyset*", route => { reads++; return route.fulfill({ json: [template] }); });

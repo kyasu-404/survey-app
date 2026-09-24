@@ -3,18 +3,16 @@ import ExcelJS from "exceljs";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
 test("200 loaded form cards refresh with one keyset request", async ({ page }) => {
-  const { listRequests, pageErrors } = await openSurveyApp(page);
+  const { listRequests, pageErrors, realtime, form } = await openSurveyApp(page);
+  const initialRequests = listRequests.length;
   await expect(page.getByText("Карточка 20", { exact: true })).toBeVisible();
   for (let count = 40; count <= 200; count += 20) {
     await page.getByRole("button", { name: "Показать ещё", exact: true }).click();
     await expect(page.getByText(`Карточка ${count}`, { exact: true })).toBeVisible();
   }
-  expect(listRequests).toHaveLength(10);
+  expect(listRequests).toHaveLength(initialRequests + 9);
   listRequests.length = 0;
-  await page.getByRole("link", { name: "Шаблоны", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Шаблоны", exact: true })).toBeVisible();
-  listRequests.length = 0;
-  await page.getByRole("link", { name: "Мои формы", exact: true }).click();
+  realtime.change("forms", "INSERT", form);
   await expect.poll(() => listRequests.length).toBe(1);
   expect(listRequests[0]).toEqual({ cursor: null, limit: 201 });
   await expect(page.getByText("Карточка 200", { exact: true })).toBeVisible();

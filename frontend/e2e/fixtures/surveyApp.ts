@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../src/entities/survey/types";
+import { mockRealtime } from "./realtime";
 
 // Each call creates isolated state. All API traffic is intercepted, including mutations.
 export async function openSurveyApp(page: Page, options: { responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
@@ -36,9 +37,11 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
   const listRequests: Array<{ cursor: string | null; limit: number }> = [];
   const forms = Array.from({ length: 220 }, (_, index) => ({ ...form, id: `20000000-0000-4000-8000-${String(220 - index).padStart(12, "0")}`, title: `Карточка ${index + 1}` }));
   await page.routeWebSocket("**/*", (socket) => socket.close());
+  const realtime = await mockRealtime(page);
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === "/api/office/status") return route.fulfill({ json: { enabled: false } });
     if (url.pathname.includes("/auth/v1/")) {
       return route.fulfill({ json: url.pathname.endsWith("/token")
         ? { access_token: token, refresh_token: "test-refresh-token", token_type: "bearer", expires_in: 3600, user }
@@ -102,5 +105,10 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
   await page.getByPlaceholder("Пароль").fill("test-only-password");
   await page.getByRole("button", { name: "Войти" }).click();
   await expect(page).toHaveURL(/dashboard/);
-  return { formId, form, questions, commentTitle, listRequests, deletedBatchSizes, pageErrors };
+  // A successful subscription resynchronizes the list once. Finish that read
+  // before measuring requests caused by pagination or UI-only interactions.
+  await expect.poll(() => realtime.connected("dashboard-forms:")).toBe(true);
+  await expect.poll(() => listRequests.length).toBeGreaterThanOrEqual(2);
+  await expect(page.locator(".dashboard-form-card")).toHaveCount(20);
+  return { formId, form, questions, commentTitle, listRequests, deletedBatchSizes, pageErrors, realtime };
 }

@@ -9,6 +9,11 @@ export async function mockRealtime(page: Page) {
   const waiting: Array<() => void> = [];
   let paused = false;
   await page.routeWebSocket("**/realtime/v1/websocket*", socket => {
+    socket.onClose(() => {
+      for (const [topic, channel] of channels) {
+        if (channel.socket === socket) channels.delete(topic);
+      }
+    });
     socket.onMessage(raw => {
       const parsed = JSON.parse(String(raw));
       const message = Array.isArray(parsed) ? { join_ref: parsed[0], ref: parsed[1], topic: parsed[2], event: parsed[3], payload: parsed[4] } : parsed;

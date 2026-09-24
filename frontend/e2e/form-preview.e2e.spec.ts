@@ -30,9 +30,15 @@ test("preview keeps files local, allows required-file navigation and returns to 
   await page.getByRole("button", { name: "Показать ещё" }).click();
   await expect(page.locator(".dashboard-form-card")).toHaveCount(40);
   const card = page.locator(".dashboard-form-card").nth(30);
-  await card.click({ trial: true });
-  const scrollBefore = await page.evaluate(() => scrollY);
+  // Capture the actual click position, after Playwright scrolls the card into view.
+  const scrollAtClick = await page.evaluateHandle(() => ({ top: -1 }));
+  await card.evaluate((element, position) => {
+    element.addEventListener("click", () => { position.top = scrollY; }, { capture: true, once: true });
+  }, scrollAtClick);
   await card.click();
+  const scrollBefore = await scrollAtClick.evaluate(position => position.top);
+  await scrollAtClick.dispose();
+  expect(scrollBefore).toBeGreaterThan(0);
   await expect(page.getByText("Открыт предпросмотр формы", { exact: true })).toHaveClass("toast toast-warning");
   await expect(page.locator(".survey-preview-toolbar").getByRole("button", { name: "Назад", exact: true })).toBeVisible();
 
@@ -70,13 +76,13 @@ test("preview keeps files local, allows required-file navigation and returns to 
   expect(mutations).toEqual([]);
   await page.locator(".survey-preview-toolbar").getByRole("button", { name: "Назад", exact: true }).click();
   await expect(page).toHaveURL(originalUrl);
-  expect(await page.evaluate(isBlobAvailable, localUrl)).toBe(false);
+  // The URL changes before React unmounts the preview and revokes its blobs.
+  await expect.poll(() => page.evaluate(isBlobAvailable, localUrl)).toBe(false);
   await expect(page.getByPlaceholder("Поиск по названию и автору")).toHaveValue("Карточка");
   await expect(page.getByLabel("Тип формы", { exact: true })).toHaveValue("anketa");
   await expect(page.locator(".dashboard-form-card")).toHaveCount(40);
   const savedScroll = await page.evaluate(() => window.history.state.usr.dashboardView.scroll.top);
-  // The card's hover animation can shift the click target by two pixels.
-  expect(Math.abs(savedScroll - scrollBefore)).toBeLessThanOrEqual(2);
+  expect(savedScroll).toBe(scrollBefore);
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(savedScroll);
   await page.locator(".dashboard-form-card").nth(30).click();
   await expect(page.locator(".sd-file label[for]")).toBeVisible();

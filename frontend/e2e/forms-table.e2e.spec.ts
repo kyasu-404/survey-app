@@ -44,9 +44,12 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   await expect(table.locator("tbody tr").nth(1).locator(".dashboard-table-deadline")).toHaveCount(0);
   await expect(table.locator("thead th").last()).toHaveText("");
   expect(requests[0]).toMatchObject({ p_sort_field: "title", p_sort_direction: "asc", p_after_id: null });
+  // Realtime can also resynchronize the first page; inspect the cursor request.
+  const nextPage = page.waitForRequest(request => new URL(request.url()).pathname.endsWith("/list_forms_sorted")
+    && request.method() === "POST" && Boolean(request.postDataJSON().p_after_id));
   await page.getByRole("button", { name: "Показать ещё" }).click();
   await expect(table.locator("tbody tr")).toHaveCount(40);
-  expect(requests[1]).toMatchObject({ p_after_id: rows[19].id, p_after_value: rows[19].sort_value, p_reference_time: rows[19].sort_reference_at });
+  expect((await nextPage).postDataJSON()).toMatchObject({ p_after_id: rows[19].id, p_after_value: rows[19].sort_value, p_reference_time: rows[19].sort_reference_at });
   await page.getByRole("button", { name: "Название", exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("forms-table-light.png"), fullPage: false });
   await page.getByRole("button", { name: "Название", exact: true }).click();

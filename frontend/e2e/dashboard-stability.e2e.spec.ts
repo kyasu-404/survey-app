@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
 const geometry = (toolbar: Locator) => toolbar.evaluate(element =>
@@ -6,6 +6,17 @@ const geometry = (toolbar: Locator) => toolbar.evaluate(element =>
     const { x, y, width, height } = node.getBoundingClientRect();
     return [x + scrollX, y + scrollY, width, height];
   }));
+
+async function navigateFromSidebar(page: Page, title: string) {
+  const navigation = page.getByRole("navigation", { name: "Основная навигация" });
+  if (!await navigation.isVisible()) {
+    await page.getByRole("button", { name: "Показать меню", exact: true }).click();
+  }
+  await navigation.getByRole("link", { name: title, exact: true }).click();
+  // Closing the mobile drawer can leave the pointer over a toolbar button.
+  // Keep its hover transition out of the refresh geometry measurements.
+  await page.mouse.move(0, 0);
+}
 
 for (const width of [1440, 1760, 390]) {
   test(`filters stay still during initial and background refresh at ${width}px`, async ({ page }) => {
@@ -32,13 +43,14 @@ for (const width of [1440, 1760, 390]) {
     await expect(page.locator(".dashboard-form-card")).toHaveCount(20);
     await expectSame(initial);
     for (const title of ["Мои формы", "Все формы", "Мои формы"]) {
-      await page.getByRole("link", { name: "Шаблоны", exact: true }).click();
+      await navigateFromSidebar(page, "Шаблоны");
       await expect(page.getByRole("heading", { name: "Шаблоны", exact: true })).toBeVisible();
       hold();
       const startedBefore = requestsStarted;
-      await page.getByRole("link", { name: title, exact: true }).click();
+      await navigateFromSidebar(page, title);
       await expect(page.getByPlaceholder(/^Поиск по названию/)).toBeVisible();
       await expect.poll(() => requestsStarted).toBeGreaterThan(startedBefore);
+      await expect.poll(() => toolbar.evaluate(node => node.getAnimations({ subtree: true }).length)).toBe(0);
       const before = await geometry(toolbar);
       release(); gate = undefined;
       await expect(page.locator(".dashboard-form-card")).toHaveCount(20);
