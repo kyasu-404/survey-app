@@ -170,6 +170,7 @@ export function ResponseReportModal({
                 <div className="response-report-questions">
                   {report.questionReports.map((question) => (
                     <article key={question.name} className="response-report-question">
+                      {question.groupTitles?.length ? <p className="response-report-question-path">{question.groupTitles.join(" / ")}</p> : null}
                       <div className="response-report-question-heading">
                         <strong>{question.title}</strong>
                         <span>{ANALYSIS_KIND_LABELS[question.kind]}</span>

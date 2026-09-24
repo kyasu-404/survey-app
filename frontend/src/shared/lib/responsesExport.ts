@@ -18,6 +18,7 @@ export type ResponsesTableColumn = ResponsesColumnGroup & {
   kind?: "page" | "section";
   page?: ResponsesColumnGroup;
   section?: ResponsesColumnGroup;
+  sections?: ResponsesColumnGroup[];
   printPage?: ResponsesColumnGroup;
   answerType?: string;
 };
@@ -42,98 +43,61 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
-function visitSurveyQuestion(value: unknown, visitor: (question: SurveyQuestion) => void) {
-  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
-  let visitedNodes = 0;
-
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (!current || !isRecord(current.value)) {
-      continue;
-    }
-
-    visitedNodes += 1;
-    if (current.depth > MAX_EXPORT_VALUE_DEPTH || visitedNodes > MAX_EXPORT_VALUE_NODES) {
-      return;
-    }
-
-    if (typeof current.value.name === "string" && !NON_ANSWER_TYPES.has(String(current.value.type))) {
-      visitor(current.value as SurveyQuestion);
-    }
-
-    // Static panels group questions; compound questions store one nested answer.
-    const nested = current.value.elements;
-    if (current.value.type === "panel" && Array.isArray(nested)) {
-      for (let index = nested.length - 1; index >= 0; index -= 1) {
-        pending.push({ value: nested[index], depth: current.depth + 1 });
-      }
-    }
-  }
-}
-
 function getQuestionMeta(schema: SurveySchema) {
   const choiceMap = new Map<string, Map<string, string>>();
   const titleMap = new Map<string, string>();
   const typeMap = new Map<string, string>();
+  const questionMap = new Map<string, SurveyQuestion>();
   const columns: ResponsesTableColumn[] = [];
   const seenNames = new Set<string>();
-  let pageGroup: ResponsesColumnGroup | undefined;
-  let sectionGroup: ResponsesColumnGroup | undefined;
-  let printPage: ResponsesColumnGroup | undefined;
+  let visited = 0;
 
-  const addQuestionMeta = (question: SurveyQuestion) => {
-    if (question.name) {
-      const header = question.title?.trim() || question.name;
-      if (question.type === "sectiontitle") {
-        sectionGroup = { key: `section:${question.name}`, header };
-        columns.push({ ...sectionGroup, kind: "section", page: pageGroup, section: sectionGroup, printPage });
-        seenNames.add(question.name);
-        return;
-      }
-      if (!seenNames.has(question.name)) {
-        columns.push({ key: `answer:${question.name}`, header, page: pageGroup, section: sectionGroup, printPage, answerType: question.type });
-        seenNames.add(question.name);
-      }
-
-      titleMap.set(question.name, question.title ?? question.name);
-      typeMap.set(question.name, question.type);
-    }
-
-    if (!Array.isArray(question.choices) || !question.name) {
+  const visit = (value: unknown, groups: Pick<ResponsesTableColumn, "page" | "printPage" | "sections">, path: string, depth: number) => {
+    if (!isRecord(value) || depth > MAX_EXPORT_VALUE_DEPTH || ++visited > MAX_EXPORT_VALUE_NODES) return;
+    const question = value as SurveyQuestion;
+    const name = question.valueName || question.name;
+    const sections = groups.sections ?? [];
+    const section = sections[sections.length - 1];
+    if (question.type === "panel") {
+      const group = { key: `section:${question.name || path}`, header: question.title?.trim() || "Раздел" };
+      const nestedGroups = { ...groups, sections: [...sections, group] };
+      columns.push({ ...group, ...nestedGroups, section: group, kind: "section" });
+      if (question.name) seenNames.add(question.name);
+      if (Array.isArray(question.elements)) question.elements.forEach((child, index) => visit(child, nestedGroups, `${path}.${index}`, depth + 1));
       return;
     }
-
-    const questionChoiceMap = new Map<string, string>();
-    question.choices.forEach((choice) => {
-      if (typeof choice === "string") {
-        questionChoiceMap.set(choice, choice);
-        return;
-      }
-
-      const value = String(choice.value ?? choice.text ?? "");
-      const text = String(choice.text ?? choice.value ?? "");
-      if (value) {
-        questionChoiceMap.set(value, text);
+    if (!name || NON_ANSWER_TYPES.has(question.type)) return;
+    const header = question.title?.trim() || question.name;
+    if (!seenNames.has(name)) {
+      columns.push({ key: `answer:${name}`, header, ...groups, section, answerType: question.type });
+      seenNames.add(name);
+    }
+    questionMap.set(name, question);
+    titleMap.set(name, header);
+    typeMap.set(name, question.type);
+    if (!Array.isArray(question.choices)) return;
+    const choices = new Map<string, string>();
+    question.choices.forEach(choice => {
+      if (typeof choice === "string") choices.set(choice, choice);
+      else {
+        const value = String(choice.value ?? choice.text ?? "");
+        if (value) choices.set(value, String(choice.text ?? choice.value ?? ""));
       }
     });
-
-    if (questionChoiceMap.size > 0) {
-      choiceMap.set(question.name, questionChoiceMap);
-    }
+    if (choices.size) choiceMap.set(name, choices);
   };
 
   const pages = Array.isArray(schema.pages) ? schema.pages : [];
   pages.forEach((page, index) => {
     const header = page?.title?.trim();
-    pageGroup = header ? { key: `page:${index}`, header } : undefined;
-    printPage = header || pages.length > 1 ? { key: `page:${index}`, header: header || `Страница ${index + 1}` } : undefined;
-    sectionGroup = undefined;
+    const pageGroup = header ? { key: `page:${index}`, header } : undefined;
+    const printPage = header || pages.length > 1 ? { key: `page:${index}`, header: header || `Страница ${index + 1}` } : undefined;
     if (pageGroup) columns.push({ ...pageGroup, kind: "page", page: pageGroup, printPage });
     const elements = Array.isArray(page?.elements) ? page.elements : [];
-    elements.forEach((element) => visitSurveyQuestion(element, addQuestionMeta));
+    elements.forEach((element, childIndex) => visit(element, { page: pageGroup, printPage }, `${index}.${childIndex}`, 0));
   });
 
-  return { choiceMap, columns, seenNames, titleMap, typeMap };
+  return { choiceMap, columns, seenNames, titleMap, typeMap, questionMap };
 }
 
 function isSafeExportValue(value: unknown) {
@@ -182,7 +146,13 @@ function formatAnswerValue(
   choiceMap: Map<string, Map<string, string>>,
   typeMap: Map<string, string>,
   organizationLabels?: Map<string, string>,
-) {
+  questionMap = new Map<string, SurveyQuestion>(),
+  depth = 0,
+): string {
+  const question = questionMap.get(questionName);
+  if (question?.type === "paneldynamic" && Array.isArray(value)) {
+    return formatDynamicPanel(question, value, organizationLabels, depth);
+  }
   const questionChoices = choiceMap.get(questionName);
 
   if (
@@ -227,6 +197,28 @@ function formatAnswerValue(
   }
 
   return String(value);
+}
+
+function formatDynamicPanel(question: SurveyQuestion, values: unknown[], organizationLabels: Map<string, string> | undefined, depth: number): string {
+  if (depth > MAX_EXPORT_VALUE_DEPTH || !isSafeExportValue(values)) return "[Значение превышает допустимую сложность]";
+  const meta = getQuestionMeta({ pages: [{ elements: question.templateElements ?? [] }] });
+  return values.map((value, index) => {
+    if (!isRecord(value) || Array.isArray(value)) return `Запись ${index + 1}: ${formatObjectValue(value) || "—"}`;
+    const lines = meta.columns.filter(column => !column.kind).map(column => {
+      const name = column.key.slice("answer:".length);
+      const raw = Object.prototype.hasOwnProperty.call(value, name) ? value[name] : undefined;
+      const answer = column.answerType === "signaturepad" && raw
+        ? (getSignatureImage(String(raw)) ? "Подпись (см. просмотр ответа)" : SIGNATURE_UNAVAILABLE)
+        : formatAnswerValue(name, raw, meta.choiceMap, meta.typeMap, organizationLabels, meta.questionMap, depth + 1);
+      const label = [...(column.sections ?? []).map(group => group.header), column.header].join(" / ");
+      return answer.includes("\n") ? `${label}:\n  ${answer.replace(/\n/g, "\n  ")}` : `${label}: ${answer || "—"}`;
+    });
+    // Keep data from removed template questions instead of silently dropping it.
+    Object.entries(value).forEach(([name, answer]) => {
+      if (!meta.seenNames.has(name)) lines.push(`${name}: ${formatObjectValue(answer) || "—"}`);
+    });
+    return [`Запись ${index + 1}`, ...lines].join("\n");
+  }).join("\n\n");
 }
 
 function formatObjectValue(value: unknown): string {
@@ -282,6 +274,7 @@ function getDateCellParts(value: string) {
 
 export function getResponseColumnClassName(column: ResponsesTableColumn) {
   if (column.kind) return `responses-table-${column.kind}-column`;
+  if (column.answerType === "paneldynamic") return "responses-table-multiline-column";
   return column.isDate ? "responses-table-date-column" : "";
 }
 
@@ -306,7 +299,7 @@ export function formatResponsesForTable(
   schema: SurveySchema,
   organizationLabels?: Map<string, string>,
 ): ResponsesTable {
-  const { choiceMap, columns: schemaColumns, seenNames, titleMap, typeMap } = getQuestionMeta(schema);
+  const { choiceMap, columns: schemaColumns, seenNames, titleMap, typeMap, questionMap } = getQuestionMeta(schema);
   // Include legacy/extra answer keys once, across all responses, after schema columns.
   const columns: ResponsesTableColumn[] = [
     { key: RESPONSE_DATE_KEY, header: RESPONSE_DATE_HEADER, isDate: true },
@@ -327,7 +320,7 @@ export function formatResponsesForTable(
     columns.forEach((column) => {
       if (column.isDate) return;
       const name = column.key.slice("answer:".length);
-      base[column.key] = column.kind ? "" : formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels);
+      base[column.key] = column.kind ? "" : formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels, questionMap);
     });
 
     return base;
@@ -363,10 +356,21 @@ function renderHtmlTable(columns: ResponsesTableColumn[], rows: ResponsesTableRo
 // Retain a placeholder for empty groups so their titles are not lost.
 export function getResponseAnswerColumns(columns: ResponsesTableColumn[]) {
   const populated = new Set<string>();
-  columns.forEach(column => [column.page, column.section].forEach(group => {
+  columns.forEach(column => [column.page, ...(column.sections ?? [])].forEach(group => {
     if (group && group.key !== column.key) populated.add(group.key);
   }));
   return columns.filter(column => !column.kind || !populated.has(column.key));
+}
+
+export function getResponseHeaderLevels(columns: ResponsesTableColumn[], forPrint = false) {
+  const levels: Array<{ kind: "page" | "section"; groupOf: (column: ResponsesTableColumn) => ResponsesColumnGroup | undefined }> = [];
+  const pageOf = (column: ResponsesTableColumn) => forPrint ? column.printPage ?? column.page : column.page;
+  if (columns.some(pageOf)) levels.push({ kind: "page", groupOf: pageOf });
+  const depth = Math.max(0, ...columns.map(column => column.sections?.length ?? 0));
+  for (let index = 0; index < depth; index += 1) {
+    levels.push({ kind: "section", groupOf: column => column.sections?.[index] });
+  }
+  return levels;
 }
 
 export const MAX_PRINT_ANSWER_COLUMNS = 8;
@@ -399,11 +403,9 @@ export function getResponsesPrintBlocks(columns: ResponsesTableColumn[]): Respon
 }
 
 function renderPrintGroupHeaders(columns: ResponsesTableColumn[]) {
-  return (["page", "section"] as const).map(level => {
-    const groupOf = (column: ResponsesTableColumn) => level === "page" ? column.printPage ?? column.page : column.section;
-    if (!columns.some(groupOf)) return "";
+  return getResponseHeaderLevels(columns, true).map(({ kind, groupOf }) => {
     const groups = splitColumnGroups(columns, column => groupOf(column)?.key);
-    return `<tr>${groups.map(group => `<th colspan="${group.length}" class="responses-print-${level}-heading">${escapeHtml(groupOf(group[0])?.header ?? "")}</th>`).join("")}</tr>`;
+    return `<tr>${groups.map(group => `<th colspan="${group.length}" class="responses-print-${kind}-heading">${escapeHtml(groupOf(group[0])?.header ?? "")}</th>`).join("")}</tr>`;
   }).join("");
 }
 

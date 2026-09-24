@@ -10,7 +10,7 @@ describe("response print layout", () => {
   it("keeps up to eight answer columns in one table even across pages and sections", () => {
     const table = formatResponsesForTable([response], { pages: [
       { title: "Страница", elements: questions(1, 4) },
-      { title: "Страница", elements: [{ type: "sectiontitle", name: "s", title: "Раздел" }, ...questions(5, 4)] },
+      { title: "Страница", elements: [{ type: "panel", name: "s", title: "Раздел", elements: questions(5, 4) }] },
     ] });
     const blocks = getResponsesPrintBlocks(table.columns);
     expect(blocks).toHaveLength(1);
@@ -21,11 +21,11 @@ describe("response print layout", () => {
     const schema: SurveySchema = { pages: [
       { title: "Страница", elements: [
         ...questions(1, 2),
-        { type: "sectiontitle", name: "s1", title: "Раздел" }, ...questions(3, 3),
-        { type: "sectiontitle", name: "s2", title: "Раздел" }, ...questions(6, 9),
+        { type: "panel", name: "s1", title: "Раздел", elements: questions(3, 3) },
+        { type: "panel", name: "s2", title: "Раздел", elements: questions(6, 9) },
       ] },
       { elements: questions(15, 4) },
-      { title: "Пустая страница", elements: [{ type: "sectiontitle", name: "empty", title: "Пустой раздел" }] },
+      { title: "Пустая страница", elements: [{ type: "panel", name: "empty", title: "Пустой раздел" }] },
     ] };
     const data = Object.fromEntries(questions(1, 18).map((q, index) => [q.name, `Ответ ${index + 1}`]));
     const table = formatResponsesForTable([{ ...response, data: { ...data, legacy: "Архивный" } }], schema);

@@ -7,10 +7,11 @@ import { TEST_SIGNATURE_PNG } from "../../test/signatures";
 describe("export helpers", () => {
   it("embeds signatures in their answer cells with grouping offsets and leaves empty or invalid signatures readable", async () => {
     const schema: SurveySchema = { pages: [{ title: "Страница", elements: [
-      { type: "sectiontitle", name: "section", title: "Раздел" },
+      { type: "panel", name: "section", title: "Раздел", elements: [
       { type: "signaturepad", name: "sign", title: "Подпись" },
       { type: "signaturepad", name: "other", title: "Подпись" },
       { type: "text", name: "text", title: "Текст" },
+    ] },
     ] }] };
     const table = formatResponsesForTable([
       { id: "1", form_id: "f", created_at: "2026-09-11T09:00:00Z", data: { sign: TEST_SIGNATURE_PNG, other: TEST_SIGNATURE_PNG, text: "=1+1" } },
@@ -55,15 +56,15 @@ describe("export helpers", () => {
     const schema: SurveySchema = { pages: [
       { title: "Страница", elements: [
         { type: "text", name: "intro", title: "До разделов" },
-        { type: "sectiontitle", name: "s1", title: "Раздел" },
-        { type: "text", name: "q1", title: "Ответ" },
-        { type: "text", name: "q2", title: "Ответ" },
-        { type: "sectiontitle", name: "s2", title: "Раздел" },
-        { type: "text", name: "q3", title: "Ответ" },
+        { type: "panel", name: "s1", title: "Раздел", elements: [
+          { type: "text", name: "q1", title: "Ответ" },
+          { type: "text", name: "q2", title: "Ответ" },
+        ] },
+        { type: "panel", name: "s2", title: "Раздел", elements: [{ type: "text", name: "q3", title: "Ответ" }] },
       ] },
       { title: "Страница", elements: [
         { type: "text", name: "q4", title: "Без раздела" },
-        { type: "sectiontitle", name: "empty", title: "Пустой раздел" },
+        { type: "panel", name: "empty", title: "Пустой раздел" },
       ] },
       { elements: [{ type: "text", name: "q5", title: "Без страницы" }] },
       { title: "Пустая страница", elements: [] },
@@ -116,8 +117,8 @@ describe("export helpers", () => {
     const table = formatResponsesForTable([
       { id: "r", form_id: "f", created_at: "2026-09-10T09:00:00Z", data: { answer: "=1+1" } },
     ], { pages: [{ title: kind === "page" ? "=Title" : undefined, elements: [
-      ...(kind === "section" ? [{ type: "sectiontitle", name: "s", title: "=Title" }] : []),
-      { type: "text", name: "answer", title: "+Answer" },
+      ...(kind === "section" ? [{ type: "panel", name: "s", title: "=Title", elements: [{ type: "text", name: "answer", title: "+Answer" }] }]
+        : [{ type: "text", name: "answer", title: "+Answer" }]),
     ] }] });
     const workbook = await createExcelWorkbook(table.rows, "Ответы", table.columns);
     const sheet = workbook.worksheets[0];

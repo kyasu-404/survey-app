@@ -1,7 +1,7 @@
 import { ComponentCollection } from "survey-core";
 
 export const QUESTION_TYPES = [
-  "sectiontitle",
+  "panel",
   "text",
   "comment",
   "radiogroup",
@@ -27,7 +27,6 @@ export const QUESTION_TYPES = [
   "imagepicker",
   "file",
   "signaturepad",
-  "panel",
   "paneldynamic",
   "expression",
   "html",
@@ -46,19 +45,11 @@ export type QuestionTypeDefinition = {
 
 export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
   {
-    name: "sectiontitle",
-    iconName: "icon-toolbox-sectiontitle-custom",
-    title: "Название раздела",
+    name: "panel",
+    iconName: "icon-panel",
+    title: "Раздел",
     category: "basic",
-    defaultQuestionTitle: "Название раздела",
-    questionJSON: {
-      type: "expression",
-      expression: "",
-      defaultDisplayValue: "",
-      isRequired: false,
-      showNumber: false,
-      titleLocation: "top",
-    },
+    defaultQuestionTitle: "Раздел",
   },
   {
     name: "text",
@@ -273,12 +264,6 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
     name: "signaturepad",
     iconName: "icon-signaturepad",
     title: "Подпись",
-    category: "advanced",
-  },
-  {
-    name: "panel",
-    iconName: "icon-panel",
-    title: "Панель",
     category: "advanced",
   },
   {

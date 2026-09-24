@@ -7,6 +7,41 @@ import {blankXlsx,readTemplate,checkTemplate,responseValues,renderTemplate,gener
 const id=randomUUID(),numberId=randomUUID();
 const form={title:'Сведения',schema:{pages:[{name:'p',elements:[{type:'text',name:'org',title:'Организация',integrationId:id},{type:'text',inputType:'number',name:'count',integrationId:numberId}]}]}};
 const responses=Array.from({length:20},(_,i)=>({id:randomUUID(),created_at:'2026-09-14T10:00:00Z',data:{org:`Организация ${i+1} & <test>`,count:i}}));
+test('dynamic panels use field labels and numbered multiline entries in DOCX and XLSX bindings',()=>{
+ const panelForm={title:'Сотрудники',schema:{pages:[{elements:[{type:'panel',name:'section',title:'Раздел',elements:[
+  {type:'paneldynamic',name:'people',integrationId:id,templateElements:[
+   {type:'text',name:'name',title:'Имя'},
+   {type:'dropdown',name:'role',title:'Должность',choices:[{value:'teacher',text:'Учитель'}]},
+   {type:'panel',name:'details',title:'Данные',elements:[{type:'number',name:'count',title:'Количество'}]},
+  ]},
+ ]}]}]}};
+ const response={...responses[0],data:{people:[{name:'Анна & <тест>',role:'teacher',count:0},{name:'Борис',role:'teacher',count:2}]}};
+ const values=responseValues(panelForm,response),expected='Запись 1\nИмя: Анна & <тест>\nДолжность: Учитель\nДанные / Количество: 0\n\nЗапись 2\nИмя: Борис\nДолжность: Учитель\nДанные / Количество: 2';
+ assert.equal(values.get('question:'+id),expected);
+ const word=strFromU8(unzipSync(renderTemplate(readTemplate(docx(),'docx'),values))['word/document.xml']);
+ assert.ok(word.includes('Имя: Анна &amp; &lt;тест&gt;'));assert.ok(word.includes('<w:br/>'));assert.ok(!word.includes('teacher'));
+ const excelFiles=unzipSync(renderTemplate(readTemplate(xlsx(),'xlsx'),values));
+ const excel=strFromU8(excelFiles['xl/worksheets/sheet1.xml']);
+ assert.ok(excel.includes('Запись 1\nИмя: Анна &amp; &lt;тест&gt;'));assert.ok(excel.includes('xml:space="preserve"'));
+ assert.ok(strFromU8(excelFiles['xl/styles.xml']).includes('wrapText="1"'));
+ assert.ok(strFromU8(excelFiles['[Content_Types].xml']).includes('/xl/styles.xml'));
+ assert.ok(strFromU8(excelFiles['xl/_rels/workbook.xml.rels']).includes('/styles'));
+ assert.ok(excel.includes('ht="141"'));
+});
+test('multiline values clone the bound cell style while preserving fonts, borders and other template cells',()=>{
+ const files=unzipSync(xlsx());
+ files['xl/styles.xml']=strToU8('<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font/><font><b/></font></fonts><fills count="1"><fill/></fills><borders count="2"><border/><border><left style="thin"/></border></borders><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1"><alignment horizontal="right" wrapText="0"/></xf></cellXfs></styleSheet>');
+ const template=readTemplate(Buffer.from(zipSync(files)),'xlsx');
+ const result=unzipSync(renderTemplate(template,responseValues(form,{...responses[0],data:{org:'Первая строка\nВторая строка',count:3}})));
+ const styles=strFromU8(result['xl/styles.xml']),sheet=strFromU8(result['xl/worksheets/sheet1.xml']);
+ assert.ok(styles.includes('count="3"'));
+ assert.ok(styles.includes('horizontal="right" wrapText="0"'));
+ assert.ok(styles.includes('fontId="1" fillId="0" borderId="1" applyAlignment="1"'));
+ assert.ok(styles.includes('horizontal="right" wrapText="1" vertical="top"'));
+ assert.ok(sheet.includes('r="B1" s="2"'));assert.ok(sheet.includes('r="B2" s="2"'));
+ assert.ok(sheet.includes('<f>C1*2</f>'));assert.ok(sheet.includes('width="32"'));
+ assert.ok(strFromU8(template.files['xl/styles.xml']).includes('count="2"'));
+});
 function docx(){const files=validateDocx(blankDocx(),1024*1024);const control=`<w:sdt><w:sdtPr><w:tag w:val="survey-question:${id}"/></w:sdtPr><w:sdtContent><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>[Организация]</w:t></w:r></w:sdtContent></w:sdt>`;files['word/document.xml']=strToU8(strFromU8(files['word/document.xml']).replace('<w:p/>',`<w:p>${control}<w:r><w:t> / </w:t></w:r>${control}</w:p>`));return Buffer.from(zipSync(files));}
 function xlsx(){const files=unzipSync(blankXlsx()),name=()=>`_survey_q_${id.replaceAll('-','')}_${randomUUID().replaceAll('-','')}`;files['xl/workbook.xml']=strToU8(strFromU8(files['xl/workbook.xml']).replace('</workbook>',`<definedNames><definedName name="${name()}">'Лист1'!$B$1</definedName><definedName name="${name()}">'Лист1'!$B$2</definedName><definedName name="_survey_q_${numberId.replaceAll('-','')}_${randomUUID().replaceAll('-','')}">'Лист1'!$C$1</definedName></definedNames></workbook>`));files['xl/worksheets/sheet1.xml']=strToU8(strFromU8(files['xl/worksheets/sheet1.xml']).replace('<sheetData/>','<cols><col min="2" max="2" width="32" customWidth="1"/></cols><sheetData><row r="1"><c r="B1" s="1" t="inlineStr"><is><t>[Организация]</t></is></c><c r="C1" t="inlineStr"><is><t>[Число]</t></is></c><c r="D1"><f>C1*2</f><v>99</v></c></row><row r="2"><c r="B2" s="1" t="inlineStr"><is><t>[Организация]</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A4:D4"/></mergeCells>'));return Buffer.from(zipSync(files));}
 test('20 responses create 20 DOCX: independent values, repeated fields, formatting; template unchanged',()=>{

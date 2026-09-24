@@ -31,11 +31,11 @@ test("wide HTML scrolls on screen and prints all answers in A4 landscape blocks 
   const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 35, responseData, pages: [
     { title: "Страница", elements: [
       ...questions(1, 2),
-      { type: "sectiontitle", name: "s1", title: "Раздел" }, ...questions(3, 3),
-      { type: "sectiontitle", name: "s2", title: "Раздел" }, ...questions(6, 9),
+      { type: "panel", name: "s1", title: "Раздел", elements: questions(3, 3) },
+      { type: "panel", name: "s2", title: "Раздел", elements: questions(6, 9) },
     ] },
     { elements: questions(15, 4) },
-    { title: "Пустая страница", elements: [{ type: "sectiontitle", name: "empty", title: "Пустой раздел" }] },
+    { title: "Пустая страница", elements: [{ type: "panel", name: "empty", title: "Пустой раздел" }] },
   ] });
   await page.goto(`/dashboard/forms/${formId}/responses/html`);
   const screenTable = page.locator(".responses-report-screen");

@@ -1,4 +1,4 @@
-import { getResponseAnswerColumns, type ResponsesTableColumn } from "./responsesExport";
+import { getResponseAnswerColumns, getResponseHeaderLevels, type ResponsesTableColumn } from "./responsesExport";
 import { getSignatureImage, getExcelSignatureImage, SIGNATURE_UNAVAILABLE } from "./signatureImage";
 
 const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -54,17 +54,17 @@ export async function createExcelWorkbook(
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
   const exportColumns = getResponseAnswerColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
-  const groupLevels = (["page", "section"] as const).filter((level) => exportColumns.some((column) => column[level]));
-  worksheet.columns = exportColumns.map(({ key }) => ({ key }));
+  const groupLevels = getResponseHeaderLevels(exportColumns);
+  worksheet.columns = exportColumns.map(({ key, answerType }) => ({ key, width: answerType === "paneldynamic" ? 44 : 28 }));
 
-  groupLevels.forEach((level) => {
+  groupLevels.forEach(({ kind: level, groupOf }) => {
     const row = worksheet.addRow(exportColumns.map(() => ""));
     row.height = 32;
     for (let start = 0; start < exportColumns.length;) {
-      const group = exportColumns[start][level];
+      const group = groupOf(exportColumns[start]);
       if (!group) { start += 1; continue; }
       let end = start + 1;
-      while (end < exportColumns.length && exportColumns[end][level]?.key === group.key) end += 1;
+      while (end < exportColumns.length && groupOf(exportColumns[end])?.key === group.key) end += 1;
       const cell = row.getCell(start + 1);
       cell.value = String(neutralizeSpreadsheetFormula(group.header));
       cell.font = { bold: true, color: { argb: level === "page" ? "FF1E40AF" : "FF1F2937" } };
@@ -82,7 +82,6 @@ export async function createExcelWorkbook(
     headerRow.font = { bold: true };
     headerRow.alignment = { vertical: "middle", wrapText: true };
     headerRow.height = 45;
-    worksheet.columns.forEach((column) => { column.width = 28; });
     worksheet.views = [{ state: "frozen", ySplit: headerRow.number }];
     worksheet.pageSetup.printTitlesRow = `1:${headerRow.number}`;
   }
@@ -90,6 +89,14 @@ export async function createExcelWorkbook(
   const imageCache = new Map<string, { id: number; width: number; height: number } | null>();
   for (const values of sanitizeRows(data)) {
     const row = worksheet.addRow(values);
+    row.alignment = { vertical: "top", wrapText: true };
+    for (const [index, column] of exportColumns.entries()) {
+      const text = String(values[column.key] ?? "");
+      if (!text.includes("\n")) continue;
+      const width = (worksheet.getColumn(index + 1).width ?? 28) - 2;
+      const lines = text.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(line.length / width)), 0);
+      row.height = Math.max(row.height ?? 0, Math.min(409, lines * 15 + 6));
+    }
     for (const [index, column] of exportColumns.entries()) {
       if (column.answerType !== "signaturepad" || !values[column.key]) continue;
       const value = String(values[column.key]);

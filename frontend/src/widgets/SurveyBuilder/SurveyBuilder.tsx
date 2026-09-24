@@ -25,7 +25,6 @@ import integerIcon from "../../img/constructor/integer.svg?raw";
 import dateIcon from "../../img/constructor/Date.svg?raw";
 import timeIcon from "../../img/constructor/Time.svg?raw";
 import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
-import sectionTitleIcon from "../../img/constructor/Title.svg?raw";
 
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -210,11 +209,14 @@ function configureCreatorLocalization() {
   editorLocalization.currentLocale = "ru";
   const ruEditorStrings = editorLocalization.getLocaleStrings("ru");
   if (ruEditorStrings?.ed) {
+    ruEditorStrings.ed.panelPlaceHolder = "Перетащите элемент с панели инструментов";
+    ruEditorStrings.ed.panelPlaceHolderMobile = "Перетащите элемент с панели инструментов";
     ruEditorStrings.ed.pagePlaceHolder =
       "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
     ruEditorStrings.ed.pagePlaceHolderMobile =
       "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
   }
+  if (ruEditorStrings?.qt) ruEditorStrings.qt.panel = "Раздел";
   if (ruEditorStrings?.tabs) {
     ruEditorStrings.tabs.designer = "\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440";
     ruEditorStrings.tabs.preview = "\u041f\u0440\u0435\u0432\u044c\u044e";
@@ -234,7 +236,11 @@ function configureCreatorToolbox(creator: SurveyCreator) {
       iconName: definition.iconName,
       title: definition.title,
       category: definition.category,
-      json: { type: definition.name, ...(definition.name === "file" ? { allowMultiple: true } : {}) },
+      json: {
+        type: definition.name,
+        ...(definition.defaultQuestionTitle ? { title: definition.defaultQuestionTitle } : {}),
+        ...(definition.name === "file" ? { allowMultiple: true } : {}),
+      },
     };
 
     toolbox.addItem(item, index);
@@ -276,7 +282,6 @@ function registerCustomIcons() {
   registerSvgIcon("icon-toolbox-date-custom", dateIcon);
   registerSvgIcon("icon-toolbox-time-custom", timeIcon);
   registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
-  registerSvgIcon("icon-toolbox-sectiontitle-custom", sectionTitleIcon);
 }
 
 function configureCreatorQuestionTypes() {
@@ -365,7 +370,7 @@ function createCreatorInstance(
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
       const questionType = (options.question as { getType?: () => string }).getType?.();
-      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !safeEditingMode;
+      options.question.isRequired = questionType !== "expression" && !safeEditingMode;
       options.question.descriptionLocation = "underTitle";
       (options.question as { showNumber?: boolean }).showNumber = false;
       if (questionType === "panel" || questionType === "paneldynamic") {
@@ -378,7 +383,6 @@ function createCreatorInstance(
     const currentType = options.obj?.getType?.();
 
     options.allowChangeInputType = false;
-    if (currentType === "sectiontitle") options.allowChangeRequired = false;
     if (!currentType) {
       return;
     }
@@ -391,12 +395,6 @@ function createCreatorInstance(
     const elementType = options.element?.getType?.();
     if (propertyName === "name" && elementType !== "survey") {
       options.readOnly = true;
-    }
-  });
-
-  creator.onPropertyShowing.add((_sender, options) => {
-    if (options.element?.getType?.() === "sectiontitle" && options.property.name === "isRequired") {
-      options.show = false;
     }
   });
 

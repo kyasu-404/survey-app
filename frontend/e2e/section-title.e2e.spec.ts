@@ -1,30 +1,36 @@
 import { expect, test } from "@playwright/test";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
-test("section titles save and render, while only section titles and expressions default to optional", async ({ page }, testInfo) => {
+test("section panels save nested questions and render their titles, with required questions and optional expressions", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const { formId, form, pageErrors } = await openSurveyApp(page, { responseCount: 0, elements: [] });
   await page.goto(`/builder/${formId}`);
   await expect(page.locator(".builder-host")).toBeVisible();
   await expect(page.locator(".svc-creator")).toBeVisible();
   const toolbox = page.locator(".svc-toolbox");
-  await expect(toolbox.locator(".svc-toolbox__item").first()).toContainText("Название раздела");
-  await expect(toolbox.locator(".svc-toolbox__item").first().locator("use")).toHaveAttribute("xlink:href", /sectiontitle/);
-  await toolbox.getByText("Название раздела", { exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Обязательный?", exact: true })).toHaveCount(0);
+  await expect(toolbox.locator(".svc-toolbox__item").first()).toContainText("Раздел");
+  await expect(toolbox.locator(".svc-toolbox__item").first().locator("use")).toHaveAttribute("xlink:href", /panel/);
+  await toolbox.getByText("Раздел", { exact: true }).click();
+  await expect(page.getByText("Перетащите элемент с панели инструментов", { exact: true })).toBeVisible();
+  await expect(toolbox.getByText("Название раздела", { exact: true })).toHaveCount(0);
   const headingTitle = "Информационная безопасность";
-  await page.getByRole("textbox", { name: "Название раздела", exact: true }).getByRole("textbox").fill(headingTitle);
-  await toolbox.getByText("Текст", { exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Обязательный?", exact: true }).first()).toBeChecked();
+  await page.getByRole("textbox", { name: "Заголовок панели", exact: true }).fill(headingTitle);
+  const tool = await toolbox.getByRole("button", { name: "Текст", exact: true }).boundingBox();
+  const target = await page.getByText("Перетащите элемент с панели инструментов", { exact: true }).boundingBox();
+  await page.mouse.move(tool!.x + tool!.width / 2, tool!.y + tool!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(tool!.x + tool!.width + 15, tool!.y + tool!.height / 2, { steps: 8 });
+  await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 20 });
+  await page.mouse.up();
+  await expect(page.getByText("Перетащите элемент с панели инструментов", { exact: true })).toHaveCount(0);
   await toolbox.getByText("Расширенные", { exact: true }).click();
   await toolbox.getByText("Выражение", { exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Обязательный?", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
-  await expect.poll(() => form.schema.pages[0].elements.length).toBe(3);
+  await expect.poll(() => form.schema.pages[0].elements[0]?.elements?.length).toBe(1);
   const elements = form.schema.pages[0].elements;
-  const heading = elements.find(element => element.type === "sectiontitle")!;
-  const expression = elements.find(element => element.type === "expression")!;
-  const text = elements.find(element => element.type === "text")!;
+  const heading = elements.find(element => element.type === "panel")!;
+  const expression = [...elements, ...heading.elements!].find(element => element.type === "expression")!;
+  const text = heading.elements!.find(element => element.type === "text")!;
   expect(heading).toBeDefined();
   expect(heading.isRequired ?? false).toBe(false);
   expect(expression.isRequired ?? false).toBe(false);
@@ -43,7 +49,7 @@ test("section titles save and render, while only section titles and expressions 
   await page.goto(`/form/${formId}`);
   await expect(page.getByText(heading.title!, { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: text.title ?? text.name, exact: true })).toBeEditable();
-  await expect(page.getByRole("textbox", { name: heading.title, exact: true }).locator("input, textarea")).toHaveCount(0);
+  await expect(page.locator(".sd-panel").filter({ hasText: heading.title! }).getByRole("textbox", { name: text.title ?? text.name, exact: true })).toBeEditable();
   await page.screenshot({ path: testInfo.outputPath("section-title-form.png"), fullPage: true });
   expect(pageErrors).toEqual([]);
 });

@@ -20,9 +20,10 @@ test("PNG, JPEG and SVG signatures render as thumbnails and export as embedded E
   const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 3, responseData: [
     { ...signatures, name: "Анна" }, { png: "data:image/png;base64,bad", name: "Борис" }, { name: "Вера" },
   ], pages: [{ title: "Страница", elements: [
-    { type: "sectiontitle", name: "s", title: "Раздел" },
+    { type: "panel", name: "s", title: "Раздел", elements: [
     ...["png", "jpeg", "svg"].map(name => ({ type: "signaturepad", name, title: "Подпись" })),
     { type: "text", name: "name", title: "Имя" },
+    ] },
   ] }] });
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 3", { exact: true })).toBeVisible();

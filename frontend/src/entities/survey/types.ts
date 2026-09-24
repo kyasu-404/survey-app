@@ -5,6 +5,7 @@ export type SurveyQuestion = {
   integrationId?: string;
   type: string;
   name: string;
+  valueName?: string;
   title?: string;
   isRequired?: boolean;
   showNumber?: boolean;

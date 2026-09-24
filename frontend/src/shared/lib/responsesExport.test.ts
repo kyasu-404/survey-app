@@ -16,16 +16,14 @@ describe("responsesExport", () => {
       { id: "r1", form_id: "f1", created_at: "2026-09-10T09:00:00Z", data: { a: "Первый", b: "Второй", c: "Третий", d: "Четвёртый", s1: "Не ответ", legacy: "Архивный" } },
     ], { pages: [
       { title, elements: [
-        { type: "sectiontitle", name: "s1", title },
-        { type: "text", name: "a", title },
-        { type: "panel", name: "panel", elements: [
-          { type: "sectiontitle", name: "s2", title },
-          { type: "text", name: "b", title },
+        { type: "panel", name: "s1", title, elements: [
+          { type: "text", name: "a", title },
+          { type: "panel", name: "s2", title, elements: [{ type: "text", name: "b", title }] },
         ] },
       ] },
       { title, elements: [
         { type: "text", name: "c", title },
-        { type: "sectiontitle", name: "empty", title: "Пустой раздел" },
+        { type: "panel", name: "empty", title: "Пустой раздел" },
       ] },
       { name: "technical-name", title: "  ", elements: [{ type: "text", name: "d", title }] },
       { title: "Пустая страница", elements: [] },
@@ -68,12 +66,12 @@ describe("responsesExport", () => {
       ] },
     ] });
 
-    expect(table.columns.map((column) => column.header)).toEqual(["Дата ответа", header, header, header, header]);
-    expect(table.columns.map((column) => table.rows[0][column.key])).toEqual([expect.any(String), "Первый", "", "Третий", ""]);
-    expect(table.columns.map((column) => table.rows[1][column.key])).toEqual([expect.any(String), "", "Второй", "", ""]);
+    expect(table.columns.map((column) => column.header)).toEqual(["Дата ответа", header, "Раздел", header, header, header]);
+    expect(table.columns.map((column) => table.rows[0][column.key])).toEqual([expect.any(String), "Первый", "", "", "Третий", ""]);
+    expect(table.columns.map((column) => table.rows[1][column.key])).toEqual([expect.any(String), "", "", "Второй", "", ""]);
     const document = new DOMParser().parseFromString(createResponsesHtmlDocument({ title: "ИБ школы", ...table }), "text/html");
-    expect(Array.from(document.querySelectorAll(".responses-report-screen th"), (cell) => cell.textContent)).toEqual(["Дата ответа", header, header, header, header]);
-    expect(Array.from(document.querySelectorAll(".responses-report-screen tbody tr:first-child td"), (cell) => cell.textContent).slice(1)).toEqual(["Первый", "", "Третий", ""]);
+    expect(Array.from(document.querySelectorAll(".responses-report-screen th"), (cell) => cell.textContent)).toEqual(["Дата ответа", header, "Раздел", header, header, header]);
+    expect(Array.from(document.querySelectorAll(".responses-report-screen tbody tr:first-child td"), (cell) => cell.textContent).slice(1)).toEqual(["Первый", "", "", "Третий", ""]);
   });
 
   it("preserves identity and schema order for date, numeric, special, and colliding legacy headers", () => {

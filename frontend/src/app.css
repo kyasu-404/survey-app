@@ -8646,6 +8646,12 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 }
 
 /* Structural titles keep their place without presenting an answer value. */
+.response-report-question-path { margin: 0 0 8px; color: var(--theme-text-muted); font-size: 12px; }
+.responses-table td.responses-table-multiline-column {
+  white-space: pre-wrap;
+  min-width: 260px;
+}
+
 .responses-table thead th.responses-table-page-column,
 .responses-html-preview th.responses-table-page-column {
   color: #1e40af;

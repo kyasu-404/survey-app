@@ -35,6 +35,7 @@ export type ResponseQuestionAnalysisKind =
 export type ResponseQuestionReport = {
   name: string;
   title: string;
+  groupTitles?: string[];
   type: string;
   kind: ResponseQuestionAnalysisKind;
   answeredCount: number;
@@ -60,10 +61,11 @@ export type ResponseReport = {
 type QuestionDescriptor = {
   question: SurveyQuestion;
   path: string[];
+  groupTitles: string[];
 };
 
 const NESTED_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
-const STRUCTURAL_TYPES = new Set(["panel", "paneldynamic", "html", "expression", "image", "sectiontitle"]);
+const STRUCTURAL_TYPES = new Set(["panel", "paneldynamic", "html", "expression", "image"]);
 const SINGLE_CHOICE_TYPES = new Set(["radiogroup", "dropdown", "boolean", "imagepicker"]);
 const MULTIPLE_CHOICE_TYPES = new Set(["checkbox", "tagbox"]);
 const MATRIX_TYPES = new Set(["matrix", "matrixdropdown", "matrixdynamic", "multipletext"]);
@@ -103,22 +105,24 @@ function getQuestions(schema: SurveySchema) {
   const questions: QuestionDescriptor[] = [];
   let visited = 0;
 
-  const visit = (value: unknown, path: string[], depth: number) => {
+  const visit = (value: unknown, path: string[], depth: number, groupTitles: string[] = []) => {
     if (!isRecord(value) || depth > 32 || visited > 10_000) return;
     visited += 1;
     const type = typeof value.type === "string" ? value.type : "";
-    const name = typeof value.name === "string" ? value.name : "";
+    const name = typeof value.valueName === "string" ? value.valueName : typeof value.name === "string" ? value.name : "";
     const questionPath = name ? [...path, name] : path;
 
     if (type && name && !STRUCTURAL_TYPES.has(type) && type !== ORGANIZATION_QUESTION_TYPE) {
-      questions.push({ question: value as SurveyQuestion, path: questionPath });
+      questions.push({ question: value as SurveyQuestion, path: questionPath, groupTitles });
     }
 
     const nestedPath = type === "paneldynamic" && name ? questionPath : path;
+    const title = typeof value.title === "string" ? value.title.trim() : "";
+    const nestedGroups = title && (!type || type === "panel" || type === "paneldynamic") ? [...groupTitles, title] : groupTitles;
     NESTED_KEYS.forEach((key) => {
       const nested = value[key];
       if (Array.isArray(nested)) {
-        nested.forEach((item) => visit(item, nestedPath, depth + 1));
+        nested.forEach((item) => visit(item, nestedPath, depth + 1, nestedGroups));
       }
     });
   };
@@ -535,6 +539,7 @@ function analyzeQuestion(responses: SurveyResponse[], descriptor: QuestionDescri
   return {
     name: descriptor.path.join("."),
     title: question.title?.trim() || question.name,
+    ...(descriptor.groupTitles.length ? { groupTitles: descriptor.groupTitles } : {}),
     type: question.type,
     kind: analysis.kind,
     answeredCount: analysis.answeredCount,

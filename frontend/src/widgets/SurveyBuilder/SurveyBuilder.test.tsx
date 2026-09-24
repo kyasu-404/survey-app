@@ -844,7 +844,7 @@ describe("SurveyBuilder", () => {
     );
 
     const questionTypes = [
-      "sectiontitle",
+      "panel",
       "text",
       "comment",
       "radiogroup",
@@ -870,7 +870,6 @@ describe("SurveyBuilder", () => {
       "imagepicker",
       "file",
       "signaturepad",
-      "panel",
       "paneldynamic",
       "expression",
       "html",
@@ -900,13 +899,13 @@ describe("SurveyBuilder", () => {
     expect(serializerProperties["panel:showQuestionNumbers"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showNumber"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showQuestionNumbers"]?.visible).toBe(false);
-    expect(componentCollectionAdd).toHaveBeenCalledTimes(9);
+    expect(componentCollectionAdd).toHaveBeenCalledTimes(8);
     expect(creator.toolbox.items[0]).toMatchObject({
-      name: "sectiontitle",
-      title: "Название раздела",
+      name: "panel",
+      title: "Раздел",
       category: "basic",
-      iconName: "icon-toolbox-sectiontitle-custom",
-      json: { type: "sectiontitle" },
+      iconName: "icon-panel",
+      json: { type: "panel", title: "Раздел" },
     });
     expect(componentCollectionAdd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -953,16 +952,6 @@ describe("SurveyBuilder", () => {
     expect(textOptions.allowChangeType).toBe(true);
     expect(textOptions.allowChangeInputType).toBe(false);
 
-    for (const type of ["sectiontitle", "text", "dropdown"]) {
-      const operations = { obj: { getType: () => type }, allowChangeRequired: true };
-      creator.onElementAllowOperations.fire(creator, operations);
-      expect(operations.allowChangeRequired).toBe(type !== "sectiontitle");
-      for (const name of ["isRequired", "title"]) {
-        const propertyOptions = { element: { getType: () => type }, property: { name }, show: true };
-        creator.onPropertyShowing.fire(creator, propertyOptions);
-        expect(propertyOptions.show).toBe(type !== "sectiontitle" || name !== "isRequired");
-      }
-    }
 
     const unsupportedOptions = {
       obj: {
@@ -1052,9 +1041,6 @@ describe("SurveyBuilder", () => {
       isRequired: true,
       descriptionLocation: "underTitle",
     });
-    const sectionTitle = { getType: () => "sectiontitle", isRequired: true };
-    creator.onQuestionAdded.fire(creator, { question: sectionTitle });
-    expect(sectionTitle.isRequired).toBe(false);
     const expression = { getType: () => "expression", isRequired: true };
     creator.onQuestionAdded.fire(creator, { question: expression });
     expect(expression.isRequired).toBe(false);

@@ -10,13 +10,13 @@ test("page and section titles stay distinct in responses, HTML, and bordered Exc
   ]).flat();
   const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 2, pages: [
     { title: "Страница", elements: [
-      { type: "sectiontitle", name: "s1", title: "Раздел" },
+      { type: "panel", name: "s1", title: "Раздел", elements: [
       { type: "text", name: "name", title: "Имя" },
       ...questionPairs.slice(0, 2),
+      ] },
     ] },
     { title: "Страница", elements: [
-      { type: "sectiontitle", name: "s2", title: "Раздел" },
-      ...questionPairs.slice(2),
+      { type: "panel", name: "s2", title: "Раздел", elements: questionPairs.slice(2) },
     ] },
   ] });
   await page.goto(`/dashboard/forms/${formId}/responses`);
