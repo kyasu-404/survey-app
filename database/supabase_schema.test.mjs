@@ -551,6 +551,11 @@ test("public response payloads are checked against the form schema and organizat
   assert.match(updateFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
 });
 
+test("the comment hotfix installs the same response validator as a fresh database", () => {
+  const migration = readFileSync(new URL("./migrations/202609241610_response_value_names.sql", import.meta.url), "utf8");
+  assert.ok(migration.includes(getFunctionDefinition("response_data_matches_form")));
+});
+
 test("anonymous upload reservations isolate visitors and enforce an independent client budget", () => {
   const guard = getFunctionDefinition("can_upload_survey_file");
   const reserve = getFunctionDefinition("reserve_survey_upload");

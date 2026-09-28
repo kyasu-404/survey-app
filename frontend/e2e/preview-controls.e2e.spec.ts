@@ -17,6 +17,9 @@ for (const theme of ["sand", "graphite"]) {
     await page.getByRole("button", { name: /Открыть/ }).first().click();
     const response = page.locator(".response-preview-drawer");
     await expect(response).toBeVisible();
+    if (theme === "sand") await expect(response).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
+    await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
     expect(await buttonStyle(response.getByRole("button", { name: "Закрыть", exact: true }))).toEqual(expected);
     await expect(response).toHaveCSS("animation-duration", "0.15s");
     await response.getByRole("button", { name: "Закрыть", exact: true }).click();
@@ -32,6 +35,11 @@ for (const theme of ["sand", "graphite"]) {
     const preview = page.getByRole("dialog", { name: "Превью шаблона Проверка шаблона", exact: true });
     await expect(preview).toBeVisible();
     await expect(preview.locator(".sd-root-modern")).toBeVisible();
+    if (theme === "sand") await expect(preview).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
+    await expect.poll(() => preview.evaluate(el => Math.abs(el.getBoundingClientRect().right - innerWidth))).toBeLessThan(1);
+    await preview.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(preview.getByRole("button", { name: "Закрыть", exact: true })).toBeVisible();
     expect(await buttonStyle(preview.getByRole("button", { name: "Закрыть", exact: true }))).toEqual(expected);
     await expect(preview.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", "rgb(229, 231, 235)");
     await expect(preview).toHaveCSS("animation-duration", "0.15s");
@@ -44,6 +52,8 @@ for (const theme of ["sand", "graphite"]) {
     });
     expect(exit).toEqual({ duration: "0.15s", name: "app-drawer-leave" });
     await expect(preview).toHaveCount(0);
+    await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "stable");
+    await expect(page.locator("html")).not.toHaveCSS("overflow", "hidden");
     expect(app.pageErrors).toEqual([]);
   });
 }

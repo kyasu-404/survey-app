@@ -549,7 +549,7 @@ describe("SurveyFormRenderer", () => {
 
     await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
 
-    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: false });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: false, restoreDraft: false });
     expect(callback).toHaveBeenCalledWith("success", "file-content");
   });
 
@@ -574,7 +574,7 @@ describe("SurveyFormRenderer", () => {
         name: "answer.xlsx",
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         content: "public/form-1/file.xlsx",
-      }, { allowAnonymous: false });
+      }, { allowAnonymous: false, restoreDraft: false });
     });
     expect(downloadEventsDuringDataAssignment).toEqual(["data:application/octet-stream;base64,UEsDBA=="]);
   });
@@ -591,7 +591,7 @@ describe("SurveyFormRenderer", () => {
     const callback = vi.fn();
     await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
     expect(callback).toHaveBeenCalledExactlyOnceWith("success", "data:text/plain;base64,aGVsbG8=");
-    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: true });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: true, restoreDraft: true });
   });
 
   it("adds a submitting hook while the response is being sent", async () => {
@@ -785,7 +785,7 @@ describe("SurveyFormRenderer", () => {
     });
   });
 
-  it("omits uploaded file values from response drafts", async () => {
+  it("keeps completed upload paths in drafts without inline bodies or signed tokens", async () => {
     render(
       <SurveyFormRenderer
         formId="form-1"
@@ -818,7 +818,7 @@ describe("SurveyFormRenderer", () => {
       data?: Record<string, unknown>;
     };
 
-    expect(storedDraft.data).toEqual({ email: "draft@example.com" });
+    expect(storedDraft.data).toEqual({ email: "draft@example.com", attachment: [{ name: "answer.txt", content: "public/form-1/file-id.txt" }] });
   });
 
   it("keeps saving drafts when the installed SurveyJS runtime has no UI state event", async () => {

@@ -212,7 +212,7 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
-async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>) {
+async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>, onError: (message: string) => void) {
   try {
     const content = isRecord(options.fileValue) ? options.fileValue.content : options.fileValue;
     if (typeof content === "string" && content.startsWith("blob:")) {
@@ -224,11 +224,14 @@ async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: 
     const localFile = path ? uploadedFiles.get(path) : undefined;
     const fileContent = localFile
       ? await readLocalSurveyFile(localFile)
-      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous });
+      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous, restoreDraft: allowAnonymous });
     options.callback("success", fileContent);
   } catch (error) {
     console.error(error);
-    options.callback("error", getSubmitResponseErrorMessage(error));
+    const name = isRecord(options.fileValue) && typeof options.fileValue.name === "string" ? ` «${options.fileValue.name}»` : "";
+    const message = `Не удалось открыть файл${name}. ${getErrorMessage(error, "Прикрепите его заново.")}`;
+    options.callback("error", message);
+    onError(message);
   }
 }
 
@@ -254,6 +257,7 @@ export function SurveyFormRenderer({
       : null
   ));
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const { showToast } = useToast();
   const submitResponseMutation = useSubmitResponseMutation();
   const updateResponseMutation = useUpdateResponseMutation();
@@ -283,7 +287,7 @@ export function SurveyFormRenderer({
       options.allow = isSafeSurveyNavigationUrl(options.url);
     });
     // Register before restoring data, and keep the handler for this model's lifetime.
-    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles));
+    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles, setFileError));
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
@@ -425,6 +429,7 @@ export function SurveyFormRenderer({
       options: { files: File[]; callback: (data: unknown, errors?: unknown) => void }
     ) => {
       const uploaded: Awaited<ReturnType<typeof uploadFileToStorage>>[] = [];
+      setFileError(null);
       try {
         for (const file of options.files) {
           uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads }));
@@ -459,6 +464,7 @@ export function SurveyFormRenderer({
       options: { value: unknown; fileName?: string | null; callback: (status: "success" | "error") => void }
     ) => {
       const values = Array.isArray(options.value) ? options.value : [options.value];
+      setFileError(null);
       const paths = values
         .filter((value) => !options.fileName || (isRecord(value) && value.name === options.fileName))
         .map((value) => getStoragePathFromSurveyFileValue(value))
@@ -604,6 +610,7 @@ export function SurveyFormRenderer({
 
   return (
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>
+      {fileError && <p role="alert">{fileError}</p>}
       {submitError && <p style={{ color: "#991b1b", marginBottom: 10 }}>Ошибка отправки: {submitError}</p>}
       {savedResponse?.status === "already_submitted" && !isEditingResponse && (
         <div className="survey-response-already-submitted" role="status">

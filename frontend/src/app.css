@@ -4019,7 +4019,7 @@ button.responses-export-button:disabled {
 
 .responses-table th,
 .responses-table td {
-  white-space: normal;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
   max-width: min(28rem, 40vw);
@@ -4684,7 +4684,7 @@ button.responses-export-button:disabled {
   --sjs-primary-background-400: #232323;
   --sjs-primary-background-10: rgba(18, 18, 18, 0.08);
   --sjs-general-backcolor: #fffdf9;
-  --sjs-general-backcolor-dim: #f2eee8;
+  --sjs-general-backcolor-dim: #eae4dc;
   --sjs-general-backcolor-dim-light: #f8f5f0;
   --sjs-general-backcolor-dark: #dfd9d1;
   --sjs-general-forecolor: #181818;
@@ -7756,6 +7756,11 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
 .template-preview-drawer,
 .response-preview-drawer {
   background: var(--theme-surface-muted);
+}
+
+:root[data-theme="sand"] .template-preview-drawer,
+:root[data-theme="sand"] .response-preview-drawer {
+  background: #ffffff;
 }
 
 .template-preview-body.survey-page-card,

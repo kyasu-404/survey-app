@@ -49,23 +49,37 @@ export function getAuthErrorMessage(error: unknown) {
 }
 
 export function getSubmitResponseErrorMessage(error: unknown) {
-  const fallbackMessage = "Не удалось отправить ответ. Проверьте подключение к интернету и попробуйте ещё раз.";
+  const fallbackMessage = "Не удалось отправить ответ. Попробуйте ещё раз. Если ошибка повторится, сообщите автору формы.";
 
-  if (!(error instanceof Error)) {
+  // PostgREST returns a plain object, not an Error instance.
+  if (typeof error !== "object" || error === null || !("message" in error) || typeof error.message !== "string") {
     return fallbackMessage;
   }
 
-  const message = error.message.toLowerCase();
+  const message = error.message.trim().toLowerCase();
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+
+  // Our RPC validation errors use Russian messages intended for respondents.
+  // Internal SQL errors and diagnostic details still use the generic fallback.
+  if (["22023", "42501", "P0002"].includes(code) && /^[А-ЯЁ]/.test(error.message.trim())) {
+    return error.message.trim();
+  }
+
+  if (message.includes("timeout") || message.includes("timed out") || message.includes("таймаут") || code === "57014") {
+    return "Сервер не успел ответить. Отправьте ответ снова — повторная отправка не создаст дубликат.";
+  }
+  if (code === "54000" || code === "413") return "Ответ слишком большой. Уменьшите его объём и попробуйте снова.";
+  if (code === "429" || message.includes("too many requests")) return "Слишком много запросов. Подождите немного и отправьте ответ снова.";
 
   if (message.includes("network") || message.includes("fetch")) {
     return "Проблема с сетью. Проверьте подключение и отправьте ответ снова.";
   }
 
-  if (message.includes("auth") || message.includes("permission") || message.includes("forbidden")) {
+  if (code === "42501" || message.includes("auth") || message.includes("permission") || message.includes("forbidden")) {
     return "Недостаточно прав для отправки ответа. Обновите страницу или войдите заново.";
   }
 
-  if (message.includes("лимит ответов") || message.includes("23514")) {
+  if (message.includes("лимит ответов")) {
     return "Лимит ответов для этой формы уже достигнут.";
   }
 

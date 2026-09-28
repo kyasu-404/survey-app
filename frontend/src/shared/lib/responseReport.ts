@@ -1,7 +1,9 @@
+import { answerLabel, answerCommentKey, formatSimpleAnswer, hasAnswerComment, matrixCellDefinition, readableValue } from "./answerValue";
 import { getOrganizationQuestionNames, ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 import type { EducationOrganization } from "../../entities/organization/types";
 import type { SurveyResponse } from "../../entities/response/types";
 import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
+import { sectionSiblings, type SurveySection } from "./surveyHierarchy";
 
 export type ResponseReportValue = {
   label: string;
@@ -64,8 +66,7 @@ type QuestionDescriptor = {
   groupTitles: string[];
 };
 
-const NESTED_KEYS = ["elements", "items", "rows", "columns", "panels", "templateElements"] as const;
-const STRUCTURAL_TYPES = new Set(["panel", "paneldynamic", "html", "expression", "image"]);
+const STRUCTURAL_TYPES = new Set(["panel", "sectiontitle", "paneldynamic", "html", "expression", "image"]);
 const SINGLE_CHOICE_TYPES = new Set(["radiogroup", "dropdown", "boolean", "imagepicker"]);
 const MULTIPLE_CHOICE_TYPES = new Set(["checkbox", "tagbox"]);
 const MATRIX_TYPES = new Set(["matrix", "matrixdropdown", "matrixdynamic", "multipletext"]);
@@ -105,29 +106,27 @@ function getQuestions(schema: SurveySchema) {
   const questions: QuestionDescriptor[] = [];
   let visited = 0;
 
-  const visit = (value: unknown, path: string[], depth: number, groupTitles: string[] = []) => {
-    if (!isRecord(value) || depth > 32 || visited > 10_000) return;
-    visited += 1;
-    const type = typeof value.type === "string" ? value.type : "";
-    const name = typeof value.valueName === "string" ? value.valueName : typeof value.name === "string" ? value.name : "";
-    const questionPath = name ? [...path, name] : path;
-
-    if (type && name && !STRUCTURAL_TYPES.has(type) && type !== ORGANIZATION_QUESTION_TYPE) {
-      questions.push({ question: value as SurveyQuestion, path: questionPath, groupTitles });
-    }
-
-    const nestedPath = type === "paneldynamic" && name ? questionPath : path;
-    const title = typeof value.title === "string" ? value.title.trim() : "";
-    const nestedGroups = title && (!type || type === "panel" || type === "paneldynamic") ? [...groupTitles, title] : groupTitles;
-    NESTED_KEYS.forEach((key) => {
-      const nested = value[key];
-      if (Array.isArray(nested)) {
-        nested.forEach((item) => visit(item, nestedPath, depth + 1, nestedGroups));
+  const visit = (elements: SurveyQuestion[], path: string[], depth: number, parents: SurveySection[], scope: string) => {
+    if (depth > 32) return;
+    for (const { question, sections, path: elementPath } of sectionSiblings(elements, parents, scope)) {
+      if (++visited > 10_000) return;
+      const { type } = question;
+      const name = question.valueName || question.name;
+      const questionPath = name ? [...path, name] : path;
+      if (type && name && !STRUCTURAL_TYPES.has(type) && type !== ORGANIZATION_QUESTION_TYPE) {
+        questions.push({ question, path: questionPath, groupTitles: sections.map(group => group.header) });
       }
-    });
+      if (type === "panel" && Array.isArray(question.elements)) visit(question.elements, path, depth + 1, sections, elementPath);
+      if (type === "paneldynamic" && Array.isArray(question.templateElements)) {
+        const title = question.title?.trim();
+        visit(question.templateElements, questionPath, depth + 1, title ? [...sections, { key: elementPath, header: title }] : sections, elementPath);
+      }
+    }
   };
-
-  (schema.pages ?? []).forEach((page) => visit(page, [], 0));
+  (schema.pages ?? []).forEach((page, index) => {
+    const title = page.title?.trim();
+    visit(page.elements ?? [], [], 0, title ? [{ key: `page:${index}`, header: title }] : [], String(index));
+  });
   return questions;
 }
 
@@ -150,8 +149,20 @@ function collectValuesAtPath(data: Record<string, unknown>, path: string[]) {
   return current;
 }
 
-function getResponseValues(responses: SurveyResponse[], descriptor: QuestionDescriptor) {
-  return responses.map((response) => collectValuesAtPath(response.data, descriptor.path));
+function getResponseValues(responses: SurveyResponse[], descriptor: QuestionDescriptor, suffix: string) {
+  return responses.map(response => collectValuesAtPath(response.data, descriptor.path.slice(0, -1)).flatMap(parent => {
+    const containers = Array.isArray(parent) ? parent : [parent];
+    return containers.flatMap(container => {
+      if (!isRecord(container)) return [];
+      const value = container[descriptor.path[descriptor.path.length - 1]];
+      const question = descriptor.question;
+      const comment = container[answerCommentKey(question, suffix)];
+      const replaceOther = (item: unknown) => hasAnswerComment(question) && item === ((question as unknown as Record<string, unknown>).otherItemValue ?? "other") && typeof comment === "string" && comment
+        ? { displayValue: comment } : isRecord(item) ? { displayValue: formatSimpleAnswer(question, item, container, suffix) } : item;
+      return [SINGLE_CHOICE_TYPES.has(question.type) || MULTIPLE_CHOICE_TYPES.has(question.type)
+        ? Array.isArray(value) ? value.map(replaceOther) : replaceOther(value) : value];
+    });
+  }));
 }
 
 function getChoiceLabelMap(items: unknown) {
@@ -166,7 +177,7 @@ function getChoiceLabelMap(items: unknown) {
     if (!isRecord(choice)) return;
     const rawValue = choice.value ?? choice.name ?? choice.text;
     if (typeof rawValue === "undefined") return;
-    labels.set(String(rawValue), String(choice.text ?? choice.title ?? rawValue));
+    labels.set(String(rawValue), answerLabel(items, rawValue));
   });
   return labels;
 }
@@ -180,9 +191,10 @@ function countValues(
   for (const value of initialValues) counts.set(value, 0);
 
   values.forEach((value) => {
-    const rawValue = String(value ?? "").trim();
+    const formatted = isRecord(value) && typeof value.displayValue === "string";
+    const rawValue = String(formatted ? value.displayValue : value ?? "").trim();
     if (!rawValue) return;
-    const label = labelMap.get(rawValue) ?? rawValue;
+    const label = formatted ? rawValue : labelMap.get(rawValue) ?? rawValue;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   });
   return counts;
@@ -217,8 +229,8 @@ function analyzeChoice(
   const questionRecord = question as unknown as Record<string, unknown>;
   const labelMap = getChoiceLabelMap(questionRecord.choices);
   if (question.type === "boolean") {
-    labelMap.set("true", "Да");
-    labelMap.set("false", "Нет");
+    labelMap.set(String(questionRecord.valueTrue ?? true), formatSimpleAnswer(questionRecord, questionRecord.valueTrue ?? true));
+    labelMap.set(String(questionRecord.valueFalse ?? false), formatSimpleAnswer(questionRecord, questionRecord.valueFalse ?? false));
   }
   const answeredCount = getAnsweredCount(responseValues);
   const rawValues = flattenAnswered(responseValues).flatMap((value) => multiple && Array.isArray(value) ? value : [value]);
@@ -362,7 +374,7 @@ function stringifyAnswer(value: unknown) {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   try {
-    return JSON.stringify(value);
+    return readableValue(value);
   } catch {
     return String(value);
   }
@@ -416,35 +428,38 @@ function analyzeRanking(question: SurveyQuestion, responseValues: unknown[][]) {
   };
 }
 
-function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][]) {
+function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], suffix: string) {
   const answeredCount = getAnsweredCount(responseValues);
   const questionRecord = question as unknown as Record<string, unknown>;
   const rowLabels = getChoiceLabelMap(questionRecord.rows);
   const columnLabels = getChoiceLabelMap(questionRecord.columns);
   const grouped = new Map<string, unknown[]>();
+  const cells = (row: Record<string, unknown>) => Object.entries(row).filter(([name]) => !Object.keys(row).some(key => name === answerCommentKey(matrixCellDefinition(question, key), suffix) && hasAnswerComment(matrixCellDefinition(question, key))));
 
   flattenAnswered(responseValues).forEach((value) => {
     if (question.type === "matrixdynamic" && Array.isArray(value)) {
       value.forEach((row) => {
         if (!isRecord(row)) return;
-        Object.entries(row).forEach(([column, cell]) => {
+        cells(row).forEach(([column, cell]) => {
           const label = columnLabels.get(column) ?? column;
-          grouped.set(label, [...(grouped.get(label) ?? []), cell]);
+          const display = formatSimpleAnswer(matrixCellDefinition(question, column), cell, row, suffix);
+          grouped.set(label, [...(grouped.get(label) ?? []), display]);
         });
       });
       return;
     }
     if (!isRecord(value)) return;
     Object.entries(value).forEach(([row, answer]) => {
-      const rowLabel = rowLabels.get(row) ?? row;
+      const rowLabel = question.type === "multipletext" ? answerLabel(questionRecord.items, row) : rowLabels.get(row) ?? row;
       if (isRecord(answer)) {
-        Object.entries(answer).forEach(([column, cell]) => {
+        cells(answer).forEach(([column, cell]) => {
           const columnLabel = columnLabels.get(column) ?? column;
           const label = `${rowLabel} · ${columnLabel}`;
-          grouped.set(label, [...(grouped.get(label) ?? []), cell]);
+          const display = formatSimpleAnswer(matrixCellDefinition(question, column), cell, answer, suffix);
+          grouped.set(label, [...(grouped.get(label) ?? []), display]);
         });
       } else {
-        grouped.set(rowLabel, [...(grouped.get(rowLabel) ?? []), answer]);
+        grouped.set(rowLabel, [...(grouped.get(rowLabel) ?? []), question.type === "matrix" ? answerLabel(questionRecord.columns, answer) : answer]);
       }
     });
   });
@@ -512,9 +527,9 @@ function getQuestionKind(question: SurveyQuestion) {
   return "text";
 }
 
-function analyzeQuestion(responses: SurveyResponse[], descriptor: QuestionDescriptor): ResponseQuestionReport {
+function analyzeQuestion(responses: SurveyResponse[], descriptor: QuestionDescriptor, suffix: string): ResponseQuestionReport {
   const { question } = descriptor;
-  const responseValues = getResponseValues(responses, descriptor);
+  const responseValues = getResponseValues(responses, descriptor, suffix);
   const kind = getQuestionKind(question);
   const analysis = kind === "single-choice"
     ? analyzeChoice(question, responseValues, responses.length, false)
@@ -531,7 +546,7 @@ function analyzeQuestion(responses: SurveyResponse[], descriptor: QuestionDescri
               : kind === "ranking"
                 ? analyzeRanking(question, responseValues)
                 : kind === "matrix"
-                  ? analyzeMatrix(question, responseValues)
+                  ? analyzeMatrix(question, responseValues, suffix)
                   : kind === "attachment"
                     ? analyzeAttachment(question, responseValues)
                     : analyzeText(responseValues);
@@ -555,7 +570,7 @@ export function createResponseReport(
   schema: SurveySchema,
   organizations: EducationOrganization[] = [],
 ): ResponseReport {
-  const questionReports = getQuestions(schema).map((descriptor) => analyzeQuestion(responses, descriptor));
+  const questionReports = getQuestions(schema).map((descriptor) => analyzeQuestion(responses, descriptor, schema.commentSuffix ?? "-Comment"));
   const organizationQuestionNames = getOrganizationQuestionNames(schema);
   let organizationCoverage: ResponseOrganizationCoverage | null = null;
 

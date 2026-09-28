@@ -114,7 +114,7 @@ function isSurveyFileValue(value: unknown) {
     return true;
   }
 
-  if (typeof value.content === "string" && value.content.startsWith("data:")) {
+  if (typeof value.content === "string" && /^(data|blob):/.test(value.content)) {
     return true;
   }
 
@@ -124,6 +124,11 @@ function isSurveyFileValue(value: unknown) {
 }
 
 function sanitizeDraftValue(value: unknown): unknown {
+  // Keep references to completed uploads, never raw File objects, blobs or tokens.
+  if (isRecord(value) && typeof value.name === "string") {
+    const path = [value.storagePath, value.path, value.content].find(item => typeof item === "string" && !item.includes(":") && looksLikeDraftStoragePath(item));
+    if (typeof path === "string") return { name: value.name, ...(typeof value.type === "string" ? { type: value.type } : {}), content: path };
+  }
   if (isSurveyFileValue(value)) {
     return undefined;
   }

@@ -62,7 +62,7 @@ describe("dynamic panel answers", () => {
       { type: "dropdown", name: "roles", choices: [{ value: "a", text: "Внешняя" }] },
     ] }] };
     const table = formatResponsesForTable([{ ...response, data: { staff: [{ name: "Анна", org: "org-id", files: [{ name: "a.pdf", content: "https://example.test/a.pdf" }], roles: ["a"], flag: false, count: 0, children: [{ name: "Маша" }], extra: "Сохранено" }], roles: "a" } }], nested, new Map([["org-id", "Школа 1"]]));
-    expect(table.rows[0]["answer:staff"]).toBe("Запись 1\nИмя: Анна\nДанные / ОУ: Школа 1\nДанные / Файлы: a.pdf\nДанные / Роли: Первая\nДанные / Признак: false\nДанные / Количество: 0\nДети:\n  Запись 1\n  Имя ребёнка: Маша\nНе заполнено: —\nextra: Сохранено");
+    expect(table.rows[0]["answer:staff"]).toBe("Запись 1\nИмя: Анна\nДанные / ОУ: Школа 1\nДанные / Файлы: a.pdf\nДанные / Роли: Первая\nДанные / Признак: Нет\nДанные / Количество: 0\nДети:\n  Запись 1\n  Имя ребёнка: Маша\nНе заполнено: —\nextra: Сохранено");
     expect(table.rows[0]["answer:roles"]).toBe("Внешняя");
     expect(table.columns.map(c => c.key)).toEqual(["response-date", "answer:staff", "answer:roles"]);
   });
@@ -76,7 +76,7 @@ describe("dynamic panel answers", () => {
     ] }] };
     const table = formatResponsesForTable([{ ...response, data: { people: [{ name: "<script>alert(1)</script>" }, {}, "Старый ответ"], matrix: { row: { col: "x" } }, choice: ["x"], files: [{ name: "test.pdf", content: "secret" }] } }], mixed);
     expect(table.rows[0]["answer:people"]).toContain("Запись 2\n<Имя>: —\n\nЗапись 3: Старый ответ");
-    expect(table.rows[0]["answer:matrix"]).toBe('{"row":{"col":"x"}}');
+    expect(table.rows[0]["answer:matrix"]).toBe("row\n  col: x");
     expect(table.rows[0]["answer:choice"]).toBe("Выбран");
     expect(table.rows[0]["answer:files"]).toBe("test.pdf");
     const html = createResponsesHtmlDocument({ title: "Ответы", ...table });

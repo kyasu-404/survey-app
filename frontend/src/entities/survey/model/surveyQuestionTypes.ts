@@ -2,6 +2,7 @@ import { ComponentCollection } from "survey-core";
 
 export const QUESTION_TYPES = [
   "panel",
+  "sectiontitle",
   "text",
   "comment",
   "radiogroup",
@@ -50,6 +51,21 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
     title: "Раздел",
     category: "basic",
     defaultQuestionTitle: "Раздел",
+  },
+  {
+    name: "sectiontitle",
+    iconName: "icon-toolbox-sectiontitle-custom",
+    title: "Название раздела",
+    category: "basic",
+    defaultQuestionTitle: "Название раздела",
+    questionJSON: {
+      type: "expression",
+      expression: "",
+      defaultDisplayValue: "",
+      isRequired: false,
+      showNumber: false,
+      titleLocation: "top",
+    },
   },
   {
     name: "text",
@@ -298,7 +314,8 @@ export function registerCustomSurveyQuestionTypes() {
       iconName: definition.iconName,
       questionJSON: definition.questionJSON,
       defaultQuestionTitle: definition.defaultQuestionTitle,
-      inheritBaseProps: true,
+      inheritBaseProps: definition.name !== "sectiontitle",
+      onLoaded: definition.name === "sectiontitle" ? question => { question.isRequired = false; } : undefined,
     });
   });
 }

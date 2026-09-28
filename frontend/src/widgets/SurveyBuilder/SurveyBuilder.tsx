@@ -25,6 +25,7 @@ import integerIcon from "../../img/constructor/integer.svg?raw";
 import dateIcon from "../../img/constructor/Date.svg?raw";
 import timeIcon from "../../img/constructor/Time.svg?raw";
 import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
+import sectionTitleIcon from "../../img/constructor/Title.svg?raw";
 
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
@@ -282,6 +283,7 @@ function registerCustomIcons() {
   registerSvgIcon("icon-toolbox-date-custom", dateIcon);
   registerSvgIcon("icon-toolbox-time-custom", timeIcon);
   registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
+  registerSvgIcon("icon-toolbox-sectiontitle-custom", sectionTitleIcon);
 }
 
 function configureCreatorQuestionTypes() {
@@ -370,7 +372,7 @@ function createCreatorInstance(
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
       const questionType = (options.question as { getType?: () => string }).getType?.();
-      options.question.isRequired = questionType !== "expression" && !safeEditingMode;
+      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !safeEditingMode;
       options.question.descriptionLocation = "underTitle";
       (options.question as { showNumber?: boolean }).showNumber = false;
       if (questionType === "panel" || questionType === "paneldynamic") {
@@ -383,6 +385,7 @@ function createCreatorInstance(
     const currentType = options.obj?.getType?.();
 
     options.allowChangeInputType = false;
+    if (currentType === "sectiontitle") options.allowChangeRequired = false;
     if (!currentType) {
       return;
     }
@@ -395,6 +398,12 @@ function createCreatorInstance(
     const elementType = options.element?.getType?.();
     if (propertyName === "name" && elementType !== "survey") {
       options.readOnly = true;
+    }
+  });
+
+  creator.onPropertyShowing.add((_sender, options) => {
+    if (options.element?.getType?.() === "sectiontitle" && ["isRequired", "valueName", "defaultValue", "correctAnswer", "requiredIf", "validators"].includes(options.property.name)) {
+      options.show = false;
     }
   });
 
@@ -1241,13 +1250,13 @@ export function SurveyBuilder({
 
         if (formId) {
           const request: ExistingFormSaveRequest = {
-            allowResponseEditing: responseEditingEnabled,
+            allowResponseEditing: editableForm?.allow_response_editing ?? responseEditingEnabled,
             callback,
             id: formId,
             isTemplate,
             saveNo,
             schema,
-            selectedOrganizationTypes: organizationTypes,
+            selectedOrganizationTypes: editableForm ? normalizeOrganizationTypes(editableForm.organization_types) : organizationTypes,
             theme,
             title,
           };

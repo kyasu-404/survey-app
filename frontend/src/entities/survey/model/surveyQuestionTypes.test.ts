@@ -7,10 +7,26 @@ import { formatResponsesForTable } from "../../../shared/lib/responsesExport";
 import { createResponseReport } from "../../../shared/lib/responseReport";
 
 describe("section panels", () => {
+  it("round-trips a standalone heading without an answer or required validation", () => {
+    registerCustomSurveyQuestionTypes();
+    const survey = new Model({ elements: [{ type: "sectiontitle", name: "heading", title: "Контакты", isRequired: true }, { type: "text", name: "phone", isRequired: true }] });
+    const heading = survey.getQuestionByName("heading");
+    expect(heading.getType()).toBe("sectiontitle");
+    expect(heading.isRequired).toBe(false);
+    expect(survey.validate()).toBe(false);
+    survey.setValue("phone", "123");
+    expect(survey.validate()).toBe(true);
+    expect(survey.data).toEqual({ phone: "123" });
+    heading.title = "Связь";
+    const restored = new Model(sanitizeSurveySchema(survey.toJSON() as SurveySchema));
+    expect(restored.getQuestionByName("heading").title).toBe("Связь");
+    expect(restored.data).toEqual({});
+    survey.dispose(); restored.dispose();
+  });
   it("uses a native panel, preserves nested questions and an edited title after saving", () => {
     registerCustomSurveyQuestionTypes();
     registerCustomSurveyQuestionTypes();
-    expect(QUESTION_TYPES).not.toContain("sectiontitle");
+    expect(QUESTION_TYPES).toContain("sectiontitle");
     expect(QUESTION_TYPE_DEFINITIONS[0]).toMatchObject({ name: "panel", title: "Раздел", defaultQuestionTitle: "Раздел", category: "basic" });
     const survey = new Model({ pages: [{ elements: [{
       type: "panel", name: "section1", title: "Раздел", elements: [

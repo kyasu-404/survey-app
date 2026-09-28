@@ -780,7 +780,16 @@ begin
       select 1
       from jsonb_path_query(form_schema, '$.** ? (@.type() == "object")', '{}'::jsonb, true) element
       where jsonb_typeof(element -> 'name') = 'string'
-        and element ->> 'name' = response_key
+        and (
+          coalesce(nullif(element ->> 'valueName', ''), element ->> 'name') = response_key
+          or (
+            -- SurveyJS stores "Other" text and question comments separately.
+            response_key = coalesce(nullif(element ->> 'valueName', ''), element ->> 'name') || coalesce(nullif(form_schema ->> 'commentSuffix', ''), '-Comment')
+            and (element @> '{"showOtherItem":true}' or element @> '{"showCommentArea":true}'
+              or element @> '{"hasOther":true}' or element @> '{"hasComment":true}')
+            and jsonb_typeof(response_data -> response_key) = 'string'
+          )
+        )
     )
   ) then
     return false;
@@ -792,7 +801,7 @@ begin
     where element ->> 'type' = 'organization'
       and jsonb_typeof(element -> 'name') = 'string'
   loop
-    question_name := question ->> 'name';
+    question_name := coalesce(nullif(question ->> 'valueName', ''), question ->> 'name');
     if response_data ? question_name then
       begin
         organization_id := (response_data ->> question_name)::uuid;
@@ -837,7 +846,7 @@ begin
   end if;
   -- Lock selected organizations against concurrent archiving until the response commits.
   for question_name in
-    select distinct element ->> 'name'
+    select distinct coalesce(nullif(element ->> 'valueName', ''), element ->> 'name')
     from jsonb_path_query(target_form.schema, '$.** ? (@.type() == "object")', '{}'::jsonb, true) element
     where element ->> 'type' = 'organization'
       and jsonb_typeof(element -> 'name') = 'string'
@@ -2772,5 +2781,18 @@ $$;
 revoke all on function public.enforce_survey_upload_size() from public,anon,authenticated;
 create trigger survey_upload_reserved_size before insert or update of metadata,name,bucket_id on storage.objects
 for each row execute function public.enforce_survey_upload_size();
+
+-- Only the browser that reserved a file may reopen it from a response draft.
+create or replace function public.can_restore_survey_upload(p_path text, p_browser_id uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.survey_upload_reservations r
+    join storage.objects o on o.bucket_id = 'survey-files' and o.name = r.object_path
+    where r.object_path = p_path and r.browser_hash = public.browser_capability_hash(p_browser_id)
+      and not r.cleanup_claimed and (r.attached or r.expires_at > now())
+  );
+$$;
+revoke all on function public.can_restore_survey_upload(text,uuid) from public, anon, authenticated;
+grant execute on function public.can_restore_survey_upload(text,uuid) to service_role;
 
 commit;

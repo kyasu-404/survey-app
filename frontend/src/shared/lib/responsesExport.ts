@@ -1,8 +1,9 @@
 import type { SurveyResponse } from "../../entities/response/types";
 import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
-import { ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
+import { answerCommentKey, hasAnswerComment, formatSimpleAnswer, formatMatrixAnswer, readableValue, COMPLEX_ANSWER_TYPES } from "./answerValue";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "./signatureImage";
 import { RESPONSES_HTML_LAYOUT_CSS } from "./responsesHtmlLayout";
+import { sectionSiblings } from "./surveyHierarchy";
 
 export type ResponsesTableRow = {
   [key: string]: string;
@@ -44,47 +45,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getQuestionMeta(schema: SurveySchema) {
-  const choiceMap = new Map<string, Map<string, string>>();
-  const titleMap = new Map<string, string>();
-  const typeMap = new Map<string, string>();
   const questionMap = new Map<string, SurveyQuestion>();
   const columns: ResponsesTableColumn[] = [];
   const seenNames = new Set<string>();
   let visited = 0;
 
-  const visit = (value: unknown, groups: Pick<ResponsesTableColumn, "page" | "printPage" | "sections">, path: string, depth: number) => {
-    if (!isRecord(value) || depth > MAX_EXPORT_VALUE_DEPTH || ++visited > MAX_EXPORT_VALUE_NODES) return;
-    const question = value as SurveyQuestion;
-    const name = question.valueName || question.name;
-    const sections = groups.sections ?? [];
-    const section = sections[sections.length - 1];
-    if (question.type === "panel") {
-      const group = { key: `section:${question.name || path}`, header: question.title?.trim() || "Раздел" };
-      const nestedGroups = { ...groups, sections: [...sections, group] };
-      columns.push({ ...group, ...nestedGroups, section: group, kind: "section" });
-      if (question.name) seenNames.add(question.name);
-      if (Array.isArray(question.elements)) question.elements.forEach((child, index) => visit(child, nestedGroups, `${path}.${index}`, depth + 1));
-      return;
-    }
-    if (!name || NON_ANSWER_TYPES.has(question.type)) return;
-    const header = question.title?.trim() || question.name;
-    if (!seenNames.has(name)) {
-      columns.push({ key: `answer:${name}`, header, ...groups, section, answerType: question.type });
-      seenNames.add(name);
-    }
-    questionMap.set(name, question);
-    titleMap.set(name, header);
-    typeMap.set(name, question.type);
-    if (!Array.isArray(question.choices)) return;
-    const choices = new Map<string, string>();
-    question.choices.forEach(choice => {
-      if (typeof choice === "string") choices.set(choice, choice);
-      else {
-        const value = String(choice.value ?? choice.text ?? "");
-        if (value) choices.set(value, String(choice.text ?? choice.value ?? ""));
+  const visit = (elements: SurveyQuestion[], parents: Pick<ResponsesTableColumn, "page" | "printPage" | "sections">, scope: string, depth: number) => {
+    if (depth > MAX_EXPORT_VALUE_DEPTH) return;
+    for (const { question, sections, group, path } of sectionSiblings(elements, parents.sections, scope)) {
+      if (++visited > MAX_EXPORT_VALUE_NODES) return;
+      const groups = { ...parents, sections };
+      const name = question.valueName || question.name;
+      const section = sections[sections.length - 1];
+      if (group) {
+        columns.push({ ...group, ...groups, section: group, kind: "section" });
+        if (question.name) seenNames.add(question.name);
+        if (name) seenNames.add(name);
+        if (question.type === "panel" && Array.isArray(question.elements)) visit(question.elements, groups, path, depth + 1);
+        continue;
       }
-    });
-    if (choices.size) choiceMap.set(name, choices);
+      if (!name || NON_ANSWER_TYPES.has(question.type)) continue;
+      const header = question.title?.trim() || question.name;
+      if (!seenNames.has(name)) {
+        columns.push({ key: `answer:${name}`, header, ...groups, section, answerType: question.type });
+        seenNames.add(name);
+      }
+      questionMap.set(name, question);
+      if (hasAnswerComment(question)) seenNames.add(answerCommentKey(question, schema.commentSuffix));
+    }
   };
 
   const pages = Array.isArray(schema.pages) ? schema.pages : [];
@@ -94,10 +82,10 @@ function getQuestionMeta(schema: SurveySchema) {
     const printPage = header || pages.length > 1 ? { key: `page:${index}`, header: header || `Страница ${index + 1}` } : undefined;
     if (pageGroup) columns.push({ ...pageGroup, kind: "page", page: pageGroup, printPage });
     const elements = Array.isArray(page?.elements) ? page.elements : [];
-    elements.forEach((element, childIndex) => visit(element, { page: pageGroup, printPage }, `${index}.${childIndex}`, 0));
+    visit(elements, { page: pageGroup, printPage }, String(index), 0);
   });
 
-  return { choiceMap, columns, seenNames, titleMap, typeMap, questionMap };
+  return { columns, seenNames, questionMap };
 }
 
 function isSafeExportValue(value: unknown) {
@@ -140,68 +128,17 @@ function isSafeExportValue(value: unknown) {
   return true;
 }
 
-function formatAnswerValue(
-  questionName: string,
-  value: unknown,
-  choiceMap: Map<string, Map<string, string>>,
-  typeMap: Map<string, string>,
-  organizationLabels?: Map<string, string>,
-  questionMap = new Map<string, SurveyQuestion>(),
-  depth = 0,
-): string {
-  const question = questionMap.get(questionName);
-  if (question?.type === "paneldynamic" && Array.isArray(value)) {
-    return formatDynamicPanel(question, value, organizationLabels, depth);
-  }
-  const questionChoices = choiceMap.get(questionName);
-
-  if (
-    typeMap.get(questionName) === ORGANIZATION_QUESTION_TYPE
-    && typeof value === "string"
-    && organizationLabels?.has(value)
-  ) {
-    return organizationLabels.get(value) ?? value;
-  }
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string" && questionChoices?.has(item)) {
-          return questionChoices.get(item) ?? item;
-        }
-
-        if (typeMap.get(questionName) === "file" && isRecord(item) && typeof item.name === "string") {
-          return item.name;
-        }
-
-        return formatObjectValue(item);
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  if (typeof value === "string" && questionChoices?.has(value)) {
-    return questionChoices.get(value) ?? value;
-  }
-
-  if (value === null || typeof value === "undefined") {
-    return "";
-  }
-
-  if (typeof value === "object") {
-    if (typeMap.get(questionName) === "file" && "name" in value && typeof value.name === "string") {
-      return value.name;
-    }
-
-    return formatObjectValue(value);
-  }
-
-  return String(value);
+function formatAnswerValue(question: SurveyQuestion | undefined, value: unknown, organizationLabels?: Map<string, string>, siblings: Record<string, unknown> = {}, suffix = "-Comment", depth = 0): string {
+  if (depth > MAX_EXPORT_VALUE_DEPTH || !isSafeExportValue(value)) return "[Значение превышает допустимую сложность]";
+  if (!question) return formatObjectValue(value);
+  if (question.type === "paneldynamic" && Array.isArray(value)) return formatDynamicPanel(question, value, organizationLabels, suffix, depth);
+  if (["matrix", "matrixdropdown", "matrixdynamic", "multipletext"].includes(question.type)) return formatMatrixAnswer(question, value, suffix, organizationLabels);
+  return formatSimpleAnswer(question, value, siblings, suffix, organizationLabels);
 }
 
-function formatDynamicPanel(question: SurveyQuestion, values: unknown[], organizationLabels: Map<string, string> | undefined, depth: number): string {
+function formatDynamicPanel(question: SurveyQuestion, values: unknown[], organizationLabels: Map<string, string> | undefined, suffix: string, depth: number): string {
   if (depth > MAX_EXPORT_VALUE_DEPTH || !isSafeExportValue(values)) return "[Значение превышает допустимую сложность]";
-  const meta = getQuestionMeta({ pages: [{ elements: question.templateElements ?? [] }] });
+  const meta = getQuestionMeta({ pages: [{ elements: question.templateElements ?? [] }], commentSuffix: suffix });
   return values.map((value, index) => {
     if (!isRecord(value) || Array.isArray(value)) return `Запись ${index + 1}: ${formatObjectValue(value) || "—"}`;
     const lines = meta.columns.filter(column => !column.kind).map(column => {
@@ -209,7 +146,7 @@ function formatDynamicPanel(question: SurveyQuestion, values: unknown[], organiz
       const raw = Object.prototype.hasOwnProperty.call(value, name) ? value[name] : undefined;
       const answer = column.answerType === "signaturepad" && raw
         ? (getSignatureImage(String(raw)) ? "Подпись (см. просмотр ответа)" : SIGNATURE_UNAVAILABLE)
-        : formatAnswerValue(name, raw, meta.choiceMap, meta.typeMap, organizationLabels, meta.questionMap, depth + 1);
+        : formatAnswerValue(meta.questionMap.get(name), raw, organizationLabels, value, suffix, depth + 1);
       const label = [...(column.sections ?? []).map(group => group.header), column.header].join(" / ");
       return answer.includes("\n") ? `${label}:\n  ${answer.replace(/\n/g, "\n  ")}` : `${label}: ${answer || "—"}`;
     });
@@ -225,7 +162,7 @@ function formatObjectValue(value: unknown): string {
   if (!isRecord(value)) return String(value ?? "");
   if (!isSafeExportValue(value)) return "[Значение превышает допустимую сложность]";
   try {
-    return JSON.stringify(value);
+    return readableValue(value);
   } catch {
     return "[Не удалось отобразить значение]";
   }
@@ -274,7 +211,7 @@ function getDateCellParts(value: string) {
 
 export function getResponseColumnClassName(column: ResponsesTableColumn) {
   if (column.kind) return `responses-table-${column.kind}-column`;
-  if (column.answerType === "paneldynamic") return "responses-table-multiline-column";
+  if (COMPLEX_ANSWER_TYPES.has(column.answerType ?? "")) return "responses-table-multiline-column";
   return column.isDate ? "responses-table-date-column" : "";
 }
 
@@ -299,7 +236,7 @@ export function formatResponsesForTable(
   schema: SurveySchema,
   organizationLabels?: Map<string, string>,
 ): ResponsesTable {
-  const { choiceMap, columns: schemaColumns, seenNames, titleMap, typeMap, questionMap } = getQuestionMeta(schema);
+  const { columns: schemaColumns, seenNames, questionMap } = getQuestionMeta(schema);
   // Include legacy/extra answer keys once, across all responses, after schema columns.
   const columns: ResponsesTableColumn[] = [
     { key: RESPONSE_DATE_KEY, header: RESPONSE_DATE_HEADER, isDate: true },
@@ -307,7 +244,7 @@ export function formatResponsesForTable(
   ];
   responses.forEach((response) => Object.keys(response.data).forEach((name) => {
     if (seenNames.has(name)) return;
-    columns.push({ key: `answer:${name}`, header: titleMap.get(name) ?? name });
+    columns.push({ key: `answer:${name}`, header: name });
     seenNames.add(name);
   }));
 
@@ -320,7 +257,7 @@ export function formatResponsesForTable(
     columns.forEach((column) => {
       if (column.isDate) return;
       const name = column.key.slice("answer:".length);
-      base[column.key] = column.kind ? "" : formatAnswerValue(name, answerEntries.get(name), choiceMap, typeMap, organizationLabels, questionMap);
+      base[column.key] = column.kind ? "" : formatAnswerValue(questionMap.get(name), answerEntries.get(name), organizationLabels, response.data, schema.commentSuffix);
     });
 
     return base;

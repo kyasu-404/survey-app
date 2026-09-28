@@ -26,6 +26,7 @@ export type SurveyPageSchema = {
 
 export type SurveySchema = {
   locale?: string;
+  commentSuffix?: string;
   title?: string;
   description?: string;
   questionDescriptionLocation?: string;

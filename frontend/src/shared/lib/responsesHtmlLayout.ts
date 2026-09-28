@@ -6,7 +6,7 @@ export const RESPONSES_HTML_LAYOUT_CSS = `
 .responses-html-report .responses-report-print { display: none; }
 .responses-html-report .responses-report-screen table { width: max-content; min-width: 100%; }
 .responses-html-report .responses-report-screen th,
-.responses-html-report .responses-report-screen td { min-width: 180px; max-width: 360px; }
+.responses-html-report .responses-report-screen td { white-space: pre-wrap; min-width: 180px; max-width: 360px; }
 .responses-html-report .responses-report-screen .responses-table-date-column { min-width: 12ch; width: 12ch; }
 .responses-html-report td.responses-table-multiline-column { white-space: pre-wrap; min-width: 260px; }
 .responses-html-report .response-signature-image {

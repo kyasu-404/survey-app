@@ -35,3 +35,10 @@
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* Keep the selected smiley's scale color when displaying a saved response. */
+.survey-renderer .sd-rating__item-smiley.sd-rating__item-smiley--selected.sd-rating__item-smiley--readonly {
+  background-color: var(--survey-rating-saved-color, var(--sjs-primary-backcolor));
+  border-color: var(--survey-rating-saved-color, var(--sjs-primary-backcolor));
+  fill: var(--sjs-primary-forecolor, #fff);
+}

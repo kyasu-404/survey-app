@@ -5,6 +5,17 @@ import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
 const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
+test("draft restoration authorizes the browser capability before signing a private upload", () => {
+  const restore = source.slice(source.indexOf('if (payload.action === "restore-upload")'), source.indexOf('if (payload.action === "delete-upload")'));
+  assert.match(restore, /isUuid\(payload.browserId\)/);
+  assert.match(restore, /isAnonymousUploadPath\(payload.path, payload.formId\)/);
+  assert.match(restore, /rpc\("can_restore_survey_upload"/);
+  assert.match(restore, /allowed !== true/);
+  assert.ok(restore.indexOf('allowed !== true') < restore.indexOf('createSignedUrl'));
+  assert.match(restore, /createSignedUrl\(payload.path, 60\)/);
+  assert.match(restore, /signedUrl.pathname \+ signedUrl.search/);
+});
+
 test("pins the Supabase client import to an exact version", () => {
   assert.match(source, /@supabase\/supabase-js@2\.\d+\.\d+/);
   assert.doesNotMatch(source, /@supabase\/supabase-js@2["']/);

@@ -7,12 +7,21 @@ export const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadshee
 export const mimeFor=format=>format==='zip' ? 'application/zip' : format==='xlsx' ? XLSX_MIME : DOCX_MIME;
 export const systemFields=[['form_title','Название формы'],['response_id','ID ответа'],['response_date','Дата ответа'],['response_updated_at','Дата последнего изменения']].map(([id,label])=>({id,label}));
 const plain=v=>typeof v==='string' ? v.replace(/<[^>]*>/g,'') : v && typeof v==='object' ? plain(v.ru ?? v.default ?? Object.values(v)[0]) : String(v ?? '');
+function* sectionNodes(nodes) {
+ let heading='';
+ for(const [index,q] of (nodes || []).entries()) {
+  if(q.type==='sectiontitle') heading=plain(q.title)||'Название раздела';
+  yield {q,index,heading};
+ }
+}
 export function templateSources(schema) {
   const result=[];
-  function walk(nodes,path=[],repeated=false){for(const [i,q] of (nodes || []).entries()){
-    const label=plain(q.title)||q.name||`Страница ${i+1}`;
-    if(q.integrationId && !['html','panel'].includes(q.type))result.push({integrationId:q.integrationId,name:q.name,valueName:q.valueName || q.name,title:label,path:path.join(' / '),type:q.type,inputType:q.inputType,definition:q,unsupported:repeated ? 'Поля внутри повторяющихся панелей пока не поддерживаются' : null});
-    walk(q.elements,[...path,label],repeated);walk(q.templateElements,[...path,label],true);walk(q.pages,[...path,label],repeated);
+  function walk(nodes,path=[],repeated=false){for(const {q,index,heading} of sectionNodes(nodes)){
+    if(q.type==='sectiontitle')continue;
+    const label=plain(q.title)||(q.type==='panel' ? 'Раздел' : q.name)||`Страница ${index+1}`;
+    const parents=[...path,...(heading ? [heading] : [])];
+    if(q.integrationId && !['html','panel'].includes(q.type))result.push({integrationId:q.integrationId,name:q.name,valueName:q.valueName || q.name,title:label,path:parents.join(' / '),type:q.type,inputType:q.inputType,definition:q,unsupported:repeated ? 'Поля внутри повторяющихся панелей пока не поддерживаются' : null});
+    walk(q.elements,[...parents,label],repeated);walk(q.templateElements,[...parents,label],true);walk(q.pages,[...parents,label],repeated);
   }}walk(schema.pages || schema.elements);return result;
 }
 const options={preserveOrder:true,ignoreAttributes:false,attributeNamePrefix:'@_',parseTagValue:false,parseAttributeValue:false,trimValues:false,processEntities:true,htmlEntities:true};
@@ -88,44 +97,79 @@ export function checkTemplate(template,form){
 }
 function panelFields(elements, prefix = [], depth = 0) {
  requireValue(depth <= 32, 'Слишком много вложенных разделов');
- return (elements || []).flatMap(question => {
+ return [...sectionNodes(elements)].flatMap(({q:question,heading}) => {
   const label = plain(question.title) || (question.type === 'panel' ? 'Раздел' : question.name);
-  if(question.type === 'panel') return panelFields(question.elements, [...prefix, label], depth + 1);
+  const parents=[...prefix,...(heading ? [heading] : [])];
+  const field={ definition: question, name: question.valueName || question.name, label: [...parents, label].join(' / ') };
+  if(question.type === 'panel') return [field,...panelFields(question.elements, [...parents, label], depth + 1)];
   if(!question.name || ['html', 'image'].includes(question.type)) return [];
-  return [{ definition: question, name: question.valueName || question.name, label: [...prefix, label].join(' / ') }];
+  return [field];
  });
 }
-function displayPanel(values, definition, orgs, depth) {
+function displayPanel(values, definition, orgs, depth, suffix) {
  const fields = panelFields(definition.templateElements);
- const names = new Set(fields.map(field => field.name));
+ const names = new Set(fields.flatMap(field => [field.name, ...(hasComment(field.definition) ? [field.name+suffix] : [])]));
  return values.map((entry, index) => {
   if(!entry || typeof entry !== 'object' || Array.isArray(entry)) return `Запись ${index + 1}: ${display(entry, null, orgs, depth + 1) || '—'}`;
-  const lines = fields.map(field => {
+  const lines = fields.filter(field=>!['panel','sectiontitle'].includes(field.definition.type)).map(field => {
    const raw = Object.hasOwn(entry, field.name) ? entry[field.name] : undefined;
-   const answer = display(raw, field.definition, orgs, depth + 1);
+   const answer = display(raw, field.definition, orgs, depth + 1, entry, suffix);
    return answer.includes('\n') ? `${field.label}:\n  ${answer.replaceAll('\n', '\n  ')}` : `${field.label}: ${answer || '—'}`;
   });
   for(const [name, raw] of Object.entries(entry)) if(!names.has(name)) lines.push(`${name}: ${display(raw, null, orgs, depth + 1) || '—'}`);
   return [`Запись ${index + 1}`, ...lines].join('\n');
  }).join('\n\n');
 }
-function display(value,definition,orgs,depth=0){
+const hasComment = q => q?.showOtherItem || q?.showCommentArea || q?.hasOther || q?.hasComment;
+function itemLabel(items, value) {
+ const item=(items || []).find(item=>String(typeof item==='object' ? item.value ?? item.name : item)===String(value));
+ return item && typeof item==='object' ? plain(item.text ?? item.title).trim() || String(value) : String(value ?? '');
+}
+function displayMatrix(value,q,orgs,depth,suffix) {
+ const cells=row=>Object.entries(row || {}).filter(([key])=>!(q.columns || []).some(c=>hasComment(c) && key===(c.valueName || c.name)+suffix)).map(([name,cell])=>{
+  const column=(q.columns || []).find(c=>c.name===name) || {};
+  return `${itemLabel(q.columns,name)}: ${display(cell,{choices:q.choices,...column,name,type:column.cellType || q.cellType || 'dropdown'},orgs,depth+1,row,suffix) || '—'}`;
+ }).join('\n');
+ if(q.type==='matrixdynamic' && Array.isArray(value))return value.map((row,i)=>`Строка ${i+1}\n${cells(row)}`).join('\n\n');
+ if(!value || typeof value!=='object')return String(value ?? '');
+ return Object.entries(value).map(([row,answer])=>{
+  if(q.type==='matrixdropdown')return `${itemLabel(q.rows,row)}\n${cells(answer).replace(/^/gm,'  ')}`;
+  if(q.type==='multipletext')return `${itemLabel(q.items,row)}: ${display(answer,{type:'text',...(q.items || []).find(item=>item.name===row)},orgs,depth+1)}`;
+  return `${itemLabel(q.rows,row)}: ${Array.isArray(answer) ? answer.map(v=>itemLabel(q.columns,v)).join('; ') : itemLabel(q.columns,answer)}`;
+ }).join('\n');
+}
+function display(value,definition,orgs,depth=0,siblings={},suffix='-Comment'){
+ const text=displayValue(value,definition,orgs,depth,siblings,suffix);
+ const comment=siblings[(definition?.valueName || definition?.name)+suffix];
+ const other=definition?.otherItemValue ?? 'other';
+ if(hasComment(definition) && typeof comment==='string' && comment && !(Array.isArray(value) ? value : [value]).includes(other))return [text,`Комментарий: ${comment}`].filter(Boolean).join('\n');
+ return text;
+}
+function displayValue(value,definition,orgs,depth=0,siblings={},suffix='-Comment'){
  requireValue(depth <= 32, 'Слишком большая вложенность ответа');
  if(value===undefined || value===null)return '';
+ const comment=siblings[(definition?.valueName || definition?.name)+suffix];
+ if((definition?.showOtherItem || definition?.hasOther) && value===(definition.otherItemValue ?? 'other'))return plain(comment)||plain(definition.otherText)||'Другое';
+ if(definition?.showNoneItem && value===(definition.noneItemValue ?? 'none'))return plain(definition.noneText)||'Ничего из перечисленного';
+ if(['matrix','matrixdropdown','matrixdynamic','multipletext'].includes(definition?.type))return displayMatrix(value,definition,orgs,depth,suffix);
+ if(definition?.type==='boolean'){if(value===(definition.valueTrue ?? true))return plain(definition.labelTrue)||'Да';if(value===(definition.valueFalse ?? false))return plain(definition.labelFalse)||'Нет';}
+ if(['date','datetime','datetime-local'].includes(definition?.inputType || definition?.type)){const m=String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}(?::\d{2})?))?$/);if(m)return `${m[3]}.${m[2]}.${m[1]}${m[4] ? ' '+m[4] : ''}`;}
  if(definition?.type==='signaturepad')return value ? '[Подпись]' : '';
  if(definition?.type==='file')return (Array.isArray(value)?value:[value]).map(v=>v?.name || 'Файл').join('; ');
- if(definition?.type==='paneldynamic' && Array.isArray(value))return displayPanel(value,definition,orgs,depth);
- if(Array.isArray(value))return value.map(v=>display(v,definition,orgs,depth+1)).join('; ');
+ if(definition?.type==='paneldynamic' && Array.isArray(value))return displayPanel(value,definition,orgs,depth,suffix);
+ if(Array.isArray(value))return value.map((v,i)=>(definition?.type==='ranking' ? `${i+1}. ` : '')+displayValue(v,definition,orgs,depth+1,siblings,suffix)).join(definition?.type==='ranking' ? '\n' : '; ');
  if(definition?.type==='organization'){const org=orgs.find(o=>o.id===value);return org ? [org.alias,org.number].filter(Boolean).join(' ') : String(value);}
- const choice=(definition?.choices || []).find(c=>String(typeof c==='object'?c.value:c)===String(value));
- if(choice!==undefined)return plain(typeof choice==='object'?choice.text ?? choice.value:choice);
- if(typeof value==='object')return Object.entries(value).map(([k,v])=>`${k}: ${display(v,null,orgs,depth+1)}`).join('; ');
+ if(typeof value==='object' && Object.hasOwn(value,definition?.valuePropertyName || 'value'))return [displayValue(value[definition?.valuePropertyName || 'value'],definition,orgs,depth+1,siblings,suffix),plain(value[definition?.commentPropertyName || 'comment'])].filter(Boolean).join(': ');
+ const choices=definition?.type==='rating' ? definition.rateValues : definition?.choices;
+ const choice=(choices || []).find(c=>String(typeof c==='object'?c.value:c)===String(value));
+ if(choice!==undefined)return itemLabel(choices,value);
+ if(typeof value==='object')return Object.entries(value).map(([k,v])=>`${k}: ${display(v,null,orgs,depth+1)}`).join('\n');
  return typeof value==='boolean' ? value ? 'Да':'Нет' : String(value);
 }
 export function responseValues(form,response,organizations=[]){
  const values=new Map();
  for(const q of templateSources(form.schema)){
-  const raw=response.data?.[q.valueName];let value=display(raw,q.definition,organizations);
+  const raw=response.data?.[q.valueName];let value=display(raw,q.definition,organizations,0,response.data,form.schema.commentSuffix || "-Comment");
   if((q.inputType==='number'||['number','integer','rating'].includes(q.type)) && typeof raw==='number' && Number.isFinite(raw))value=raw;
   values.set('question:'+q.integrationId.toLowerCase(),value);
  }

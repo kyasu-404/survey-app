@@ -1,5 +1,5 @@
-// Keep the original bytes only for this survey instance. Anonymous respondents
-// can upload to private Storage, but cannot read it back to create a preview.
+// Reuse local bytes during upload. After reload, draft previews obtain a short
+// signed URL only after the server verifies this browser's upload capability.
 export function readLocalSurveyFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

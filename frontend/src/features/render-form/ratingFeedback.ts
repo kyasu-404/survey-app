@@ -1,4 +1,4 @@
-import type { Model, QuestionRatingModel } from "survey-core";
+import { QuestionRatingModel, type Model } from "survey-core";
 
 function getRatingFeedback(question: QuestionRatingModel) {
   if (question.isEmpty()) return "Оценка не выбрана";
@@ -27,7 +27,19 @@ export function installRatingFeedback(model: Model) {
     container.querySelector(".survey-rating-feedback")?.remove();
     container.append(feedback);
 
-    const update = () => { feedback.textContent = getRatingFeedback(rating); };
+    const update = () => {
+      feedback.textContent = getRatingFeedback(rating);
+      if (rating.rateType !== "smileys" || !rating.isReadOnly) return;
+      // SurveyJS suppresses scale colors in read-only mode. Use its public color
+      // calculation on a detached editable copy, keeping the real answer locked.
+      const display = new QuestionRatingModel(rating.name);
+      display.fromJSON(rating.toJSON());
+      display.readOnly = false;
+      const index = display.visibleRateValues.findIndex(item => item.value === rating.value);
+      const color = index >= 0 ? display.getItemStyle(display.renderedRateItems[index])["--sd-rating-item-color"] : null;
+      if (color) htmlElement.style.setProperty("--survey-rating-saved-color", color);
+      display.dispose();
+    };
     rating.registerPropertyChangedHandlers(["value"], update, "survey-rating-feedback");
     update();
   });

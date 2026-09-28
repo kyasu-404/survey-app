@@ -17,7 +17,7 @@ export const DEFAULT_SURVEY_THEME: ITheme = {
     "--sjs-primary-forecolor": "#ffffff",
     "--sjs-header-backcolor": "#121212",
     "--sjs-general-backcolor": "#fffdf9",
-    "--sjs-general-backcolor-dim": "#f2eee8",
+    "--sjs-general-backcolor-dim": "#eae4dc",
     "--sjs-general-backcolor-dim-light": "#f8f5f0",
     "--sjs-general-backcolor-dark": "#dfd9d1",
     "--sjs-general-forecolor": "#181818",
@@ -25,7 +25,7 @@ export const DEFAULT_SURVEY_THEME: ITheme = {
     "--sjs-layer-1-foreground-100": "#181818",
     "--sjs-layer-1-foreground-50": "#5f5a54",
     "--sjs-layer-1-background-500": "#fffdf9",
-    "--sjs-layer-3-background-500": "#f2eee8",
+    "--sjs-layer-3-background-500": "#eae4dc",
   },
 };
 
@@ -161,6 +161,9 @@ export function sanitizeSurveyTheme(value: unknown): ITheme {
 
 export function resolveSurveyTheme(value: unknown): ITheme {
   const theme = sanitizeSurveyTheme(value);
+  for (const key of ["--sjs-general-backcolor-dim", "--sjs-layer-3-background-500"]) {
+    if (theme.cssVariables?.[key] === "#f2eee8") theme.cssVariables[key] = "#eae4dc";
+  }
   return Object.keys(theme).length > 0 ? theme : sanitizeSurveyTheme(DEFAULT_SURVEY_THEME);
 }
 

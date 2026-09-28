@@ -228,7 +228,7 @@ describe("FormResponsesPage", () => {
     const css = readAppCss();
 
     expect(css).toMatch(
-      /\.responses-table th,\s*\.responses-table td\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;[^}]*max-width:\s*min\(28rem,\s*40vw\);/s,
+      /\.responses-table th,\s*\.responses-table td\s*\{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;[^}]*max-width:\s*min\(28rem,\s*40vw\);/s,
     );
   });
 

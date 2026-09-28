@@ -4,6 +4,26 @@ import { openSurveyApp } from "./fixtures/surveyApp";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64");
 const file = (name: string) => ({ name, mimeType: "image/png", buffer: png });
 
+test("an expired upload restored from a draft names the file and allows replacement", async ({ page }) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 0, elements: [{ type: "file", name: "file", title: "Файл", ...{ needConfirmRemoveFile: false } }] });
+  await page.route("**/functions/v1/form-admin", route => {
+    const body = route.request().postDataJSON();
+    if (body.action === "reserve-upload") return route.fulfill({ json: { path: `public/${formId}/${crypto.randomUUID()}.png` } });
+    if (body.action === "restore-upload") return route.fulfill({ status: 410, json: { error: "Файл больше недоступен. Прикрепите его заново." } });
+    return route.fulfill({ json: { success: true } });
+  });
+  await page.route("**/storage/v1/object/**", route => route.fulfill({ json: { Key: "uploaded" } }));
+  await page.goto(`/form/${formId}`);
+  await chooseFiles(page, ["expired.png"]);
+  await expect(page.locator(".sd-file img")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".survey-renderer > [role=alert]")).toContainText("expired.png");
+  await expect(page.locator(".survey-renderer > [role=alert]")).toContainText("Прикрепите его заново");
+  await chooseFiles(page, ["replacement.png"]);
+  await expect(page.locator(".sd-file img")).toBeVisible();
+  await expect(page.locator(".survey-renderer > [role=alert]")).toHaveCount(0);
+});
+
 async function chooseFiles(page: Page, names: string[]) {
   const chooser = page.waitForEvent("filechooser");
   await page.locator(".sd-file label[for]").click();
@@ -21,6 +41,7 @@ test("public file upload recovers from failed deletion and upload without refres
   let deletionStarted = false;
   await page.route("**/functions/v1/form-admin", async route => {
     const payload = route.request().postDataJSON();
+    if (payload.action === "restore-upload") return route.fulfill({ json: { signedUrl: `/storage/v1/object/sign/survey-files/${payload.path}?token=restored` } });
     if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     expect(route.request().postDataJSON().action).toBe("delete-upload");
     deletionStarted = true;
@@ -63,9 +84,12 @@ test("public file upload recovers from failed deletion and upload without refres
   await expect.poll(() => uploads.length).toBe(3);
   await expect(preview).toHaveAttribute("src", /^data:image\/png;base64,/);
   await expect(choose).toBeVisible();
-  // File bodies are deliberately excluded from local drafts; the input must recover.
+  // Reload keeps the uploaded path and restores a preview without uploading again.
   await page.reload();
   await expect(choose).toBeVisible();
+  await expect(preview).toBeVisible();
+  await expect(page.locator(".sd-file")).toContainText("retry.png");
+  expect(uploads).toHaveLength(3);
   await chooseFiles(page, ["after-reload.png"]);
   await expect(preview).toHaveAttribute("src", /^data:image\/png;base64,/);
   expect(pageErrors).toEqual([]);
@@ -80,6 +104,7 @@ test("removing one of several public files preserves the other attachment", asyn
   const deleted: string[] = [];
   await page.route("**/functions/v1/form-admin", async route => {
     const payload = route.request().postDataJSON();
+    if (payload.action === "restore-upload") return route.fulfill({ json: { signedUrl: `/storage/v1/object/sign/survey-files/${payload.path}?token=restored` } });
     if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     const body = route.request().postDataJSON();
     expect(body.action).toBe("delete-upload");
@@ -105,6 +130,9 @@ test("removing one of several public files preserves the other attachment", asyn
   await expect(page.locator(".sd-file")).toContainText("keep.png");
   await page.reload();
   await expect(page.locator(".sd-file label[for]")).toBeVisible();
+  await expect(page.locator(".sd-file img")).toHaveCount(1);
+  await expect(page.locator(".sd-file")).toContainText("keep.png");
+  expect(uploads).toHaveLength(2);
   expect(pageErrors).toEqual([]);
 });
 
@@ -129,6 +157,7 @@ test("anonymous file previews and downloads work when private Storage denies rea
   });
   await page.route("**/functions/v1/form-admin", async route => {
     const payload = route.request().postDataJSON();
+    if (payload.action === "restore-upload") return route.fulfill({ json: { signedUrl: `/storage/v1/object/sign/survey-files/${payload.path}?token=restored` } });
     if (payload.action === "reserve-upload") return route.fulfill({ json: { path: `public/${payload.formId}/${crypto.randomUUID()}${payload.extension}` } });
     deleted.push(route.request().postDataJSON().path);
     return route.fulfill({ json: { success: true } });

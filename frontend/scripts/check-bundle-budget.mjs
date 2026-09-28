@@ -16,8 +16,10 @@ const budgets = {
   // Patched React Router 7, durable-job UI and motion add about 36 KiB.
   // Responsive navigation, styles and editor controls add another 14 KiB.
   // Viewport-bounded menus and mobile preview refinements add 2.5 KiB.
+  // Answer formatting and draft upload restoration add a measured 6.4 KiB.
+  // Standalone section hierarchy and preview chrome add another 1.5 KiB.
   // Keep the initial-load gate unchanged; allow only this measured increase.
-  total: { raw: 6_972_500 },
+  total: { raw: 6_980_500 },
 };
 
 function formatBytes(bytes) {

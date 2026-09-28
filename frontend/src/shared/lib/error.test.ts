@@ -27,7 +27,7 @@ describe("error helpers", () => {
     expect(getSubmitResponseErrorMessage(new Error("permission denied"))).toBe(
       "Недостаточно прав для отправки ответа. Обновите страницу или войдите заново.",
     );
-    expect(getSubmitResponseErrorMessage(new Error("23514 check violation"))).toBe(
+    expect(getSubmitResponseErrorMessage(new Error("Лимит ответов достигнут"))).toBe(
       "Лимит ответов для этой формы уже достигнут.",
     );
   });
@@ -36,5 +36,22 @@ describe("error helpers", () => {
     expect(isAbortError(new DOMException("The user aborted a request.", "AbortError"))).toBe(true);
     expect(isAbortError(Object.assign(new Error("aborted"), { name: "AbortError" }))).toBe(true);
     expect(isAbortError(new Error("fetch failed"))).toBe(false);
+  });
+
+  it("shows known PostgREST submission errors without blaming the network or exposing database details", () => {
+    expect(getSubmitResponseErrorMessage({ code: "22023", message: "Ответ не соответствует структуре формы", details: "private" }))
+      .toBe("Ответ не соответствует структуре формы");
+    expect(getSubmitResponseErrorMessage({ code: "22023", message: "Срок загрузки файла истёк. Прикрепите файл заново." }))
+      .toBe("Срок загрузки файла истёк. Прикрепите файл заново.");
+    expect(getSubmitResponseErrorMessage({ code: "42501", message: "Форма закрыта для ответов" })).toBe("Форма закрыта для ответов");
+    expect(getSubmitResponseErrorMessage({ code: "23514", message: "constraint violation" })).not.toContain("Лимит ответов");
+    expect(getSubmitResponseErrorMessage({ code: "57014", message: "timeout" })).toContain("не создаст дубликат");
+    expect(getSubmitResponseErrorMessage({ code: "413", message: "too large" })).toContain("слишком большой");
+    expect(getSubmitResponseErrorMessage({ code: "429", message: "rate limited" })).toContain("Подождите");
+    expect(getSubmitResponseErrorMessage({ message: "TypeError: Failed to fetch" })).toContain("Проблема с сетью");
+    const generic = getSubmitResponseErrorMessage({ code: "XX000", message: "internal relation secret_table error" });
+    expect(generic).not.toMatch(/интернет|secret_table/);
+    expect(generic).toContain("сообщите автору формы");
+    expect(getSubmitResponseErrorMessage(null)).toBe(generic);
   });
 });

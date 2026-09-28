@@ -46,6 +46,25 @@ describe("storage api", () => {
     vi.useRealTimers();
   });
 
+  it("restores an anonymous draft file with its browser capability and a fresh signed URL", async () => {
+    const path = "public/10000000-0000-4000-8000-000000000000/file.txt";
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=short-lived` }, error: null } as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("hello", { headers: { "Content-Type": "text/plain" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(resolveSurveyFileValueContent({ name: "file.txt", content: path }, { allowAnonymous: true, restoreDraft: true })).resolves.toBe("data:text/plain;base64,aGVsbG8=");
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) } }));
+    expect(publicSupabaseClient.storage.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired draft uploads and unexpected signed URL origins", async () => {
+    const file = { content: "public/10000000-0000-4000-8000-000000000000/file.txt" };
+    const options = { allowAnonymous: true, restoreDraft: true };
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: null, error: { context: new Response("", { status: 410 }) } } as never);
+    await expect(resolveSurveyFileValueContent(file, options)).rejects.toThrow("Прикрепите его заново");
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: "https://attacker.test/file" }, error: null } as never);
+    await expect(resolveSurveyFileValueContent(file, options)).rejects.toThrow("некорректная ссылка");
+  });
+
   it("uploads files under the current user's prefix and stores the storage path", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
 

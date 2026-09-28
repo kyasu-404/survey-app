@@ -845,6 +845,7 @@ describe("SurveyBuilder", () => {
 
     const questionTypes = [
       "panel",
+      "sectiontitle",
       "text",
       "comment",
       "radiogroup",
@@ -899,7 +900,7 @@ describe("SurveyBuilder", () => {
     expect(serializerProperties["panel:showQuestionNumbers"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showNumber"]?.visible).toBe(false);
     expect(serializerProperties["paneldynamic:showQuestionNumbers"]?.visible).toBe(false);
-    expect(componentCollectionAdd).toHaveBeenCalledTimes(8);
+    expect(componentCollectionAdd).toHaveBeenCalledTimes(9);
     expect(creator.toolbox.items[0]).toMatchObject({
       name: "panel",
       title: "Раздел",

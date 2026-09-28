@@ -3,10 +3,42 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {zipSync,unzipSync,strToU8,strFromU8} from 'fflate';
 import {blankDocx,validateDocx} from '../src/docx.mjs';
-import {blankXlsx,readTemplate,checkTemplate,responseValues,renderTemplate,generateArchive} from '../src/templates.mjs';
+import {blankXlsx,readTemplate,checkTemplate,templateSources,responseValues,renderTemplate,generateArchive} from '../src/templates.mjs';
 const id=randomUUID(),numberId=randomUUID();
 const form={title:'Сведения',schema:{pages:[{name:'p',elements:[{type:'text',name:'org',title:'Организация',integrationId:id},{type:'text',inputType:'number',name:'count',integrationId:numberId}]}]}};
 const responses=Array.from({length:20},(_,i)=>({id:randomUUID(),created_at:'2026-09-14T10:00:00Z',data:{org:`Организация ${i+1} & <test>`,count:i}}));
+test('headings and panels share scoped document paths and dynamic record labels',()=>{
+ const field=name=>({type:'text',name,title:name,integrationId:randomUUID()});
+ const elements=[
+  {type:'sectiontitle',name:'h',title:'Сведения',integrationId:randomUUID()},field('a'),
+  {type:'panel',name:'p',title:'Контакты',elements:[field('b'),{type:'sectiontitle',name:'inner',title:'Связь'},field('c')]},
+  field('d'),{type:'sectiontitle',name:'h2',title:'Итог'},field('e'),
+ ];
+ const f={title:'Тест',schema:{pages:[{title:'Страница',elements},{title:'Следующая',elements:[field('outside')]}]}};
+ assert.deepEqual(templateSources(f.schema).map(q=>[q.name,q.path]),[['a','Страница / Сведения'],['b','Страница / Сведения / Контакты'],['c','Страница / Сведения / Контакты / Связь'],['d','Страница / Сведения'],['e','Страница / Итог'],['outside','Следующая']]);
+ f.schema.pages=[{elements:[{type:'paneldynamic',name:'people',integrationId:id,templateElements:elements}]}];
+ const values=responseValues(f,{...responses[0],data:{people:[{a:'А',b:'Б',c:'В',d:'Г',e:'Д',h:'не ответ',p:'не ответ'}]}});
+ assert.equal(values.get('question:'+id),'Запись 1\nСведения / a: А\nСведения / Контакты / b: Б\nСведения / Контакты / Связь / c: В\nСведения / d: Г\nИтог / e: Д');
+ const xml=strFromU8(unzipSync(renderTemplate(readTemplate(docx(),'docx'),values))['word/document.xml']);
+ assert.ok(xml.includes('Сведения / Контакты / Связь / c: В'));assert.ok(xml.includes('<w:br/>'));assert.ok(!xml.includes('не ответ'));
+});
+test('matrix and Other answers use labels and line breaks in document bindings',()=>{
+ const choices=[{value:'a',text:'Первый'},{value:'b',text:'Второй'}];
+ const cases=[
+  [{type:'dropdown',showOtherItem:true},'other','Свой'],
+  [{type:'checkbox',showOtherItem:true,choices},['a','other'],'Первый; Свой'],
+  [{type:'matrix',rows:[{value:'r',text:'Строка'}],columns:choices},{r:'b'},'Строка: Второй'],
+  [{type:'matrixdropdown',rows:[{value:'r',text:'Строка'}],columns:[{name:'c',title:'Столбец',choices}]},{r:{c:'a'}},'Строка\n  Столбец: Первый'],
+  [{type:'matrixdynamic',columns:[{name:'c',title:'Столбец',showOtherItem:true}]},[{c:'other','c-Comment':'Вложенный'}],'Строка 1\nСтолбец: Вложенный'],
+  [{type:'multipletext',items:[{name:'a',title:'Имя'},{name:'b',title:'Счёт'}]},{a:'Анна',b:0},'Имя: Анна\nСчёт: 0'],
+  [{type:'ranking',choices},['b','a'],'1. Второй\n2. Первый'],
+  [{type:'paneldynamic',templateElements:[{type:'dropdown',name:'c',title:'Выбор',showOtherItem:true}]},[{c:'other','c-Comment':'Вложенный'}],'Запись 1\nВыбор: Вложенный'],
+ ];
+ for(const [definition,value,expected] of cases){
+  const f={title:'Тест',schema:{pages:[{elements:[{...definition,name:'q',integrationId:id}]}]}};
+  assert.equal(responseValues(f,{...responses[0],data:{q:value,'q-Comment':'Свой'}}).get('question:'+id),expected);
+ }
+});
 test('dynamic panels use field labels and numbered multiline entries in DOCX and XLSX bindings',()=>{
  const panelForm={title:'Сотрудники',schema:{pages:[{elements:[{type:'panel',name:'section',title:'Раздел',elements:[
   {type:'paneldynamic',name:'people',integrationId:id,templateElements:[

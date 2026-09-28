@@ -122,7 +122,7 @@ describe("responsesExport", () => {
       { type: "boolean", name: "flag" },
       { type: "text", name: "number" },
     ] }] }, new Map([["org-id", "Школа"]]));
-    expect(table.columns.map((column) => table.rows[0][column.key]).slice(1)).toEqual(["Первый", "Второй", "Школа", "false", "0"]);
+    expect(table.columns.map((column) => table.rows[0][column.key]).slice(1)).toEqual(["Первый", "Второй", "Школа", "Нет", "0"]);
   });
 
   it("orders response columns by the form schema instead of response JSON key order", () => {

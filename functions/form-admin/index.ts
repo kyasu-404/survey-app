@@ -5,6 +5,7 @@ type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string }
+  | { action: "restore-upload"; formId: string; browserId: string; path: string }
   | { action: "delete-upload"; formId: string; path: string }
   | { action: "get-cleanup-status" }
   | { action: "cleanup-orphans" }
@@ -447,6 +448,21 @@ Deno.serve(async (req) => {
     });
     if (error) return errorResponse(req, error.code === "54000" ? 429 : 400, error.message, requestLogContext);
     return jsonResponse(req, 200, { path }, requestLogContext);
+  }
+
+  if (payload.action === "restore-upload") {
+    if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !isAnonymousUploadPath(payload.path, payload.formId)) {
+      return errorResponse(req, 400, "Некорректные параметры файла", requestLogContext);
+    }
+    const { data: allowed, error } = await adminClient.rpc("can_restore_survey_upload", {
+      p_path: payload.path, p_browser_id: payload.browserId,
+    });
+    if (error) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", requestLogContext);
+    if (allowed !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
+    const { data, error: signError } = await adminClient.storage.from(storageBucket).createSignedUrl(payload.path, 60);
+    if (signError || !data?.signedUrl) return errorResponse(req, 503, "Не удалось восстановить файл. Повторите позже.", requestLogContext);
+    const signedUrl = new URL(data.signedUrl);
+    return jsonResponse(req, 200, { signedUrl: signedUrl.pathname + signedUrl.search }, requestLogContext);
   }
 
   if (payload.action === "delete-upload") {

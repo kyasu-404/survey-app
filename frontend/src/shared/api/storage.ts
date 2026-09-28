@@ -12,6 +12,7 @@ const STORAGE_TRANSFER_TIMEOUT_MS = 60_000;
 type StorageAuthOptions = {
   allowAnonymous?: boolean;
   signal?: AbortSignal;
+  restoreDraft?: boolean;
 };
 
 type UploadFileToStorageOptions = StorageAuthOptions;
@@ -226,6 +227,20 @@ export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
 }
 
 async function createSignedUrlForStoragePath(path: string, options: StorageAuthOptions) {
+  if (options.allowAnonymous && options.restoreDraft && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
+    const { data, error } = await runRequest("storage.restoreUpload", signal => publicSupabaseClient.functions.invoke("form-admin", {
+      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: getOrCreateResponseBrowserId() }, signal,
+    }), { signal: options.signal });
+    if (error || typeof data?.signedUrl !== "string") {
+      const response = error && "context" in error ? error.context : undefined;
+      if (response instanceof Response && response.status === 410) throw new Error("Файл больше недоступен. Прикрепите его заново.");
+      throw new Error("Не удалось восстановить файл. Проверьте подключение и повторите попытку.");
+    }
+    // Accept only the configured Storage origin, even if an upstream is misconfigured.
+    const signedUrl = new URL(data.signedUrl, SUPABASE_URL).href;
+    if (getStoragePathByUrl(signedUrl) !== path) throw new Error("Получена некорректная ссылка на файл");
+    return signedUrl;
+  }
   const client = options.allowAnonymous && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)
     ? publicSupabaseClient
     : supabaseClient;
