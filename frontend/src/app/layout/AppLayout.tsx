@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "../routes";
 import { Sidebar } from "../../widgets/Sidebar/Sidebar";
 import { useToast } from "../providers/ToastProvider";
 import { useSidebarMotion } from "./useSidebarMotion";
 import { useMobileLayout } from "../../shared/ui/useMobileLayout";
 
+const mobileHeaderTitles = [
+  { path: routes.dashboardMy, title: "Мои формы" },
+  { path: routes.dashboardAll, title: "Все формы" },
+  { path: routes.templates, title: "Шаблоны" },
+  { path: routes.organizations, title: "Справочник ОУ" },
+  { path: routes.builder, title: "Конструктор" },
+  { path: routes.formResponsesById, title: "Ответы на форму" },
+  { path: routes.users, title: "Пользователи" },
+  { path: routes.settings, title: "Настройки" },
+];
+
 export function AppLayout() {
   const { showToast } = useToast();
   const location = useLocation();
+  const mobileHeaderTitle = mobileHeaderTitles.find(({ path }) =>
+    matchPath({ path, end: false }, location.pathname),
+  )?.title ?? "Формы";
   const navigate = useNavigate();
   const isLoginPage = location.pathname === routes.login;
   const isSurveyPage = location.pathname.startsWith("/form/");
@@ -104,7 +118,7 @@ export function AppLayout() {
               <path d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span>Формы</span>
+          <span>{mobileHeaderTitle}</span>
         </header>
       )}
       {!shouldHideSidebar && !isMobile && isSidebarHidden && (
