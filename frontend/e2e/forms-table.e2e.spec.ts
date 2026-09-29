@@ -23,6 +23,7 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   const table = page.getByRole("table");
   await expect(table.locator("tbody tr")).toHaveCount(20);
   expect(app.listRequests.length).toBe(initialRequests);
+  await page.getByRole("button", { name: "Фильтры", exact: true }).click();
   for (const name of ["Тип формы", "Основание формы"]) await expect(page.getByLabel(name, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Название", exact: true }).click();
   await expect(table.locator("tbody tr").first()).toContainText("Форма 01");

@@ -218,10 +218,13 @@ export default function SettingsPage() {
               <input
                 type="checkbox"
                 checked={draft.enabled}
-                onChange={(event) => updateDraft("enabled", event.target.checked)}
+                onChange={(event) => {
+                  updateDraft("enabled", event.target.checked);
+                  showToast("Для применения сохраните настройки", "warning");
+                }}
               />
               <span className="smtp-enable-track" aria-hidden="true"><span /></span>
-              Коннектор включён
+              {draft.enabled ? "Коннектор включён" : "Коннектор выключен"}
             </label>
           </div>
 

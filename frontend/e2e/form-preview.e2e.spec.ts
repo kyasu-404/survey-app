@@ -24,6 +24,7 @@ test("preview keeps files local, allows required-file navigation and returns to 
     return url.pathname.endsWith("/list_forms_keyset") && url.searchParams.get("or")?.includes("Карточка") && url.searchParams.getAll("form_type").includes("eq.anketa");
   });
   await page.getByPlaceholder("Поиск по названию и автору").fill("Карточка");
+  await page.getByRole("button", { name: "Фильтры", exact: true }).click();
   await page.getByLabel("Тип формы", { exact: true }).selectOption("anketa");
   await filteredList;
   await expect(page.locator(".dashboard-form-card")).toHaveCount(20);

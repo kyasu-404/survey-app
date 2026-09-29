@@ -4,13 +4,15 @@ import { useAuth } from "../providers/AuthProvider";
 import { routes } from "../routes";
 
 export function AdminRoute({ children }: PropsWithChildren) {
-  const { loading, profile, profileLoading } = useAuth();
+  const { user, loading, profile, profileLoading } = useAuth();
+  const hasCurrentProfile = Boolean(user && profile?.id === user.id);
 
-  if (loading || profileLoading) {
+  // Rechecking the same user's profile must not unmount unsaved admin forms.
+  if (loading || (profileLoading && !hasCurrentProfile)) {
     return <p>Проверка прав доступа...</p>;
   }
 
-  if (profile?.role !== "admin") {
+  if (!hasCurrentProfile || profile?.role !== "admin" || profile.is_disabled) {
     return <Navigate to={routes.dashboardMy} replace />;
   }
 

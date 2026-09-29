@@ -3,7 +3,7 @@ import type { FormsCursor } from "../../entities/survey/types";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,7 @@ import { routes } from "../../app/routes";
 import { getDashboardFormStatsQueryKey, getDashboardFormsQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveyForm } from "../../entities/survey/types";
 import DashboardPage from "./DashboardPage";
+import { copyTextToClipboard } from "../../shared/lib/browser";
 
 const {
   showToast,
@@ -238,6 +239,9 @@ function createDeferred<T>() {
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    HTMLDialogElement.prototype.close = function () { this.open = false; };
+    vi.mocked(copyTextToClipboard).mockResolvedValue(true);
     localStorage.removeItem("survey-app:forms-layout");
     resetRealtimeChannel();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
@@ -262,6 +266,7 @@ describe("DashboardPage", () => {
     renderPage();
     await screen.findByText("Форма 1");
     await userEvent.type(screen.getByPlaceholderText("Поиск по названию и автору"), "Форма");
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
     await userEvent.selectOptions(screen.getByLabelText("Тип формы"), "anketa");
     await userEvent.selectOptions(screen.getByLabelText("Основание формы"), "plan");
     await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ filters: expect.objectContaining({ search: "Форма" }) })));
@@ -276,6 +281,40 @@ describe("DashboardPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Показать карточки" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть превью формы Форма 1" })).toBeInTheDocument();
+  });
+
+  it("sorts all forms by status from the filter panel and resets search, dates and sorting", async () => {
+    getDashboardFormsPage.mockImplementation(({ sort, filters }) => Promise.resolve(createDashboardPage([
+      createForm(sort || filters?.search || filters?.dateFrom ? 99 : 1),
+    ])));
+    renderPage();
+    await screen.findByText("Форма 1");
+    expect(screen.queryByRole("region", { name: "Фильтры форм" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
+    await userEvent.type(screen.getByPlaceholderText("Поиск по названию и автору"), "Форма");
+    fireEvent.change(screen.getByLabelText("Дата с"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("Дата по"), { target: { value: "2026-01-31" } });
+    await userEvent.selectOptions(screen.getByLabelText("Тип формы"), "anketa");
+    await userEvent.selectOptions(screen.getByLabelText("Сортировка"), "status:desc");
+    await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({
+      cursor: null, sort: { field: "status", direction: "desc" },
+      filters: expect.objectContaining({ search: "Форма", dateFrom: "2026-01-01", dateTo: "2026-01-31", formType: "anketa" }),
+    })));
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры (3)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры (3)" }));
+    expect(screen.getByLabelText("Дата с")).toHaveValue("2026-01-01");
+    await userEvent.selectOptions(screen.getByLabelText("Сортировка"), "status:asc");
+    await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ sort: { field: "status", direction: "asc" } })));
+    await userEvent.click(screen.getByRole("button", { name: "Сбросить" }));
+    expect(screen.getByPlaceholderText("Поиск по названию и автору")).toHaveValue("");
+    expect(screen.getByLabelText("Дата с")).toHaveValue("");
+    expect(screen.getByLabelText("Дата по")).toHaveValue("");
+    expect(screen.getByLabelText("Тип формы")).toHaveValue("");
+    expect(screen.getByLabelText("Сортировка")).toHaveValue("created_at:desc");
+    // The default list can be restored from the query cache without another request.
+    expect(await screen.findByText("Форма 1")).toBeInTheDocument();
+    expect(screen.queryByText("Форма 99")).not.toBeInTheDocument();
+    expect(getDashboardFormsPage.mock.lastCall?.[0].sort).toBeUndefined();
   });
 
   it("requests a new globally sorted page when clicking headers and preserves row actions", async () => {
@@ -819,6 +858,7 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("admin")).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
 
@@ -890,6 +930,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Мониторинг по приказу")).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
 
@@ -973,6 +1014,7 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Опрос по запросу")).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Тип формы" }), "survey");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Основание формы" }), "request");
 
@@ -1109,7 +1151,7 @@ describe("DashboardPage", () => {
     await userEvent.click(menuTrigger);
 
     const menu = await screen.findByRole("menu", { name: "Меню действий формы Моя форма" });
-    expect(within(menu).getByRole("menuitem", { name: "Копировать ссылку" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "Копировать ссылку" })).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Переименовать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Дублировать" })).toBeInTheDocument();
@@ -1151,14 +1193,11 @@ describe("DashboardPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
 
     const menu = await screen.findByRole("menu", { name: "Меню действий формы Моя форма" });
-    const copyLinkButton = within(menu).getByRole("menuitem", { name: "Копировать ссылку" });
     const renameButton = within(menu).getByRole("menuitem", { name: "Переименовать" });
     const editButton = within(menu).getByRole("menuitem", { name: "Редактировать" });
     const duplicateButton = within(menu).getByRole("menuitem", { name: "Дублировать" });
     const deleteButton = within(menu).getByRole("menuitem", { name: "Удалить" });
 
-    expect(copyLinkButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
-    expect(copyLinkButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
     expect(renameButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
     expect(renameButton.querySelector(".form-menu-item-label")).toBeInTheDocument();
     expect(editButton.querySelector(".form-menu-item-icon")).toBeInTheDocument();
@@ -1174,7 +1213,7 @@ describe("DashboardPage", () => {
     expect(deadlineText).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   });
 
-  it("opens a generated QR dialog and downloads the QR on request", async () => {
+  it("shares the public link and generates and downloads QR only from its tab", async () => {
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
         createForm(1, {
@@ -1187,16 +1226,13 @@ describe("DashboardPage", () => {
 
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Действия формы QR форма" }));
-
-    const menu = await screen.findByRole("menu", { name: "Меню действий формы QR форма" });
-    const copyLinkButton = within(menu).getByRole("menuitem", { name: "Копировать ссылку" });
-    const generateQrButton = within(menu).getByRole("menuitem", { name: "Генерировать QR" });
-
-    expect(copyLinkButton.compareDocumentPosition(generateQrButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: "Поделиться формой QR форма" }));
+    const dialog = await screen.findByRole("dialog", { name: "Поделиться формой QR форма" });
+    expect(within(dialog).getByRole("tab", { name: "Ссылка" })).toHaveAttribute("aria-selected", "true");
     expect(qrToString).not.toHaveBeenCalled();
-
-    await userEvent.click(generateQrButton);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Копировать ссылку" }));
+    expect(copyTextToClipboard).toHaveBeenCalledWith(`${window.location.origin}${routes.survey("form-1")}`);
+    await userEvent.click(within(dialog).getByRole("tab", { name: "QR-код" }));
 
     const formLink = `${window.location.origin}${routes.survey("form-1")}`;
     await waitFor(() => {
@@ -1209,12 +1245,11 @@ describe("DashboardPage", () => {
       );
     });
 
-    const dialog = await screen.findByRole("dialog", { name: "QR-код формы QR форма" });
-    expect(within(dialog).getByRole("button", { name: "Закрыть QR-код" })).toHaveClass("dashboard-qr-close-button");
+    expect(within(dialog).getByRole("button", { name: "Закрыть окно поделиться" })).toHaveClass("dashboard-qr-close-button");
     expect(within(dialog).getByRole("button", { name: "PNG" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "SVG" })).toBeInTheDocument();
     expect(within(dialog).getByAltText("QR-код формы QR форма")).toHaveAttribute("src", expect.stringMatching(/^data:image\/svg\+xml/));
-    expect(within(dialog).getByText(formLink)).toBeInTheDocument();
+    expect(within(dialog).queryByText(formLink)).not.toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "PNG" }));
 
@@ -1235,6 +1270,48 @@ describe("DashboardPage", () => {
       expect(qrToString).toHaveBeenCalledTimes(2);
     });
     expect(anchorClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("copies iframe code with an escaped title and keeps a manual fallback for closed forms", async () => {
+    const title = 'Опрос "ОУ" <пример> & отзывы';
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1, { title, is_public: false, deadline_at: null })]));
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: `Поделиться формой ${title}` }));
+    const dialog = screen.getByRole("dialog", { name: `Поделиться формой ${title}` });
+    expect(within(dialog).getByText(/Форма закрыта/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Код для сайта" }));
+    const field = within(dialog).getByRole("textbox", { name: "Код для встраивания" }) as HTMLTextAreaElement;
+    const parsed = new DOMParser().parseFromString(field.value, "text/html");
+    expect(parsed.body.children).toHaveLength(1);
+    const frame = parsed.querySelector("iframe");
+    expect(frame?.getAttribute("title")).toBe(title);
+    expect(frame?.getAttribute("src")).toBe(`${window.location.origin}/form/form-1`);
+    expect(frame?.getAttribute("width")).toBe("100%");
+    expect(field.value).toContain("&quot;");
+    expect(field.value).toContain("&lt;");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Копировать код" }));
+    expect(copyTextToClipboard).toHaveBeenLastCalledWith(field.value);
+    expect(showToast).toHaveBeenCalledWith("Код для сайта скопирован", "success");
+    vi.mocked(copyTextToClipboard).mockResolvedValue(false);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Копировать код" }));
+    expect(showToast).toHaveBeenLastCalledWith(expect.stringContaining("вручную"), "warning");
+    expect(field).toBeVisible();
+    expect(qrToString).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("can retry QR generation without losing the other share tabs", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));
+    qrToString.mockRejectedValueOnce(new Error("QR unavailable"));
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Поделиться формой Форма 1" }));
+    const dialog = screen.getByRole("dialog", { name: "Поделиться формой Форма 1" });
+    await userEvent.click(within(dialog).getByRole("tab", { name: "QR-код" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("QR unavailable");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Повторить" }));
+    expect(await within(dialog).findByAltText("QR-код формы Форма 1")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Ссылка" }));
+    expect(within(dialog).getByRole("textbox", { name: "Ссылка на форму" })).toHaveValue(`${window.location.origin}/form/form-1`);
   });
 
   it("shows the compact action set for non-owners and the status dropdown for owners", async () => {
@@ -1259,7 +1336,8 @@ describe("DashboardPage", () => {
     await userEvent.click(guestMenuTrigger);
 
     const guestMenu = await screen.findByRole("menu", { name: "Меню действий формы Чужая форма" });
-    expect(within(guestMenu).getByRole("menuitem", { name: "Копировать ссылку" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Поделиться формой Чужая форма" })).toBeInTheDocument();
+    expect(within(guestMenu).queryByRole("menuitem", { name: "Копировать ссылку" })).not.toBeInTheDocument();
     expect(within(guestMenu).getByRole("menuitem", { name: "Дублировать" })).toBeInTheDocument();
     expect(within(guestMenu).queryByRole("menuitem", { name: "Переименовать" })).not.toBeInTheDocument();
     expect(within(guestMenu).queryByRole("menuitem", { name: "Удалить" })).not.toBeInTheDocument();
@@ -1339,12 +1417,9 @@ describe("DashboardPage", () => {
     );
   });
 
-  it("keeps card action menus wide enough for single-line labels and rounds only their ellipsis triggers", () => {
+  it("keeps card action menus wide enough for single-line labels", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(
-      /\.dashboard-actions-menu-shell\s+\.form-menu-trigger,\s*\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
-    );
     expect(css).toMatch(
       /\.dashboard-actions-menu-shell\s+\.form-menu-dropdown,\s*\.templates-actions-menu-shell\s+\.form-menu-dropdown\s*\{[^}]*min-width:\s*236px;/s,
     );
@@ -1422,6 +1497,7 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Автор 1")).not.toBeInTheDocument();
     expect(screen.queryByText("Шаблон отчёта")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("Поиск по названию")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
     expect(screen.getByRole("combobox", { name: "Тип формы" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Основание формы" })).toBeInTheDocument();
   });

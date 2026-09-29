@@ -11,6 +11,9 @@ import { formatDashboardCreatedAt, formatDashboardDeadlineLabel, getAuthorLabel,
 import { DashboardFormActionMenu } from "./DashboardFormActionMenu";
 import { DashboardFormMetaLine } from "./DashboardFormMetaLine";
 import { DashboardFormStatusControl } from "./DashboardFormStatusControl";
+import shareBlackIcon from "../../../img/Share_black.svg";
+import shareWhiteIcon from "../../../img/Share_white.svg";
+import { useTheme } from "../../../shared/theme/ThemeProvider";
 import { DashboardDeadlineTooltip } from "./DashboardDeadlineTooltip";
 
 type DashboardFormCardProps = {
@@ -19,19 +22,17 @@ type DashboardFormCardProps = {
   form: SurveyFormSummary;
   formIndex: number;
   isPending: boolean;
-  onCopyLink: (formId: string) => void;
   onDeleteRequest: (form: SurveyFormSummary) => void;
   onDuplicate: (form: SurveyFormSummary) => void;
   onEditForm: (formId: string) => void;
   onOpenDeadlineEditor: (form: SurveyFormSummary) => void;
   onOpenForm: (form: SurveyFormSummary) => void;
-  onOpenQrCode: (form: SurveyFormSummary) => void;
+  onShare: (form: SurveyFormSummary) => void;
   onOpenResponseLimitEditor: (form: SurveyFormSummary) => void;
   onOpenResponses: (formId: string) => void;
   onRename: (form: SurveyFormSummary) => void;
   onToggleStatus: (form: SurveyFormSummary) => void;
   openedMenu: OpenMenuState;
-  qrGeneratingFormId: string | null;
   setOpenedMenu: Dispatch<SetStateAction<OpenMenuState>>;
   viewMode: DashboardViewMode;
 };
@@ -42,22 +43,21 @@ export function DashboardFormCard({
   form,
   formIndex,
   isPending,
-  onCopyLink,
   onDeleteRequest,
   onDuplicate,
   onEditForm,
   onOpenDeadlineEditor,
   onOpenForm,
-  onOpenQrCode,
+  onShare,
   onOpenResponseLimitEditor,
   onOpenResponses,
   onRename,
   onToggleStatus,
   openedMenu,
-  qrGeneratingFormId,
   setOpenedMenu,
   viewMode,
 }: DashboardFormCardProps) {
+  const { themeId } = useTheme();
   const title = getSurveyDisplayTitle(form);
   const isOwnForm = form.author_id === currentUserId;
   const isTemplate = isTemplateForm(form);
@@ -67,6 +67,7 @@ export function DashboardFormCard({
   const formReasonLabel = getFormReasonLabel(form.form_reason);
 
   const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
@@ -89,6 +90,20 @@ export function DashboardFormCard({
     />
   );
   const actionMenu = (
+    <div className="dashboard-form-actions">
+      {!isTemplate && (
+        <button
+          type="button"
+          className="form-menu-trigger dashboard-share-button"
+          aria-label={`Поделиться формой ${title}`}
+          title="Поделиться"
+          aria-haspopup="dialog"
+          disabled={isPending}
+          onClick={(event) => { event.stopPropagation(); setOpenedMenu(null); onShare(form); }}
+        >
+          <img src={themeId === "graphite" ? shareWhiteIcon : shareBlackIcon} alt="" aria-hidden="true" />
+        </button>
+      )}
     <DashboardFormActionMenu
       portal={layout === "table"}
       actionMenuOpen={actionMenuOpen}
@@ -96,15 +111,13 @@ export function DashboardFormCard({
       form={form}
       isFirstVisibleForm={formIndex === 0}
       isPending={isPending}
-      onCopyLink={onCopyLink}
       onDeleteRequest={onDeleteRequest}
       onDuplicate={onDuplicate}
       onEditForm={onEditForm}
-      onOpenQrCode={onOpenQrCode}
       onRename={onRename}
-      qrGeneratingFormId={qrGeneratingFormId}
       setOpenedMenu={setOpenedMenu}
     />
+    </div>
   );
 
   if (layout === "table") {

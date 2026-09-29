@@ -1,7 +1,7 @@
 import { Presence } from "../../../shared/ui/Presence";
-import { useId, useState, type Dispatch, type SetStateAction } from "react";
-import { useMobileLayout } from "../../../shared/ui/useMobileLayout";
+import { useId, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entities/survey/model/formOptions";
+import type { FormsSort } from "../../../entities/survey/types";
 import viewBlack from "../../../img/FormatViewBlack.svg";
 import viewWhite from "../../../img/FormatViewWhite.svg";
 import infoIcon from "../../../img/info.svg";
@@ -11,6 +11,8 @@ import type { DashboardLayout, DashboardViewMode, OpenMenuState } from "../types
 type DashboardToolbarProps = {
   layout: DashboardLayout;
   onToggleLayout: () => void;
+  sort: FormsSort;
+  onSortChange: (sort: FormsSort) => void;
   activeFormsCount: number;
   dateFrom: string;
   dateTo: string;
@@ -32,6 +34,8 @@ type DashboardToolbarProps = {
 export function DashboardToolbar({
   layout,
   onToggleLayout,
+  sort,
+  onSortChange,
   activeFormsCount,
   dateFrom,
   dateTo,
@@ -50,10 +54,19 @@ export function DashboardToolbar({
   viewMode,
 }: DashboardToolbarProps) {
   const searchPlaceholder = viewMode === "mine" ? "Поиск по названию" : "Поиск по названию и автору";
-  const isMobile = useMobileLayout();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersButton = useRef<HTMLButtonElement>(null);
   const filtersId = useId();
-  const activeFilterCount = [dateFrom, dateTo, formType, formReason].filter(Boolean).length;
+  const customSort = sort.field !== "created_at" || sort.direction !== "desc";
+  const activeFilterCount = [dateFrom || dateTo, formType, formReason, customSort].filter(Boolean).length;
+  const resetFilters = () => {
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setFormType("");
+    setFormReason("");
+    onSortChange({ field: "created_at", direction: "desc" });
+  };
 
   return (
     <div className="dashboard-toolbar">
@@ -108,7 +121,8 @@ export function DashboardToolbar({
         </div>
       </div>
 
-      {isMobile && <button
+      <button
+        ref={filtersButton}
         type="button"
         className="app-button dashboard-filters-toggle"
         aria-expanded={filtersOpen}
@@ -117,16 +131,23 @@ export function DashboardToolbar({
       >
         Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
         <span aria-hidden="true">{filtersOpen ? "−" : "+"}</span>
-      </button>}
-      <div id={filtersId} className="dashboard-filter-group" hidden={isMobile && !filtersOpen}>
-        <label className="dashboard-filter-field">
-          <span>Дата с</span>
-          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-        </label>
-        <label className="dashboard-filter-field">
-          <span>Дата по</span>
-          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-        </label>
+      </button>
+      <div id={filtersId} className="dashboard-filter-group dashboard-filters-popover" role="region" aria-label="Фильтры форм" hidden={!filtersOpen}
+        onKeyDown={event => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            setFiltersOpen(false);
+            filtersButton.current?.focus();
+          }
+        }}>
+        <fieldset className="dashboard-filter-field dashboard-date-range">
+          <legend>Период создания</legend>
+          <div className="dashboard-date-range-inputs">
+            <label className="dashboard-date-bound"><span>С</span><input type="date" aria-label="Дата с" title="Дата с" max={dateTo || undefined} value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+            <span aria-hidden="true">—</span>
+            <label className="dashboard-date-bound"><span>По</span><input type="date" aria-label="Дата по" title="Дата по" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+          </div>
+        </fieldset>
         <label className="dashboard-filter-field">
           <span>Тип формы</span>
           <select aria-label="Тип формы" value={formType} onChange={(event) => setFormType(event.target.value)}>
@@ -149,6 +170,27 @@ export function DashboardToolbar({
             ))}
           </select>
         </label>
+        <label className="dashboard-filter-field">
+          <span>Сортировка</span>
+          <select value={`${sort.field}:${sort.direction}`} onChange={event => {
+            const [field, direction] = event.target.value.split(":") as [FormsSort["field"], FormsSort["direction"]];
+            onSortChange({ field, direction });
+          }}>
+            <option value="created_at:desc">Сначала новые</option>
+            <option value="created_at:asc">Сначала старые</option>
+            <option value="status:desc">Сначала открытые</option>
+            <option value="status:asc">Сначала закрытые</option>
+            <option value="title:asc">Название: А–Я</option>
+            <option value="title:desc">Название: Я–А</option>
+            <option value="responses_count:desc">Больше ответов</option>
+            <option value="responses_count:asc">Меньше ответов</option>
+            <option value="classification:asc">Тип и основание: А–Я</option>
+            <option value="classification:desc">Тип и основание: Я–А</option>
+            <option value="author_name:asc">Автор: А–Я</option>
+            <option value="author_name:desc">Автор: Я–А</option>
+          </select>
+        </label>
+        <button type="button" className="app-button dashboard-filters-reset" disabled={!search && activeFilterCount === 0} onClick={resetFilters}>Сбросить</button>
       </div>
     </div>
   );

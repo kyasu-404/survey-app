@@ -111,6 +111,17 @@ http {{
             assert "Content-Security-Policy" in headers
             status, html_headers = request(port_number, "/dashboard/my")
             assert status == 200 and html_headers.get("Cache-Control") == "no-cache"
+            for protected_path in ["/dashboard/my", "/settings", "/login", "/form/example/extra", "/form/%2e%2e/settings"]:
+                status, protected_headers = request(port_number, protected_path)
+                assert status == 200
+                assert "frame-ancestors 'none'" in protected_headers["Content-Security-Policy"], protected_headers
+                assert protected_headers.get("X-Frame-Options") == "DENY", protected_headers
+            for public_path in ["/form/20000000-0000-4000-8000-000000000001", "/form/example/?source=website"]:
+                status, embed_headers = request(port_number, public_path)
+                assert status == 200 and embed_headers.get("Cache-Control") == "no-cache", embed_headers
+                assert "frame-ancestors *" in embed_headers["Content-Security-Policy"], embed_headers
+                assert "X-Frame-Options" not in embed_headers, embed_headers
+                assert embed_headers.get("X-Content-Type-Options") == "nosniff", embed_headers
             status, missing_headers = request(port_number, "/assets/missing-12345678.js")
             assert status == 404 and "immutable" not in missing_headers.get("Cache-Control", "")
             assert request(port_number, "/assets/app-12345678.js", headers={"If-None-Match": headers["ETag"]})[0] == 304

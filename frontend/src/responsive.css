@@ -19,7 +19,7 @@
   display: none;
 }
 
-.dashboard-filter-group[hidden] {
+.dashboard-filter-group.dashboard-filters-popover[hidden] {
   display: none;
 }
 
@@ -231,9 +231,10 @@
   .dashboard-info-button { width: 44px; height: 44px; min-width: 44px; border-radius: 12px; }
   .dashboard-stats-popover { max-width: calc(100vw - 56px); }
   .dashboard-filters-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 44px; box-shadow: none; }
-  .dashboard-filter-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .dashboard-filter-group.dashboard-filters-popover { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px; }
   .dashboard-filter-field { min-width: 0; }
   .dashboard-filter-field :is(input, select) { width: 100%; min-width: 0; max-width: 100%; padding: 10px 8px; }
+  .dashboard-filters-popover .dashboard-date-range,
   .dashboard-filter-field:has(select) { grid-column: 1 / -1; }
   .dashboard-forms-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .dashboard-form-card { padding: 14px; border-radius: 16px; }
@@ -242,6 +243,7 @@
   .dashboard-form-footer { flex-direction: row; align-items: flex-end; gap: 8px; }
   .dashboard-form-footer .form-menu { flex-shrink: 0; }
   .form-menu-trigger { min-width: 44px; min-height: 44px; }
+  .dashboard-form-actions .form-menu-trigger { width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 12px; }
   .form-menu-item { min-height: 44px; }
   .templates-gallery-grid { grid-template-columns: minmax(0, 1fr); }
   .templates-page-header { flex-wrap: wrap; gap: 12px; }
@@ -320,6 +322,10 @@
 }
 
 @media (max-width: 359px) {
-  .dashboard-filter-group,
+  .dashboard-filter-group.dashboard-filters-popover,
   .users-filters-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-date-range-inputs { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-date-range-inputs > span { display: none; }
+  .dashboard-date-bound { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 6px; }
+  .dashboard-date-bound > span { display: block; }
 }

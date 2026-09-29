@@ -14,12 +14,16 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   textarea.style.position = "fixed";
   textarea.style.opacity = "0";
 
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  const isCopied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-
-  return isCopied;
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // A modal dialog makes the rest of the document inert, including a body-level fallback.
+  const host = previousFocus?.closest("dialog[open]") ?? document.body;
+  host.appendChild(textarea);
+  try {
+    textarea.focus();
+    textarea.select();
+    return document.execCommand("copy");
+  } finally {
+    textarea.remove();
+    previousFocus?.focus({ preventScroll: true });
+  }
 }

@@ -17,7 +17,7 @@ export function OnlyofficeSettingsSection(){
  async function test(){setBusy(true);setError('');setChecks([]);try{const r=await officeRequest<{checks:typeof checks}>('/settings/test',{method:'POST'});setChecks(r.checks);}catch(e){setError(getErrorMessage(e,'Не удалось проверить подключение'));}finally{setBusy(false);}}
  return <section className="settings-area" aria-labelledby="office-settings-title">
   <div className="settings-area-heading"><div><p>Макеты документов</p><h2 id="office-settings-title">ONLYOFFICE</h2><span>Макеты XLSX и DOCX для отдельного документа на каждый ответ.</span></div>
-   <label className={`smtp-enable-control ${value.enabled?'active':''}`}><input type="checkbox" checked={value.enabled} disabled={query.isLoading || busy} onChange={e=>update('enabled',e.target.checked)}/><span className="smtp-enable-track" aria-hidden="true"><span/></span>Коннектор включён</label>
+   <label className={`smtp-enable-control ${value.enabled?'active':''}`}><input type="checkbox" checked={value.enabled} disabled={query.isLoading || busy} onChange={e=>{update('enabled',e.target.checked);showToast('Для применения сохраните настройки','warning');}}/><span className="smtp-enable-track" aria-hidden="true"><span/></span>{value.enabled?'Коннектор включён':'Коннектор выключен'}</label>
   </div>
   {(error || query.error) && <p role="alert" className="settings-form-error">{error || getErrorMessage(query.error,'Office API недоступен')}</p>}
   <section className="settings-section" aria-labelledby="office-connection-title">

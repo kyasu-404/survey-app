@@ -9,10 +9,8 @@ import type {
 import { getSurveyDisplayTitle, isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import copyIcon from "../../../img/copy.svg";
-import copyLinkIcon from "../../../img/copy_link.svg";
 import deleteIcon from "../../../img/delete.svg";
 import editIcon from "../../../img/edit.svg";
-import qrIcon from "../../../img/qr.svg";
 import renameIcon from "../../../img/rename.svg";
 import type { OpenMenuState } from "../types";
 
@@ -23,13 +21,10 @@ type DashboardFormActionMenuProps = {
   form: SurveyFormSummary;
   isFirstVisibleForm: boolean;
   isPending: boolean;
-  onCopyLink: (formId: string) => void;
   onDeleteRequest: (form: SurveyFormSummary) => void;
   onDuplicate: (form: SurveyFormSummary) => void;
   onEditForm: (formId: string) => void;
-  onOpenQrCode: (form: SurveyFormSummary) => void;
   onRename: (form: SurveyFormSummary) => void;
-  qrGeneratingFormId: string | null;
   setOpenedMenu: Dispatch<SetStateAction<OpenMenuState>>;
 };
 
@@ -44,13 +39,10 @@ export function DashboardFormActionMenu({
   form,
   isFirstVisibleForm,
   isPending,
-  onCopyLink,
   onDeleteRequest,
   onDuplicate,
   onEditForm,
-  onOpenQrCode,
   onRename,
-  qrGeneratingFormId,
   setOpenedMenu,
 }: DashboardFormActionMenuProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -89,39 +81,6 @@ export function DashboardFormActionMenu({
           aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
           onClick={stopCardEvent}
         >
-          {!isTemplate && (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                className="form-menu-item"
-                onClick={(event) => {
-                  stopCardEvent(event);
-                  setOpenedMenu(null);
-                  void onCopyLink(form.id);
-                }}
-                disabled={isPending}
-              >
-                <img src={copyLinkIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                <span className="form-menu-item-label">Копировать ссылку</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="form-menu-item"
-                onClick={(event) => {
-                  stopCardEvent(event);
-                  setOpenedMenu(null);
-                  void onOpenQrCode(form);
-                }}
-                disabled={isPending || qrGeneratingFormId === form.id}
-              >
-                <img src={qrIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
-                <span className="form-menu-item-label">Генерировать QR</span>
-              </button>
-            </>
-          )}
-
           {(isTemplate || isOwnForm) && (
             <button
               type="button"

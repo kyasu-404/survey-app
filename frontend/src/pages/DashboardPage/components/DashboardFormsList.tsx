@@ -15,20 +15,18 @@ type DashboardFormsListProps = {
   isFetchingNextFormsPage: boolean;
   isFormActionPending: (formId: string) => boolean;
   isInitialFormsLoading: boolean;
-  onCopyLink: (formId: string) => void;
   onDeleteRequest: (form: SurveyFormSummary) => void;
   onDuplicate: (form: SurveyFormSummary) => void;
   onEditForm: (formId: string) => void;
   onLoadMore: () => void;
   onOpenDeadlineEditor: (form: SurveyFormSummary) => void;
   onOpenForm: (form: SurveyFormSummary) => void;
-  onOpenQrCode: (form: SurveyFormSummary) => void;
+  onShare: (form: SurveyFormSummary) => void;
   onOpenResponseLimitEditor: (form: SurveyFormSummary) => void;
   onOpenResponses: (formId: string) => void;
   onRename: (form: SurveyFormSummary) => void;
   onToggleStatus: (form: SurveyFormSummary) => void;
   openedMenu: OpenMenuState;
-  qrGeneratingFormId: string | null;
   setOpenedMenu: Dispatch<SetStateAction<OpenMenuState>>;
   viewMode: DashboardViewMode;
 };
@@ -44,20 +42,18 @@ export function DashboardFormsList({
   isFetchingNextFormsPage,
   isFormActionPending,
   isInitialFormsLoading,
-  onCopyLink,
   onDeleteRequest,
   onDuplicate,
   onEditForm,
   onLoadMore,
   onOpenDeadlineEditor,
   onOpenForm,
-  onOpenQrCode,
+  onShare,
   onOpenResponseLimitEditor,
   onOpenResponses,
   onRename,
   onToggleStatus,
   openedMenu,
-  qrGeneratingFormId,
   setOpenedMenu,
   viewMode,
 }: DashboardFormsListProps) {
@@ -69,19 +65,17 @@ export function DashboardFormsList({
             form={form}
             formIndex={formIndex}
             isPending={isFormActionPending(form.id)}
-            onCopyLink={onCopyLink}
             onDeleteRequest={onDeleteRequest}
             onDuplicate={onDuplicate}
             onEditForm={onEditForm}
             onOpenDeadlineEditor={onOpenDeadlineEditor}
             onOpenForm={onOpenForm}
-            onOpenQrCode={onOpenQrCode}
+            onShare={onShare}
             onOpenResponseLimitEditor={onOpenResponseLimitEditor}
             onOpenResponses={onOpenResponses}
             onRename={onRename}
             onToggleStatus={onToggleStatus}
             openedMenu={openedMenu}
-            qrGeneratingFormId={qrGeneratingFormId}
             setOpenedMenu={setOpenedMenu}
             viewMode={viewMode}
           />

@@ -13,7 +13,7 @@ import { DashboardFormsList } from "./components/DashboardFormsList";
 import { DashboardToolbar } from "./components/DashboardToolbar";
 import { DeadlineModal } from "./components/DeadlineModal";
 import { DeleteFormModal } from "./components/DeleteFormModal";
-import { QrModal } from "./components/QrModal";
+import { ShareFormModal } from "./components/ShareFormModal";
 import { ResponseLimitModal } from "./components/ResponseLimitModal";
 import { useDashboardActions } from "./hooks/useDashboardActions";
 import { useDashboardFilters, type DashboardFilterValues } from "./hooks/useDashboardFilters";
@@ -22,7 +22,6 @@ import { useDashboardListRefresh } from "./hooks/useDashboardListRefresh";
 import { useDashboardMenuDismiss } from "./hooks/useDashboardMenuDismiss";
 import { useDashboardRealtime } from "./hooks/useDashboardRealtime";
 import { useDashboardStats } from "./hooks/useDashboardStats";
-import { useQrDialog } from "./hooks/useQrDialog";
 import type { DashboardLayout, DashboardPageProps, OpenMenuState } from "./types";
 
 type DashboardViewSnapshot = {
@@ -88,7 +87,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     formsStatsQueryKey: stats.formsStatsQueryKey,
     userId: user?.id,
   });
-  const qr = useQrDialog();
+  const [sharedForm, setSharedForm] = useState<SurveyFormSummary | null>(null);
 
   useDashboardRealtime({
     filters: filters.listFilters,
@@ -165,6 +164,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         <DashboardToolbar
           layout={layout}
           onToggleLayout={toggleLayout}
+          sort={sort}
+          onSortChange={setSort}
           activeFormsCount={stats.activeFormsCount}
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
@@ -194,20 +195,18 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           isFetchingNextFormsPage={forms.isFetchingNextFormsPage}
           isFormActionPending={actions.isFormActionPending}
           isInitialFormsLoading={forms.isInitialFormsLoading}
-          onCopyLink={(formId) => void qr.handleCopyLink(formId)}
           onDeleteRequest={actions.setFormToDelete}
           onDuplicate={(form) => void actions.handleDuplicate(form)}
           onEditForm={(formId) => navigate(routes.builderEdit(formId))}
           onLoadMore={forms.handleLoadMoreForms}
           onOpenDeadlineEditor={actions.openDeadlineEditor}
           onOpenForm={handleCardOpen}
-          onOpenQrCode={(form) => void qr.handleOpenQrCode(form)}
+          onShare={setSharedForm}
           onOpenResponseLimitEditor={actions.openResponseLimitEditor}
           onOpenResponses={(formId) => navigate(routes.formResponses(formId))}
           onRename={(form) => void actions.handleRename(form)}
           onToggleStatus={(form) => void actions.handleToggleFormStatus(form)}
           openedMenu={openedMenu}
-          qrGeneratingFormId={qr.qrGeneratingFormId}
           setOpenedMenu={setOpenedMenu}
           viewMode={viewMode}
         />
@@ -244,13 +243,8 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
         />
       )}</Presence>
 
-      <Presence kind="modal">{qr.qrDialog && (
-        <QrModal
-          downloadFormat={qr.qrDownloadFormat}
-          onClose={() => qr.setQrDialog(null)}
-          onDownload={(format) => void qr.handleDownloadQr(format)}
-          qrDialog={qr.qrDialog}
-        />
+      <Presence kind="modal">{sharedForm && (
+        <ShareFormModal key={sharedForm.id} form={sharedForm} onClose={() => setSharedForm(null)} />
       )}</Presence>
     </div>
   );

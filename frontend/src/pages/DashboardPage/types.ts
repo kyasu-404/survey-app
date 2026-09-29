@@ -18,13 +18,6 @@ export type ResponseLimitEditorState = {
   value: string;
 };
 
-export type QrDialogState = {
-  fileName: string;
-  link: string;
-  previewDataUrl: string;
-  title: string;
-};
-
 export type DashboardActionOptions = {
   actionKey: string;
   successMessage: string;

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AdminRoute } from "./AdminRoute";
@@ -129,9 +129,10 @@ describe("route guards", () => {
 
   it("redirects a non-admin user back to the dashboard", () => {
     useAuth.mockReturnValue({
+      user: { id: "user-1" },
       loading: false,
       profileLoading: false,
-      profile: { role: "user" },
+      profile: { id: "user-1", role: "user" },
     });
 
     render(
@@ -155,9 +156,10 @@ describe("route guards", () => {
 
   it("renders children for admin profiles", () => {
     useAuth.mockReturnValue({
+      user: { id: "user-1" },
       loading: false,
       profileLoading: false,
-      profile: { role: "admin" },
+      profile: { id: "user-1", role: "admin" },
     });
 
     render(
@@ -169,5 +171,57 @@ describe("route guards", () => {
     );
 
     expect(screen.getByText("admin content")).toBeInTheDocument();
+  });
+
+  it("preserves unsaved input while refreshing the same administrator's profile", () => {
+    const auth = {
+      user: { id: "user-1" }, loading: false, profileLoading: false,
+      profile: { id: "user-1", role: "admin" },
+    };
+    useAuth.mockReturnValue(auth);
+    const content = <MemoryRouter><AdminRoute><input aria-label="Draft" defaultValue="" /></AdminRoute></MemoryRouter>;
+    const { rerender } = render(content);
+    const input = screen.getByRole("textbox", { name: "Draft" });
+    fireEvent.change(input, { target: { value: "Unsaved settings" } });
+
+    for (const profileLoading of [true, false]) {
+      useAuth.mockReturnValue({ ...auth, profileLoading });
+      rerender(<MemoryRouter><AdminRoute><input aria-label="Draft" defaultValue="" /></AdminRoute></MemoryRouter>);
+      expect(screen.getByRole("textbox", { name: "Draft" })).toBe(input);
+      expect(input).toHaveValue("Unsaved settings");
+    }
+  });
+
+  it("does not reuse the previous administrator's profile when the account changes", () => {
+    useAuth.mockReturnValue({
+      user: { id: "user-2" }, loading: false, profileLoading: true,
+      profile: { id: "user-1", role: "admin" },
+    });
+    render(<MemoryRouter><AdminRoute><div>admin content</div></AdminRoute></MemoryRouter>);
+    expect(screen.getByText("Проверка прав доступа...")).toBeInTheDocument();
+    expect(screen.queryByText("admin content")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { id: "user-1", role: "user", is_disabled: false },
+    { id: "user-1", role: "admin", is_disabled: true },
+    null,
+  ])("removes admin content when a refreshed profile loses access: %j", (profile) => {
+    const auth = { user: { id: "user-1" }, loading: false, profileLoading: false };
+    useAuth.mockReturnValue({ ...auth, profile: { id: "user-1", role: "admin" } });
+    const content = () => (
+      <MemoryRouter initialEntries={[routes.settings]}>
+        <Routes>
+          <Route path={routes.settings} element={<AdminRoute><div>admin content</div></AdminRoute>} />
+          <Route path={routes.dashboardMy} element={<div>dashboard content</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const { rerender } = render(content());
+    expect(screen.getByText("admin content")).toBeInTheDocument();
+    useAuth.mockReturnValue({ ...auth, profile });
+    rerender(content());
+    expect(screen.queryByText("admin content")).not.toBeInTheDocument();
+    expect(screen.getByText("dashboard content")).toBeInTheDocument();
   });
 });

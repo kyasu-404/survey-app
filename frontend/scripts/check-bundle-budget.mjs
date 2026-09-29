@@ -18,8 +18,10 @@ const budgets = {
   // Viewport-bounded menus and mobile preview refinements add 2.5 KiB.
   // Answer formatting and draft upload restoration add a measured 6.4 KiB.
   // Standalone section hierarchy and preview chrome add another 1.5 KiB.
+  // Sharing tabs, iframe code and collapsible filters add about 8 KiB.
+  // Allocate 10 KiB for this UI; dependency and initial-load budgets stay fixed.
   // Keep the initial-load gate unchanged; allow only this measured increase.
-  total: { raw: 6_980_500 },
+  total: { raw: 6_990_740 },
 };
 
 function formatBytes(bytes) {

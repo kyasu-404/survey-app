@@ -79,9 +79,11 @@
 .motion-modal[data-state="leaving"] > .modal-backdrop,
 .motion-modal[data-state="leaving"] > .office-dialog::backdrop { animation: app-backdrop-leave 180ms ease both; }
 .motion-modal[data-state="leaving"] > .modal-backdrop > .modal-card,
-.motion-modal[data-state="leaving"] > .office-dialog { animation: app-modal-leave 180ms ease both; }
+.motion-modal[data-state="leaving"] > .office-dialog,
+.motion-modal[data-state="leaving"] > .dashboard-share-modal { animation: app-modal-leave 180ms ease both; }
 
-.motion-menu .form-menu-dropdown, .motion-menu .dashboard-stats-popover {
+.motion-menu .form-menu-dropdown, .motion-menu .dashboard-stats-popover,
+.dashboard-filters-popover:not([hidden]) {
   animation: app-menu-enter 180ms var(--app-motion-easing) both;
 }
 
@@ -146,7 +148,7 @@
   .sidebar-open-button, .template-preview-layer, .response-preview-layer,
   .template-preview-drawer, .response-preview-drawer { animation: none !important; }
   .motion-presence *, .office-dialog::backdrop, .modal-backdrop, .modal-card,
-  .toast-slot, .toast-clip, .toast, .dashboard-layout-transition {
+  .toast-slot, .toast-clip, .toast, .dashboard-layout-transition, .dashboard-filters-popover {
     animation: none !important;
     transition: none !important;
   }

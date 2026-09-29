@@ -34,4 +34,24 @@ describe("browser helpers", () => {
     expect(execCommand).toHaveBeenCalledWith("copy");
     expect(document.querySelector("textarea")).toBeNull();
   });
+
+  it("keeps fallback copying inside an open dialog and restores focus even on failure", async () => {
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: undefined });
+    const dialog = document.createElement("dialog");
+    dialog.open = true;
+    const button = document.createElement("button");
+    dialog.appendChild(button);
+    document.body.appendChild(dialog);
+    button.focus();
+    Object.defineProperty(document, "execCommand", { configurable: true, value: vi.fn(() => {
+      expect(dialog.querySelector("textarea")).toHaveValue("iframe code");
+      expect(document.activeElement).toBe(dialog.querySelector("textarea"));
+      throw new Error("Copy blocked");
+    }) });
+    try {
+      await expect(copyTextToClipboard("iframe code")).rejects.toThrow("Copy blocked");
+      expect(dialog.querySelector("textarea")).toBeNull();
+      expect(document.activeElement).toBe(button);
+    } finally { dialog.remove(); }
+  });
 });
