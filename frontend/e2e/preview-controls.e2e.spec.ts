@@ -52,7 +52,9 @@ for (const theme of ["sand", "graphite"]) {
     });
     expect(exit).toEqual({ duration: "0.15s", name: "app-drawer-leave" });
     await expect(preview).toHaveCount(0);
-    await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "stable");
+    // Closing the drawer must not restore the empty gutter removed from list pages.
+    await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
+    expect(await page.locator("html").evaluate(element => element.getBoundingClientRect().width)).toBe(1440);
     await expect(page.locator("html")).not.toHaveCSS("overflow", "hidden");
     expect(app.pageErrors).toEqual([]);
   });
