@@ -104,7 +104,7 @@ export function MailDeliveryPanel({
             <select value={effectiveBatchId ?? ""} onChange={(event) => setSelectedBatchId(event.target.value)}>
               {batches.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {new Date(batch.created_at).toLocaleString("ru-RU")} · {batch.total_count} писем
+                  {batch.kind === "invitation" ? "Приглашения" : "Напоминания"} · {new Date(batch.created_at).toLocaleString("ru-RU")} · {batch.total_count} писем
                 </option>
               ))}
             </select>

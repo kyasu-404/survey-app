@@ -149,13 +149,14 @@ export async function insertResponse(
   submissionId: string,
   browserId: string,
   signal?: AbortSignal,
+  personalToken?: string,
 ): Promise<SubmitResponseResult> {
   const { data: result, error } = await runRequest(
     "responses.submit",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc("submit_form_response", {
+      apiClient.rpc(personalToken ? "submit_personal_form_response" : "submit_form_response", {
         p_form_id: formId,
-        p_browser_id: browserId,
+        ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
         p_submission_id: submissionId,
         p_data: data,
       }),
@@ -172,13 +173,14 @@ export async function fetchExistingResponse(
   formId: string,
   browserId: string,
   signal?: AbortSignal,
+  personalToken?: string,
 ): Promise<ExistingResponseResult | null> {
   const { data: result, error } = await runRequest(
     "responses.fetchExisting",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc("get_form_response_status", {
+      apiClient.rpc(personalToken ? "get_personal_form_response_status" : "get_form_response_status", {
         p_form_id: formId,
-        p_browser_id: browserId,
+        ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
       }),
       requestSignal,
     ),
@@ -195,13 +197,14 @@ export async function updateResponse(
   data: Record<string, unknown>,
   browserId: string,
   signal?: AbortSignal,
+  personalToken?: string,
 ): Promise<UpdateResponseResult> {
   const { data: result, error } = await runRequest(
     "responses.update",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc("update_form_response", {
+      apiClient.rpc(personalToken ? "update_personal_form_response" : "update_form_response", {
         p_form_id: formId,
-        p_browser_id: browserId,
+        ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
         p_response_id: responseId,
         p_data: data,
       }),

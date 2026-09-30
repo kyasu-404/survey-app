@@ -105,7 +105,7 @@ export function getOrganizationQuestionNames(schema: SurveySchema) {
   const names: string[] = [];
   visitQuestions(schema, (question) => {
     if (question.type === ORGANIZATION_QUESTION_TYPE) {
-      names.push(question.name);
+      names.push(typeof question.valueName === "string" && question.valueName ? question.valueName : question.name);
     }
   });
   return names;

@@ -21,7 +21,7 @@ export type MailDeliveryStatus = "queued" | "processing" | "sent" | "failed";
 
 export type MailBatch = {
   id: string;
-  kind: "reminder" | "test";
+  kind: "reminder" | "invitation" | "test";
   form_id: string | null;
   created_by: string;
   total_count: number;
@@ -53,3 +53,12 @@ export type QueueMailResult = {
   batchId: string | null;
   queuedCount: number;
 };
+
+export type FormMailKind = "invitation" | "reminder";
+export type MailTemplate = { subject: string; bodyText: string };
+export type MailRecipient = { id: string; name: string; email: string; organizationType: string; canSend: boolean };
+export type MailComposition = { personal: boolean; smtpEnabled: boolean; template: MailTemplate; recipients: MailRecipient[] };
+export type FormMailDraft = { organizationIds: string[]; template: MailTemplate; personal: boolean };
+export type MailPreview = { personal: boolean; recipientCount: number; message: {
+  organizationId: string; name: string; email: string; subject: string; bodyText: string;
+} };

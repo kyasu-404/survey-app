@@ -748,7 +748,7 @@ export default function FormResponsesPage() {
           report={responseReport}
           formId={id}
           organizationTypes={formOrganizationTypes}
-          canSendReminders={canDeleteResponses}
+          canSendReminders={Boolean(user && formQuery.data?.author_id === user.id)}
           onClose={() => setResponseReport(null)}
         />
       )}</Presence>

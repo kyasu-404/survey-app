@@ -1,11 +1,11 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
+import { createClient } from "npm:@supabase/supabase-js@2.100.0";
 import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
 type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string }
-  | { action: "restore-upload"; formId: string; browserId: string; path: string }
+  | { action: "restore-upload"; formId: string; browserId: string; path: string; personalToken?: string }
   | { action: "delete-upload"; formId: string; path: string }
   | { action: "get-cleanup-status" }
   | { action: "cleanup-orphans" }
@@ -454,10 +454,17 @@ Deno.serve(async (req) => {
     if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !isAnonymousUploadPath(payload.path, payload.formId)) {
       return errorResponse(req, 400, "Некорректные параметры файла", requestLogContext);
     }
-    const { data: allowed, error } = await adminClient.rpc("can_restore_survey_upload", {
+    const { data: browserAllowed, error } = await adminClient.rpc("can_restore_survey_upload", {
       p_path: payload.path, p_browser_id: payload.browserId,
     });
     if (error) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", requestLogContext);
+    let allowed = browserAllowed === true;
+    if (!allowed && isUuid(payload.personalToken)) {
+      const { data: personalAllowed } = await adminClient.rpc("can_restore_personal_upload", {
+        p_form_id: payload.formId, p_token: payload.personalToken, p_path: payload.path,
+      });
+      allowed = personalAllowed === true;
+    }
     if (allowed !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
     const { data, error: signError } = await adminClient.storage.from(storageBucket).createSignedUrl(payload.path, 60);
     if (signError || !data?.signedUrl) return errorResponse(req, 503, "Не удалось восстановить файл. Повторите позже.", requestLogContext);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Model, type QuestionCustomModel, type QuestionDropdownModel } from "survey-core";
 import { registerCustomSurveyQuestionTypes } from "../survey/model/surveyQuestionTypes";
-import { applyOrganizationChoicesToSurvey } from "./surveyQuestion";
+import { applyOrganizationChoicesToSurvey, lockPersonalOrganization } from "./surveyQuestion";
 
 describe("applyOrganizationChoicesToSurvey", () => {
   it("fills only protected organization dropdowns with directory labels", () => {
@@ -47,5 +47,28 @@ it("keeps a saved archive readable and selectable only in its original question"
   expect((other.contentQuestion as QuestionDropdownModel).choices.map((choice) => choice.value)).toEqual(["active-1"]);
   model.data = savedData; // Opening editing after asynchronous choice loading.
   expect(org.displayValue).toBe("ГБОУ 2");
+  model.dispose();
+});
+
+it("prefills and locks organization fields after restoring a draft, including valueName and hidden fields", () => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [
+    { type: "organization", name: "org", valueName: "institution", enableIf: "{q} = 1", visibleIf: "{q} = 1" },
+    { type: "panel", name: "p", elements: [{ type: "organization", name: "org2" }] },
+    { type: "text", name: "q" },
+  ] });
+  model.data = { institution: "wrong", org2: "wrong", q: "draft" };
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  expect(model.data).toEqual({ institution: "locked", org2: "locked", q: "draft" });
+  for (const name of ["org", "org2"]) {
+    const question = model.getQuestionByName(name) as QuestionCustomModel;
+    expect(question.isReadOnly).toBe(true);
+    expect(question.contentQuestion.isReadOnly).toBe(true);
+    expect(question.displayValue).toBe("ГБОУ 12");
+  }
+  model.setValue("q", "1");
+  expect(model.getQuestionByName("org").isReadOnly).toBe(true);
+  model.setValue("q", "2");
+  expect(model.data.institution).toBe("locked");
   model.dispose();
 });

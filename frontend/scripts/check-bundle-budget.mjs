@@ -21,7 +21,13 @@ const budgets = {
   // Sharing tabs, iframe code and collapsible filters add about 8 KiB.
   // Allocate 10 KiB for this UI; dependency and initial-load budgets stay fixed.
   // Keep the initial-load gate unchanged; allow only this measured increase.
-  total: { raw: 6_990_740 },
+  // Personal links, invitation status and response binding add 9.8 KiB.
+  // Reserve 12 KiB; initial-load and dependency budgets remain unchanged.
+  // Lazy mail composer, recipient selection and responsive layout add 15.2 KiB.
+  // Reserve 18 KiB; initial-load and dependency limits stay fixed.
+  // iframe settings and favicon UI add a measured 12 KiB; reserve 14 KiB.
+  // Initial-load and dependency limits stay fixed.
+  total: { raw: 7_035_796 },
 };
 
 function formatBytes(bytes) {

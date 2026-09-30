@@ -56,6 +56,14 @@ describe("storage api", () => {
     expect(publicSupabaseClient.storage.from).not.toHaveBeenCalled();
   });
 
+  it("passes a personal capability when restoring an attached file on another browser", async () => {
+    const path = "public/10000000-0000-4000-8000-000000000000/file.txt";
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=short-lived` }, error: null } as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("hello", { headers: { "Content-Type": "text/plain" } })));
+    await resolveSurveyFileValueContent({ content: path }, { allowAnonymous: true, restoreDraft: true, personalToken: "personal-token" });
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: expect.objectContaining({ personalToken: "personal-token", path }) }));
+  });
+
   it("rejects expired draft uploads and unexpected signed URL origins", async () => {
     const file = { content: "public/10000000-0000-4000-8000-000000000000/file.txt" };
     const options = { allowAnonymous: true, restoreDraft: true };

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { getPersonalFormContext } from "../../entities/personal-link/api";
 import { getExistingResponse } from "../../entities/response/api";
 import { getFormById, getPublicFormById } from "../../entities/survey/api/surveysApi";
 import {
@@ -78,6 +79,15 @@ export default function SurveyPage() {
   const { user, loading: isAuthLoading } = useAuth();
   const renderMode = getRouteRenderMode(location.state);
   const isPreview = renderMode !== "interactive";
+  const personalToken = isPreview ? null : new URLSearchParams(location.hash.slice(1)).get("personal");
+  const hasPersonalLink = personalToken !== null;
+  const personalQuery = useQuery({
+    queryKey: ["personal-form-context", id, personalToken],
+    queryFn: ({ signal }) => getPersonalFormContext(id!, personalToken!, signal),
+    enabled: Boolean(id) && hasPersonalLink,
+    retry: false,
+    staleTime: 0,
+  });
   const responseBrowserId = useMemo(() => getOrCreateResponseBrowserId(), []);
 
   const isPrivatePreview = isPreview;
@@ -113,12 +123,12 @@ export default function SurveyPage() {
     else navigate(routes.dashboardMy, { replace: true });
   };
   const existingResponseQuery = useQuery({
-    queryKey: ["form-response-status", id, responseBrowserId],
+    queryKey: ["form-response-status", id, personalToken ?? responseBrowserId],
     queryFn: ({ signal }) => {
       if (!id) return null;
-      return getExistingResponse(id, responseBrowserId, signal);
+      return personalToken ? getExistingResponse(id, responseBrowserId, signal, personalToken) : getExistingResponse(id, responseBrowserId, signal);
     },
-    enabled: renderMode === "interactive" && Boolean(id) && Boolean(form?.is_public),
+    enabled: renderMode === "interactive" && Boolean(id) && Boolean(form?.is_public) && (!hasPersonalLink || Boolean(personalQuery.data)),
     retry: 1,
     staleTime: 0,
     refetchOnMount: "always",
@@ -126,11 +136,13 @@ export default function SurveyPage() {
     refetchOnReconnect: true,
   });
   const showInitialSkeleton = (
-    (!form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading)))
+    (hasPersonalLink && personalQuery.isLoading)
+    || (!form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading)))
     || Boolean(form && renderMode === "interactive" && existingResponseQuery.isLoading)
   );
 
   const errorMessage = useMemo(() => {
+    if (personalQuery.error) return personalQuery.error instanceof Error ? personalQuery.error.message : "Персональная ссылка недействительна";
     if (surveyQuery.error && !isAbortError(surveyQuery.error)) {
       return surveyQuery.error instanceof Error
         ? surveyQuery.error.message
@@ -144,7 +156,7 @@ export default function SurveyPage() {
     }
 
     return null;
-  }, [existingResponseQuery.error, surveyQuery.error]);
+  }, [existingResponseQuery.error, surveyQuery.error, personalQuery.error]);
 
   if (!id) return <SurveyNotFound />;
   if (showInitialSkeleton) {
@@ -179,6 +191,9 @@ export default function SurveyPage() {
       <SurveyRuntimeSurface className="card">
         <Suspense fallback={<SurveyRendererFallback />}>
           <LazySurveyRenderer
+            key={`${form.id}:${personalToken ?? "public"}`}
+            personalToken={personalToken ?? undefined}
+            personalOrganization={hasPersonalLink ? personalQuery.data : undefined}
             schema={form.schema}
             theme={form.theme}
             formId={form.id}

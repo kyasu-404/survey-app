@@ -639,7 +639,7 @@ describe("TemplatesPage", () => {
     expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
     expect(css).not.toContain("border: 2px solid rgba(20, 20, 20, 0.72);");
     expect(css).toMatch(
-      /\.dashboard-actions-menu-shell\s+\.form-menu-trigger,\s*\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
+      /\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
     );
   });
 

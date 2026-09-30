@@ -1,3 +1,4 @@
+import type { SelectableOrganization } from "../../entities/organization/types";
 import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -32,7 +33,7 @@ import {
   DEFAULT_FORM_ORGANIZATION_TYPES,
   hasOrganizationQuestion,
 } from "../../entities/organization/model";
-import { applyOrganizationChoicesToSurvey } from "../../entities/organization/surveyQuestion";
+import { applyOrganizationChoicesToSurvey, lockPersonalOrganization } from "../../entities/organization/surveyQuestion";
 import { getErrorMessage, getSubmitResponseErrorMessage } from "../../shared/lib/error";
 import {
   getStoragePathFromSurveyFileValue,
@@ -76,6 +77,8 @@ type SurveyFormRendererProps = {
   allowResponseEditing?: boolean;
   existingResponse?: ExistingResponseResult | null;
   responseBrowserId?: string;
+  personalToken?: string;
+  personalOrganization?: SelectableOrganization;
 };
 
 type SavedResponseState = {
@@ -212,7 +215,7 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
-async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>, onError: (message: string) => void) {
+async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>, onError: (message: string) => void, personalToken?: string) {
   try {
     const content = isRecord(options.fileValue) ? options.fileValue.content : options.fileValue;
     if (typeof content === "string" && content.startsWith("blob:")) {
@@ -224,7 +227,7 @@ async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: 
     const localFile = path ? uploadedFiles.get(path) : undefined;
     const fileContent = localFile
       ? await readLocalSurveyFile(localFile)
-      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous, restoreDraft: allowAnonymous });
+      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous, restoreDraft: allowAnonymous, personalToken });
     options.callback("success", fileContent);
   } catch (error) {
     console.error(error);
@@ -248,6 +251,8 @@ export function SurveyFormRenderer({
   allowResponseEditing = false,
   existingResponse = null,
   responseBrowserId,
+  personalToken,
+  personalOrganization,
 }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingResponse, setIsEditingResponse] = useState(false);
@@ -267,8 +272,8 @@ export function SurveyFormRenderer({
   const isInteractiveMode = resolvedRenderMode === "interactive";
   const usesOrganizationDirectory = useMemo(() => hasOrganizationQuestion(schema), [schema]);
   const responseDraftStorageKey = useMemo(
-    () => (isInteractiveMode ? getSurveyResponseDraftStorageKey(formId, respondentId) : null),
-    [formId, isInteractiveMode, respondentId],
+    () => (isInteractiveMode ? getSurveyResponseDraftStorageKey(personalOrganization ? `${formId}:organization:${personalOrganization.id}` : formId, respondentId) : null),
+    [formId, isInteractiveMode, personalOrganization, respondentId],
   );
   const { model, uploadedFiles } = useMemo(() => {
     registerCustomSurveyQuestionTypes();
@@ -287,7 +292,7 @@ export function SurveyFormRenderer({
       options.allow = isSafeSurveyNavigationUrl(options.url);
     });
     // Register before restoring data, and keep the handler for this model's lifetime.
-    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles, setFileError));
+    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles, setFileError, personalToken));
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
@@ -315,10 +320,11 @@ export function SurveyFormRenderer({
       }
     }
     applyRenderMode(nextModel, resolvedRenderMode);
+    if (personalOrganization) lockPersonalOrganization(nextModel, personalOrganization);
     nextModel.onQuestionCreated.add((_sender, { question }) => prepareFileQuestionActions(question));
     nextModel.getAllQuestions().forEach(prepareFileQuestionActions);
     return { model: nextModel, uploadedFiles: localFiles };
-  }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme]);
+  }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme, personalOrganization, personalToken]);
 
   useEffect(() => {
     if (resolvedRenderMode !== "preview-interactive") return;
@@ -365,7 +371,7 @@ export function SurveyFormRenderer({
   }, [existingResponse, responseDraftStorageKey]);
 
   useEffect(() => {
-    if (!usesOrganizationDirectory) {
+    if (!usesOrganizationDirectory || personalOrganization) {
       return;
     }
 
@@ -391,7 +397,7 @@ export function SurveyFormRenderer({
       });
 
     return () => controller.abort();
-  }, [formId, initialData, isInteractiveMode, model, savedResponse, showToast, usesOrganizationDirectory]);
+  }, [formId, initialData, isInteractiveMode, model, savedResponse, showToast, usesOrganizationDirectory, personalOrganization]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -506,6 +512,7 @@ export function SurveyFormRenderer({
             responseId: savedResponse.responseId,
             data: payload.answers,
             browserId: browserIdRef.current,
+            ...(personalToken ? { personalToken } : {}),
           });
           const removedPaths = [...previousPaths].filter((path) => !nextPaths.has(path));
 
@@ -531,6 +538,7 @@ export function SurveyFormRenderer({
           data: payload.answers,
           submissionId: submissionIdRef.current,
           browserId: browserIdRef.current,
+            ...(personalToken ? { personalToken } : {}),
         });
         setSavedResponse(result);
 
@@ -587,6 +595,7 @@ export function SurveyFormRenderer({
     isInteractiveMode,
     model,
     responseDraftStorageKey,
+    personalToken,
     savedResponse,
     showToast,
     submitResponseMutation,
@@ -602,6 +611,7 @@ export function SurveyFormRenderer({
 
     model.clear(false, true);
     model.data = savedResponse.data;
+    if (personalOrganization) lockPersonalOrganization(model, personalOrganization);
     model.currentPageNo = 0;
     model.completeText = "Сохранить изменения";
     setSubmitError(null);

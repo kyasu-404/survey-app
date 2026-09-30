@@ -14,6 +14,7 @@ const {
   getAppBranding,
   uploadAppLogo,
   resetAppLogo,
+  getEmbeddingSettings, saveEmbeddingSettings, getAppFavicon, uploadAppFavicon, resetAppFavicon,
   showToast,
 } = vi.hoisted(() => ({
   getSmtpSettings: vi.fn(),
@@ -23,7 +24,14 @@ const {
   getAppBranding: vi.fn(),
   uploadAppLogo: vi.fn(),
   resetAppLogo: vi.fn(),
+  getEmbeddingSettings: vi.fn(), saveEmbeddingSettings: vi.fn(), getAppFavicon: vi.fn(), uploadAppFavicon: vi.fn(), resetAppFavicon: vi.fn(),
   showToast: vi.fn(),
+}));
+
+vi.mock("../../entities/site-settings/api", async importOriginal => ({
+  ...await importOriginal<typeof import("../../entities/site-settings/api")>(),
+  getEmbeddingSettings, saveEmbeddingSettings, getAppFavicon, uploadAppFavicon, resetAppFavicon,
+  validateFaviconFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./OnlyofficeSettingsSection", () => ({ OnlyofficeSettingsSection: () => null }));
@@ -87,6 +95,12 @@ function renderPage() {
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getEmbeddingSettings.mockResolvedValue({allowed_origins:[],updated_at:"2026-09-29"});
+    saveEmbeddingSettings.mockImplementation(async origins=>({allowed_origins:origins,updated_at:"2026-09-29"}));
+    getAppFavicon.mockResolvedValue({path:null,mime:null,url:null,updatedAt:null});
+    uploadAppFavicon.mockResolvedValue({path:"favicon-test.png",mime:"image/png",url:"https://storage.test/icon.png",updatedAt:null});
+    resetAppFavicon.mockResolvedValue({path:null,mime:null,url:null,updatedAt:null});
+    URL.createObjectURL=vi.fn(()=>"blob:preview");URL.revokeObjectURL=vi.fn();
     getSmtpSettings.mockResolvedValue(storedSettings);
     saveSmtpSettings.mockResolvedValue({ ...storedSettings, host: "smtp2.example.ru" });
     getStorageCleanupOverview.mockResolvedValue({ retentionHours: 168, lastRun: null });
@@ -199,4 +213,39 @@ describe("SettingsPage", () => {
     expect(css).toMatch(/:root\[data-theme="graphite"\] \.smtp-enable-control\.active\s*\{[^}]*border-color:\s*#4caf73;[^}]*color:\s*#b8f3cb;[^}]*background:\s*rgba\(31,\s*92,\s*58,\s*0\.32\);/s);
     expect(css).toMatch(/:root\[data-theme="graphite"\] \.smtp-enable-control\.active \.smtp-enable-track\s*\{[^}]*background:\s*#21824f;/);
   });
+});
+
+
+describe("site settings",()=>{
+  beforeEach(()=>{
+    vi.clearAllMocks(); getEmbeddingSettings.mockResolvedValue({allowed_origins:[],updated_at:"now"}); saveEmbeddingSettings.mockImplementation(async origins=>({allowed_origins:origins,updated_at:"now"}));getAppFavicon.mockResolvedValue({path:null,url:null,mime:null,updatedAt:null});uploadAppFavicon.mockResolvedValue({path:"favicon-test.png",url:"https://storage.test/icon.png",mime:"image/png",updatedAt:null});resetAppFavicon.mockResolvedValue({path:null,url:null,mime:null,updatedAt:null});URL.createObjectURL=vi.fn(()=>"blob:preview");URL.revokeObjectURL=vi.fn();
+  });
+it("places iframe after SMTP, normalizes sites and saves only on request", async()=>{
+  renderPage();const tabs=screen.getAllByRole("tab").map(tab=>tab.textContent);
+  expect(tabs.indexOf("iframe")).toBe(tabs.indexOf("SMTP")+1);
+  await userEvent.click(screen.getByRole("tab",{name:"iframe"}));
+  expect(await screen.findByText(/Список пуст — встраивание форм запрещено/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button",{name:"+ Добавить сайт"}));
+  await userEvent.type(screen.getByLabelText("Адрес сайта"),"https://EXAMPLE.ru/");
+  await userEvent.click(screen.getByRole("button",{name:"Добавить"}));
+  expect(screen.getByText("https://example.ru",{exact:true})).toBeVisible();
+  expect(saveEmbeddingSettings).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button",{name:"Сохранить сайты"}));
+  await waitFor(()=>expect(saveEmbeddingSettings).toHaveBeenCalledWith(["https://example.ru"]));
+  await userEvent.click(screen.getByRole("button",{name:"Удалить https://example.ru"}));
+  await userEvent.click(screen.getByRole("button",{name:"Сохранить сайты"}));
+  await waitFor(()=>expect(saveEmbeddingSettings).toHaveBeenLastCalledWith([]));
+});
+it("uploads favicon and restores its default separately from the sidebar logo",async()=>{
+  renderPage();const input=screen.getByLabelText("Выбрать favicon");await waitFor(()=>expect(input).toBeEnabled());
+  const file=new File(["image"],"favicon.ico",{type:"image/x-icon"});
+  await userEvent.upload(input,file);
+  await userEvent.click(screen.getByRole("button",{name:"Сохранить favicon"}));
+  await waitFor(()=>expect(uploadAppFavicon).toHaveBeenCalledWith(file));
+  expect(screen.getByAltText("Предпросмотр favicon")).toHaveAttribute("src","https://storage.test/icon.png");
+  await userEvent.click(screen.getByRole("button",{name:"Вернуть стандартный favicon"}));
+  await waitFor(()=>expect(resetAppFavicon).toHaveBeenCalledOnce());
+  expect(uploadAppLogo).not.toHaveBeenCalled();
+});
+
 });

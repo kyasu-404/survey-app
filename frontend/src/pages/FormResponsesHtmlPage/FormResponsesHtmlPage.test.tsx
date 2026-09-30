@@ -115,9 +115,9 @@ describe("FormResponsesHtmlPage", () => {
   it("uses monochrome primary styling with matching icons for export buttons and borders every HTML response table cell", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/button\.responses-export-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/button\.responses-export-button:hover,\s*button\.responses-export-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+    expect(css).toMatch(/button\.responses-export-button,\s*button\.dashboard-qr-download-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/button\.responses-export-button:hover,\s*button\.responses-export-button:focus-visible,\s*button\.dashboard-qr-download-button:hover,\s*button\.dashboard-qr-download-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
+    expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon,\s*\.dashboard-qr-download-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
     expect(css).toMatch(/\.responses-html-preview th,\s*\.responses-html-preview td\s*\{[^}]*border:\s*1px solid #d8dee8;/);
     expect(css).toMatch(/\.responses-html-preview tr:last-child td\s*\{[^}]*border-bottom:\s*1px solid #d8dee8;/);
   });

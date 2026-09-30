@@ -11,6 +11,9 @@ test("draft restoration authorizes the browser capability before signing a priva
   assert.match(restore, /isAnonymousUploadPath\(payload.path, payload.formId\)/);
   assert.match(restore, /rpc\("can_restore_survey_upload"/);
   assert.match(restore, /allowed !== true/);
+  assert.match(restore, /isUuid\(payload\.personalToken\)/);
+  assert.match(restore, /can_restore_personal_upload/);
+  assert.match(restore, /allowed = personalAllowed === true/);
   assert.ok(restore.indexOf('allowed !== true') < restore.indexOf('createSignedUrl'));
   assert.match(restore, /createSignedUrl\(payload.path, 60\)/);
   assert.match(restore, /signedUrl.pathname \+ signedUrl.search/);

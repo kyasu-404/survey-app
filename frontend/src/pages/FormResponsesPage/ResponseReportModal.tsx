@@ -1,11 +1,7 @@
-import { Presence } from "../../shared/ui/Presence";
 import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
 import { useState } from "react";
-import { useToast } from "../../app/providers/ToastProvider";
-import { queueFormReminders } from "../../entities/mail/api";
 import { getOrganizationDisplayName, getOrganizationTypeLabel } from "../../entities/organization/model";
 import type { OrganizationType } from "../../entities/organization/types";
-import { getErrorMessage } from "../../shared/lib/error";
 import type {
   ResponseQuestionAnalysisKind,
   ResponseReport,
@@ -87,33 +83,10 @@ export function ResponseReportModal({
   canSendReminders: boolean;
   onClose: () => void;
 }) {
-  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<"statistics" | "coverage">("statistics");
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
-  const [isQueueingReminders, setIsQueueingReminders] = useState(false);
   const [isMailActivityOpen, setIsMailActivityOpen] = useState(false);
-  const [preferredBatchId, setPreferredBatchId] = useState<string | null>(null);
   const coverage = report.organizationCoverage;
-
-  const handleQueueReminders = async () => {
-    setIsQueueingReminders(true);
-    try {
-      const result = await queueFormReminders(formId);
-      setIsConfirmationOpen(false);
-      setPreferredBatchId(result.batchId);
-      setIsMailActivityOpen(true);
-      showToast(
-        result.queuedCount > 0
-          ? `Поставлено в очередь писем: ${result.queuedCount}`
-          : "Все организации уже предоставили ответ",
-        result.queuedCount > 0 ? "success" : "warning",
-      );
-    } catch (error) {
-      showToast(getErrorMessage(error, "Не удалось сформировать рассылку"), "error");
-    } finally {
-      setIsQueueingReminders(false);
-    }
-  };
 
   return (
     <div className="modal-backdrop response-report-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -141,8 +114,8 @@ export function ResponseReportModal({
             role="tab"
             aria-selected={activeTab === "coverage"}
             className={activeTab === "coverage" ? "active" : ""}
-            disabled={!coverage}
-            title={!coverage ? "Добавьте в форму поле «Организация», чтобы включить учёт сдавших" : undefined}
+            disabled={!coverage || !canSendReminders}
+            title={!canSendReminders ? "Учёт сдавших доступен только автору формы" : !coverage ? "Добавьте в форму поле «Организация», чтобы включить учёт сдавших" : undefined}
             onClick={() => setActiveTab("coverage")}
           >
             Учёт сдавших
@@ -190,7 +163,7 @@ export function ResponseReportModal({
           </div>
         )}
 
-        {activeTab === "coverage" && coverage && (
+        {activeTab === "coverage" && coverage && canSendReminders && (
           <div role="tabpanel" className="response-report-tab-panel">
             <div className="response-report-summary">
               <div><span>Всего организаций</span><strong>{coverage.expectedCount}</strong></div>
@@ -219,7 +192,7 @@ export function ResponseReportModal({
                       type="button"
                       className="button-primary"
                       onClick={() => setIsConfirmationOpen(true)}
-                      disabled={coverage.missingOrganizations.length === 0 || isQueueingReminders}
+                      disabled={coverage.missingOrganizations.length === 0}
                     >
                       Отправить напоминание
                     </button>
@@ -258,20 +231,19 @@ export function ResponseReportModal({
             {isMailActivityOpen && (
               <MailDeliveryPanel
                 formId={formId}
-                preferredBatchId={preferredBatchId}
+                preferredBatchId={null}
                 onClose={() => setIsMailActivityOpen(false)}
               />
             )}
           </div>
         )}
       </div>
-      <Presence kind="modal">{isConfirmationOpen && (
+      {isConfirmationOpen && canSendReminders && (
         <ReminderConfirmationModal
-          isPending={isQueueingReminders}
+          formId={formId}
           onCancel={() => setIsConfirmationOpen(false)}
-          onConfirm={() => void handleQueueReminders()}
         />
-      )}</Presence>
+       )}
     </div>
   );
 }

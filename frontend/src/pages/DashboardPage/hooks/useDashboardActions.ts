@@ -88,7 +88,7 @@ export function useDashboardActions({ formsQueryKey, formsStatsQueryKey, userId 
       await duplicateMutation.mutateAsync({ form: fullForm, authorId: userId });
     }, {
       actionKey: getFormActionKey(form.id),
-      successMessage: "Форма сохранена",
+      successMessage: "Форма скопирована",
       errorMessage: "Не удалось дублировать форму",
       logLabel: `dashboard duplicate ${form.id}`,
     });

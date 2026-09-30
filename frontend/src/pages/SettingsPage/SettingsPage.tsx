@@ -13,6 +13,8 @@ import { supabaseClient } from "../../shared/api";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { EmbeddingSettingsSection } from "./EmbeddingSettingsSection";
+import { FaviconSettingsSection } from "./FaviconSettingsSection";
 import { BrandingSettingsSection } from "./BrandingSettingsSection";
 
 function settingsToDraft(settings: SmtpSettings | null): SmtpSettingsDraft {
@@ -41,7 +43,7 @@ function formatCleanupDate(value: string | null) {
 
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const [tab,setTab]=useState<'branding'|'office'|'smtp'|'cleanup'>('branding');
+  const [tab,setTab]=useState<'branding'|'office'|'smtp'|'iframe'|'cleanup'>('branding');
   const { showToast } = useToast();
   const settingsQuery = useQuery({
     queryKey: ["smtp-settings"],
@@ -202,8 +204,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <SectionTabs id="settings" label="Разделы настроек" tabs={[{value:'branding',label:'Оформление'},{value:'office',label:'ONLYOFFICE'},{value:'smtp',label:'SMTP'},{value:'cleanup',label:'Очистка файлов'}]} value={tab} onChange={setTab}/>
-        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-branding" aria-labelledby="settings-tab-branding" hidden={tab!=='branding'}><BrandingSettingsSection /></div>
+        <SectionTabs id="settings" label="Разделы настроек" tabs={[{value:'branding',label:'Оформление'},{value:'office',label:'ONLYOFFICE'},{value:'smtp',label:'SMTP'},{value:'iframe',label:'iframe'},{value:'cleanup',label:'Очистка файлов'}]} value={tab} onChange={setTab}/>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-branding" aria-labelledby="settings-tab-branding" hidden={tab!=='branding'}><BrandingSettingsSection /><FaviconSettingsSection /></div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-iframe" aria-labelledby="settings-tab-iframe" hidden={tab!=='iframe'}><EmbeddingSettingsSection /></div>
         <div className="settings-tab-panel" role="tabpanel" id="settings-panel-office" aria-labelledby="settings-tab-office" hidden={tab!=='office'}><OnlyofficeSettingsSection /></div>
         <div className="settings-tab-panel" role="tabpanel" id="settings-panel-smtp" aria-labelledby="settings-tab-smtp" hidden={tab!=='smtp'}>
 

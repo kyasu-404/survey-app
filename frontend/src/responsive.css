@@ -88,8 +88,6 @@
 @media (max-width: 760px) {
   :root { --mobile-header-height: calc(56px + env(safe-area-inset-top, 0px)); }
 
-  :root:has(.dashboard-layout-transition, .templates-page) { scrollbar-gutter: auto; }
-
   .app-shell { min-height: 100dvh; }
 
   .mobile-app-header {

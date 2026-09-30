@@ -50,6 +50,25 @@ export function DashboardFormActionMenu({
   const isOwnForm = form.author_id === currentUserId;
   const isTemplate = isTemplateForm(form);
 
+  if (!isOwnForm && !isTemplate) {
+    return (
+      <button
+        type="button"
+        className="form-menu-trigger dashboard-duplicate-button"
+        aria-label={`Дублировать форму ${title}`}
+        title="Дублировать форму"
+        disabled={isPending}
+        onClick={(event) => {
+          stopCardEvent(event);
+          setOpenedMenu(null);
+          void onDuplicate(form);
+        }}
+      >
+        <img src={copyIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+      </button>
+    );
+  }
+
   return (
     <div
       ref={anchorRef}

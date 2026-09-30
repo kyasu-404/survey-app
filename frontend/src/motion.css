@@ -108,8 +108,8 @@
   from { background-color: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-surface-light)); }
   to { background-color: var(--theme-surface-light); }
 }
-/* Keep list width stable and don't restart a CSS fade when the snapshot ends. */
-:root:has(.dashboard-layout-transition, .templates-page) { scrollbar-gutter: stable; }
+/* Lists scroll inside their panels; the viewport needs no reserved gutter. */
+:root:has(.dashboard-layout-transition, .templates-page) { scrollbar-gutter: auto; }
 /* The preview has its own scroll area; don't leave the page's gutter beside it. */
 :root:has(.template-preview-layer, .response-preview-layer) { overflow: hidden; scrollbar-gutter: auto; }
 .template-preview-drawer, .response-preview-drawer { overscroll-behavior: contain; }

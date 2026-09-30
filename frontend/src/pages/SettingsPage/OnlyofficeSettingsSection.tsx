@@ -38,7 +38,7 @@ export function OnlyofficeSettingsSection(){
   </section>
   <div className="settings-save-row"><button type="button" className="button-primary settings-save-button" disabled={busy || query.isLoading || (!draft && !secret)} onClick={()=>void save()}>{busy && <InlineSpinner/>}Сохранить настройки</button></div>
   <section className="settings-section settings-test-section"><div className="settings-section-heading"><div><h2>Проверка подключения</h2><p>Проверка редактора, JWT и доступа Document Server к макету.</p></div></div><button type="button" className="app-button" disabled={busy || !!draft || !!secret || !value.has_secret} onClick={()=>void test()}>{busy && <InlineSpinner/>}Проверить подключение</button>
-   {checks.length>0 && <ul className="office-checks">{checks.map(c=><li key={c.label}><strong>{c.ok===null?'○':c.ok?'✓':'✕'} {c.label}</strong>{c.detail && <span>{c.detail}</span>}</li>)}</ul>}
+   {checks.length>0 && <ul className="office-checks">{checks.map(c=><li key={c.label}><strong><span className={`office-check-icon ${c.ok===null?'pending':c.ok?'success':'failure'}`} aria-label={c.ok===null?'Не проверено':c.ok?'Успешно':'Ошибка'}>{c.ok===null?'○':c.ok?'✓':'✕'}</span> {c.label}</strong>{c.detail && <span>{c.detail}</span>}</li>)}</ul>}
   </section>
  </section>;
 }

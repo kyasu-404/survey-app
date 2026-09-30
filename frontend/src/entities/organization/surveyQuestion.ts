@@ -25,3 +25,19 @@ export function applyOrganizationChoicesToSurvey(
       : choices;
   });
 }
+
+/** Applies after drafts and before render; the server independently checks the binding. */
+export function lockPersonalOrganization(model: Model, organization: SelectableOrganization) {
+  const lockQuestion = (question: ReturnType<Model["getAllQuestions"]>[number]) => {
+    if (question.getType() !== ORGANIZATION_QUESTION_TYPE) return;
+    const content = (question as QuestionCustomModel).contentQuestion as QuestionDropdownModel;
+    question.enableIf = "";
+    question.readOnly = true;
+    question.clearIfInvisible = "none";
+    question.value = organization.id;
+    content.choices = [{ value: organization.id, text: getOrganizationDisplayName(organization) }];
+    content.readOnly = true;
+  };
+  model.getAllQuestions().forEach(lockQuestion);
+  model.onQuestionCreated.add((_sender, { question }) => lockQuestion(question));
+}

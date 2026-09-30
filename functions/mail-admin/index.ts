@@ -1,5 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
-import { buildReminderMail, getOrganizationMailName } from "./mailContent.mjs";
+import { createClient } from "npm:@supabase/supabase-js@2.110.7";
+import { buildFormMailJobs, getOrganizationMailName, getDefaultMailTemplate, validateMailTemplate, selectMailRecipients } from "./mailContent.mjs";
 
 type RequestProfile = {
   id: string;
@@ -29,6 +29,7 @@ type OrganizationRow = {
   number: string | null;
   alias: string;
   email: string;
+  token?: string | null;
 };
 
 const baseCorsHeaders = {
@@ -309,7 +310,11 @@ Deno.serve(async (req) => {
       return json(req, 202, { batchId, queuedCount: 1 }, requestId);
     }
 
-    if (action === "queue-reminders") {
+    if (["queue-reminders", "queue-invitations", "prepare-mail", "preview-mail"].includes(action)) {
+      const preparing = action === "prepare-mail";
+      const previewing = action === "preview-mail";
+      const kind = preparing || previewing ? payload.kind : action === "queue-invitations" ? "invitation" : "reminder";
+      if (kind !== "invitation" && kind !== "reminder") return json(req, 400, { error: "Некорректный тип рассылки" }, requestId);
       const formId = asTrimmedString(payload.formId);
       if (!uuidPattern.test(formId)) return json(req, 400, { error: "Некорректный идентификатор формы" }, requestId);
       const { data: form, error: formError } = await adminClient
@@ -319,7 +324,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (formError) throw formError;
       if (!form) return json(req, 404, { error: "Форма не найдена" }, requestId);
-      if (form.author_id !== profile.id && profile.role !== "admin") return json(req, 403, { error: "Нет прав на рассылку по этой форме" }, requestId);
+      if (form.author_id !== profile.id) return json(req, 403, { error: "Нет прав на рассылку по этой форме" }, requestId);
 
       const { data: settings, error: settingsError } = await adminClient
         .from("mail_settings")
@@ -327,13 +332,33 @@ Deno.serve(async (req) => {
         .eq("id", 1)
         .maybeSingle();
       if (settingsError) throw settingsError;
-      if (!settings?.enabled) return json(req, 409, { error: "SMTP-коннектор не настроен или выключен" }, requestId);
+      if (!preparing && !previewing && !settings?.enabled) return json(req, 409, { error: "SMTP-коннектор не настроен или выключен" }, requestId);
 
       const appBaseUrl = getAppBaseUrl();
       if (!appBaseUrl) return json(req, 500, { error: "Для ссылок в письмах задайте PUBLIC_APP_URL" }, requestId);
-      const { data: missingData, error: missingError } = await adminClient.rpc("list_missing_form_organizations_snapshot", { p_form_id: formId });
-      if (missingError) throw missingError;
-      const missing = (missingData ?? []) as OrganizationRow[];
+      const { data: audience, error: audienceError } = await adminClient.rpc("prepare_form_mail_recipients", { p_form_id: formId, p_kind: kind });
+      if (audienceError) {
+        if (audienceError.code === "22023") return json(req, 409, { error: audienceError.message }, requestId);
+        throw audienceError;
+      }
+      const recipients = (audience?.recipients ?? []) as OrganizationRow[];
+      if (preparing) return json(req, 200, {
+        personal: audience.personal, smtpEnabled: Boolean(settings?.enabled), template: getDefaultMailTemplate(kind),
+        recipients: recipients.map(org => ({ id: org.id, name: getOrganizationMailName(org), email: org.email,
+          organizationType: org.organization_type, canSend: emailPattern.test(org.email) && org.email.length <= 320 })),
+      }, requestId);
+      if (payload.personal !== undefined && payload.personal !== audience.personal) {
+        return json(req, 409, { error: "Режим ссылок изменился. Обновите список получателей и проверьте письмо" }, requestId);
+      }
+      let missing: OrganizationRow[];
+      let template;
+      try {
+        if (previewing && (payload.organizationIds === undefined || payload.template === undefined)) throw new Error("Выберите получателей и укажите текст письма");
+        missing = selectMailRecipients(recipients, payload.organizationIds);
+        template = payload.template === undefined ? undefined : validateMailTemplate(payload.template);
+      } catch (error) {
+        return json(req, 400, { error: (error as Error).message }, requestId);
+      }
       if (missing.length === 0) return json(req, 200, { batchId: null, queuedCount: 0 }, requestId);
       if (missing.length > 5000) return json(req, 409, { error: "За одну рассылку можно поставить в очередь не более 5000 писем" }, requestId);
       const invalidRecipient = missing.find((organization) => !emailPattern.test(organization.email) || organization.email.length > 320);
@@ -343,34 +368,31 @@ Deno.serve(async (req) => {
         }, requestId);
       }
 
+      let jobs;
+      try { jobs = buildFormMailJobs({ organizations: missing, form, appBaseUrl, kind, personal: audience.personal, template }); }
+      catch (error) { return json(req, 400, { error: (error as Error).message }, requestId); }
+      if (previewing) {
+        const job = payload.previewOrganizationId ? jobs.find(job => job.organization_id === payload.previewOrganizationId) : jobs[0];
+        if (!job) return json(req, 400, { error: "Выберите организацию из списка получателей" }, requestId);
+        return json(req, 200, { personal: audience.personal, recipientCount: jobs.length, message: {
+          organizationId: job.organization_id, name: job.recipient_name, email: job.recipient_email,
+          subject: job.subject, bodyText: job.body_text,
+        } }, requestId);
+      }
       const batchId = crypto.randomUUID();
-      const formUrl = new URL(`/form/${formId}`, appBaseUrl).toString();
-      const jobs = missing.map((organization) => {
-        const recipientName = getOrganizationMailName(organization);
-        const content = buildReminderMail({
-          organizationName: recipientName,
-          formTitle: form.title,
-          deadlineAt: form.deadline_at,
-          formUrl,
-        });
-        return {
-          organization_id: organization.id,
-          recipient_email: organization.email.toLowerCase(),
-          recipient_name: recipientName,
-          subject: content.subject,
-          body_text: content.bodyText,
-        };
-      });
-      const { error: enqueueError } = await adminClient.rpc("enqueue_mail_reminder_batch", {
+      const { error: enqueueError } = await adminClient.rpc("enqueue_form_mail_batch", {
         p_batch_id: batchId,
         p_form_id: formId,
         p_created_by: profile.id,
         p_jobs: jobs,
+        p_kind: kind,
+        p_personal: audience.personal,
       });
       if (enqueueError) {
         if (enqueueError.message.includes("Previous reminder run is still active")) {
           return json(req, 409, { error: "Предыдущая рассылка по этой форме ещё выполняется" }, requestId);
         }
+        if (enqueueError.code === "22023") return json(req, 409, { error: enqueueError.message }, requestId);
         throw enqueueError;
       }
       return json(req, 202, { batchId, queuedCount: jobs.length }, requestId);

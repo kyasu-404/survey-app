@@ -119,7 +119,7 @@ http {{
             for public_path in ["/form/20000000-0000-4000-8000-000000000001", "/form/example/?source=website"]:
                 status, embed_headers = request(port_number, public_path)
                 assert status == 200 and embed_headers.get("Cache-Control") == "no-cache", embed_headers
-                assert "frame-ancestors *" in embed_headers["Content-Security-Policy"], embed_headers
+                assert "frame-ancestors " in embed_headers["Content-Security-Policy"] and "frame-ancestors *" not in embed_headers["Content-Security-Policy"], embed_headers
                 assert "X-Frame-Options" not in embed_headers, embed_headers
                 assert embed_headers.get("X-Content-Type-Options") == "nosniff", embed_headers
             status, missing_headers = request(port_number, "/assets/missing-12345678.js")

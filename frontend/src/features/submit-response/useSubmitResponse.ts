@@ -11,16 +11,17 @@ export async function submitResponse(
   data: Record<string, unknown>,
   submissionId: string,
   browserId: string,
+  personalToken?: string,
 ) {
-  return createResponse(formId, data, submissionId, browserId);
+  return personalToken ? createResponse(formId, data, submissionId, browserId, personalToken) : createResponse(formId, data, submissionId, browserId);
 }
 
 export function useSubmitResponseMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ formId, data, submissionId, browserId }: { formId: string; data: Record<string, unknown>; submissionId: string; browserId: string }) =>
-      submitResponse(formId, data, submissionId, browserId),
+    mutationFn: ({ formId, data, submissionId, browserId, personalToken }: { formId: string; data: Record<string, unknown>; submissionId: string; browserId: string; personalToken?: string }) =>
+      submitResponse(formId, data, submissionId, browserId, personalToken),
     onSuccess: (_data, variables) => {
       scheduleQueryInvalidation(queryClient, "submit response", [
         { queryKey: getFormQueryKey(variables.formId) },
@@ -34,12 +35,13 @@ export function useUpdateResponseMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ formId, responseId, data, browserId }: {
+    mutationFn: ({ formId, responseId, data, browserId, personalToken }: {
       formId: string;
       responseId: string;
       data: Record<string, unknown>;
       browserId: string;
-    }) => editResponse(formId, responseId, data, browserId),
+      personalToken?: string;
+    }) => personalToken ? editResponse(formId, responseId, data, browserId, personalToken) : editResponse(formId, responseId, data, browserId),
     onSuccess: (_data, variables) => {
       scheduleQueryInvalidation(queryClient, "update response", [
         { queryKey: getFormResponsesQueryKey(variables.formId) },

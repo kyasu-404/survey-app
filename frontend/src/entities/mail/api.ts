@@ -1,12 +1,14 @@
 import { apiClient, supabaseClient } from "../../shared/api";
 import { runRequest } from "../../shared/api/request";
-import type { MailActivity, MailBatch, MailJob, QueueMailResult, SmtpSettings, SmtpSettingsDraft } from "./types";
+import type { FormMailKind, FormMailDraft, MailComposition, MailPreview, MailActivity, MailBatch, MailJob, QueueMailResult, SmtpSettings, SmtpSettingsDraft } from "./types";
 
 type MailAdminAction =
   | { action: "get-settings" }
   | ({ action: "save-settings" } & SmtpSettingsDraft)
   | { action: "queue-test"; recipientEmail: string }
-  | { action: "queue-reminders"; formId: string };
+  | ({ action: "queue-reminders" | "queue-invitations"; formId: string } & Partial<FormMailDraft>)
+  | { action: "prepare-mail"; formId: string; kind: FormMailKind }
+  | ({ action: "preview-mail"; formId: string; kind: FormMailKind; previewOrganizationId?: string } & FormMailDraft);
 
 async function getFunctionErrorMessage(error: unknown, response?: Response) {
   const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
@@ -68,8 +70,14 @@ export async function queueTestEmail(recipientEmail: string) {
   return data;
 }
 
-export async function queueFormReminders(formId: string) {
-  const data = await callMailAdmin<QueueMailResult>({ action: "queue-reminders", formId });
+export async function queueFormReminders(formId: string, draft?: FormMailDraft) {
+  const data = await callMailAdmin<QueueMailResult>({ action: "queue-reminders", formId, ...draft });
+  if (!data) throw new Error("Сервер не вернул результат постановки писем в очередь");
+  return data;
+}
+
+export async function queueFormInvitations(formId: string, draft?: FormMailDraft) {
+  const data = await callMailAdmin<QueueMailResult>({ action: "queue-invitations", formId, ...draft });
   if (!data) throw new Error("Сервер не вернул результат постановки писем в очередь");
   return data;
 }
@@ -127,4 +135,16 @@ export async function getMailBatchActivity(batchId: string): Promise<MailActivit
     batches: batchData ? [batchData as MailBatch] : [],
     jobs,
   };
+}
+
+export async function prepareFormMail(formId: string, kind: FormMailKind) {
+  const data = await callMailAdmin<MailComposition>({ action: "prepare-mail", formId, kind });
+  if (!data) throw new Error("Не удалось загрузить получателей");
+  return data;
+}
+
+export async function previewFormMail(formId: string, kind: FormMailKind, draft: FormMailDraft, previewOrganizationId?: string) {
+  const data = await callMailAdmin<MailPreview>({ action: "preview-mail", formId, kind, ...draft, previewOrganizationId });
+  if (!data) throw new Error("Не удалось подготовить предпросмотр");
+  return data;
 }

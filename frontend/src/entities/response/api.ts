@@ -13,8 +13,9 @@ export async function getExistingResponse(
   formId: string,
   browserId: string,
   signal?: AbortSignal,
+  personalToken?: string,
 ) {
-  return fetchExistingResponse(formId, browserId, signal);
+  return personalToken ? fetchExistingResponse(formId, browserId, signal, personalToken) : fetchExistingResponse(formId, browserId, signal);
 }
 
 export async function createResponse(
@@ -22,8 +23,9 @@ export async function createResponse(
   data: Record<string, unknown>,
   submissionId: string,
   browserId: string,
+  personalToken?: string,
 ) {
-  return insertResponse(formId, data, submissionId, browserId);
+  return personalToken ? insertResponse(formId, data, submissionId, browserId, undefined, personalToken) : insertResponse(formId, data, submissionId, browserId);
 }
 
 export async function editResponse(
@@ -31,8 +33,9 @@ export async function editResponse(
   responseId: string,
   data: Record<string, unknown>,
   browserId: string,
+  personalToken?: string,
 ) {
-  return updateResponse(formId, responseId, data, browserId);
+  return personalToken ? updateResponse(formId, responseId, data, browserId, undefined, personalToken) : updateResponse(formId, responseId, data, browserId);
 }
 
 export async function deleteResponses(formId: string, responseIds: string[]) {

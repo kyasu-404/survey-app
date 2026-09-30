@@ -55,5 +55,6 @@ export const apiClient = {
 };
 
 export const publicApiClient = {
+  rpc: (functionName: string, args?: Record<string, unknown>) => publicSupabaseClient.rpc(functionName as never, args as never),
   from: <TTable extends string>(table: TTable) => publicSupabaseClient.from(table),
 };

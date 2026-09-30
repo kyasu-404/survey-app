@@ -50,6 +50,7 @@ export type SurveyForm = {
   deadline_at: string | null;
   max_responses?: number | null;
   allow_response_editing?: boolean;
+  personal_links_enabled?: boolean;
   organization_types?: OrganizationType[];
   author_id: string;
   schema: SurveySchema;

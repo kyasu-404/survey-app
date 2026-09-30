@@ -1,3 +1,4 @@
+import type { SelectableOrganization } from "../../entities/organization/types";
 import type { SurveySchema } from "../../entities/survey/types";
 import type { ITheme } from "survey-core";
 import { SurveyFormRenderer, type SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
@@ -16,6 +17,8 @@ type SurveyRendererProps = {
   allowResponseEditing?: boolean;
   existingResponse?: ExistingResponseResult | null;
   responseBrowserId?: string;
+  personalToken?: string;
+  personalOrganization?: SelectableOrganization;
 };
 
 export function SurveyRenderer({
@@ -31,6 +34,8 @@ export function SurveyRenderer({
   allowResponseEditing = false,
   existingResponse = null,
   responseBrowserId,
+  personalToken,
+  personalOrganization,
 }: SurveyRendererProps) {
   return (
     <SurveyFormRenderer
@@ -46,6 +51,8 @@ export function SurveyRenderer({
       allowResponseEditing={allowResponseEditing}
       existingResponse={existingResponse}
       responseBrowserId={responseBrowserId}
+      personalToken={personalToken}
+      personalOrganization={personalOrganization}
     />
   );
 }

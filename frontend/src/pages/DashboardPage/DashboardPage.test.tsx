@@ -1332,18 +1332,15 @@ describe("DashboardPage", () => {
 
     renderPage();
 
-    const guestMenuTrigger = await screen.findByRole("button", { name: "Действия формы Чужая форма" });
-    await userEvent.click(guestMenuTrigger);
-
-    const guestMenu = await screen.findByRole("menu", { name: "Меню действий формы Чужая форма" });
+    const duplicateButton = await screen.findByRole("button", { name: "Дублировать форму Чужая форма" });
+    expect(screen.queryByRole("button", { name: "Действия формы Чужая форма" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Поделиться формой Чужая форма" })).toBeInTheDocument();
-    expect(within(guestMenu).queryByRole("menuitem", { name: "Копировать ссылку" })).not.toBeInTheDocument();
-    expect(within(guestMenu).getByRole("menuitem", { name: "Дублировать" })).toBeInTheDocument();
-    expect(within(guestMenu).queryByRole("menuitem", { name: "Переименовать" })).not.toBeInTheDocument();
-    expect(within(guestMenu).queryByRole("menuitem", { name: "Удалить" })).not.toBeInTheDocument();
-
+    expect(duplicateButton.querySelector("img")).toBeInTheDocument();
+    getFormById.mockResolvedValue(createForm(1, { title: "Чужая форма", author_id: "user-2" }));
     navigate.mockClear();
-    await userEvent.click(guestMenu);
+    await userEvent.click(duplicateButton);
+    await waitFor(() => expect(cloneForm).toHaveBeenCalledWith(expect.objectContaining({ id: "form-1" }), "user-1"));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith("Форма скопирована", "success"));
     expect(navigate).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Статус формы Закрытая форма: Закрыта" }));

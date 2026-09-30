@@ -13,6 +13,7 @@ type StorageAuthOptions = {
   allowAnonymous?: boolean;
   signal?: AbortSignal;
   restoreDraft?: boolean;
+  personalToken?: string;
 };
 
 type UploadFileToStorageOptions = StorageAuthOptions;
@@ -229,7 +230,7 @@ export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
 async function createSignedUrlForStoragePath(path: string, options: StorageAuthOptions) {
   if (options.allowAnonymous && options.restoreDraft && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
     const { data, error } = await runRequest("storage.restoreUpload", signal => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: getOrCreateResponseBrowserId() }, signal,
+      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: getOrCreateResponseBrowserId(), ...(options.personalToken ? { personalToken: options.personalToken } : {}) }, signal,
     }), { signal: options.signal });
     if (error || typeof data?.signedUrl !== "string") {
       const response = error && "context" in error ? error.context : undefined;
