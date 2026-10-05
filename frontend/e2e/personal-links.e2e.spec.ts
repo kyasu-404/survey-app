@@ -88,3 +88,58 @@ test("personal forms lock organization, isolate drafts, submit and reopen the sa
   await expect(page.getByRole("button", { name: "Отправить", exact: true })).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
+
+test("personal forms keep organization bound in dynamic entries through conditions, reload and editing", async ({ page }) => {
+  const organization = organizations[0];
+  const { formId, form, pageErrors } = await openSurveyApp(page, { elements: [{
+    type: "paneldynamic", name: "entries", valueName: "records", title: "Записи",
+    panelCount: 1, panelAddText: "Добавить запись", templateElements: [
+      { type: "organization", name: "org", valueName: "institution", title: "Организация", isRequired: true,
+        resetValueIf: "{panel.answer} = 'Сбросить'", setValueExpression: "iif({panel.answer} = 'Заменить', 'wrong', 'initial')" },
+      { type: "text", name: "answer", title: "Ответ", isRequired: true },
+    ],
+  }] });
+  Object.assign(form, { allow_response_editing: true });
+  let saved: { response_id: string; response_data: Record<string, unknown>; response_editable: boolean } | undefined;
+  let submissions = 0;
+  await page.route("**/rest/v1/rpc/*personal_form*", route => {
+    const body = route.request().postDataJSON();
+    expect(body.p_token).toBe(organization.token);
+    if (route.request().url().endsWith("get_personal_form_context")) return route.fulfill({ json: organization });
+    if (route.request().url().endsWith("get_personal_form_response_status")) return route.fulfill({ json: saved ? [saved] : [] });
+    expect(body.p_data.institution).toBeUndefined();
+    expect(body.p_data.records).toEqual([
+      { institution: organization.id, answer: "Сбросить" },
+      { institution: organization.id, answer: "Заменить" },
+    ]);
+    submissions += 1;
+    saved = { response_id: "response-nested", response_data: body.p_data, response_editable: true };
+    return route.fulfill({ json: [{ status: "submitted", ...saved }] });
+  });
+  await page.goto(`/form/${formId}#personal=${organization.token}`);
+  const orgFields = page.getByRole("combobox", { name: "Организация" });
+  const answers = page.getByRole("textbox", { name: "Ответ" });
+  await expect(orgFields).toHaveCount(1);
+  await expect(orgFields.first()).toBeDisabled();
+  await answers.first().fill("Сбросить");
+  await page.getByRole("button", { name: "Добавить запись", exact: true }).click();
+  await expect(orgFields).toHaveCount(2);
+  await expect(orgFields.nth(1)).toBeDisabled();
+  await answers.nth(1).fill("Заменить");
+  await answers.nth(1).press("Tab");
+  await page.reload();
+  await expect(orgFields).toHaveCount(2);
+  await expect(page.getByText("ГБОУ 12", { exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Отправить", exact: true }).click();
+  await expect.poll(() => submissions).toBe(1);
+  await page.reload();
+  await page.getByRole("button", { name: "Редактировать", exact: true }).click();
+  await expect(orgFields).toHaveCount(2);
+  await expect(orgFields.first()).toBeDisabled();
+  await expect(orgFields.nth(1)).toBeDisabled();
+  await expect(answers.first()).toHaveValue("Сбросить");
+  await expect(answers.nth(1)).toHaveValue("Заменить");
+  await page.getByRole("button", { name: "Сохранить изменения", exact: true }).click();
+  await expect.poll(() => submissions).toBe(2);
+  expect(pageErrors).toEqual([]);
+});

@@ -1,5 +1,5 @@
 import { answerLabel, answerCommentKey, formatSimpleAnswer, hasAnswerComment, matrixCellDefinition, readableValue } from "./answerValue";
-import { getOrganizationQuestionNames, ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
+import { ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 import type { EducationOrganization } from "../../entities/organization/types";
 import type { SurveyResponse } from "../../entities/response/types";
 import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
@@ -113,7 +113,7 @@ function getQuestions(schema: SurveySchema) {
       const { type } = question;
       const name = question.valueName || question.name;
       const questionPath = name ? [...path, name] : path;
-      if (type && name && !STRUCTURAL_TYPES.has(type) && type !== ORGANIZATION_QUESTION_TYPE) {
+      if (type && name && !STRUCTURAL_TYPES.has(type)) {
         questions.push({ question, path: questionPath, groupTitles: sections.map(group => group.header) });
       }
       if (type === "panel" && Array.isArray(question.elements)) visit(question.elements, path, depth + 1, sections, elementPath);
@@ -433,7 +433,11 @@ function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], su
   const questionRecord = question as unknown as Record<string, unknown>;
   const rowLabels = getChoiceLabelMap(questionRecord.rows);
   const columnLabels = getChoiceLabelMap(questionRecord.columns);
-  const grouped = new Map<string, unknown[]>();
+  const grouped = new Map<string, Array<{ raw: unknown; display: unknown; numeric: boolean }>>();
+  const addCell = (label: string, raw: unknown, display: unknown, withoutComment: unknown = display) => {
+    const numeric = isAnswered(raw) && isAnswered(withoutComment) && toNumbers([withoutComment]).length === 1;
+    grouped.set(label, [...(grouped.get(label) ?? []), { raw, display, numeric }]);
+  };
   const cells = (row: Record<string, unknown>) => Object.entries(row).filter(([name]) => !Object.keys(row).some(key => name === answerCommentKey(matrixCellDefinition(question, key), suffix) && hasAnswerComment(matrixCellDefinition(question, key))));
 
   flattenAnswered(responseValues).forEach((value) => {
@@ -443,7 +447,7 @@ function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], su
         cells(row).forEach(([column, cell]) => {
           const label = columnLabels.get(column) ?? column;
           const display = formatSimpleAnswer(matrixCellDefinition(question, column), cell, row, suffix);
-          grouped.set(label, [...(grouped.get(label) ?? []), display]);
+          addCell(label, cell, display, formatSimpleAnswer(matrixCellDefinition(question, column), cell));
         });
       });
       return;
@@ -456,18 +460,20 @@ function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], su
           const columnLabel = columnLabels.get(column) ?? column;
           const label = `${rowLabel} · ${columnLabel}`;
           const display = formatSimpleAnswer(matrixCellDefinition(question, column), cell, answer, suffix);
-          grouped.set(label, [...(grouped.get(label) ?? []), display]);
+          addCell(label, cell, display, formatSimpleAnswer(matrixCellDefinition(question, column), cell));
         });
       } else {
-        grouped.set(rowLabel, [...(grouped.get(rowLabel) ?? []), question.type === "matrix" ? answerLabel(questionRecord.columns, answer) : answer]);
+        addCell(rowLabel, answer, question.type === "matrix" ? answerLabel(questionRecord.columns, answer) : answer);
       }
     });
   });
 
   const groups = [...grouped.entries()].map(([label, values]) => {
-    const answeredValues = values.filter(isAnswered);
-    const numbers = toNumbers(answeredValues);
-    if (numbers.length === answeredValues.length && numbers.length > 0) {
+    const answeredValues = values.filter(value => isAnswered(value.raw) || isAnswered(value.display));
+    const rawAnswers = answeredValues.filter(value => isAnswered(value.raw));
+    const numbers = toNumbers(rawAnswers.map(value => value.raw));
+    // Choice labels determine whether a group is numeric; comments must not affect it.
+    if (rawAnswers.every(value => value.numeric) && numbers.length === rawAnswers.length && numbers.length > 0) {
       return {
         label,
         metrics: [
@@ -480,7 +486,7 @@ function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], su
     return {
       label,
       metrics: [{ label: "Ответов", value: String(answeredValues.length) }],
-      values: toReportValues(countValues(answeredValues.map(stringifyAnswer)), answeredValues.length),
+      values: toReportValues(countValues(answeredValues.map(value => stringifyAnswer(value.display))), answeredValues.length),
     };
   });
 
@@ -570,16 +576,19 @@ export function createResponseReport(
   schema: SurveySchema,
   organizations: EducationOrganization[] = [],
 ): ResponseReport {
-  const questionReports = getQuestions(schema).map((descriptor) => analyzeQuestion(responses, descriptor, schema.commentSuffix ?? "-Comment"));
-  const organizationQuestionNames = getOrganizationQuestionNames(schema);
+  const descriptors = getQuestions(schema);
+  const questionReports = descriptors.filter(({ question }) => question.type !== ORGANIZATION_QUESTION_TYPE)
+    .map((descriptor) => analyzeQuestion(responses, descriptor, schema.commentSuffix ?? "-Comment"));
+  const organizationQuestions = descriptors.filter(({ question }) => question.type === ORGANIZATION_QUESTION_TYPE);
   let organizationCoverage: ResponseOrganizationCoverage | null = null;
 
-  if (organizationQuestionNames.length > 0) {
+  if (organizationQuestions.length > 0) {
     const submittedIds = new Set<string>();
     responses.forEach((response) => {
-      organizationQuestionNames.forEach((name) => {
-        const value = response.data[name];
-        if (typeof value === "string") submittedIds.add(value);
+      organizationQuestions.forEach(({ path }) => {
+        collectValuesAtPath(response.data, path).forEach(value => {
+          if (typeof value === "string") submittedIds.add(value);
+        });
       });
     });
     const expectedIds = new Set(organizations.map((organization) => organization.id));

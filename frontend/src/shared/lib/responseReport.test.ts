@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { EducationOrganization } from "../../entities/organization/types";
 import type { SurveyResponse } from "../../entities/response/types";
+import type { SurveyQuestion } from "../../entities/survey/types";
+import { formatResponsesForTable } from "./responsesExport";
 import { createResponseReport } from "./responseReport";
 
 const organizations: EducationOrganization[] = [
@@ -42,6 +44,36 @@ const responses: SurveyResponse[] = [
 ];
 
 describe("createResponseReport", () => {
+  it.each(["matrixdropdown", "matrixdynamic"])("keeps raw numeric %s cells for statistics while exporting comments", (type) => {
+    const question = {
+      type, name: "matrix", rows: ["row"],
+      columns: [
+        { name: "score", cellType: "text", inputType: "number", showCommentArea: true },
+        { name: "choice", cellType: "dropdown", choices: [{ value: 10, text: "Десять" }, { value: 20, text: "Двадцать" }], showCommentArea: true },
+      ],
+    } as unknown as SurveyQuestion;
+    const schema = { commentSuffix: "_note", pages: [{ elements: [question] }] };
+    const numericResponses: SurveyResponse[] = [10, 20].map(score => ({
+      id: String(score), form_id: "form", created_at: "2026-10-05T00:00:00Z",
+      data: { matrix: type === "matrixdynamic"
+        ? [{ score, score_note: "Пояснение", choice: score, choice_note: "Выбор" }]
+        : { row: { score, score_note: "Пояснение", choice: score, choice_note: "Выбор" } } },
+    }));
+    numericResponses.push({
+      id: "comment-only", form_id: "form", created_at: "2026-10-05T00:00:00Z",
+      data: { matrix: type === "matrixdynamic"
+        ? [{ score: null, score_note: "Без числа" }]
+        : { row: { score: null, score_note: "Без числа" } } },
+    });
+    const groups = createResponseReport(numericResponses, schema).questionReports[0].groups;
+    expect(groups).toHaveLength(2);
+    expect(groups[0].metrics).toEqual([{ label: "Среднее", value: "15" }, { label: "Медиана", value: "15" }]);
+    expect(groups[0].values).toEqual([{ label: "10", count: 1, percentage: 50 }, { label: "20", count: 1, percentage: 50 }]);
+    expect(groups[1].metrics).toEqual([{ label: "Ответов", value: "2" }]);
+    expect(groups[1].values).toContainEqual({ label: "Десять\nКомментарий: Выбор", count: 1, percentage: 50 });
+    expect(formatResponsesForTable(numericResponses, schema).rows[0]["answer:matrix"]).toMatch(/10\n\s*Комментарий: Пояснение/);
+  });
+
   it("calculates question completion, distributions and organizations that did not submit", () => {
     const report = createResponseReport(responses, {
       pages: [{
@@ -79,6 +111,20 @@ describe("createResponseReport", () => {
       pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }],
     }, organizations);
     expect(report.organizationCoverage).toBeNull();
+  });
+
+  it("counts organizations at their nested valueName paths and ignores root lookalikes", () => {
+    const report = createResponseReport([{
+      ...responses[0], data: { institution: "org-2", records: [{ institution: "org-1" }, { institution: "org-1" }] },
+    }], { pages: [{ elements: [{
+      type: "paneldynamic", name: "entries", valueName: "records", templateElements: [{
+        type: "panel", name: "details", elements: [{ type: "organization", name: "org", valueName: "institution" }],
+      }],
+    }] }] }, organizations);
+    expect(report.questionReports).toEqual([]);
+    expect(report.organizationCoverage).toMatchObject({
+      submittedCount: 1, submittedOrganizations: [organizations[0]], missingOrganizations: [organizations[1]],
+    });
   });
 
   it("builds different analytics for numeric, date, ranking, matrix and attachment questions", () => {

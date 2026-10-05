@@ -52,6 +52,7 @@ test("public file upload recovers from failed deletion and upload without refres
     const path = new URL(route.request().url()).pathname;
     if (path.includes("/object/sign/")) {
       if (route.request().method() === "POST") return route.fulfill({ json: { signedURL: `${path.replace("/storage/v1", "")}?token=test` } });
+      expect(path.split("/object/")[0]).toBe(uploads[0].split("/object/")[0]);
       return route.fulfill({ contentType: "image/png", body: png });
     }
     expect(path).toContain(`/object/survey-files/public/${formId}/`);

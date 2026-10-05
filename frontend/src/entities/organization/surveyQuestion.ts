@@ -13,7 +13,7 @@ export function applyOrganizationChoicesToSurvey(
     text: getOrganizationDisplayName(organization),
   }));
 
-  model.getAllQuestions().forEach((question) => {
+  model.getAllQuestions(false, false, true).forEach((question) => {
     if (question.getType() !== ORGANIZATION_QUESTION_TYPE) {
       return;
     }
@@ -31,13 +31,20 @@ export function lockPersonalOrganization(model: Model, organization: SelectableO
   const lockQuestion = (question: ReturnType<Model["getAllQuestions"]>[number]) => {
     if (question.getType() !== ORGANIZATION_QUESTION_TYPE) return;
     const content = (question as QuestionCustomModel).contentQuestion as QuestionDropdownModel;
-    question.enableIf = "";
-    question.readOnly = true;
-    question.clearIfInvisible = "none";
-    question.value = organization.id;
+    // readOnly only blocks user input; expressions also run on read-only fields.
+    for (const target of [question, content]) {
+      target.enableIf = "";
+      target.resetValueIf = "";
+      target.setValueIf = "";
+      target.setValueExpression = "";
+      target.defaultValueExpression = "";
+      target.clearIfInvisible = "none";
+      target.readOnly = true;
+      target.defaultValue = organization.id;
+    }
     content.choices = [{ value: organization.id, text: getOrganizationDisplayName(organization) }];
-    content.readOnly = true;
+    question.value = organization.id;
   };
-  model.getAllQuestions().forEach(lockQuestion);
+  model.getAllQuestions(false, false, true).forEach(lockQuestion);
   model.onQuestionCreated.add((_sender, { question }) => lockQuestion(question));
 }

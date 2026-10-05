@@ -8,6 +8,12 @@ import {
   uploadFileToStorage,
 } from "./storage";
 import { publicSupabaseClient, supabaseClient } from "./client";
+import { SUPABASE_URL } from "../config/env";
+
+vi.mock("../config/env", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../config/env")>(),
+  SUPABASE_URL: "https://supabase.test/api",
+}));
 
 vi.mock("./client", () => ({
   supabaseClient: {
@@ -53,7 +59,24 @@ describe("storage api", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(resolveSurveyFileValueContent({ name: "file.txt", content: path }, { allowAnonymous: true, restoreDraft: true })).resolves.toBe("data:text/plain;base64,aGVsbG8=");
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) } }));
+    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/sign/survey-files/${path}?token=short-lived`, { signal: expect.any(AbortSignal) });
     expect(publicSupabaseClient.storage.from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "storage/v1",
+    "/api/storage/v1",
+    `${SUPABASE_URL}/storage/v1`,
+  ])("restores signed URLs with the configured API prefix exactly once: %s", async (storageUrl) => {
+    const path = "public/10000000-0000-4000-8000-000000000000/file.txt";
+    const signedPath = `/object/sign/survey-files/${path}?token=short%2Flived%3D`;
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: `${storageUrl}${signedPath}` }, error: null } as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("hello", { headers: { "Content-Type": "text/plain" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveSurveyFileValueContent({ content: path }, { allowAnonymous: true, restoreDraft: true })).resolves.toBe("data:text/plain;base64,aGVsbG8=");
+
+    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1${signedPath}`, { signal: expect.any(AbortSignal) });
   });
 
   it("passes a personal capability when restoring an attached file on another browser", async () => {

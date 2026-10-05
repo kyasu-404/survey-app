@@ -237,8 +237,10 @@ async function createSignedUrlForStoragePath(path: string, options: StorageAuthO
       if (response instanceof Response && response.status === 410) throw new Error("Файл больше недоступен. Прикрепите его заново.");
       throw new Error("Не удалось восстановить файл. Проверьте подключение и повторите попытку.");
     }
-    // Accept only the configured Storage origin, even if an upstream is misconfigured.
-    const signedUrl = new URL(data.signedUrl, SUPABASE_URL).href;
+    // The server returns /storage/v1/... without the public API proxy prefix.
+    const signedUrlValue = data.signedUrl.startsWith("/storage/v1/") ? data.signedUrl.slice(1) : data.signedUrl;
+    const signedUrl = new URL(signedUrlValue, `${SUPABASE_URL}/`).href;
+    // Accept only the configured Storage origin and the requested object.
     if (getStoragePathByUrl(signedUrl) !== path) throw new Error("Получена некорректная ссылка на файл");
     return signedUrl;
   }

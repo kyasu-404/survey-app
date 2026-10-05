@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Model, type QuestionCustomModel, type QuestionDropdownModel } from "survey-core";
+import { Model, type QuestionCustomModel, type QuestionDropdownModel, type QuestionPanelDynamicModel } from "survey-core";
 import { registerCustomSurveyQuestionTypes } from "../survey/model/surveyQuestionTypes";
 import { applyOrganizationChoicesToSurvey, lockPersonalOrganization } from "./surveyQuestion";
 
@@ -70,5 +70,75 @@ it("prefills and locks organization fields after restoring a draft, including va
   expect(model.getQuestionByName("org").isReadOnly).toBe(true);
   model.setValue("q", "2");
   expect(model.data.institution).toBe("locked");
+  model.dispose();
+});
+
+it("locks existing and newly added nested dynamic panels using their valueName", () => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [{
+    type: "paneldynamic", name: "entries", valueName: "records", panelCount: 1,
+    templateElements: [
+      { type: "organization", name: "org", valueName: "institution" },
+      { type: "paneldynamic", name: "children", panelCount: 1, templateElements: [{ type: "organization", name: "nestedOrg" }] },
+    ],
+  }] });
+  model.data = { records: [{ institution: "wrong", children: [{ nestedOrg: "wrong" }] }] };
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  const entries = model.getQuestionByName("entries") as QuestionPanelDynamicModel;
+  entries.addPanel();
+  for (const panel of entries.panels) {
+    const children = panel.getQuestionByName("children") as QuestionPanelDynamicModel;
+    children.addPanel();
+  }
+  expect(model.data).toEqual({ records: [
+    { institution: "locked", children: [{ nestedOrg: "locked" }, { nestedOrg: "locked" }] },
+    { institution: "locked", children: [{ nestedOrg: "locked" }, { nestedOrg: "locked" }] },
+  ] });
+  for (const question of model.getAllQuestions(false, false, true).filter(q => q.getType() === "organization")) {
+    expect(question.isReadOnly).toBe(true);
+    expect((question as QuestionCustomModel).contentQuestion.isReadOnly).toBe(true);
+    expect(question.displayValue).toBe("ГБОУ 12");
+  }
+  model.dispose();
+});
+
+it.each([
+  { resetValueIf: "{q} = 'reset'" },
+  { setValueIf: "{q} = 'reset'", setValueExpression: "'wrong'" },
+  { setValueExpression: "iif({q} = 'reset', 'wrong', 'locked')" },
+  { defaultValueExpression: "iif({q} = 'reset', 'wrong', 'locked')" },
+])("keeps a personal organization bound when conditions run: %j", (conditions) => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [
+    { type: "organization", name: "org", ...conditions },
+    { type: "text", name: "q" },
+  ] });
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  model.setValue("q", "reset");
+  expect(model.data.org).toBe("locked");
+  model.setValue("q", "other");
+  expect(model.data.org).toBe("locked");
+  model.dispose();
+});
+
+it("disables value expressions in existing and new dynamic entries", () => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [{
+    type: "paneldynamic", name: "entries", panelCount: 1, templateElements: [
+      { type: "organization", name: "org", resetValueIf: "{panel.q} = 'reset'", setValueExpression: "iif({panel.q} = 'replace', 'wrong', 'locked')" },
+      { type: "text", name: "q" },
+    ],
+  }] });
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  const entries = model.getQuestionByName("entries") as QuestionPanelDynamicModel;
+  entries.addPanel();
+  for (const panel of entries.panels) {
+    const org = panel.getQuestionByName("org") as QuestionCustomModel;
+    for (const value of ["reset", "replace"]) {
+      panel.getQuestionByName("q").value = value;
+      expect(org.value).toBe("locked");
+      expect(org.contentQuestion.isReadOnly).toBe(true);
+    }
+  }
   model.dispose();
 });
