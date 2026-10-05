@@ -142,3 +142,75 @@ it("disables value expressions in existing and new dynamic entries", () => {
   }
   model.dispose();
 });
+
+const organizationTriggers = [
+  { type: "setvalue", setValue: "wrong" },
+  { type: "copyvalue", fromName: "source" },
+  { type: "runexpression", runExpression: "{source}" },
+];
+
+it.each(organizationTriggers)("protects root organizations from $type triggers while other triggers still run", (trigger) => {
+  registerCustomSurveyQuestionTypes();
+  for (const [valueName, target] of [[undefined, "org"], ["institution", "org"], ["institution", "institution"]]) {
+    const model = new Model({ elements: [
+      { type: "organization", name: "org", valueName, isRequired: true },
+      { type: "text", name: "q" }, { type: "text", name: "source" }, { type: "text", name: "other" },
+    ], triggers: [
+      { ...trigger, expression: "{q} = 'go'", setToName: target },
+      { ...trigger, expression: "{q} = 'go'", setToName: "other" },
+    ] });
+    model.setValue("source", "wrong");
+    lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+    model.setValue("q", "go");
+    const org = model.getQuestionByName("org") as QuestionCustomModel;
+    expect(model.data[valueName ?? "org"]).toBe("locked");
+    expect(org.value).toBe("locked");
+    expect(org.contentQuestion.value).toBe("locked");
+    expect(org.displayValue).toBe("ГБОУ 12");
+    expect(org.isReadOnly).toBe(true);
+    expect(model.data.other).toBe("wrong");
+    expect(model.validate()).toBe(true);
+    model.dispose();
+  }
+});
+
+it.each(organizationTriggers)("protects existing and new dynamic entry organizations from $type triggers", (trigger) => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [
+    { type: "text", name: "q" }, { type: "text", name: "source" },
+    { type: "paneldynamic", name: "entries", valueName: "records", panelCount: 1, templateElements: [
+      { type: "organization", name: "org", valueName: "institution", isRequired: true },
+    ] },
+  ], triggers: [0, 1].map(index => ({ ...trigger, expression: "{q} = 'go'", setToName: `records[${index}].institution` })) });
+  model.setValue("source", "wrong");
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  const entries = model.getQuestionByName("entries") as QuestionPanelDynamicModel;
+  entries.addPanel();
+  model.setValue("q", "go");
+  expect(model.data.records).toEqual([{ institution: "locked" }, { institution: "locked" }]);
+  for (const panel of entries.panels) {
+    const org = panel.getQuestionByName("org") as QuestionCustomModel;
+    expect(org.value).toBe("locked");
+    expect(org.contentQuestion.value).toBe("locked");
+    expect(org.isReadOnly).toBe(true);
+  }
+  expect(model.validate()).toBe(true);
+  model.dispose();
+});
+
+it("protects organizations when a trigger replaces an entire dynamic panel value", () => {
+  registerCustomSurveyQuestionTypes();
+  const replacement = [{ institution: "wrong", answer: "copied", children: [{ nestedOrg: "wrong" }] }];
+  const model = new Model({ elements: [
+    { type: "text", name: "q" },
+    { type: "paneldynamic", name: "entries", valueName: "records", panelCount: 1, templateElements: [
+      { type: "organization", name: "org", valueName: "institution" }, { type: "text", name: "answer" },
+      { type: "paneldynamic", name: "children", panelCount: 1, templateElements: [{ type: "organization", name: "nestedOrg" }] },
+    ] },
+  ], triggers: [{ type: "setvalue", expression: "{q} = 'go'", setValue: replacement, setToName: "records" }] });
+  lockPersonalOrganization(model, { id: "locked", alias: "ГБОУ", number: "12", organization_type: "school" });
+  model.setValue("q", "go");
+  expect(model.data.records).toEqual([{ institution: "locked", answer: "copied", children: [{ nestedOrg: "locked" }] }]);
+  expect(model.toJSON().triggers[0].setValue).toEqual(replacement);
+  model.dispose();
+});

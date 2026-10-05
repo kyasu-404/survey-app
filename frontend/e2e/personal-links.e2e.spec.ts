@@ -89,7 +89,7 @@ test("personal forms lock organization, isolate drafts, submit and reopen the sa
   expect(pageErrors).toEqual([]);
 });
 
-test("personal forms keep organization bound in dynamic entries through conditions, reload and editing", async ({ page }) => {
+test("personal forms keep organization bound in dynamic entries through conditions, triggers, reload and editing", async ({ page }) => {
   const organization = organizations[0];
   const { formId, form, pageErrors } = await openSurveyApp(page, { elements: [{
     type: "paneldynamic", name: "entries", valueName: "records", title: "Записи",
@@ -100,6 +100,11 @@ test("personal forms keep organization bound in dynamic entries through conditio
     ],
   }] });
   Object.assign(form, { allow_response_editing: true });
+  Object.assign(form.schema, { triggers: [
+    { type: "setvalue", expression: "{records[0].answer} = 'Сбросить'", setToName: "records[0].institution", setValue: "wrong" },
+    { type: "copyvalue", expression: "{records[1].answer} = 'Заменить'", setToName: "records[1].institution", fromName: "records[0].answer" },
+    { type: "runexpression", expression: "{records[1].answer} = 'Заменить'", setToName: "records[0].institution", runExpression: "'wrong'" },
+  ] });
   let saved: { response_id: string; response_data: Record<string, unknown>; response_editable: boolean } | undefined;
   let submissions = 0;
   await page.route("**/rest/v1/rpc/*personal_form*", route => {
