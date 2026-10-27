@@ -38,7 +38,13 @@ test("ZIP matches XLSX styling and contains every attachment, including answers 
   const zipButton = page.getByRole("button", { name: "Файлы в ZIP", exact: true });
   await expect(zipButton).toBeVisible();
   expect(await zipButton.getAttribute("class")).toBe(await xlsx.getAttribute("class"));
-  expect(await zipButton.locator("img").getAttribute("src")).toBe(await xlsx.locator("img").getAttribute("src"));
+  const zipIcon = zipButton.locator('[data-icon="download"]');
+  const xlsxIcon = xlsx.locator('[data-icon="download"]');
+  await expect(zipIcon).toBeVisible();
+  await expect(xlsxIcon).toBeVisible();
+  await expect(zipIcon).toHaveAttribute("aria-hidden", "true");
+  expect(await zipIcon.textContent()).toBe(await xlsxIcon.textContent());
+  expect(await zipIcon.evaluate(el => getComputedStyle(el).fontFamily)).toContain("Material Symbols Outlined");
   const getColors = (element: HTMLElement | SVGElement) => {
     const style = getComputedStyle(element);
     return [style.color, style.backgroundColor];

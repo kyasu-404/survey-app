@@ -4,6 +4,10 @@ import { expect, test } from "@playwright/test";
 // The auto-started server uses the HTTPS Supabase fixture in playwright.config.ts.
 // All API requests are intercepted, including uploads and form saves.
 test("gallery and uploaded backgrounds survive saving and public rendering", async ({ page }) => {
+  // This round trip reloads Creator repeatedly, copies/uploads images, saves
+  // twice and opens the public form. Keep per-step assertions at their default
+  // timeout while allowing the whole flow to finish on a cold CI worker.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

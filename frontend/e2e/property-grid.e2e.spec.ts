@@ -153,6 +153,9 @@ for (const theme of ["sand", "graphite"]) {
   });
 
   test(`${theme}: resizing preserves the native flyout and mobile Property Grid`, async ({ page }, testInfo) => {
+    // Several full Creator reloads plus both mobile widths form one scenario.
+    // Keep individual assertions bounded while allowing a cold CI run to finish.
+    test.setTimeout(60_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
     const app = await openSurveyApp(page, { responseCount: 0 });

@@ -3,6 +3,9 @@ import { openSurveyApp } from "./fixtures/surveyApp";
 
 for (const theme of ["sand", "graphite"]) {
   test(`${theme}: compact templates use a bookmark and fit three, two and one columns`, async ({ page }, testInfo) => {
+    // Six viewport reloads, menu screenshots and a persisted bookmark round trip
+    // share this budget; individual assertions retain their default timeout.
+    test.setTimeout(60_000);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
     const app = await openSurveyApp(page, { responseCount: 0, elements: [{ type: "text", name: "name", title: "Имя" }] });

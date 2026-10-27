@@ -41,6 +41,26 @@ test("builds a Russian reminder and an IDN envelope without delivering email", a
   assert.equal(Buffer.from(mime.split("\r\n\r\n").slice(1).join("\r\n\r\n"), "base64").toString(), message.text);
 });
 
+// Regression cases for the address parser advisories fixed in Nodemailer 10.1.4:
+// GHSA-8c8m-p3m8-cjg8, GHSA-m943-m63m-w62w, GHSA-85x2-q946-cp5h.
+// Keep these at the public sendMail boundary and use only the offline transport.
+for (const [label, to, expected] of [
+  ["nested comment", "Recipient (outer(inner) <decoy@other.test>) <reader@allowed.test>", "reader@allowed.test"],
+  ["semicolon inside a group comment", "Team: (note; <decoy@other.test>) <reader@allowed.test>;", "reader@allowed.test"],
+  ["semicolon inside a quoted group name", 'Team: "note;" "<decoy@other.test>" <reader@allowed.test>;', "reader@allowed.test"],
+  // The SMTP formatter normalizes angle brackets inside a quoted local part
+  // to spaces; both spellings must still select the intended domain.
+  ["angle bracket inside a quoted local part", '<"local@other.test>"@allowed.test>', '"local@other.test "@allowed.test'],
+  ["unbracketed quoted local part", '"local@other.test>"@allowed.test', '"local@other.test "@allowed.test'],
+]) {
+  test(`keeps the intended envelope recipient with ${label}`, async (t) => {
+    const transport = createOfflineTransport();
+    t.after(() => transport.close());
+    const result = await transport.sendMail({ ...message, to });
+    assert.deepEqual(result.envelope.to, [expected]);
+  });
+}
+
 // Exercise the legacy plugin API behind GHSA-8m3c-c648-2xjj. The worker
 // currently has no plugins; its file/URL policy must still survive upgrades.
 function resolveTextInPlugin(transport) {
