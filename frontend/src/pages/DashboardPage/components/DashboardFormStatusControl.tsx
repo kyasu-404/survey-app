@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Icon } from "../../../shared/ui/Icon";
 import { DashboardMenuPortal } from "./DashboardMenuPortal";
 import type {
   Dispatch,
@@ -64,6 +65,7 @@ export function DashboardFormStatusControl({
         }`.trim()}
         aria-label={`Статус формы ${title}: ${statusLabel}`}
         aria-expanded={statusMenuOpen}
+        aria-haspopup="menu"
         onClick={(event) => {
           stopCardEvent(event);
           setOpenedMenu((current) =>
@@ -71,7 +73,7 @@ export function DashboardFormStatusControl({
           );
         }}
       >
-        {statusLabel}
+        {statusLabel}<Icon name="expand_more" className="chip-indicator" size={16} />
       </button>
 
       <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="left">

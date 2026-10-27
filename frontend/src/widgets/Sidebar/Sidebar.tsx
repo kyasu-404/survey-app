@@ -9,13 +9,16 @@ import { logout } from "../../features/auth/api";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { Icon } from "../../shared/ui/Icon";
 
 type SidebarProps = {
+  collapsed?: boolean;
+  isMobile?: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
 };
 
-export function Sidebar({ onToggle, onNavigate }: SidebarProps) {
+export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = false }: SidebarProps) {
   const { user, profile, loading } = useAuth();
   const { themeId } = useTheme();
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
@@ -52,8 +55,8 @@ export function Sidebar({ onToggle, onNavigate }: SidebarProps) {
           }}
         />
         <h3 className="brand-title">Формы</h3>
-        <button type="button" className="sidebar-toggle-button" onClick={onToggle} aria-label="Скрыть меню">
-          ←
+        <button type="button" className="sidebar-toggle-button" onClick={onToggle} aria-label={isMobile ? "Скрыть меню" : collapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!collapsed} title={collapsed ? "Развернуть меню" : "Свернуть меню"}>
+          <Icon name={collapsed ? "chevron_right" : "chevron_left"} />
         </button>
       </div>
 
@@ -71,28 +74,37 @@ export function Sidebar({ onToggle, onNavigate }: SidebarProps) {
 
         {!loading && user && (
           <>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardAll}>
-              Все формы
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardAll} title="Все формы">
+              <Icon name="description" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Все формы</span>
             </NavLink>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy}>
-              Мои формы
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.dashboardMy} title="Мои формы">
+              <Icon name="folder" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Мои формы</span>
             </NavLink>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.templates}>
-              Шаблоны
+            <span className="sidebar-nav-section">Рабочая область</span>
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.templates} title="Шаблоны">
+              <Icon name="dashboard_customize" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Шаблоны</span>
             </NavLink>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.organizations}>
-              Справочник ОУ
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.organizations} title="Справочник ОУ">
+              <Icon name="school" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Справочник ОУ</span>
             </NavLink>
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.builder}>
-              Конструктор
+            <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.builder} title="Конструктор">
+              <Icon name="edit_document" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Конструктор</span>
             </NavLink>
             {profile?.role === "admin" && (
               <>
-                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.users}>
-                  Пользователи
+                <span className="sidebar-nav-section">Управление</span>
+                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.users} title="Пользователи">
+                  <Icon name="group" className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-label">Пользователи</span>
                 </NavLink>
-                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.settings}>
-                  Настройки
+                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.settings} title="Настройки">
+                  <Icon name="settings" className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-label">Настройки</span>
                 </NavLink>
               </>
             )}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import refreshIcon from "../../img/refresh.png";
+import { Icon } from "./Icon";
 import { InlineSpinner } from "./InlineSpinner";
 
 const UPDATED_STATE_DURATION_MS = 1500;
@@ -92,7 +92,7 @@ export function RefreshButton({
         {isRefreshing ? (
           <InlineSpinner />
         ) : (
-          <img src={refreshIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+          <Icon name="refresh" className="toolbar-icon" size={18} />
         )}
         <span>{buttonLabel}</span>
       </button>

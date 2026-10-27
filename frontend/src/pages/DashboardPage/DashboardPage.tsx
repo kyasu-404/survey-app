@@ -1,8 +1,9 @@
 import { useViewTransition } from "../../shared/ui/useViewTransition";
 import { Presence } from "../../shared/ui/Presence";
+import { Icon } from "../../shared/ui/Icon";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -161,6 +162,15 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   return (
     <div className="dashboard-page dashboard-shell">
       <div className="card dashboard-main-card">
+        <header className="dashboard-page-header">
+          <div>
+            <h1>{viewMode === "mine" ? "Мои формы" : "Все формы"}</h1>
+            <p>{viewMode === "mine" ? "Формы, созданные вами" : "Формы вашей команды"}</p>
+          </div>
+          <Link className="button-primary dashboard-create-button" to={routes.builder}>
+            <Icon name="add" /> Создать форму
+          </Link>
+        </header>
         <DashboardToolbar
           layout={layout}
           onToggleLayout={toggleLayout}

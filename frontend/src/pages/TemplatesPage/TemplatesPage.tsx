@@ -98,7 +98,7 @@ export default function TemplatesPage() {
         </div>
 
         {templatesData.isInitialTemplatesLoading && (
-          <div className="templates-gallery-grid templates-gallery-grid-two-columns templates-gallery-grid-loading">
+          <div className="templates-gallery-grid templates-gallery-grid-loading">
             <TemplateSkeletonCards count={4} />
           </div>
         )}

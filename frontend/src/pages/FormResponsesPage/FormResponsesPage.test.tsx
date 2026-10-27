@@ -202,7 +202,8 @@ describe("FormResponsesPage", () => {
     const xlsx = screen.getByRole("button", { name: "Скачать XLSX" });
     expect(xlsx.nextElementSibling).toBe(button);
     expect(button.className).toBe(xlsx.className);
-    expect(button.querySelector("img")?.getAttribute("src")).toBe(xlsx.querySelector("img")?.getAttribute("src"));
+    expect(button.querySelector('[data-icon="download"]')).toBeInTheDocument();
+    expect(xlsx.querySelector('[data-icon="download"]')).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("checkbox", { name: /^Выбрать Ответ/ })[0]);
     await userEvent.click(button);
     await waitFor(() => expect(button).toHaveTextContent("1/2"));
@@ -322,7 +323,7 @@ describe("FormResponsesPage", () => {
 
     expect(css).toMatch(/button\.responses-export-button,\s*button\.dashboard-qr-download-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/button\.responses-export-button:hover,\s*button\.responses-export-button:focus-visible,\s*button\.dashboard-qr-download-button:hover,\s*button\.dashboard-qr-download-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/\.responses-export-button\s+\.toolbar-icon,\s*\.dashboard-qr-download-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+    expect(css).toMatch(/\.responses-export-button\s+img\.toolbar-icon,\s*\.dashboard-qr-download-button\s+img\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
   });
 
   it("makes the HTML export button match the XLSX button", () => {
@@ -330,7 +331,7 @@ describe("FormResponsesPage", () => {
 
     expect(css).toMatch(/button\.responses-export-button\.responses-html-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
     expect(css).toMatch(/button\.responses-export-button\.responses-html-button:hover,\s*button\.responses-export-button\.responses-html-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/);
-    expect(css).toMatch(/\.responses-html-button\s+\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
+    expect(css).toMatch(/\.responses-html-button\s+img\.toolbar-icon\s*\{[^}]*filter:\s*brightness\(0\)\s*invert\(1\);/);
   });
 
   it("uses matching light styles for report, refresh, and directory file buttons", () => {

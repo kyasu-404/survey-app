@@ -88,8 +88,8 @@ for (const width of [320, 390]) {
     expect(await status.evaluate(el => {
       const range = document.createRange();
       range.selectNodeContents(el);
-      return range.getClientRects().length;
-    })).toBe(1);
+      return range.getBoundingClientRect().height;
+    })).toBeLessThanOrEqual(20);
     await page.screenshot({ path: testInfo.outputPath("users.png") });
     await page.getByRole("button", { name: "Сменить пароль", exact: true }).click();
     await expectPageFits(page);
@@ -114,8 +114,8 @@ for (const width of [320, 390]) {
     await page.screenshot({ path: testInfo.outputPath("responses.png") });
     await trigger.click();
     await page.locator(".sidebar-account-trigger").click();
-    await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Тёмная", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Тёмная тема", exact: true }).click();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
     await expectPageFits(page);
     await page.screenshot({ path: testInfo.outputPath("responses-dark.png") });
@@ -186,7 +186,7 @@ for (const width of [320, 390]) {
     await expectMenuFits(page);
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Поделиться шаблоном Мобильный шаблон", exact: true }).tap();
-    await expect(page.locator(".templates-share-button")).toHaveText("Не показывать другим");
+    await expect(page.locator(".templates-share-button > span:not([data-icon])")).toHaveText("Не показывать другим");
     await expect(page.locator(".templates-share-button")).toBeEnabled();
     await templateTrigger.tap();
     await expectMenuFits(page);

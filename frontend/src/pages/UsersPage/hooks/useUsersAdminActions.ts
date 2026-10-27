@@ -20,6 +20,7 @@ export function useUsersAdminActions() {
   const queryClient = useQueryClient();
   const [newUser, setNewUserState] = useState<NewUserForm>(() => getUsersPageSessionState(queryClient).newUser);
   const [pendingStatusUserId, setPendingStatusUserId] = useState<string | null>(null);
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
   const [roleChangeModal, setRoleChangeModal] = useState<RoleChangeModalState | null>(null);
@@ -40,6 +41,7 @@ export function useUsersAdminActions() {
     mutationFn: createUser,
     onSuccess: () => {
       setNewUser(EMPTY_NEW_USER);
+      setIsCreateUserOpen(false);
       showToast("Пользователь создан", "success");
       scheduleQueryInvalidation(queryClient, "create user", [{ queryKey: USERS_QUERY_ROOT }]);
     },
@@ -125,11 +127,15 @@ export function useUsersAdminActions() {
       return;
     }
 
-    await createUserMutation.mutateAsync({
-      ...newUser,
-      name: newUser.name.trim(),
-      email: newUser.email.trim(),
-    });
+    try {
+      await createUserMutation.mutateAsync({
+        ...newUser,
+        name: newUser.name.trim(),
+        email: newUser.email.trim(),
+      });
+    } catch {
+      // onError reports the error; retain the dialog and draft for correction.
+    }
   };
 
   const openPasswordModal = (userId: string, title: string, isOwnPassword: boolean) => {
@@ -191,6 +197,8 @@ export function useUsersAdminActions() {
   };
 
   return {
+    isCreateUserOpen,
+    setIsCreateUserOpen,
     createUserPending: createUserMutation.isPending,
     deleteUserModal,
     deleteUserPending: deleteUserMutation.isPending,

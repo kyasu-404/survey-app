@@ -12,6 +12,7 @@ import { AppFavicon } from './entities/site-settings/AppFavicon'
 import './app.css'
 import './motion.css'
 import './responsive.css'
+import './interface.css'
 
 initializeObservability();
 

@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import {
   DEFAULT_THEME_ID,
   THEME_STORAGE_KEY,
-  getNextThemeId,
   isThemeId,
   themeOptions,
   themes,
@@ -15,7 +14,6 @@ type ThemeContextValue = {
   theme: SurveyThemeBundle;
   themeOptions: typeof themeOptions;
   setTheme: (themeId: ThemeId) => void;
-  cycleTheme: () => void;
 };
 
 const defaultContextValue: ThemeContextValue = {
@@ -23,7 +21,6 @@ const defaultContextValue: ThemeContextValue = {
   theme: themes[DEFAULT_THEME_ID],
   themeOptions,
   setTheme: () => undefined,
-  cycleTheme: () => undefined,
 };
 
 const ThemeContext = createContext<ThemeContextValue>(defaultContextValue);
@@ -62,7 +59,6 @@ export function ThemeProvider({ children, isThemeApplied = true }: ThemeProvider
         theme,
         themeOptions,
         setTheme: setThemeId,
-        cycleTheme: () => setThemeId((currentThemeId) => getNextThemeId(currentThemeId)),
       }}
     >
       {children}

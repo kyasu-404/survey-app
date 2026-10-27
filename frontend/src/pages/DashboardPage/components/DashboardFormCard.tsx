@@ -11,9 +11,7 @@ import { formatDashboardCreatedAt, formatDashboardDeadlineLabel, getAuthorLabel,
 import { DashboardFormActionMenu } from "./DashboardFormActionMenu";
 import { DashboardFormMetaLine } from "./DashboardFormMetaLine";
 import { DashboardFormStatusControl } from "./DashboardFormStatusControl";
-import shareBlackIcon from "../../../img/Share_black.svg";
-import shareWhiteIcon from "../../../img/Share_white.svg";
-import { useTheme } from "../../../shared/theme/ThemeProvider";
+import { Icon } from "../../../shared/ui/Icon";
 import { DashboardDeadlineTooltip } from "./DashboardDeadlineTooltip";
 
 type DashboardFormCardProps = {
@@ -57,7 +55,6 @@ export function DashboardFormCard({
   setOpenedMenu,
   viewMode,
 }: DashboardFormCardProps) {
-  const { themeId } = useTheme();
   const title = getSurveyDisplayTitle(form);
   const isOwnForm = form.author_id === currentUserId;
   const isTemplate = isTemplateForm(form);
@@ -101,7 +98,7 @@ export function DashboardFormCard({
           disabled={isPending}
           onClick={(event) => { event.stopPropagation(); setOpenedMenu(null); onShare(form); }}
         >
-          <img src={themeId === "graphite" ? shareWhiteIcon : shareBlackIcon} alt="" aria-hidden="true" />
+          <Icon name="share" size={18} />
         </button>
       )}
     <DashboardFormActionMenu
@@ -142,7 +139,7 @@ export function DashboardFormCard({
               aria-label={`Ответы формы ${title}: ${responsesLabel}`}
               onClick={(event) => { event.stopPropagation(); onOpenResponses(form.id); }}
             >
-              {responsesLabel}
+              {responsesLabel}<span aria-hidden="true"> →</span>
             </button>
             {deadlineLabel && <DashboardDeadlineTooltip label={deadlineLabel} />}
           </div>
@@ -169,7 +166,7 @@ export function DashboardFormCard({
             <div className="dashboard-form-heading-row">
               {statusControl}
 
-              <strong className="dashboard-form-title">{title}</strong>
+              <strong className="dashboard-form-title" title={title}>{title}</strong>
             </div>
             {!isTemplate && (
               <p className="dashboard-form-classification">

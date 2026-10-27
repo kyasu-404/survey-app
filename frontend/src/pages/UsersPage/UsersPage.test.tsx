@@ -91,7 +91,7 @@ describe("UsersPage", () => {
     resolveUsers([]);
   });
 
-  it("renders the merged users controls block and search field above the table", async () => {
+  it("keeps page actions and filters above the table, with creation in a dialog", async () => {
     getAllUsers.mockResolvedValue([
       {
         id: "user-1",
@@ -112,16 +112,16 @@ describe("UsersPage", () => {
     expect(await screen.findByRole("heading", { name: "Пользователи" })).toBeInTheDocument();
     expect(await screen.findByText("admin@example.com")).toBeInTheDocument();
     expect(container.querySelector(".users-page-card")).toBeInTheDocument();
-    expect(container.querySelector(".users-page-controls")).toBeInTheDocument();
-    expect(container.querySelector(".users-page-controls .users-create-grid")).toBeInTheDocument();
-    expect(container.querySelector(".users-page-controls .users-page-toolbar")).toBeInTheDocument();
+    expect(container.querySelector(".users-page-controls")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Имя")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Добавить пользователя" })).toBeInTheDocument();
     expect(container.querySelector(".users-table-shell")).toBeInTheDocument();
 
     const searchField = screen.getByRole("searchbox", { name: "Поиск по имени" });
     expect(searchField).toHaveAttribute("placeholder", "Введите имя для поиска");
     expect(container.querySelector(".users-search-field .users-search-icon")).toBeInTheDocument();
 
-    const controls = container.querySelector(".users-page-controls");
+    const controls = container.querySelector(".users-page-header");
     const filters = container.querySelector(".users-filters-grid");
     const tableShell = container.querySelector(".users-table-shell");
 
@@ -146,8 +146,8 @@ describe("UsersPage", () => {
   it("keeps editable role selections readable in the graphite theme", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select,[^{]+\.users-role-select option\s*\{[^}]*color:\s*#202020;[^}]*background:\s*#e2e2e2;[^}]*color-scheme:\s*light;/s);
-    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select:hover,[^{]+\.users-role-select:focus-visible\s*\{[^}]*color:\s*#202020;[^}]*background:\s*#d4d4d4;/s);
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select,[^{]+\.users-role-select option\s*\{[^}]*color:\s*var\(--theme-text\);[^}]*background:\s*var\(--theme-control-background\);[^}]*color-scheme:\s*dark;/s);
+    expect(css).toMatch(/:root\[data-theme="graphite"\] \.users-table \.users-role-select:hover,[^{]+\.users-role-select:focus-visible\s*\{[^}]*color:\s*var\(--theme-text\);[^}]*background:\s*var\(--theme-control-background\);/s);
   });
 
   it("centers user modal headings", () => {
@@ -240,6 +240,7 @@ describe("UsersPage", () => {
 
     expect(await screen.findByText("Мария")).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     const createGrid = firstRender.container.querySelector<HTMLElement>(".users-create-grid");
     expect(createGrid).not.toBeNull();
 
@@ -249,8 +250,9 @@ describe("UsersPage", () => {
 
     await userEvent.type(screen.getByPlaceholderText("Имя"), "Иван");
     await userEvent.type(screen.getByPlaceholderText("Email"), "ivan@example.com");
-    await userEvent.type(screen.getByPlaceholderText("Пароль (минимум 8 символов)"), "password123");
+    await userEvent.type(screen.getByPlaceholderText("Минимум 8 символов"), "password123");
     await userEvent.selectOptions(within(createGrid).getByRole("combobox"), "admin");
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
     await userEvent.type(screen.getByRole("searchbox", { name: "Поиск по имени" }), "ма");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Фильтр по статусу" }), "disabled");
 
@@ -264,9 +266,10 @@ describe("UsersPage", () => {
 
     expect(await screen.findByText("Мария")).toBeInTheDocument();
     expect(screen.queryByText("Администратор")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     expect(screen.getByPlaceholderText("Имя")).toHaveValue("Иван");
     expect(screen.getByPlaceholderText("Email")).toHaveValue("ivan@example.com");
-    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Минимум 8 символов")).toHaveValue("");
     expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("ма");
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("disabled");
 
@@ -299,6 +302,7 @@ describe("UsersPage", () => {
     );
 
     expect(await screen.findByText("Администратор")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     await userEvent.type(screen.getByPlaceholderText("Имя"), "Иван");
     await userEvent.type(screen.getByRole("searchbox", { name: "Поиск по имени" }), "ад");
     firstRender.unmount();
@@ -310,9 +314,10 @@ describe("UsersPage", () => {
     );
 
     expect(await screen.findByText("Администратор")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     expect(screen.getByPlaceholderText("Имя")).toHaveValue("");
     expect(screen.getByPlaceholderText("Email")).toHaveValue("");
-    expect(screen.getByPlaceholderText("Пароль (минимум 8 символов)")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Минимум 8 символов")).toHaveValue("");
     expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Фильтр по роли" })).toHaveValue("all");
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("all");
@@ -389,7 +394,7 @@ describe("UsersPage", () => {
     });
   });
 
-  it("uses red destructive controls, yellow password controls, and black cancel controls", async () => {
+  it("keeps password and destructive actions distinct from account creation", async () => {
     getAllUsers.mockResolvedValue([
       {
         id: "user-1",
@@ -416,7 +421,7 @@ describe("UsersPage", () => {
     );
 
     expect(await screen.findByText("Мария")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Сменить мой пароль" })).toHaveClass("users-yellow-button");
+    expect(screen.getByRole("button", { name: "Сменить мой пароль" })).toHaveClass("users-neutral-button");
 
     await userEvent.click(screen.getByRole("button", { name: "Сменить мой пароль" }));
     expect(screen.getByRole("heading", { name: "Смена моего пароля" })).toHaveClass("users-modal-title");

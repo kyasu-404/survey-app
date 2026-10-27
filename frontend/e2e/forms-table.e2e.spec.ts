@@ -27,7 +27,7 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   for (const name of ["Тип формы", "Основание формы"]) await expect(page.getByLabel(name, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Название", exact: true }).click();
   await expect(table.locator("tbody tr").first()).toContainText("Форма 01");
-  await expect(table.locator("tbody tr").first().getByRole("button", { name: /Ответы формы/ })).toHaveText("1/3 ответов");
+  await expect(table.locator("tbody tr").first().getByRole("button", { name: /Ответы формы/ })).toHaveText("1/3 ответов →");
   const deadline = table.locator("tbody tr").first().getByRole("img", { name: /Открыта до/ });
   await deadline.hover();
   const tooltip = page.getByRole("tooltip");
@@ -66,10 +66,11 @@ test("table shares filters, follows server cursors and keeps menus usable in bot
   await expect(page.getByPlaceholder(/^Поиск по названию/)).toHaveValue("Форма");
   await page.getByRole("button", { name: "Показать таблицу" }).click();
   await page.locator(".sidebar-account-trigger").click();
-  await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Тёмная", exact: true }).click();
-  await expect(page.locator(".dashboard-view-icon-dark")).toBeVisible();
-  await expect.poll(() => page.locator(".dashboard-layout-toggle").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(58, 58, 58)");
+  await page.getByRole("menuitemradio", { name: "Тёмная тема", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dashboard-layout-toggle [data-icon]")).toBeVisible();
+  await expect(page.locator(".dashboard-layout-toggle [data-icon]")).toHaveCSS("color", "rgb(227, 227, 227)");
+  await expect.poll(() => page.locator(".dashboard-layout-toggle").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(30, 31, 32)");
   await page.screenshot({ path: testInfo.outputPath("forms-table-dark.png") });
   await page.setViewportSize({ width: 750, height: 650 });
   await table.locator("tbody tr").last().getByRole("button", { name: /Действия формы/ }).click();

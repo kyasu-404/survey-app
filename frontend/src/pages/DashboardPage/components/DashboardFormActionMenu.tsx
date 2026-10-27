@@ -1,3 +1,4 @@
+import { MoreHorizontalIcon } from "../../../shared/ui/MoreHorizontalIcon";
 import { useRef } from "react";
 import { DashboardMenuPortal } from "./DashboardMenuPortal";
 import type {
@@ -8,10 +9,7 @@ import type {
 } from "react";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
-import copyIcon from "../../../img/copy.svg";
-import deleteIcon from "../../../img/delete.svg";
-import editIcon from "../../../img/edit.svg";
-import renameIcon from "../../../img/rename.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import type { OpenMenuState } from "../types";
 
 type DashboardFormActionMenuProps = {
@@ -64,7 +62,7 @@ export function DashboardFormActionMenu({
           void onDuplicate(form);
         }}
       >
-        <img src={copyIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+        <Icon name="content_copy" className="form-menu-item-icon" size={18} />
       </button>
     );
   }
@@ -89,7 +87,7 @@ export function DashboardFormActionMenu({
         }}
         disabled={isPending}
       >
-        ...
+        <MoreHorizontalIcon />
       </button>
 
       <DashboardMenuPortal anchor={anchorRef} enabled={portal} align="right">
@@ -112,7 +110,7 @@ export function DashboardFormActionMenu({
               }}
               disabled={isPending}
             >
-              <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="drive_file_rename_outline" className="form-menu-item-icon" size={18} />
               <span className="form-menu-item-label">Переименовать</span>
             </button>
           )}
@@ -129,7 +127,7 @@ export function DashboardFormActionMenu({
               }}
               disabled={isPending}
             >
-              <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="edit" className="form-menu-item-icon" size={18} />
               <span className="form-menu-item-label">Редактировать</span>
             </button>
           )}
@@ -146,7 +144,7 @@ export function DashboardFormActionMenu({
               }}
               disabled={isPending}
             >
-              <img src={copyIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="content_copy" className="form-menu-item-icon" size={18} />
               <span className="form-menu-item-label">Дублировать</span>
             </button>
           )}
@@ -163,7 +161,7 @@ export function DashboardFormActionMenu({
               }}
               disabled={isPending}
             >
-              <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+              <Icon name="delete" className="form-menu-item-icon" size={18} />
               <span className="form-menu-item-label">Удалить</span>
             </button>
           )}

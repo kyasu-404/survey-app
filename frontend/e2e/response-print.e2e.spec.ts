@@ -8,7 +8,7 @@ test("a compact report starts on its only printed page with the sidebar open or 
   for (const collapsed of [false, true]) {
     if (collapsed) {
       await page.emulateMedia({ media: "screen" });
-      await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
+      await page.getByRole("button", { name: "Свернуть меню", exact: true }).click();
     }
     await page.emulateMedia({ media: "print" });
     await expect(page.locator(".sidebar-region")).toBeHidden();
@@ -57,7 +57,7 @@ test("wide HTML scrolls on screen and prints all answers in A4 landscape blocks 
   const standalone = await page.context().newPage();
   await standalone.setContent(html);
   await expect(standalone.locator(".responses-report-print")).toBeHidden();
-  await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
+  await page.getByRole("button", { name: "Свернуть меню", exact: true }).click();
   for (const target of [page, standalone]) {
     // Print column widths must not inherit the screen's font-dependent 12ch minimum.
     // A larger table font reproduces the CI environment; print cells still use 9pt.

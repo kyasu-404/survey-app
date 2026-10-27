@@ -3,7 +3,7 @@ import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../src/e
 import { mockRealtime } from "./realtime";
 
 // Each call creates isolated state. All API traffic is intercepted, including mutations.
-export async function openSurveyApp(page: Page, options: { responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
+export async function openSurveyApp(page: Page, options: { profileName?: string; responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   const userId = "10000000-0000-4000-8000-000000000001";
@@ -63,7 +63,7 @@ export async function openSurveyApp(page: Page, options: { responseCount?: numbe
     }
     if (url.pathname.includes("/rest/v1/")) {
       const table = url.pathname.split("/").pop();
-      if (table === "profiles") return route.fulfill({ json: { ...user, name: "Тест", role: "admin", is_disabled: false } });
+      if (table === "profiles") return route.fulfill({ json: { ...user, name: options.profileName ?? "Тест", role: "admin", is_disabled: false } });
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
       if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 220, active_count: 220, forms_with_deadline_count: 0 }] });
       if (table === "forms") return route.fulfill({ json: { ...form, responses_count: responses.length } });

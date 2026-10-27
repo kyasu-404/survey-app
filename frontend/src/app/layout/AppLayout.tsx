@@ -5,6 +5,7 @@ import { Sidebar } from "../../widgets/Sidebar/Sidebar";
 import { useToast } from "../providers/ToastProvider";
 import { useSidebarMotion } from "./useSidebarMotion";
 import { useMobileLayout } from "../../shared/ui/useMobileLayout";
+import { Icon } from "../../shared/ui/Icon";
 
 const mobileHeaderTitles = [
   { path: routes.dashboardMy, title: "Мои формы" },
@@ -29,10 +30,13 @@ export function AppLayout() {
   const isOfficePage = /^\/forms\/[^/]+\/documents\//.test(location.pathname);
   const shouldHideSidebar = isLoginPage || isSurveyPage || isOfficePage;
   const isMobile = useMobileLayout();
-  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [expandedBuilderLocation, setExpandedBuilderLocation] = useState<string | null>(null);
+  const isBuilder = Boolean(matchPath({ path: routes.builder, end: false }, location.pathname));
+  const isSidebarCollapsed = !isMobile && (isBuilder ? expandedBuilderLocation !== location.key : desktopSidebarCollapsed);
   const [mobileMenuLocation, setMobileMenuLocation] = useState<string | null>(null);
   const isMobileMenuOpen = isMobile && mobileMenuLocation === location.key && !shouldHideSidebar;
-  const sidebarHidden = isMobile ? !isMobileMenuOpen : isSidebarHidden;
+  const sidebarHidden = isMobile && !isMobileMenuOpen;
   const sidebarMotion = useSidebarMotion(location.pathname);
 
   const sidebarRegion = useRef<HTMLDivElement>(null);
@@ -100,7 +104,7 @@ export function AppLayout() {
       className={
         shouldHideSidebar
           ? "app-shell app-shell-login app-shell-monochrome"
-          : `app-shell app-shell-monochrome ${sidebarHidden ? "app-shell-sidebar-hidden" : ""}`.trim()
+          : `app-shell app-shell-monochrome ${sidebarHidden ? "app-shell-sidebar-hidden" : ""} ${isSidebarCollapsed ? "app-shell-sidebar-rail" : ""}`.trim()
       }
     >
       {!shouldHideSidebar && isMobile && (
@@ -114,25 +118,10 @@ export function AppLayout() {
             aria-expanded={isMobileMenuOpen}
             aria-controls="app-sidebar"
           >
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <Icon name="menu" size={24} />
           </button>
           <span>{mobileHeaderTitle}</span>
         </header>
-      )}
-      {!shouldHideSidebar && !isMobile && isSidebarHidden && (
-        <button
-          type="button"
-          className="sidebar-open-button"
-          ref={showMenuButton}
-          onClick={() => sidebarMotion.change(() => setIsSidebarHidden(false))}
-          aria-label="Показать меню"
-          aria-expanded={false}
-          aria-controls="app-sidebar"
-        >
-          →
-        </button>
       )}
       {isMobileMenuOpen && <div className="mobile-sidebar-backdrop" aria-hidden="true" onClick={() => setMobileMenuLocation(null)} />}
       {!shouldHideSidebar && (
@@ -146,8 +135,13 @@ export function AppLayout() {
           aria-label={isMobileMenuOpen ? "Главное меню" : undefined}
         >
           <div className="sidebar-clip"><Sidebar
+            collapsed={isSidebarCollapsed}
+            isMobile={isMobile}
             onNavigate={() => setMobileMenuLocation(null)}
-            onToggle={() => isMobile ? setMobileMenuLocation(null) : sidebarMotion.change(() => setIsSidebarHidden(true))}
+            onToggle={() => isMobile ? setMobileMenuLocation(null) : sidebarMotion.change(() => {
+              if (isBuilder) setExpandedBuilderLocation(isSidebarCollapsed ? location.key : null);
+              else setDesktopSidebarCollapsed(current => !current);
+            })}
           /></div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import searchIcon from "../../../img/search.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import type { UsersRoleFilter, UsersStatusFilter } from "../types";
 
 type UsersFiltersBarProps = {
@@ -23,7 +23,7 @@ export function UsersFiltersBar({
     <div className="users-filters-grid">
       <label className="users-filter-field users-search-field">
         <div className="users-search-input-shell">
-          <img src={searchIcon} alt="" aria-hidden="true" className="users-search-icon" />
+          <Icon name="search" className="users-search-icon" />
           <input
             type="search"
             aria-label="Поиск по имени"

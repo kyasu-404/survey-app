@@ -71,7 +71,7 @@ test("sidebar slides a long list without resizing it on every animation frame", 
   await page.evaluate(() => scrollTo(0, 0));
   const content = page.locator(".dashboard-page");
   const requestCount = listRequests.length;
-  for (const label of ["Скрыть меню", "Показать меню"]) {
+  for (const label of ["Свернуть меню", "Развернуть меню"]) {
     const samples = await page.evaluate(async label => {
       const content = document.querySelector<HTMLElement>(".dashboard-page")!;
       document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
@@ -86,14 +86,14 @@ test("sidebar slides a long list without resizing it on every animation frame", 
     expect(Math.abs(samples[0].x - samples.at(-1)!.x)).toBeGreaterThan(30);
   }
   await page.evaluate(() => {
-    for (const label of ["Скрыть меню", "Показать меню", "Скрыть меню"])
+    for (const label of ["Свернуть меню", "Развернуть меню", "Свернуть меню"])
       document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
   });
-  await expect(page.getByRole("button", { name: "Показать меню" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Развернуть меню" })).toBeVisible();
   await expect.poll(() => content.evaluate(node => node.getAnimations().length)).toBe(0);
-  expect(await page.locator(".sidebar-region").evaluate(node => (node as HTMLElement).inert)).toBe(true);
+  expect(await page.locator(".sidebar-region").evaluate(node => (node as HTMLElement).inert)).toBe(false);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.getByRole("button", { name: "Показать меню" }).click();
+  await page.getByRole("button", { name: "Развернуть меню" }).click();
   expect(await content.evaluate(node => node.getAnimations().length)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(listRequests.length).toBe(requestCount);

@@ -1,0 +1,72 @@
+{
+  "family": "Roboto",
+  "cssUrl": "https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap",
+  "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/OFL.txt",
+  "cssSha256": "51701ed9539cc025b85b7a5fcb5d8a69dc6c4a8044845529451b94109cc896f6",
+  "files": [
+    {
+      "name": "roboto-cyrillic-ext-italic.woff2",
+      "subset": "cyrillic-ext",
+      "style": "italic",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO5CnqEu92Fr1Mu53ZEC9_Vu3r1gIhOszmkC3kaWzU.woff2",
+      "bytes": 40480,
+      "sha256": "d8d0c88eea1036dc3e7322cd0a1a3eb6fc1dd86da24c7de690e70aac1bd62f05"
+    },
+    {
+      "name": "roboto-cyrillic-italic.woff2",
+      "subset": "cyrillic",
+      "style": "italic",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO5CnqEu92Fr1Mu53ZEC9_Vu3r1gIhOszmkAnkaWzU.woff2",
+      "bytes": 25464,
+      "sha256": "f2ab3c15c750e03fb1bc8887786a9ef826d134c461f830877366399295861e55"
+    },
+    {
+      "name": "roboto-latin-ext-italic.woff2",
+      "subset": "latin-ext",
+      "style": "italic",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO5CnqEu92Fr1Mu53ZEC9_Vu3r1gIhOszmkCHkaWzU.woff2",
+      "bytes": 31820,
+      "sha256": "7f21d061a9de1ea78a858938ff3b8e677869656b10bad470fc6039f8f3daf329"
+    },
+    {
+      "name": "roboto-latin-italic.woff2",
+      "subset": "latin",
+      "style": "italic",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO5CnqEu92Fr1Mu53ZEC9_Vu3r1gIhOszmkBnka.woff2",
+      "bytes": 47208,
+      "sha256": "14f23757c6b41b4b6c0b967ca3fa74ff47a868728158373461c4e6e4b6368f19"
+    },
+    {
+      "name": "roboto-cyrillic-ext-normal.woff2",
+      "subset": "cyrillic-ext",
+      "style": "normal",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3GUBGEe.woff2",
+      "bytes": 36652,
+      "sha256": "01f94d674db55952c35898fa4da22c3e7065c3cc4dbbcc9cb7beb8b6b017fbc9"
+    },
+    {
+      "name": "roboto-cyrillic-normal.woff2",
+      "subset": "cyrillic",
+      "style": "normal",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3iUBGEe.woff2",
+      "bytes": 23664,
+      "sha256": "481dd0c01e6bbb129fd147eb5d8571016193cba141c4627ca60ceabdb5a46ea8"
+    },
+    {
+      "name": "roboto-latin-ext-normal.woff2",
+      "subset": "latin-ext",
+      "style": "normal",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3KUBGEe.woff2",
+      "bytes": 29392,
+      "sha256": "cedb374b05a35034cf96db185db4eeb8f8ce49e1a56197673702ff11b5533d6e"
+    },
+    {
+      "name": "roboto-latin-normal.woff2",
+      "subset": "latin",
+      "style": "normal",
+      "url": "https://fonts.gstatic.com/s/roboto/v51/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBA.woff2",
+      "bytes": 43136,
+      "sha256": "1404ca348bd75ef836f4dd8b6f2cc719458642d1237c368296b2fc652dca47dc"
+    }
+  ]
+}

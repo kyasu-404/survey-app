@@ -1070,9 +1070,11 @@ export function SurveyBuilder({
       {
         id: "builder-reset",
         title: "Сбросить",
-        showTitle: true,
-        css: "builder-toolbar-action-item",
-        innerCss: "builder-toolbar-action-button",
+        tooltip: "Сбросить конструктор",
+        showTitle: false,
+        iconName: "icon-reset",
+        css: "builder-toolbar-icon-item",
+        innerCss: "builder-toolbar-icon-button",
         action: () => {
           setIsResetConfirmOpen(true);
         },
@@ -1134,7 +1136,7 @@ export function SurveyBuilder({
 
     if (resetAction) {
       resetAction.enabled = !isSurveyMutationBusy && !isTemplateBusy;
-      resetAction.innerCss = "builder-toolbar-action-button";
+      resetAction.innerCss = "builder-toolbar-icon-button";
     }
 
     if (galleryAction) {

@@ -1,10 +1,9 @@
+import { MoreHorizontalIcon } from "../../../shared/ui/MoreHorizontalIcon";
 import { ViewportMenu } from "../../../shared/ui/ViewportMenu";
 import { useMobileLayout } from "../../../shared/ui/useMobileLayout";
 import { useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { routes } from "../../../app/routes";
-import deleteIcon from "../../../img/delete.svg";
-import editIcon from "../../../img/edit.svg";
-import renameIcon from "../../../img/rename.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 
 type TemplateCardMenuProps = {
@@ -50,7 +49,7 @@ export function TemplateCardMenu({
         }}
         disabled={isPending}
       >
-        ...
+        <MoreHorizontalIcon />
       </button>
 
       <ViewportMenu anchor={anchor} enabled={isMobile}>{actionMenuOpen && (
@@ -66,7 +65,7 @@ export function TemplateCardMenu({
             }}
             disabled={isPending}
           >
-            <img src={renameIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="drive_file_rename_outline" className="form-menu-item-icon" size={18} />
             <span className="form-menu-item-label">Переименовать</span>
           </button>
           <button
@@ -80,7 +79,7 @@ export function TemplateCardMenu({
             }}
             disabled={isPending}
           >
-            <img src={editIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="edit" className="form-menu-item-icon" size={18} />
             <span className="form-menu-item-label">Редактировать</span>
           </button>
           <button
@@ -94,7 +93,7 @@ export function TemplateCardMenu({
             }}
             disabled={isPending}
           >
-            <img src={deleteIcon} alt="" aria-hidden="true" className="form-menu-item-icon" />
+            <Icon name="delete" className="form-menu-item-icon" size={18} />
             <span className="form-menu-item-label">Удалить</span>
           </button>
         </div>

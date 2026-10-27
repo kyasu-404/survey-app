@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useAuth } from "../../../app/providers/AuthProvider";
 import { routes } from "../../../app/routes";
 import { useToast } from "../../../app/providers/ToastProvider";
@@ -7,9 +7,10 @@ import type { SurveyFormSummary } from "../../../entities/survey/types";
 import { copyTextToClipboard } from "../../../shared/lib/browser";
 import { getErrorMessage } from "../../../shared/lib/error";
 import { createQrPngDataUrl, createQrSvg, downloadDataUrl, svgToDataUrl } from "../../../shared/lib/qrCode";
+import { useModalSurface } from "../../../shared/ui/useModalSurface";
 import { SectionTabs } from "../../../shared/ui/SectionTabs";
 import { PersonalLinksPanel } from "./PersonalLinksPanel";
-import downloadIcon from "../../../img/Download.svg";
+import { Icon } from "../../../shared/ui/Icon";
 
 const MailComposer = lazy(() => import("../../../features/mail-composer/MailComposer").then(module => ({ default: module.MailComposer })));
 
@@ -21,7 +22,7 @@ export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onC
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAuthor = Boolean(user && form.author_id === user.id);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useModalSurface();
   const [tab, setTab] = useState<"link" | "qr" | "embed" | "mail">("link");
   const [mailVisited, setMailVisited] = useState(false);
   const [mailBusy, setMailBusy] = useState(false);
@@ -34,19 +35,6 @@ export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onC
   const title = getSurveyDisplayTitle(form);
   const link = `${window.location.origin}${routes.survey(form.id)}`;
   const embedCode = `<iframe\n  src="${escapeAttribute(link)}"\n  title="${escapeAttribute(title)}"\n  width="100%"\n  height="700"\n  style="border: 0;"\n  loading="lazy"\n></iframe>`;
-
-  useEffect(() => {
-    const element = dialog.current;
-    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    element?.showModal();
-    document.body.style.overflow = "hidden";
-    return () => {
-      element?.close();
-      document.body.style.overflow = previousOverflow;
-      trigger?.focus({ preventScroll: true });
-    };
-  }, []);
 
   useEffect(() => {
     if (tab !== "qr" || preview) return;
@@ -83,7 +71,7 @@ export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onC
   };
 
   return (
-    <dialog ref={dialog} className={`modal-card card dashboard-share-modal${isAuthor ? "" : " dashboard-share-basic"}`} aria-label={`Поделиться формой ${title}`}
+    <dialog ref={dialog} className={`modal-card card dashboard-share-modal${isAuthor ? "" : " dashboard-share-basic"}${tab === "mail" ? " dashboard-share-expanded" : ""}`} aria-label={`Поделиться формой ${title}`}
       onCancel={event => { event.preventDefault(); close(); }}
       onClick={event => {
         if (event.target !== event.currentTarget) return;
@@ -95,7 +83,7 @@ export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onC
           <h2 className="dashboard-qr-modal-title">Поделиться формой</h2>
           <p className="dashboard-qr-modal-copy">{title}</p>
         </div>
-        <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть окно поделиться" disabled={mailBusy} onClick={close}>×</button>
+        <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть окно поделиться" disabled={mailBusy} onClick={close}><Icon name="close" /></button>
       </div>
       <SectionTabs id="form-share" label="Способ поделиться" tabs={[
         { value: "link", label: "Ссылка" }, { value: "qr", label: "QR-код" }, { value: "embed", label: "Код для сайта" }, ...(isAuthor ? [{ value: "mail" as const, label: "Рассылка" }] : []),
@@ -114,8 +102,8 @@ export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onC
           : preview ? <>
             <div className="dashboard-qr-preview"><img src={preview} alt={`QR-код формы ${title}`} /></div>
             <div className="dashboard-qr-download-actions">
-              <button type="button" className="app-button dashboard-qr-download-button" disabled={downloadFormat !== null} onClick={() => void download("png")}><span>PNG</span><img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" /></button>
-              <button type="button" className="app-button dashboard-qr-download-button" disabled={downloadFormat !== null} onClick={() => void download("svg")}><span>SVG</span><img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" /></button>
+              <button type="button" className="app-button dashboard-qr-download-button" disabled={downloadFormat !== null} onClick={() => void download("png")}><span>PNG</span><Icon name="download" className="toolbar-icon" size={18} /></button>
+              <button type="button" className="app-button dashboard-qr-download-button" disabled={downloadFormat !== null} onClick={() => void download("svg")}><span>SVG</span><Icon name="download" className="toolbar-icon" size={18} /></button>
             </div>
           </> : <p role="status">Создание QR-кода…</p>}
       </div>

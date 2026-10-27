@@ -24,10 +24,7 @@ import type {
   OrganizationType,
 } from "../../entities/organization/types";
 import { exportOrganizationsXlsx, parseOrganizationsXlsx } from "../../entities/organization/xlsx";
-import downloadIcon from "../../img/Download.svg";
-import uploadIcon from "../../img/Upload.svg";
-import deleteIcon from "../../img/delete.svg";
-import editIcon from "../../img/edit.svg";
+import { Icon } from "../../shared/ui/Icon";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -186,7 +183,7 @@ export default function OrganizationsPage() {
             >
               {isImporting && <InlineSpinner />}
               Импорт XLSX
-              <img src={uploadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="upload" className="toolbar-icon" size={18} />
             </button>
             <input
               ref={importInputRef}
@@ -202,7 +199,7 @@ export default function OrganizationsPage() {
               disabled={filteredOrganizations.length === 0}
             >
               Экспорт XLSX
-              <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="download" className="toolbar-icon" size={18} />
             </button>
             <button
               type="button"
@@ -212,7 +209,7 @@ export default function OrganizationsPage() {
               title={!canManage ? "Удаление доступно администратору" : undefined}
             >
               {isDeletingAll ? "Удаление…" : "Удалить все"}
-              <img src={deleteIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="delete" className="toolbar-icon" size={18} />
             </button>
           </div>
         </div>
@@ -279,11 +276,11 @@ export default function OrganizationsPage() {
                         <div className="organizations-row-actions">
                           <button type="button" className="organization-edit-button" onClick={() => openEditModal(organization)}>
                             Изменить
-                            <img src={editIcon} alt="" aria-hidden="true" />
+                            <Icon name="edit" size={18} />
                           </button>
                           <button type="button" className="danger organization-delete-button" onClick={() => void handleDelete(organization)}>
                             Удалить
-                            <img src={deleteIcon} alt="" aria-hidden="true" />
+                            <Icon name="delete" size={18} />
                           </button>
                         </div>
                       </td>

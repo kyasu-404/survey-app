@@ -2,9 +2,9 @@ import { Presence } from "../../shared/ui/Presence";
 import {officeRequest} from '../../entities/office/api';
 import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
-import { Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -20,10 +20,7 @@ import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import type { SurveySchema } from "../../entities/survey/types";
-import downloadIcon from "../../img/Download.svg";
-import useIcon from "../../img/use.svg";
-import deleteIcon from "../../img/delete.svg";
-import infoIcon from "../../img/info.svg";
+import { Icon } from "../../shared/ui/Icon";
 import pinBlackIcon from "../../img/Pin_black.svg";
 import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
@@ -36,8 +33,7 @@ import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signa
 import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
 import { Skeleton } from "../../shared/ui/Skeleton";
-import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
-import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
+import { ResponsePreviewSheet } from "./ResponsePreviewSheet";
 import { ResponseReportModal } from "./ResponseReportModal";
 import { useNewResponseHighlights } from "./useNewResponseHighlights";
 import { createRealtimeRecovery } from "../../shared/lib/realtimeRecovery";
@@ -509,6 +505,7 @@ export default function FormResponsesPage() {
     <div className="dashboard-page">
       <Presence kind="modal">{documentsOpen && <DocumentsModal formId={id} selectedResponseIds={[...selectedResponseIds]} onClose={() => setDocumentsOpen(false)} />}</Presence>
       <div className="card responses-page-card">
+        <Link className="responses-back-link" to={routes.dashboardAll}>← Назад к формам</Link>
         <div className="responses-page-header">
           <div className="responses-page-header-copy">
             <h1 className="responses-page-title">{formQuery.data?.title ?? "Ответы формы"}</h1>
@@ -522,7 +519,7 @@ export default function FormResponsesPage() {
           <div className="responses-page-toolbar">
             <button type="button" className="responses-export-button" onClick={handleExport} disabled={isLoading || isExporting}>
               <span>{isExporting ? "Выгрузка…" : selectedResponseIds.size ? "Скачать выбранные XLSX" : "Скачать XLSX"}</span>
-              <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="download" className="toolbar-icon" size={18} />
             </button>
             {hasFileQuestions && (
               <button
@@ -534,7 +531,7 @@ export default function FormResponsesPage() {
                 disabled={isLoading || Boolean(zipProgress)}
               >
                 <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : selectedResponseIds.size ? "Выбранные файлы в ZIP" : "Файлы в ZIP"}</span>
-                <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+                <Icon name="download" className="toolbar-icon" size={18} />
               </button>
             )}
             <button
@@ -544,7 +541,7 @@ export default function FormResponsesPage() {
               disabled={isLoading}
             >
               <span>HTML</span>
-              <img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="description" className="toolbar-icon" size={18} />
             </button>
             {officeStatus.data?.enabled && <button type="button" className="responses-export-button" onClick={() => setDocumentsOpen(true)} disabled={isLoading}><span>Документы</span><img src={onlyofficeIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>}
             <button
@@ -554,7 +551,7 @@ export default function FormResponsesPage() {
               disabled={isLoading || isGeneratingReport}
             >
               <span>{isGeneratingReport ? "Формирование…" : "Отчёт"}</span>
-              <img src={infoIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="info" className="toolbar-icon" size={18} />
             </button>
           </div>
         </div>
@@ -569,7 +566,7 @@ export default function FormResponsesPage() {
               disabled={isDeletingResponses}
             >
               <span>{isDeletingResponses ? "Удаление…" : "Удалить"}</span>
-              <img src={deleteIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+              <Icon name="delete" className="toolbar-icon" size={18} />
             </button>
           </div>
         )}
@@ -707,41 +704,10 @@ export default function FormResponsesPage() {
       </div>
 
       <Presence kind="drawer">{selectedResponsePreview && formQuery.data && (
-        <div
-          className="response-preview-layer"
-          onMouseDown={(event) => event.target === event.currentTarget && setSelectedResponsePreview(null)}
-        >
-          <aside
-            className="response-preview-drawer"
-            role="dialog"
-            aria-label={selectedResponsePreview.label}
-            aria-modal="true"
-          >
-            <div className="response-preview-header">
-              <div>
-                <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
-              </div>
-              <button type="button" className="responses-export-button" onClick={() => setSelectedResponsePreview(null)}>
-                Закрыть
-              </button>
-            </div>
-            <SurveyRuntimeSurface className="response-preview-body response-preview-builder-palette">
-              <Suspense fallback={<Skeleton className="response-preview-renderer-skeleton" />}>
-                <LazySurveyRenderer
-                  schema={{
-                    ...formQuery.data.schema,
-                    title: formQuery.data.title,
-                  }}
-                  theme={formQuery.data.theme}
-                  formId={formQuery.data.id}
-                  initialData={selectedResponsePreview.response.data}
-                  initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, selectedResponsePreview.response.data)}
-                  renderMode="readonly-navigable"
-                />
-              </Suspense>
-            </SurveyRuntimeSurface>
-          </aside>
-        </div>
+        <ResponsePreviewSheet form={formQuery.data} response={selectedResponsePreview.response}
+          label={selectedResponsePreview.label}
+          initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, selectedResponsePreview.response.data)}
+          onClose={() => setSelectedResponsePreview(null)} />
       )}</Presence>
       <Presence kind="modal">{responseReport && (
         <ResponseReportModal

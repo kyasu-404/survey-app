@@ -13,6 +13,8 @@ const budgets = {
   lazySurveyCreatorCoreJs: { raw: 1_650_000, gzip: 400_000 },
   css: { raw: 550_000, gzip: 125_000 },
   image: { raw: 250_000 },
+  font: { raw: 32_768 },
+  textFont: { raw: 49_152 },
   // Patched React Router 7, durable-job UI and motion add about 36 KiB.
   // Responsive navigation, styles and editor controls add another 14 KiB.
   // Viewport-bounded menus and mobile preview refinements add 2.5 KiB.
@@ -27,7 +29,14 @@ const budgets = {
   // Reserve 18 KiB; initial-load and dependency limits stay fixed.
   // iframe settings and favicon UI add a measured 12 KiB; reserve 14 KiB.
   // Initial-load and dependency limits stay fixed.
-  total: { raw: 7_035_796 },
+  // Navigation rail, user creation dialog and full-height response sheet add
+  // 9.2 KiB measured. Reserve 10 KiB; startup/dependency limits stay fixed.
+  // Local Material Symbols subset + Apache license add 15.1 KiB net after
+  // replacing duplicated icon assets. Reserve 16 KiB; startup limits stay fixed.
+  // Self-hosted variable Roboto (8 Unicode/style subsets), SIL license and UI
+  // changes add 281.0 KiB measured. Reserve 288 KiB; JS/CSS startup, dependency
+  // and icon-font limits stay fixed. Each text subset is capped at 48 KiB.
+  total: { raw: 7_357_332 },
 };
 
 function formatBytes(bytes) {
@@ -69,6 +78,8 @@ function getBudget(filePath) {
   if ([".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"].includes(extension)) {
     return budgets.image;
   }
+
+  if (extension === ".woff2") return name.startsWith("roboto-") ? budgets.textFont : budgets.font;
 
   return undefined;
 }

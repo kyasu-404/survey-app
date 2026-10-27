@@ -1,3 +1,5 @@
+import { Icon } from "../../shared/ui/Icon";
+import { MoreHorizontalIcon } from "../../shared/ui/MoreHorizontalIcon";
 import { ViewportMenu } from "../../shared/ui/ViewportMenu";
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -9,12 +11,6 @@ import {getErrorMessage} from '../../shared/lib/error';
 import {SectionTabs} from '../../shared/ui/SectionTabs';
 import {GenerateDocuments} from './GenerateDocuments';
 import {DocumentResults} from './DocumentResults';
-import useIcon from '../../img/use.svg';
-import editIcon from '../../img/edit.svg';
-import downloadIcon from '../../img/Download.svg';
-import renameIcon from '../../img/rename.svg';
-import copyIcon from '../../img/copy.svg';
-import deleteIcon from '../../img/delete.svg';
 import '../../entities/office/office.css';
 export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:string;onClose:()=>void;selectedResponseIds?:string[]}){
  const navigate=useNavigate(),queryClient=useQueryClient(),{showToast}=useToast(),{user,profile}=useAuth();
@@ -42,14 +38,14 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
     {query.data?.documents.filter(d=>d.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(doc=><article key={doc.id}>
      <div className="office-document-copy"><strong>{doc.name}</strong><span>{doc.author_name || 'Сотрудник'} · {new Date(doc.updated_at).toLocaleString('ru-RU')}</span><span>Полей макета: {doc.binding_count} · {(doc.size_bytes/1024).toLocaleString('ru-RU',{maximumFractionDigits:0})} КБ</span>{doc.last_save_error && <span className="office-error">{doc.last_save_error}</span>}</div>
      <div className="office-document-actions">
-      <span className="organizations-row-actions"><button type="button" className="organization-edit-button" disabled={busy || !query.data?.enabled} onClick={()=>navigate(`/forms/${formId}/documents/${doc.id}`)}>Редактировать<img src={editIcon} alt="" aria-hidden="true"/></button></span>
-      <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);templatesPanel.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<img src={useIcon} alt="" aria-hidden="true" className="toolbar-icon"/></button>
-      <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button ref={menu===doc.id?menuAnchor:undefined} type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}>...</button>
+      <span className="organizations-row-actions"><button type="button" className="organization-edit-button" disabled={busy || !query.data?.enabled} onClick={()=>navigate(`/forms/${formId}/documents/${doc.id}`)}>Редактировать<Icon name="edit" size={18} /></button></span>
+      <button type="button" className="responses-export-button responses-html-button" disabled={busy} onClick={()=>{setGeneration(doc);setSelected(null);setMode(null);setMenu(null);templatesPanel.current?.scrollTo({top:0,behavior:'smooth'});}}>Сформировать документы<Icon name="add" size={18} className="toolbar-icon" /></button>
+      <div className={`office-menu-shell form-menu ${menu===doc.id?'office-menu-open':''}`}><button ref={menu===doc.id?menuAnchor:undefined} type="button" className="form-menu-trigger" aria-label={`Действия: ${doc.name}`} aria-expanded={menu===doc.id} onClick={()=>setMenu(menu===doc.id?null:doc.id)}><MoreHorizontalIcon /></button>
        <ViewportMenu anchor={menuAnchor}>{menu===doc.id && <div className="form-menu-dropdown" role="menu" aria-label={`Действия: ${doc.name}`} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(null);}}}>
-        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>downloadOfficeDocument(doc))}><img src={downloadIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Скачать</span></button>
-        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>{setSelected(doc);setName(doc.name.replace(/\.(docx|xlsx)$/i,''));setMode('rename');setMenu(null);}}><img src={renameIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Переименовать</span></button>
-        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>officeRequest(`/documents/${doc.id}/copy`,{method:'POST'}))}><img src={copyIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Создать копию</span></button>
-        {(doc.created_by===user?.id || profile?.role==='admin') && <button type="button" role="menuitem" className="form-menu-item form-menu-item-danger" disabled={busy} onClick={()=>{setSelected(doc);setMode(null);setMenu(null);}}><img src={deleteIcon} alt="" className="form-menu-item-icon"/><span className="form-menu-item-label">Удалить</span></button>}
+        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>downloadOfficeDocument(doc))}><Icon name="download" size={18} className="form-menu-item-icon" /><span className="form-menu-item-label">Скачать</span></button>
+        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>{setSelected(doc);setName(doc.name.replace(/\.(docx|xlsx)$/i,''));setMode('rename');setMenu(null);}}><Icon name="drive_file_rename_outline" size={18} className="form-menu-item-icon" /><span className="form-menu-item-label">Переименовать</span></button>
+        <button type="button" role="menuitem" className="form-menu-item" disabled={busy} onClick={()=>void run(()=>officeRequest(`/documents/${doc.id}/copy`,{method:'POST'}))}><Icon name="content_copy" size={18} className="form-menu-item-icon" /><span className="form-menu-item-label">Создать копию</span></button>
+        {(doc.created_by===user?.id || profile?.role==='admin') && <button type="button" role="menuitem" className="form-menu-item form-menu-item-danger" disabled={busy} onClick={()=>{setSelected(doc);setMode(null);setMenu(null);}}><Icon name="delete" size={18} className="form-menu-item-icon" /><span className="form-menu-item-label">Удалить</span></button>}
        </div>}</ViewportMenu>
       </div>
      </div>

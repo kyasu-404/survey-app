@@ -1,6 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
-import shareIcon from "../../../img/share.svg";
-import useIcon from "../../../img/use.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import { getSurveyDisplayTitle } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import { formatCreatedAt, getAuthorLabel } from "../templatesPageUtils";
@@ -74,7 +73,7 @@ export function TemplateCard({
       <div className="templates-card-header">
         <div className="dashboard-form-heading-row templates-card-title-row">
           <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
-          <strong className="dashboard-form-title templates-card-title">{title}</strong>
+          <strong className="dashboard-form-title templates-card-title" title={title}>{title}</strong>
         </div>
         <button
           type="button"
@@ -86,7 +85,7 @@ export function TemplateCard({
             onTogglePin(template.id);
           }}
         >
-          <span aria-hidden="true">★</span>
+          <Icon name="bookmark" size={24} />
         </button>
       </div>
 
@@ -115,7 +114,7 @@ export function TemplateCard({
             disabled={isPending}
           >
             <span>Использовать</span>
-            <img src={useIcon} alt="" aria-hidden="true" className="templates-action-icon" />
+            <Icon name="add" className="templates-action-icon" size={18} />
           </button>
 
           {isOwnTemplate && (
@@ -130,7 +129,7 @@ export function TemplateCard({
               disabled={isPending}
             >
               <span>{shareLabel}</span>
-              <img src={shareIcon} alt="" aria-hidden="true" className="templates-action-icon" />
+              <Icon name="share" className="templates-action-icon" size={18} />
             </button>
           )}
         </div>

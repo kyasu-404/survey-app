@@ -79,9 +79,9 @@ test("section panels save nested questions and render their titles, with require
   await expect(page.locator(".svc-creator")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("section-title-builder.png"), fullPage: true });
   await page.locator(".sidebar-account-trigger").click();
-  await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
   await page.locator('[data-theme-option="graphite"]').click();
-  await expect(toolbox.locator(".svc-toolbox__item").first().locator("svg")).toHaveCSS("color", "rgb(245, 245, 245)");
+  await page.keyboard.press("Escape");
+  await expect(toolbox.locator(".svc-toolbox__item").first().locator("svg")).toHaveCSS("color", "rgb(196, 199, 197)");
   await page.screenshot({ path: testInfo.outputPath("section-title-builder-dark.png"), fullPage: true });
   await page.getByText("Превью", { exact: true }).click();
   await expect(page.getByTestId("builder-preview-tab").getByText(heading.title!, { exact: true })).toBeVisible();

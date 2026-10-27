@@ -1,4 +1,5 @@
 import { Presence } from "../../shared/ui/Presence";
+import { Icon } from "../../shared/ui/Icon";
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../features/users/api";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -41,17 +42,13 @@ export default function UsersPage() {
   return (
     <div className="dashboard-page">
       <div className="card users-page-card">
-        <h2 className="users-page-title">Пользователи</h2>
-
-        <CreateUserForm
-          canChangeOwnPassword={Boolean(user)}
-          isCreatePending={actions.createUserPending}
-          isPasswordValid={actions.isPasswordValid}
-          newUser={actions.newUser}
-          onCreateUser={() => void actions.onCreateUser()}
-          onOpenOwnPasswordModal={() => actions.openPasswordModal(user?.id ?? "", "Смена моего пароля", true)}
-          setNewUser={actions.setNewUser}
-        />
+        <div className="users-page-header">
+          <h1 className="users-page-title">Пользователи</h1>
+          <div className="users-page-toolbar">
+            <button type="button" className="app-button button-primary" aria-label="+ Добавить пользователя" disabled={!user} onClick={() => actions.setIsCreateUserOpen(true)}><Icon name="add" /> Добавить пользователя</button>
+            <button type="button" className="users-neutral-button" disabled={!user} onClick={() => actions.openPasswordModal(user?.id ?? "", "Смена моего пароля", true)}>Сменить мой пароль</button>
+          </div>
+        </div>
 
         <UsersFiltersBar
           roleFilter={filters.roleFilter}
@@ -99,6 +96,12 @@ export default function UsersPage() {
           />
         )}
       </div>
+
+      <Presence kind="modal">{actions.isCreateUserOpen && (
+        <CreateUserForm isCreatePending={actions.createUserPending} isPasswordValid={actions.isPasswordValid}
+          newUser={actions.newUser} onCreateUser={() => void actions.onCreateUser()}
+          onCancel={() => actions.setIsCreateUserOpen(false)} setNewUser={actions.setNewUser} />
+      )}</Presence>
 
       <Presence kind="modal">{actions.passwordModal && (
         <PasswordModal

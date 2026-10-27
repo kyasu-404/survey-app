@@ -64,7 +64,7 @@ describe("RefreshButton", () => {
     const refreshButton = screen.getByRole("button", { name: "Обновить" });
 
     expect(screen.getByText("Обновлено 13:14:15, синхронизация...")).toBeInTheDocument();
-    expect(refreshButton.querySelector("img.toolbar-icon")).toBeInTheDocument();
+    expect(refreshButton.querySelector('[data-icon="refresh"]')).toBeInTheDocument();
     expect(refreshButton.querySelector(".inline-spinner")).not.toBeInTheDocument();
   });
 });

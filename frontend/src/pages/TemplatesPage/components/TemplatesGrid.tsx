@@ -38,7 +38,7 @@ export function TemplatesGrid({
 }: TemplatesGridProps) {
   return (
     <div
-      className={`templates-gallery-grid templates-gallery-grid-two-columns ${
+      className={`templates-gallery-grid ${
         openedMenuTemplateId ? "templates-gallery-grid-menu-open" : ""
       }`.trim()}
     >

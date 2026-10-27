@@ -1,5 +1,4 @@
 import userEvent from "@testing-library/user-event";
-import exitWhite from "../../img/ExitWhite.svg";
 import { logout } from "../../features/auth/api";
 import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -50,6 +49,8 @@ function readAppCss() {
 
 describe("Sidebar", () => {
   beforeEach(() => {
+    localStorage.clear();
+    delete document.documentElement.dataset.theme;
     authState.role = "user";
     getAppBranding.mockResolvedValue({ sidebarLogoPath: null, sidebarLogoUrl: null, updatedAt: null });
   });
@@ -86,10 +87,20 @@ describe("Sidebar", () => {
   it("opens account actions by name, changes theme and logs out", async () => {
     renderSidebar();const user=userEvent.setup();const trigger=screen.getByRole('button',{name:'Анна Иванова'});
     expect(screen.queryByRole('menuitem',{name:'Выйти'})).not.toBeInTheDocument();
-    await user.click(trigger);expect(screen.getAllByRole('menuitem')).toHaveLength(2);
-    await user.click(screen.getByRole('menuitem',{name:'Тема'}));await user.click(screen.getByRole('menuitemradio',{name:'Тёмная'}));
-    expect(document.documentElement).toHaveAttribute('data-theme','graphite');expect(trigger).toHaveFocus();
-    await user.click(trigger);expect(screen.getByRole('menuitem',{name:'Выйти'}).querySelector('img')?.getAttribute('src')).toBe(exitWhite);
+    await user.click(trigger);
+    const accountHeader = screen.getByRole('menu').querySelector('.sidebar-account-header');
+    expect(accountHeader).toHaveTextContent('Анна Иванова');
+    expect(accountHeader?.querySelector('.sidebar-account-avatar')).toHaveAttribute('aria-hidden', 'true');
+    expect(trigger).toHaveTextContent('А');
+    expect(trigger).not.toHaveTextContent('Анна Иванова');
+    expect(trigger).toHaveAttribute('title', 'Анна Иванова');
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    await user.click(screen.getByRole('menuitemradio',{name:'Тёмная тема'}));
+    expect(document.documentElement).toHaveAttribute('data-theme','graphite');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio',{name:'Тёмная тема'})).toHaveFocus();
+    expect(screen.getByRole('menuitem',{name:'Выйти'}).querySelector('[data-icon="logout"]')).toHaveAttribute('aria-hidden', 'true');
     await user.keyboard('{Escape}');expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     await user.click(trigger);await user.click(screen.getByRole('menuitem',{name:'Выйти'}));await waitFor(()=>expect(logout).toHaveBeenCalled());
   });
@@ -128,11 +139,11 @@ describe("Sidebar", () => {
     expect(finalLogoRule).toMatch(/box-shadow:\s*none;/);
   });
 
-  it("lets the theme menu render above and outside the sidebar", () => {
+  it("lets the account menu render above and outside the sidebar", () => {
     const css = readAppCss();
 
     expect(css).toMatch(/\.sidebar\s*\{[^}]*overflow:\s*visible;[^}]*z-index:\s*500;/s);
-    expect(css).toMatch(/\.theme-cycle-menu\s*\{[^}]*z-index:\s*520;/s);
+    expect(css).toMatch(/\.sidebar-account \.sidebar-account-menu\s*\{[^}]*z-index:\s*520;/s);
   });
 
   it("colors the sidebar utility controls with the active application theme", () => {

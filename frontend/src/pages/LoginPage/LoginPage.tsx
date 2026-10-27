@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { routes } from "../../app/routes";
@@ -26,6 +26,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<MessageType>("success");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fieldId = useId();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,6 +39,8 @@ export default function LoginPage() {
   }
 
   async function onLogin() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       setMessage("");
       const displayName = await login(email, password);
@@ -47,6 +51,8 @@ export default function LoginPage() {
     } catch (error) {
       setMessageType("error");
       setMessage(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -62,15 +68,17 @@ export default function LoginPage() {
           }}
         >
           <div className="login-fields">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" type="password" />
+            <label htmlFor={`${fieldId}-email`}>Электронная почта</label>
+            <input id={`${fieldId}-email`} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Электронная почта" required />
+            <label htmlFor={`${fieldId}-password`}>Пароль</label>
+            <input id={`${fieldId}-password`} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" type="password" required />
           </div>
           <div className="login-actions">
-            <button type="submit" className="button-primary">Войти</button>
+            <button type="submit" className="button-primary" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? "Вход…" : "Войти"}</button>
           </div>
         </form>
         {message && (
-          <p className={`login-message login-message-${messageType}`}>
+          <p role="alert" className={`login-message login-message-${messageType}`}>
             {message}
           </p>
         )}

@@ -2,10 +2,7 @@ import { Presence } from "../../../shared/ui/Presence";
 import { useId, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../../entities/survey/model/formOptions";
 import type { FormsSort } from "../../../entities/survey/types";
-import viewBlack from "../../../img/FormatViewBlack.svg";
-import viewWhite from "../../../img/FormatViewWhite.svg";
-import infoIcon from "../../../img/info.svg";
-import searchIcon from "../../../img/search.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import type { DashboardLayout, DashboardViewMode, OpenMenuState } from "../types";
 
 type DashboardToolbarProps = {
@@ -72,7 +69,7 @@ export function DashboardToolbar({
     <div className="dashboard-toolbar">
       <div className="dashboard-search-group">
         <div className="dashboard-search-input-shell">
-          <img src={searchIcon} alt="" aria-hidden="true" className="dashboard-search-icon" />
+          <Icon name="search" className="dashboard-search-icon" />
           <input
             className="dashboard-search-input"
             placeholder={searchPlaceholder}
@@ -89,8 +86,7 @@ export function DashboardToolbar({
           aria-pressed={layout === "table"}
           onClick={onToggleLayout}
         >
-          <img src={viewBlack} alt="" aria-hidden="true" className="dashboard-view-icon-light" />
-          <img src={viewWhite} alt="" aria-hidden="true" className="dashboard-view-icon-dark" />
+          <Icon name={layout === "cards" ? "table_chart" : "view_agenda"} />
         </button>
         <div className="dashboard-floating-root dashboard-info-box">
           <button
@@ -100,7 +96,7 @@ export function DashboardToolbar({
             aria-expanded={openedMenu?.kind === "stats"}
             onClick={() => setOpenedMenu((current) => (current?.kind === "stats" ? null : { kind: "stats" }))}
           >
-            <img src={infoIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+            <Icon name="info" className="toolbar-icon" />
           </button>
           <Presence kind="menu">{openedMenu?.kind === "stats" && (
             <div className="dashboard-stats-popover" role="dialog" aria-label="Сводка по формам">
@@ -130,7 +126,7 @@ export function DashboardToolbar({
         onClick={() => setFiltersOpen((open) => !open)}
       >
         Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-        <span aria-hidden="true">{filtersOpen ? "−" : "+"}</span>
+        <Icon name={filtersOpen ? "close" : "filter_list"} size={18} />
       </button>
       <div id={filtersId} className="dashboard-filter-group dashboard-filters-popover" role="region" aria-label="Фильтры форм" hidden={!filtersOpen}
         onKeyDown={event => {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import deadlineIcon from "../../../img/deadline.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import { DashboardMenuPortal } from "./DashboardMenuPortal";
 
 export function DashboardDeadlineTooltip({ label }: { label: string }) {
@@ -33,7 +33,7 @@ export function DashboardDeadlineTooltip({ label }: { label: string }) {
       onBlur={() => setFocused(false)}
       onClick={(event) => event.stopPropagation()}
     >
-      <img src={deadlineIcon} alt="" aria-hidden="true" className="dashboard-meta-icon" />
+      <Icon name="schedule" className="dashboard-meta-icon" size={16} />
       {open && (
         <DashboardMenuPortal anchor={anchor} enabled>
           <div id={id} role="tooltip" className="dashboard-deadline-tooltip">{label}</div>

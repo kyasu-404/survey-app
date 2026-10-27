@@ -1335,7 +1335,7 @@ describe("DashboardPage", () => {
     const duplicateButton = await screen.findByRole("button", { name: "Дублировать форму Чужая форма" });
     expect(screen.queryByRole("button", { name: "Действия формы Чужая форма" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Поделиться формой Чужая форма" })).toBeInTheDocument();
-    expect(duplicateButton.querySelector("img")).toBeInTheDocument();
+    expect(duplicateButton.querySelector('[data-icon="content_copy"]')).toBeInTheDocument();
     getFormById.mockResolvedValue(createForm(1, { title: "Чужая форма", author_id: "user-2" }));
     navigate.mockClear();
     await userEvent.click(duplicateButton);
@@ -1358,20 +1358,12 @@ describe("DashboardPage", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("keeps dashboard form cards subtly cool-gray highlighted and action triggers visibly outlined", () => {
-    const css = readAppCss();
-
-    expect(css).toContain(".dashboard-forms-grid > .dashboard-form-card {");
-    expect(css).toContain("border: 2px solid rgba(20, 20, 20, 0.14);");
-    expect(css).toContain(".dashboard-forms-grid > .dashboard-form-card-interactive:hover");
-    expect(css).toContain("rgba(148, 163, 184, 0.12)");
-    expect(css).toContain("rgba(248, 250, 252, 0.96)");
-    expect(css).toContain("0 0 22px rgba(100, 116, 139, 0.1)");
-    expect(css).not.toContain("0 0 34px rgba(37, 99, 235, 0.18)");
-    expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
-    expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
-    expect(css).not.toContain("border-width: 3px;");
-    expect(css).toMatch(/:root\[data-theme="graphite"\] \.dashboard-forms-grid > \.dashboard-form-card-interactive:hover,[^{]+\{[^}]*transform:\s*translateY\(-4px\);[^}]*background:\s*var\(--theme-card-background\);[^}]*0 26px 54px var\(--theme-shadow-color\),[^}]*var\(--theme-accent-soft\)/s);
+  it("provides a direct create-form action above the loaded forms", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1)]));
+    renderPage();
+    await screen.findByText("Форма 1");
+    expect(screen.getByRole("heading", { name: "Все формы" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Создать форму" })).toHaveAttribute("href", routes.builder);
   });
 
   it("styles active and closed form status controls from the selected application theme", () => {

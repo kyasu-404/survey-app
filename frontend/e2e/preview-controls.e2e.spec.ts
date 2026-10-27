@@ -30,7 +30,8 @@ for (const theme of ["sand", "graphite"]) {
     await page.goto("/templates");
     const card = page.getByRole("button", { name: "Открыть превью шаблона Проверка шаблона", exact: true });
     await expect(card).toBeVisible();
-    await expect(card.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", "rgb(229, 231, 235)");
+    const badgeBackground = await card.locator(".dashboard-status-pill-template").evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(badgeBackground).not.toBe("rgba(0, 0, 0, 0)");
     await card.click();
     const preview = page.getByRole("dialog", { name: "Превью шаблона Проверка шаблона", exact: true });
     await expect(preview).toBeVisible();
@@ -41,7 +42,7 @@ for (const theme of ["sand", "graphite"]) {
     await preview.evaluate(el => { el.scrollTop = el.scrollHeight; });
     await expect(preview.getByRole("button", { name: "Закрыть", exact: true })).toBeVisible();
     expect(await buttonStyle(preview.getByRole("button", { name: "Закрыть", exact: true }))).toEqual(expected);
-    await expect(preview.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", "rgb(229, 231, 235)");
+    await expect(preview.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", badgeBackground);
     await expect(preview).toHaveCSS("animation-duration", "0.15s");
     await page.screenshot({ path: testInfo.outputPath("template-preview.png") });
     const exit = await preview.evaluate(element => {

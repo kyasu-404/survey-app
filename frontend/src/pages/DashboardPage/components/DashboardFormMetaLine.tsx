@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
-import deadlineIcon from "../../../img/deadline.svg";
+import { Icon } from "../../../shared/ui/Icon";
 import {
   formatDashboardCreatedAt,
   formatDashboardDeadlineLabel,
@@ -36,7 +36,7 @@ export function DashboardFormMetaLine({ form, onOpenResponses, viewMode }: Dashb
     </span>,
     deadlineLabel ? (
       <span key="deadline" className="dashboard-meta-item dashboard-meta-item-deadline">
-        <img src={deadlineIcon} alt="" aria-hidden="true" className="dashboard-meta-icon" />
+        <Icon name="schedule" className="dashboard-meta-icon" size={16} />
         <span>открыта до {deadlineLabel}</span>
       </span>
     ) : null,
@@ -52,7 +52,7 @@ export function DashboardFormMetaLine({ form, onOpenResponses, viewMode }: Dashb
           onOpenResponses(form.id);
         }}
       >
-        {getResponsesCounterLabel(responsesCount, form.max_responses)}
+        {getResponsesCounterLabel(responsesCount, form.max_responses)}<span aria-hidden="true"> →</span>
       </button>
     ) : null,
   ].filter(Boolean);

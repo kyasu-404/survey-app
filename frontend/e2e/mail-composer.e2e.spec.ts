@@ -36,8 +36,9 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await page.route("**/rest/v1/mail_queue?*", route => route.fulfill({ json: [{ id: "job-1", batch_id: "batch-1", recipient_name: `ОченьДлинноеНазваниеОрганизации${"безпробелов".repeat(12)}`, recipient_email: "verylongemailaddress@school.example.test", status: "sent", sent_at: "2026-09-29T18:01:00Z" }] }));
     await page.locator(".dashboard-share-button").first().click();
     const dialog = page.getByRole("dialog");
-    if (viewport.width > 600) expect((await dialog.boundingBox())!.width).toBeGreaterThan(900);
+    if (viewport.width > 600) expect((await dialog.boundingBox())!.width).toBeLessThan(700);
     await dialog.getByRole("button", { name: "Подготовить рассылку" }).click();
+    if (viewport.width > 600) await expect.poll(async () => (await dialog.boundingBox())!.width).toBeGreaterThan(900);
     await expect(dialog.getByText("Выбрано: 3 из 3")).toBeVisible();
     await dialog.getByRole("button", { name: "Снять выбор" }).click();
     await dialog.getByLabel("Поиск организации или email").fill("organization2@");

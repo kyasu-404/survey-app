@@ -13,3 +13,10 @@ if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "functi
     },
   });
 }
+
+// jsdom has the element but not the native dialog lifecycle. Browser tests
+// cover the real top layer, focus containment and Escape behavior.
+if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+}

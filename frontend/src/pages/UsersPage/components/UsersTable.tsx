@@ -65,7 +65,7 @@ export function UsersTable({
                       {profile.role}
                     </span>
                   ) : (
-                    <select
+                    <span className="users-role-control"><select
                       className="users-role-chip users-role-select"
                       aria-label={`Изменить роль пользователя ${displayName}`}
                       value={profile.role}
@@ -82,7 +82,7 @@ export function UsersTable({
                         {profile.role}
                       </option>
                       <option value={nextRole}>{nextRole}</option>
-                    </select>
+                    </select><span className="chip-indicator" aria-hidden="true">▾</span></span>
                   )}
                 </td>
                 <td>
@@ -91,10 +91,11 @@ export function UsersTable({
                     className={`users-status-button ${profile.is_disabled ? "user-status-disabled" : "user-status-active"}`.trim()}
                     aria-label={`Статус пользователя ${displayName}: ${getStatusLabel(profile)}`}
                     onClick={() => void onToggleUserDisabled(profile.id, !profile.is_disabled)}
+                    title={isOwnUser ? "Нельзя отключить собственную учётную запись" : profile.is_disabled ? "Включить пользователя" : "Отключить пользователя"}
                     disabled={isStatusChangePending || isOwnUser}
                   >
                     {isStatusPending && <InlineSpinner />}
-                    {getStatusLabel(profile)}
+                    {getStatusLabel(profile)}{!isOwnUser && <span className="chip-indicator" aria-hidden="true">⇄</span>}
                   </button>
                 </td>
                 <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>

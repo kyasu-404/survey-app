@@ -28,10 +28,10 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await expect(share).toBeVisible();
     await expectMatchingActions(card);
     const shareBox = await share.boundingBox();
-    expect(shareBox?.width).toBeLessThanOrEqual(viewport.width < 480 ? 40 : 36);
-    expect(await share.locator("img").evaluate(image => {
-      const rect = image.getBoundingClientRect();
-      return rect.width === 16 && rect.height === 16;
+    expect(shareBox?.width).toBe(viewport.width < 480 ? 44 : 36);
+    expect(await share.locator('[data-icon="share"]').evaluate(icon => {
+      const rect = icon.getBoundingClientRect();
+      return rect.width === 18 && rect.height === 18;
     })).toBe(true);
     await share.click();
     const dialog = page.getByRole("dialog", { name: "Поделиться формой Карточка 1" });
@@ -49,8 +49,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       const button = qrPanel.getByRole("button", { name, exact: true });
       const box = await button.boundingBox();
       expect(box!.y).toBeGreaterThan(qrBox!.y + qrBox!.height);
-      expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toContain("rgb(17, 17, 17)");
-      await expect(button.locator("img")).toBeVisible();
+      await expect(button).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(button.locator('[data-icon="download"]')).toBeVisible();
       await button.hover();
       await expect(button).toHaveCSS("transform", "none");
       const hoveredBox = await button.boundingBox();
@@ -80,18 +80,17 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       await page.getByRole("button", { name: "Показать меню", exact: true }).click();
     }
     await page.locator(".sidebar-account-trigger").click();
-    await page.getByRole("menuitem", { name: "Тема", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Тёмная", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Тёмная тема", exact: true }).click();
+    await page.keyboard.press("Escape");
     if (viewport.width < 760) await page.getByRole("button", { name: "Скрыть меню", exact: true }).click();
     await row.locator(".dashboard-share-button").click();
     await dialog.getByRole("tab", { name: "QR-код" }).click();
     await expect(dialog.getByAltText("QR-код формы Карточка 1")).toBeVisible();
-    await expect(dialog.getByRole("tab", { name: "QR-код" })).toHaveCSS("color", "rgb(23, 23, 23)");
+    await expect(dialog.getByRole("tab", { name: "QR-код" })).toHaveCSS("color", "rgb(6, 46, 111)");
     expect(await dialog.getByRole("tablist").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     for (const name of ["PNG", "SVG"]) {
       const button = dialog.getByRole("button", { name, exact: true });
-      expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toContain("rgb(255, 255, 255)");
-      await expect(button).toHaveCSS("color", "rgb(23, 23, 23)");
+      await expect(button).toHaveCSS("color", "rgb(227, 227, 227)");
     }
     await page.screenshot({ path: testInfo.outputPath("share-qr-dark.png") });
     expect(pageErrors).toEqual([]);

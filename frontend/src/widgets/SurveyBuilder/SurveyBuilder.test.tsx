@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
-import { ThemeCycleButton } from "../../shared/theme/ThemeCycleButton";
+import { SidebarAccountMenu } from "../Sidebar/SidebarAccountMenu";
 import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { SurveyBuilder } from "./SurveyBuilder";
 import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
@@ -379,11 +379,11 @@ describe("SurveyBuilder", () => {
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-primary-backcolor": "#985036",
+            "--sjs-primary-backcolor": "#0b57d0",
             "--sjs-general-backcolor": "#ffffff",
             "--sjs-general-forecolor": "#2f2925",
             "--sjs-special-background": "#ece7e2",
-            "--sjs2-color-utility-surface-designer": "#e3e0dc",
+            "--sjs2-color-utility-surface-designer": "#f4f2ef",
           }),
         }),
       );
@@ -391,7 +391,7 @@ describe("SurveyBuilder", () => {
   });
 
   it("switches the Creator UI palette without recreating the builder", async () => {
-    window.localStorage.setItem("survey-app:theme", "sky");
+    window.localStorage.setItem("survey-app:theme", "sand");
     const user = userEvent.setup();
 
     render(
@@ -399,7 +399,7 @@ describe("SurveyBuilder", () => {
         <MemoryRouter>
           <QueryClientProvider client={createQueryClient()}>
             <SurveyBuilder userId="user-1" />
-            <ThemeCycleButton />
+            <SidebarAccountMenu name="Пользователь" onLogout={async () => {}} />
           </QueryClientProvider>
         </MemoryRouter>
       </ThemeProvider>,
@@ -408,17 +408,17 @@ describe("SurveyBuilder", () => {
     await waitFor(() => {
       expect(creatorInstances).toHaveLength(1);
       expect(creatorInstances[0].applyCreatorTheme).toHaveBeenLastCalledWith(
-        expect.objectContaining({ themeName: "survey-app-creator-sky" }),
+        expect.objectContaining({ themeName: "survey-app-creator-sand" }),
       );
     });
 
-    await user.click(screen.getByRole("button", { name: /Сменить тему/i }));
-    await user.click(screen.getByRole("menuitemradio", { name: "Зелёная" }));
+    await user.click(screen.getByRole("button", { name: "Пользователь" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Тёмная тема" }));
 
     await waitFor(() => {
       expect(creatorInstances).toHaveLength(1);
       expect(creatorInstances[0].applyCreatorTheme).toHaveBeenLastCalledWith(
-        expect.objectContaining({ themeName: "survey-app-creator-teal" }),
+        expect.objectContaining({ themeName: "survey-app-creator-graphite" }),
       );
     });
   });
@@ -791,8 +791,10 @@ describe("SurveyBuilder", () => {
       "builder-save-template",
     ]);
     expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-reset")).toMatchObject({
-      css: "builder-toolbar-action-item",
-      innerCss: "builder-toolbar-action-button",
+      css: "builder-toolbar-icon-item",
+      innerCss: "builder-toolbar-icon-button",
+      iconName: "icon-reset",
+      showTitle: false,
     });
     expect(creator.toolbar.actions.find((action: { id: string }) => action.id === "builder-reset")).not.toMatchObject({
       disableShrink: true,
@@ -810,7 +812,7 @@ describe("SurveyBuilder", () => {
     const saveTemplateAction = creator.toolbar.getActionById("builder-save-template");
 
     expect(galleryAction).toMatchObject({ visible: false, innerCss: "builder-toolbar-action-button" });
-    expect(resetAction).toMatchObject({ visible: true, innerCss: "builder-toolbar-action-button" });
+    expect(resetAction).toMatchObject({ visible: true, innerCss: "builder-toolbar-icon-button" });
     expect(saveTemplateAction).toMatchObject({ visible: true, innerCss: "builder-toolbar-action-button" });
 
     act(() => {
@@ -1188,20 +1190,20 @@ describe("SurveyBuilder", () => {
     expect(surveyBuilderSource).toContain('registerCreatorTheme(...Object.values(creatorThemes));');
   });
 
-  it("keeps the built-in save action icon-only while custom builder actions stay compact text buttons", () => {
+  it("keeps save and reset icon-only while template actions retain their labels", () => {
     const surveyBuilderSource = readSurveyBuilderSource();
 
     expect(surveyBuilderSource).toContain('saveAction.css = "builder-toolbar-icon-item";');
     expect(surveyBuilderSource).toContain('builder-toolbar-icon-button');
-    expect(surveyBuilderSource).toContain('resetAction.innerCss = "builder-toolbar-action-button";');
+    expect(surveyBuilderSource).toContain('resetAction.innerCss = "builder-toolbar-icon-button";');
     expect(surveyBuilderSource).toContain('saveTemplateAction.innerCss = `builder-toolbar-action-button ${');
   });
 
-  it("keeps all custom text actions neutral white in every application theme", () => {
+  it("keeps custom text actions on the selected creator surface", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*background:\s*#ffffff\s*!important;[^}]*color:\s*#202124\s*!important;/s,
+      /\.builder-creator-shell\s+\.builder-toolbar-action-button,\s*\.builder-creator-shell\s+\.builder-toolbar-action-button\.builder-toolbar-action-button-secondary\s*\{[^}]*color:\s*var\(--creator-text\)\s*!important;[^}]*background:\s*var\(--creator-control\)\s*!important;/s,
     );
   });
 
@@ -1222,13 +1224,9 @@ describe("SurveyBuilder", () => {
     expect(appCss).toMatch(/\.builder-creator-shell \.svc-toolbox__item-title\s*\{[^}]*color:\s*var\(--creator-text-muted\)\s*!important;/s);
     expect(appCss).toMatch(/\.builder-creator-shell \.svc-toolbox__item:hover,[^{]+\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--creator-accent\)\s*!important;[^}]*transform:\s*translateX\(2px\);/s);
     expect(appCss).toMatch(/\.builder-creator-shell \.svc-tabbed-menu-item:not\(\.svc-tabbed-menu-item--selected\):hover,[^{]+\{[^}]*background:\s*var\(--creator-hover\)\s*!important;/s);
-    expect(appCss).toMatch(/\.builder-creator-shell \.builder-toolbar-action-button:hover,[^{]+\{[^}]*background:\s*var\(--creator-hover\)\s*!important;[^}]*transform:\s*translateY\(-1px\);/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-creator\s*\{[^}]*--ctr-editor-background-color:\s*#d6d6d6\s*!important;[^}]*--ctr-editor-content-text-color:\s*#202020\s*!important;[^}]*--ctr-property-grid-chapter-caption-text-color:\s*#f5f5f5\s*!important;[^}]*--ctr-menu-toolbar-button-icon-color:\s*#f5f5f5\s*!important;/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-question__content\s*\{[^}]*border:\s*1px solid #a8a8a8\s*!important;/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-toolbox__search-container,[^{]+\.svc-toolbox \.svc-search,[^{]+\.svc-side-bar \.svc-search\s*\{[^}]*background:\s*#383838\s*!important;/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-creator\s*\{[^}]*--ctr-editor-content-text-opacity-disabled:\s*1\s*!important;[^}]*--ctr-editor-label-opacity-disabled:\s*0\.78\s*!important;/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.spg-question--disabled \.spg-input,[^{]+input\.spg-input:read-only[^{]+\{[^}]*color:\s*#5f5f5f\s*!important;[^}]*opacity:\s*1\s*!important;/s);
-    expect(appCss).toMatch(/:root\[data-theme="graphite"\] \.builder-creator-shell \.svc-top-bar \.svc-toolbar__item use,[^{]+\.sv-action-bar-item__icon use\s*\{[^}]*fill:\s*#f5f5f5\s*!important;/s);
+    expect(appCss).toMatch(/\.builder-creator-shell \.builder-toolbar-action-button:hover,[^{]+\{[^}]*background:\s*var\(--creator-hover\)\s*!important;[^}]*box-shadow:\s*none\s*!important;[^}]*transform:\s*none;/s);
+    // Dark text/background contrast is exercised against the actual cascade
+    // in interface-design.e2e.spec.ts, including the loaded SurveyJS styles.
   });
 
   it("keeps the designer logo and title left-aligned", () => {

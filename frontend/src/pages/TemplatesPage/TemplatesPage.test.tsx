@@ -204,7 +204,6 @@ describe("TemplatesPage", () => {
     expect(screen.getByText("Анкета участника")).toBeInTheDocument();
     expect(screen.queryByText("Обычная форма")).not.toBeInTheDocument();
     expect(container.querySelector(".templates-gallery-grid")).toBeInTheDocument();
-    expect(container.querySelector(".templates-gallery-grid")).toHaveClass("templates-gallery-grid-two-columns");
     expect(getTemplateFormsPage).toHaveBeenCalledWith(
       expect.objectContaining({
         cursor: null,
@@ -232,7 +231,7 @@ describe("TemplatesPage", () => {
     renderPage();
 
     const useTemplateButton = await screen.findByRole("button", { name: "Использовать шаблон Шаблон заявки" });
-    expect(useTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src");
+    expect(useTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("data-icon", "add");
 
     await userEvent.click(useTemplateButton);
 
@@ -299,7 +298,7 @@ describe("TemplatesPage", () => {
     const { container } = renderPage();
 
     const shareTemplateButton = await screen.findByRole("button", { name: "Поделиться шаблоном Закрытый шаблон" });
-    expect(shareTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("src");
+    expect(shareTemplateButton.querySelector(".templates-action-icon")).toHaveAttribute("data-icon", "share");
 
     await userEvent.click(shareTemplateButton);
 
@@ -335,7 +334,7 @@ describe("TemplatesPage", () => {
     );
   });
 
-  it("pins templates locally, highlights the star, and keeps pinned templates first", async () => {
+  it("pins templates locally, fills the bookmark, and keeps pinned templates first", async () => {
     getTemplateFormsPage.mockResolvedValue(
       createTemplatesPage([
         createTemplate(1, { title: "Первый шаблон" }),
@@ -354,6 +353,7 @@ describe("TemplatesPage", () => {
     expect(getCardTitles()).toEqual(["Первый шаблон", "Важный шаблон", "Третий шаблон"]);
 
     const pinButton = screen.getByRole("button", { name: "Закрепить шаблон Важный шаблон" });
+    expect(pinButton.querySelector('[data-icon="bookmark"]')).toHaveAttribute("aria-hidden", "true");
     await userEvent.click(pinButton);
 
     expect(screen.getByRole("button", { name: "Открепить шаблон Важный шаблон" })).toHaveClass(
@@ -628,20 +628,9 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(
       /\.survey-runtime-surface\.survey-page-card \.sd-question \.sd-description,\s*\.survey-runtime-surface\.survey-page-card \.sd-question__description\s*\{[^}]*width:\s*fit-content;[^}]*background:\s*rgba\(219,\s*234,\s*254,\s*0\.88\)\s*!important;/s,
     );
-    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*font-size:\s*2\.1rem;/);
   });
 
-  it("uses a gray border and rounded shape for template action menu trigger buttons", () => {
-    const css = readAppCss();
 
-    expect(css).toContain(".form-menu-trigger {");
-    expect(css).toContain("border: 2px solid rgba(100, 116, 139, 0.52);");
-    expect(css).toContain("border-color: rgba(100, 116, 139, 0.72);");
-    expect(css).not.toContain("border: 2px solid rgba(20, 20, 20, 0.72);");
-    expect(css).toMatch(
-      /\.templates-actions-menu-shell\s+\.form-menu-trigger\s*\{[^}]*width:\s*54px;[^}]*min-width:\s*54px;[^}]*border-radius:\s*14px;/s,
-    );
-  });
 
   it("matches template card border thickness with dashboard form cards", () => {
     const css = readAppCss();
@@ -656,11 +645,5 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.templates-page-actions\s*\{[^}]*align-items:\s*flex-end;/);
   });
 
-  it("renders template pin stars without a framed button background", () => {
-    const css = readAppCss();
 
-    expect(css).toMatch(/\.templates-pin-button\s*\{[^}]*border:\s*none;[^}]*background:\s*transparent;[^}]*font-size:\s*2\.1rem;/);
-    expect(css).toMatch(/\.templates-pin-button:hover,\s*\.templates-pin-button:focus-visible\s*\{[^}]*background:\s*transparent;/);
-    expect(css).toMatch(/\.templates-pin-button-active,[^{]*\{[^}]*background:\s*transparent;/);
-  });
 });

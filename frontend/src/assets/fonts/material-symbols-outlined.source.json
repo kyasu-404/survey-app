@@ -1,0 +1,61 @@
+{
+  "family": "Material Symbols Outlined",
+  "axes": {
+    "FILL": [
+      0,
+      1
+    ],
+    "wght": [
+      400,
+      500
+    ],
+    "GRAD": 0,
+    "opsz": [
+      20,
+      24
+    ]
+  },
+  "repositoryCommit": "10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7",
+  "cssUrl": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined%3Aopsz%2Cwght%2CFILL%4020..24%2C400..500%2C0..1&icon_names=add%2Carrow_back%2Carrow_forward%2Cbookmark%2Ccheck_circle%2Cchevron_left%2Cchevron_right%2Cclose%2Ccontent_copy%2Cdark_mode%2Cdashboard_customize%2Cdelete%2Cdescription%2Cdownload%2Cdrive_file_rename_outline%2Cedit%2Cedit_document%2Cexpand_more%2Cfilter_list%2Cfolder%2Cgroup%2Cinfo%2Clight_mode%2Clogout%2Cmenu%2Cmore_horiz%2Crefresh%2Cschedule%2Cschool%2Csearch%2Csettings%2Cshare%2Ctable_chart%2Cupload%2Cview_agenda&display=block",
+  "fontUrl": "https://fonts.gstatic.com/l/font?kit=kJESBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzBwG-RpA6RzaxHMO1W2aE-UujWzhKV2nsHuwLAkDTP0lbLo0mfvfFZvJh-U8KivxHt1ojiBMtJuLzIy886W4p1hcaVIwl6JXsg4W4Ze5f5gIcPvA&skey=b8dc2088854b122f&v=v382",
+  "sha256": "bcb16577d223cb8b062bccd907a29055c16a2dbd82fc4d57d27e5ac859e1cea2",
+  "bytes": 21236,
+  "codepointIndexSha256": "a7404d9e5a1b63f496cf05ace45d386075886b5a7f123fba9f29527cb6006fde",
+  "codepoints": {
+    "add": "e145",
+    "arrow_back": "e5c4",
+    "arrow_forward": "e5c8",
+    "bookmark": "e8e7",
+    "check_circle": "f0be",
+    "chevron_left": "e5cb",
+    "chevron_right": "e5cc",
+    "close": "e5cd",
+    "content_copy": "e14d",
+    "dark_mode": "e51c",
+    "dashboard_customize": "e99b",
+    "delete": "e92e",
+    "description": "e873",
+    "download": "f090",
+    "drive_file_rename_outline": "e9a2",
+    "edit": "f097",
+    "edit_document": "f88c",
+    "expand_more": "e5cf",
+    "filter_list": "e152",
+    "folder": "e2c7",
+    "group": "ea21",
+    "info": "e88e",
+    "light_mode": "e518",
+    "logout": "e9ba",
+    "menu": "e5d2",
+    "more_horiz": "e5d3",
+    "refresh": "e5d5",
+    "schedule": "efd6",
+    "school": "e80c",
+    "search": "ef7a",
+    "settings": "e8b8",
+    "share": "e80d",
+    "table_chart": "e265",
+    "upload": "f09b",
+    "view_agenda": "e8e9"
+  }
+}

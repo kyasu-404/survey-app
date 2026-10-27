@@ -1,3 +1,4 @@
+import { Icon } from "../../shared/ui/Icon";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
@@ -9,7 +10,6 @@ import {
 import { getAllResponsesByForm } from "../../entities/response/api";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
-import downloadIcon from "../../img/Download.svg";
 import printerIcon from "../../img/printer.svg";
 
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
@@ -124,7 +124,7 @@ export default function FormResponsesHtmlPage() {
       <div className="responses-html-actions" aria-label="Действия HTML">
         <button type="button" className="responses-export-button" onClick={handleDownload} disabled={!canUseHtml}>
           <span>Скачать HTML</span>
-          <img src={downloadIcon} alt="" aria-hidden="true" className="toolbar-icon" />
+          <Icon name="download" size={18} className="toolbar-icon" />
         </button>
         <button
           type="button"
