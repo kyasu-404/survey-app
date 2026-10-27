@@ -3461,7 +3461,7 @@ button.dashboard-status-trigger-glossy:focus-visible {
 .templates-card {
   display: flex;
   flex-direction: column;
-  min-height: 224px;
+  min-height: 0;
   cursor: pointer;
 }
 
@@ -3562,7 +3562,7 @@ button.dashboard-status-trigger-glossy:focus-visible {
   color: var(--text-muted);
 }
 
-.templates-card-skeleton { min-height: 224px; }
+.templates-card-skeleton { min-height: 0; }
 
 .templates-card-author {
   color: #a16207;
@@ -7941,9 +7941,6 @@ button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visibl
   }
 }
 
-/* Dark mode follows a light-from-the-front elevation model: the page is the
-   darkest layer, cards are lighter, and controls/overlays are lighter again. */
-:root[data-theme="graphite"] body,
 /* Authentication deliberately does not inherit the user's saved application
    theme: before sign-in it stays a neutral, self-contained surface. */
 .app-shell-login,

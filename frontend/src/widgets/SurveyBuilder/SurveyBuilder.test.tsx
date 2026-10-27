@@ -1359,18 +1359,11 @@ describe("SurveyBuilder", () => {
     });
   });
 
-  it("uses a two-column metadata grid with black save and soft red cancel actions in the post-save settings dialog", () => {
+  it("keeps the post-save metadata and organization settings in two-column grids", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(/\.deadline-modal-title\s*\{[^}]*text-align:\s*center;/);
-    expect(appCss).toMatch(/\.deadline-modal-subtitle\s*\{[^}]*color:\s*#4f6f91;[^}]*font-weight:\s*700;/);
     expect(appCss).toMatch(/\.deadline-modal-primary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
-    expect(appCss).toMatch(/\.deadline-modal \.deadline-save-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
-    expect(appCss).toMatch(/\.deadline-modal \.deadline-clear-button\s*\{[^}]*background:\s*rgba\(254,\s*226,\s*226,\s*0\.88\);[^}]*color:\s*#b91c1c;/);
-    expect(appCss).toMatch(/\.deadline-modal \.deadline-clear-button:hover,\s*\.deadline-modal \.deadline-clear-button:focus-visible\s*\{[^}]*background:\s*rgba\(254,\s*202,\s*202,\s*0\.92\);[^}]*color:\s*#991b1b;/);
-    expect(appCss.lastIndexOf(".deadline-modal .deadline-save-button")).toBeGreaterThan(
-      appCss.indexOf(".deadline-clear-button,\n.deadline-save-button,\n.responses-export-button"),
-    );
     expect(appCss).toMatch(
       /\.builder-organization-settings-modal legend\s*\{[^}]*float:\s*left;[^}]*width:\s*100%;[^}]*overflow-wrap:\s*anywhere;/s,
     );
@@ -1379,24 +1372,12 @@ describe("SurveyBuilder", () => {
     );
   });
 
-  it("centers the reset confirmation title and uses a black cancel button", () => {
+  it("centers the reset confirmation title and provides a cancel action", () => {
     const appCss = readAppCss();
     const surveyBuilderSource = readSurveyBuilderSource();
 
     expect(appCss).toMatch(/\.builder-reset-title\s*\{[^}]*text-align:\s*center;/);
     expect(surveyBuilderSource).toContain('className="deadline-action-cancel-button"');
-    expect(appCss).toMatch(/\.deadline-action-cancel-button\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#27272a,\s*#111111\);[^}]*color:\s*#ffffff;/);
-  });
-
-  it("keeps safe edit dark and softly darkens the compatibility action on hover", () => {
-    const appCss = readAppCss();
-
-    expect(appCss).toMatch(
-      /\.builder-answered-warning \.deadline-save-button:hover,[^{]*\.builder-answered-warning \.deadline-save-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#3f3f46,\s*#18181b\);[^}]*color:\s*#ffffff;/s,
-    );
-    expect(appCss).toMatch(
-      /\.builder-compatibility-modal \.deadline-save-button:hover,[^{]*\.builder-compatibility-modal \.deadline-save-button:focus-visible\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(248,\s*246,\s*243,\s*0\.98\),\s*rgba\(225,\s*220,\s*214,\s*0\.96\)\);[^}]*color:\s*#141414;/s,
-    );
   });
 
   it("keeps toast notifications above modal backdrops", () => {

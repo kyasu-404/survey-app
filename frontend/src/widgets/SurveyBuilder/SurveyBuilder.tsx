@@ -1695,7 +1695,7 @@ export function SurveyBuilder({
               Дедлайн и лимит ответов можно оставить пустыми.
             </p>
             <div className="deadline-modal-actions">
-              <button type="button" className="deadline-clear-button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
+              <button type="button" className="deadline-action-cancel-button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
                 Отмена
               </button>
               <button type="button" className="deadline-save-button" onClick={() => void handleSavePostSaveSettings()} disabled={isPostSaveSettingsSaving}>

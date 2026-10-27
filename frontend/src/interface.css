@@ -301,6 +301,78 @@
     background: var(--theme-popover-background);
     box-shadow: var(--shadow-lg);
   }
+
+  /* Shared dialog actions: neutral cancel, blue confirmation, semantic removal.
+     Override the legacy gradients for both dashboard and Creator dialogs. */
+  :root .app-shell .deadline-modal-actions > button {
+    justify-content: center;
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid var(--theme-border);
+    border-radius: 22px;
+    background: var(--theme-surface-light);
+    color: var(--theme-text);
+    box-shadow: none;
+    font-weight: 500;
+    letter-spacing: 0;
+    transform: none;
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+  :root .app-shell .deadline-modal-actions > button:not(:disabled):is(:hover, :focus-visible) {
+    background: var(--theme-container-high);
+    border-color: var(--theme-outline);
+    color: var(--theme-text);
+    box-shadow: none;
+    transform: none;
+  }
+  :root .app-shell .deadline-modal-actions > :is(.button-primary, .deadline-save-button, .deadline-action-save-button, .users-yellow-button) {
+    background: var(--theme-accent);
+    border-color: transparent;
+    color: var(--theme-accent-foreground);
+  }
+  :root .app-shell .deadline-modal-actions > :is(.button-primary, .deadline-save-button, .deadline-action-save-button, .users-yellow-button):not(:disabled):is(:hover, :focus-visible) {
+    background: var(--theme-accent-strong);
+    border-color: transparent;
+    color: var(--theme-accent-foreground);
+  }
+  :root .app-shell :is(.deadline-modal-actions > .deadline-clear-button, .deadline-modal-actions > .users-danger-button, .responses-delete-button) {
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid var(--theme-danger-border);
+    border-radius: 22px;
+    background: var(--theme-danger-background);
+    color: var(--theme-danger-text);
+    box-shadow: none;
+    font-weight: 500;
+    font-size: .84rem;
+    letter-spacing: 0;
+    transform: none;
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+  :root .app-shell :is(.deadline-modal-actions > .deadline-clear-button, .deadline-modal-actions > .users-danger-button, .responses-delete-button):not(:disabled):is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--theme-danger-background) 94%, #000 6%);
+    border-color: var(--theme-danger-border);
+    color: var(--theme-danger-text);
+    box-shadow: none;
+    transform: none;
+  }
+  :root .app-shell .deadline-modal-actions > button:disabled,
+  :root .app-shell .responses-delete-button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+  :root .app-shell :is(.users-modal-copy, .dashboard-delete-modal-copy) { color: var(--theme-text); }
+  :root .app-shell .users-modal-copy-danger { color: var(--theme-danger-text); }
+  :root .app-shell .responses-selection-bar {
+    border: 1px solid var(--theme-border);
+    border-radius: 16px;
+    background: var(--theme-selected-background);
+    color: var(--theme-selected-text);
+  }
+  :root .app-shell .responses-selection-count { color: inherit; }
+
   :root .app-shell dialog.dashboard-share-modal {
     width: min(640px, calc(100vw - 32px));
     height: fit-content;
@@ -356,7 +428,6 @@
   :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody .responses-table-row-clickable:is(:hover, :focus-visible) td { background: var(--theme-container-high); }
   :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody td:is(.responses-table-page-column, .responses-table-section-column) { color: var(--theme-text); background: var(--theme-surface-muted); }
   :root[data-theme="graphite"] .app-shell .users-role-chip-static { color: var(--theme-text-muted); }
-  :root[data-theme="graphite"] .responses-selection-count { color: #f2b8b5; }
   :root .app-shell :is(.responses-export-button, .dashboard-qr-download-button) img.toolbar-icon { filter: brightness(0); }
   :root[data-theme="graphite"] .app-shell :is(.responses-export-button, .dashboard-qr-download-button) img.toolbar-icon { filter: brightness(0) invert(1); }
   :root[data-theme="graphite"] :is(img.toolbar-icon, img.form-menu-item-icon, img.dashboard-meta-icon, img.users-search-icon, img.dashboard-search-icon, .organizations-row-actions img) { filter: invert(1); }
@@ -481,7 +552,7 @@
   :root .app-shell .users-status-button:not(:disabled):is(:hover, :focus-visible) { border-color: var(--theme-outline); box-shadow: none; text-decoration: none; }
   :root .app-shell .users-status-button { display: inline-flex; align-items: center; border: 1px solid transparent; font-weight: 500; }
   :root .app-shell .users-danger-button { min-height: 40px; border: 1px solid var(--theme-danger-border); border-radius: 22px; background: var(--theme-danger-background); color: var(--theme-danger-text); box-shadow: none; font-weight: 500; transform: none; }
-  :root .app-shell .users-danger-button:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--theme-danger-background) 88%, #000 12%); }
+  :root .app-shell .users-danger-button:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--theme-danger-background) 94%, #000 6%); }
   :root .app-shell .organizations-row-actions .organization-delete-button { color: var(--theme-danger-text); background: var(--theme-danger-background); border-color: var(--theme-danger-border); }
   :root .responses-back-link { display: inline-flex; align-items: center; min-height: 40px; margin-bottom: 8px; font-size: 14px; color: var(--theme-text-muted); }
   :root .app-shell .response-preview-drawer { position: fixed; inset: 0 0 0 auto; margin: 0 0 0 auto; width: min(820px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 20px 0 0 20px; color: var(--theme-text); box-shadow: -8px 0 32px #0003; }
@@ -668,6 +739,8 @@
   :root .app-shell .templates-actions-menu-shell .form-menu-trigger,
   :root .app-shell .templates-actions-menu-shell .form-menu-trigger:hover { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   .templates-pin-button { width: 44px; height: 44px; }
+  :root .app-shell .deadline-modal-actions > button,
+  :root .app-shell .responses-delete-button { min-height: 44px; }
   :root .app-shell .dashboard-status-trigger,
   :root .dashboard-responses-link-hitbox { min-height: 44px; }
   :root .app-shell dialog.dashboard-share-modal { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 18px; }

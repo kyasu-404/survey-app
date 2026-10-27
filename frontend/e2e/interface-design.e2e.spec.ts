@@ -41,6 +41,74 @@ async function contrast(locator: Locator) {
   });
 }
 
+for (const theme of ["sand", "graphite"]) {
+  test(`${theme}: dialog actions, user warnings and response selection stay readable`, async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
+    const app = await openSurveyApp(page, { responseCount: 2, elements: [{ type: "text", name: "name", title: "Имя" }] });
+    await page.route("**/list_forms_keyset*", route => route.fulfill({ json: [{
+      ...app.form, deadline_at: "2030-12-31T12:00:00Z", max_responses: 50,
+    }] }));
+    await page.route("**/functions/v1/user-admin", route => route.fulfill({ json: { users: [
+      { id: "other-user", name: "Иван Петров", email: "user@example.test", role: "user", is_disabled: false },
+    ] } }));
+    const checkDialog = async (dialog: Locator) => {
+      await expect(dialog).toBeVisible();
+      if (theme === "graphite" && await dialog.locator('input[type="datetime-local"]').count()) {
+        await expect(dialog.locator('input[type="datetime-local"]')).toHaveCSS("color-scheme", "dark");
+      }
+      for (const copy of await dialog.locator("p").all()) expect(await contrast(copy)).toBeGreaterThanOrEqual(4.5);
+      for (const button of await dialog.locator(".deadline-modal-actions > button:not(:disabled)").all()) {
+        await expect(button).toHaveCSS("background-image", "none");
+        await button.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+        expect(await contrast(button)).toBeGreaterThanOrEqual(4.5);
+        await button.hover();
+        await button.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+        expect(await contrast(button)).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        expect(await dialog.evaluate(el => {
+          const r = el.getBoundingClientRect();
+          return r.left >= 0 && r.right <= innerWidth && el.scrollWidth <= el.clientWidth + 1;
+        })).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    };
+    await page.goto("/dashboard");
+    for (const [action, title] of [["Установить дедлайн", "Дедлайн формы"], ["Ограничить ответы", "Ограничение ответов"]]) {
+      await page.locator(".dashboard-status-trigger").first().click();
+      await page.getByRole("menuitem", { name: action, exact: true }).click();
+      await checkDialog(page.getByRole("dialog", { name: title, exact: true }));
+    }
+    await page.goto("/users");
+    await page.locator(".users-role-select").selectOption("admin");
+    await checkDialog(page.getByRole("alertdialog", { name: "Смена роли пользователя" }));
+    await page.locator(".users-table .users-danger-button").click();
+    await checkDialog(page.locator(".modal-card").filter({ has: page.getByRole("heading", { name: "Удаление пользователя", exact: true }) }));
+    await page.goto(`/dashboard/forms/${app.formId}/responses`);
+    await page.getByRole("checkbox", { name: "Выбрать ответы на странице", exact: true }).check();
+    const bar = page.locator(".responses-selection-bar");
+    await expect(bar).toContainText("Выбрано: 2");
+    expect(await contrast(bar.locator(".responses-selection-count"))).toBeGreaterThanOrEqual(4.5);
+    expect(await contrast(bar.getByRole("button", { name: "Удалить", exact: true }))).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: testInfo.outputPath(`response-selection-${theme}.png`) });
+    page.once("dialog", dialog => dialog.accept());
+    await bar.getByRole("button", { name: "Удалить", exact: true }).click();
+    await expect(bar).toHaveCount(0);
+    expect(app.deletedBatchSizes).toEqual([2]);
+    await page.goto("/builder");
+    await page.locator(".svc-toolbox").getByRole("button", { name: "Текст", exact: true }).click();
+    await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
+    await checkDialog(page.getByRole("dialog", { name: "Настройки формы", exact: true }));
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test("dark status, actions, response cells and inspector fields remain readable", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.addInitScript(() => localStorage.setItem("survey-app:theme", "graphite"));

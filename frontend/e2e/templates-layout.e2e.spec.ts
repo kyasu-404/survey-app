@@ -42,7 +42,8 @@ for (const theme of ["sand", "graphite"]) {
         const r = el.getBoundingClientRect(); return { top: r.top, width: r.width, height: r.height };
       }));
       expect(row.filter(card => Math.abs(card.top - row[0].top) < 1)).toHaveLength(columns);
-      if (columns === 3) expect(row[0].width / row[0].height).toBeLessThan(2.5);
+      // The widest layout has no wrapped actions and needs no reserved height.
+      if (width === 1920) expect(Math.max(...row.map(card => card.height))).toBeLessThan(200);
       const menuButton = cards.first().locator(".templates-actions-menu-shell .form-menu-trigger");
       const menuSize = await menuButton.evaluate(el => {
         const r = el.getBoundingClientRect(); return [r.width, r.height];
