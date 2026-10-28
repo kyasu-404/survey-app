@@ -17,6 +17,7 @@ const {
   registeredCustomQuestionTypes,
   getStoragePathFromSurveyFileValue,
   getStoragePathsFromResponseData,
+  preparePersonalResponseUploads,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -42,6 +43,7 @@ const {
     registeredCustomQuestionTypes,
     getStoragePathFromSurveyFileValue: vi.fn(),
     getStoragePathsFromResponseData: vi.fn((): string[] => []),
+    preparePersonalResponseUploads: vi.fn(),
     removeFileFromStorage: vi.fn(),
     resolveSurveyFileValueContent: vi.fn(),
     uploadFileToStorage: vi.fn(),
@@ -126,7 +128,8 @@ vi.mock("survey-core", () => ({
       this.dataValue = nextData;
       const fileQuestionNames =
         this.schema.pages?.flatMap((page) =>
-          (page.elements ?? []).filter((question) => question.type === "file").map((question) => question.name),
+          (page.elements ?? []).filter((question) => question.type === "file"
+            && (!("showPreview" in question) || question.showPreview !== false)).map((question) => question.name),
         ) ?? [];
 
       fileQuestionNames.forEach((questionName) => {
@@ -211,6 +214,7 @@ vi.mock("../../shared/api/storage", () => ({
   MAX_STORAGE_FILE_SIZE_BYTES: 10 * 1024 * 1024,
   getStoragePathFromSurveyFileValue,
   getStoragePathsFromResponseData,
+  preparePersonalResponseUploads,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -294,6 +298,7 @@ describe("SurveyFormRenderer", () => {
     getStoragePathFromSurveyFileValue.mockReset();
     getStoragePathsFromResponseData.mockReset();
     getStoragePathsFromResponseData.mockReturnValue([]);
+    preparePersonalResponseUploads.mockReset();
     removeFileFromStorage.mockReset();
     resolveSurveyFileValueContent.mockReset();
     uploadFileToStorage.mockReset();
@@ -1117,6 +1122,23 @@ describe("SurveyFormRenderer", () => {
     expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: path }, expect.objectContaining({ browserId }));
     expect(removeFileFromStorage).toHaveBeenCalledWith(path, expect.objectContaining({ browserId }));
     expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ browserId }));
+  });
+
+  it("binds personal draft uploads before submission even when previews never download", async () => {
+    const browserId = "10000000-0000-4000-8000-000000000001";
+    const personalToken = "20000000-0000-4000-8000-000000000001";
+    const data = { file: [{ content: "public/form-1/legacy.pdf" }] };
+    render(<SurveyFormRenderer formId="form-1" responseBrowserId={browserId} personalToken={personalToken}
+      allowAnonymousUploads initialData={data} schema={{ pages: [{ elements: [{ type: "file", name: "file", ...{ showPreview: false } }] }] }} />);
+    const model = createdModels[0] as unknown as { onCompleting: FakeSurveyEvent };
+    await act(async () => { await model.onCompleting.fire(model, { allowComplete: true, allow: true }); });
+    expect(resolveSurveyFileValueContent).not.toHaveBeenCalled();
+    expect(preparePersonalResponseUploads).toHaveBeenCalledWith("form-1", data, browserId, personalToken);
+    expect(preparePersonalResponseUploads.mock.invocationCallOrder[0]).toBeLessThan(mutateAsync.mock.invocationCallOrder[0]);
+    mutateAsync.mockClear();
+    preparePersonalResponseUploads.mockRejectedValueOnce(new Error("File capability missing"));
+    await act(async () => { await model.onCompleting.fire(model, { allowComplete: true, allow: true }); });
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it("removes new files during response editing while preserving saved attachments until commit", async () => {

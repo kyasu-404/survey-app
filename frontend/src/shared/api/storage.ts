@@ -63,7 +63,7 @@ async function reservePublicStoragePath(formId: string, file: File, options: Sto
   const { data, error } = await runRequest(
     "storage.reserveUpload",
     (requestSignal) => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name) },
+      body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name), ...(options.personalToken ? { personalToken: options.personalToken } : {}) },
       signal: requestSignal,
     }),
     { signal: options.signal },
@@ -335,6 +335,14 @@ export async function resolveSurveyFileValueContent(value: unknown, options: Sto
   }
 
   throw new Error("Не удалось определить содержимое файла");
+}
+
+export async function preparePersonalResponseUploads(formId: string, data: Record<string, unknown>, browserId: string, personalToken: string) {
+  // Preview can be disabled, so legacy draft binding must also run before
+  // submission. Authorization/signing does not download the file contents.
+  await Promise.all(getStoragePathsFromResponseData(data)
+    .filter(path => path.startsWith(`public/${formId}/`))
+    .map(path => createSignedUrlForStoragePath(path, { allowAnonymous: true, restoreDraft: true, browserId, personalToken })));
 }
 
 export async function uploadFileToStorage(formId: string, file: File, options: UploadFileToStorageOptions = {}) {

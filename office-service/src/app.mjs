@@ -104,7 +104,7 @@ export function createApp({pool, supabase, env = process.env}) {
       }
       return !(payload.status===6 && forceTime && forceTime<=Number(doc.last_force_save_at));
     };
-    let snapshot, uploadedPath;
+    let snapshot, uploadedPath, saveAttempt=false;
     // Storage paths are unique per attempt. If COMMIT acknowledgement is lost,
     // delete only after verifying the file is not the committed document.
     const removeUnusedUpload = async () => {
@@ -120,6 +120,7 @@ export function createApp({pool, supabase, env = process.env}) {
       let bytes, fieldCount;
       const savesFile=[2,6].includes(payload.status);
       if(savesFile) {
+        saveAttempt=true;
         // No checked-out DB connection or row lock during HTTP/worker waits.
         bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
         ({fieldCount}=await runOfficeTask({task:'inspect',bytes,format:snapshot.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024}));
@@ -147,7 +148,7 @@ export function createApp({pool, supabase, env = process.env}) {
       send(res,200,{error:0});
     } catch(error) {
       await removeUnusedUpload();
-      if(snapshot) await query('update public.office_documents set last_save_error=$2,last_save_error_at=clock_timestamp() where id=$1 and version=$3 and storage_path=$4',[id,'Не удалось сохранить документ. Повторите сохранение в редакторе.',snapshot.version,snapshot.storage_path]).catch(()=>{});
+      if(saveAttempt) await query('update public.office_documents set last_save_error=$2,last_save_error_at=clock_timestamp() where id=$1 and version=$3 and storage_path=$4',[id,'Не удалось сохранить документ. Повторите сохранение в редакторе.',snapshot.version,snapshot.storage_path]).catch(()=>{});
       throw error;
     }
   }
@@ -321,7 +322,22 @@ export function createApp({pool, supabase, env = process.env}) {
         employeeOnly(auth);
         requireValue(s.enabled && s.jwt_secret_encrypted,'Редактор отключён',503);
         const result=await command(s,{c:'forcesave',key:documentKey(doc)});
-        if(result.error===4) return send(res,200,{saved:true,unchanged:true});
+        if(result.error===4) {
+          if(doc.last_save_error) {
+            // Clear only the failure observed before the command. A concurrent
+            // callback may have recorded a newer failure or changed the file.
+            const cleared=await query(`update public.office_documents set last_save_error=null,last_save_error_at=null
+              where id=$1 and version=$2 and storage_path=$3 and last_save_error=$4
+                and last_save_error_at is not distinct from $5::timestamptz returning id`,
+              [doc.id,doc.version,doc.storage_path,doc.last_save_error,doc.last_save_error_at ?? null]);
+            if(!cleared.length) {
+              const [current]=await query('select * from public.office_documents where id=$1',[doc.id]);
+              requireValue(current,'Документ не найден',404);
+              requireValue(!current.last_save_error,'Сохранение не завершено. Не закрывайте редактор.',502);
+            }
+          }
+          return send(res,200,{saved:true,unchanged:true});
+        }
         requireValue(result.error===0,'Не удалось запросить сохранение. Не закрывайте редактор.',502);
         // A command acknowledgement is not a successful Storage write. Wait for
         // the signed status-6 callback to commit a new immutable object pointer.

@@ -8,7 +8,7 @@ import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
 const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx'};
-async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead}={}){
+async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead,clearSaveError}={}){
  const statements=[];
  let documentReads=0;
  const query=async(sql,args=[])=>{
@@ -24,6 +24,7 @@ async function setup(t,{disabled=false,role='user',result,commandResult,document
    const current=documentAtRead ? documentAtRead(++documentReads) : doc;
    return {rows:current ? [{...current}] : []};
   }
+  if(sql.startsWith('update public.office_documents set last_save_error=null')) return {rows:clearSaveError?.(args) ?? []};
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})};
@@ -69,11 +70,32 @@ test('old callback retries are acknowledged without changing the current file; f
   assert.equal(response.status,status);
  }
  assert.ok(!statements.some(s=>s.sql.includes('storage_path=$2')));
+ assert.ok(!statements.some(s=>s.sql.includes('set last_save_error=')));
+});
+
+test('non-saving callbacks and invalid keys never record a save failure',async t=>{
+ const {request,statements}=await setup(t);
+ for(const status of [1,4]) for(const valid of [true,false]) {
+  const payload={key:valid ? documentKey(doc) : 'wrong-key',status};
+  const r=await request(`/callback/${documentId}`,{method:'POST',headers:{AuthorizationJwt:'Bearer '+sign({payload},secret)},body:'{}'});
+  assert.equal(r.status,valid ? 200 : 409);
+ }
+ assert.ok(!statements.some(s=>s.sql.includes('set last_save_error=')));
 });
 test('bad save origin is rejected before storage writes',async t=>{
  const {request,statements}=await setup(t);const payload={key:documentKey(doc),status:2,url:'http://169.254.169.254/cache/files/x'};
  const r=await request(`/callback/${documentId}`,{method:'POST',headers:{'Content-Type':'application/json',AuthorizationJwt:'Bearer '+sign({payload},secret)},body:'{}'});
  assert.equal(r.status,400);assert.ok(!statements.some(s=>s.sql.includes('storage_path=$2')));
+ assert.ok(statements.some(s=>s.sql.includes('set last_save_error=$2')));
+});
+
+test('OnlyOffice save error statuses still record a save failure',async t=>{
+ const {request,statements}=await setup(t);
+ for(const status of [3,7]) {
+  const payload={key:documentKey(doc),status};
+  assert.equal((await request(`/callback/${documentId}`,{method:'POST',headers:{AuthorizationJwt:'Bearer '+sign({payload},secret)},body:'{}'})).status,200);
+ }
+ assert.equal(statements.filter(s=>s.sql.includes('set last_save_error=$2')).length,2);
 });
 test('cross-origin plugin configuration is public but data API origin is restricted',async t=>{
  const {request}=await setup(t);
@@ -144,6 +166,27 @@ test('force save with no changes succeeds immediately without polling',async t=>
  const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
  assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true,unchanged:true});
  assert.equal(statements.filter(s=>s.sql.startsWith('select * from public.office_documents')).length,1);
+});
+
+test('unchanged force save clears the old failure and allows generation again',async t=>{
+ const current={...doc,last_save_error:'Old failure',last_save_error_at:'2026-10-28T09:00:00Z'};
+ const {request}=await setup(t,{commandResult:{error:4},documentAtRead:()=>current,clearSaveError:args=>{
+  assert.deepEqual(args,[current.id,current.version,current.storage_path,current.last_save_error,current.last_save_error_at]);
+  current.last_save_error=null;current.last_save_error_at=null;
+  return [{id:current.id}];
+ }});
+ const headers={Authorization:'Bearer employee'};
+ assert.equal((await request(`/documents/${documentId}/generate`,{method:'POST',headers})).status,409);
+ const r=await request(`/documents/${documentId}/save`,{method:'POST',headers});
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true,unchanged:true});
+ assert.equal(current.last_save_error,null);assert.equal(current.last_save_error_at,null);
+ assert.equal((await request(`/documents/${documentId}/generate`,{method:'POST',headers})).status,202);
+});
+
+test('unchanged force save does not clear a concurrent callback failure',async t=>{
+ const previous={...doc,last_save_error:'Same failure',last_save_error_at:'2026-10-28T09:00:00Z'};
+ const {request}=await setup(t,{commandResult:{error:4},documentAtRead:n=>n===1 ? previous : {...previous,last_save_error_at:'2026-10-28T09:01:00Z'},clearSaveError:()=>[]});
+ assert.equal((await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}})).status,502);
 });
 
 test('force save notices document deletion while awaiting a callback',async t=>{

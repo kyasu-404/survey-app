@@ -6,6 +6,7 @@ import {
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
+  preparePersonalResponseUploads,
 } from "./storage";
 import { publicSupabaseClient, supabaseClient } from "./client";
 import { SUPABASE_URL } from "../config/env";
@@ -64,14 +65,15 @@ describe("storage api", () => {
     });
     vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) } as never);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("file")));
-    const options = { allowAnonymous: true, browserId, formId, restoreDraft: true };
+    const personalToken = "30000000-0000-4000-8000-000000000000";
+    const options = { allowAnonymous: true, browserId, formId, restoreDraft: true, personalToken };
     await uploadFileToStorage(formId, new File(["file"], "file.txt"), options);
     await resolveSurveyFileValueContent({ content: path }, options);
     await removeFileFromStorage(path, options);
     const bodies = vi.mocked(publicSupabaseClient.functions.invoke).mock.calls.map(([, options]) => options?.body);
     expect(bodies).toEqual([
-      expect.objectContaining({ action: "reserve-upload", browserId }),
-      expect.objectContaining({ action: "restore-upload", browserId }),
+      expect.objectContaining({ action: "reserve-upload", browserId, personalToken }),
+      expect.objectContaining({ action: "restore-upload", browserId, personalToken }),
       expect.objectContaining({ action: "delete-upload", browserId }),
     ]);
   });
@@ -85,6 +87,23 @@ describe("storage api", () => {
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) } }));
     expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/sign/survey-files/${path}?token=short-lived`, { signal: expect.any(AbortSignal) });
     expect(publicSupabaseClient.storage.from).not.toHaveBeenCalled();
+  });
+
+  it("prepares nested personal attachments without downloading or depending on previews", async () => {
+    const formId = "10000000-0000-4000-8000-000000000000";
+    const browserId = "20000000-0000-4000-8000-000000000000";
+    const personalToken = "30000000-0000-4000-8000-000000000000";
+    const path = `public/${formId}/legacy.pdf`;
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=test` }, error: null } as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await preparePersonalResponseUploads(formId, { entries: [{ file: [{ content: path }, { path }] }] }, browserId, personalToken);
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledExactlyOnceWith("form-admin", expect.objectContaining({
+      body: { action: "restore-upload", formId, path, browserId, personalToken },
+    }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { error: "Denied" }, error: null } as never);
+    await expect(preparePersonalResponseUploads(formId, { file: [{ content: path }] }, browserId, personalToken)).rejects.toThrow();
   });
 
   it.each([

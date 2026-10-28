@@ -54,6 +54,7 @@ test("section panels save nested questions and render their titles, with require
   await expect(toolbox.getByText("Название раздела", { exact: true })).toBeVisible();
   const headingTitle = "Информационная безопасность";
   await page.getByRole("textbox", { name: "Заголовок панели", exact: true }).fill(headingTitle);
+  await page.getByRole("textbox", { name: "Заголовок панели", exact: true }).press("Tab");
   const tool = await toolbox.getByRole("button", { name: "Текст", exact: true }).boundingBox();
   const target = await page.getByText("Перетащите элемент с панели инструментов", { exact: true }).boundingBox();
   await page.mouse.move(tool!.x + tool!.width / 2, tool!.y + tool!.height / 2);
@@ -65,7 +66,8 @@ test("section panels save nested questions and render their titles, with require
   await toolbox.getByText("Расширенные", { exact: true }).click();
   await toolbox.getByText("Выражение", { exact: true }).click();
   await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
-  await expect.poll(() => form.schema.pages[0].elements[0]?.elements?.length).toBe(1);
+  await expect.poll(() => form.schema.pages[0].elements.find(element => element.type === "panel")
+    ?.elements?.filter(element => element.type === "text").length).toBe(1);
   const elements = form.schema.pages[0].elements;
   const heading = elements.find(element => element.type === "panel")!;
   const expression = [...elements, ...heading.elements!].find(element => element.type === "expression")!;

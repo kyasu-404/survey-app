@@ -10,14 +10,21 @@ test("page titles entered before the first question survive the first save and r
   const titleEditors = designer.getByRole("textbox", { name: "Введите заголовок страницы", exact: true });
   const titles = ["Страница 1", "Страница 2", "Page 3", "Информационная безопасность"];
   for (const [index, title] of titles.entries()) {
-    const editor = index === 0 ? titleEditors.first() : titleEditors.last();
+    // Editing the trailing placeholder creates a page and another placeholder.
+    // Keep targeting that page after SurveyJS updates the editor collection.
+    const editor = titleEditors.nth(index);
     await editor.fill(title);
+    await editor.press("Tab");
     await page.locator(".svc-toolbox").getByText("Текст", { exact: true }).click();
+    await expect(designer.getByRole("textbox", { name: /^вопрос\d+$/, exact: false })).toHaveCount(index + 1);
   }
   // Leave one actual page untitled: its placeholder must never become saved text.
-  await titleEditors.last().fill("Временная страница");
+  await titleEditors.nth(4).fill("Временная страница");
+  await titleEditors.nth(4).press("Tab");
   await page.locator(".svc-toolbox").getByText("Текст", { exact: true }).click();
+  await expect(designer.getByRole("textbox", { name: /^вопрос\d+$/, exact: false })).toHaveCount(5);
   await titleEditors.nth(4).fill("");
+  await titleEditors.nth(4).press("Tab");
   await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
   await expect(page).toHaveURL(/dashboard/);
   expect(form.schema.pages.map(p => p.title ?? "")).toEqual([...titles, ""]);

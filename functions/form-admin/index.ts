@@ -4,7 +4,7 @@ import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
-  | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string }
+  | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string; personalToken?: string }
   | { action: "restore-upload"; formId: string; browserId: string; path: string; personalToken?: string }
   | { action: "delete-upload"; formId: string; browserId: string; path: string }
   | { action: "get-cleanup-status" }
@@ -431,6 +431,7 @@ Deno.serve(async (req) => {
   if (payload.action === "reserve-upload") {
     if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !Number.isSafeInteger(payload.size)
       || payload.size < 0 || payload.size > 10485760 || typeof payload.extension !== "string"
+      || (payload.personalToken !== undefined && !isUuid(payload.personalToken))
       || !/^(\.[a-zA-Z0-9]{1,16})?$/.test(payload.extension)) {
       return errorResponse(req, 400, "Некорректные параметры файла", requestLogContext);
     }
@@ -442,9 +443,10 @@ Deno.serve(async (req) => {
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(supabaseServiceRoleKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(clientIp));
     const clientHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-    const { data: path, error } = await adminClient.rpc("reserve_survey_upload", {
+    const { data: path, error } = await adminClient.rpc(payload.personalToken ? "reserve_personal_survey_upload" : "reserve_survey_upload", {
       p_form_id: payload.formId, p_browser_id: payload.browserId, p_client_hash: clientHash,
       p_size: payload.size, p_extension: payload.extension,
+      ...(payload.personalToken ? { p_token: payload.personalToken } : {}),
     });
     if (error) return errorResponse(req, error.code === "54000" ? 429 : 400, error.message, requestLogContext);
     return jsonResponse(req, 200, { path }, requestLogContext);
@@ -459,6 +461,14 @@ Deno.serve(async (req) => {
     });
     if (error) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", requestLogContext);
     let allowed = browserAllowed === true;
+    if (allowed && isUuid(payload.personalToken)) {
+      // Upgrade existing personal drafts using both capabilities. The local
+      // browser still owns restoration/deletion of its unattached uploads.
+      const { data: bound, error: bindError } = await adminClient.rpc("bind_personal_survey_upload", {
+        p_form_id: payload.formId, p_token: payload.personalToken, p_browser_id: payload.browserId, p_path: payload.path,
+      });
+      if (bindError || bound !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
+    }
     if (!allowed && isUuid(payload.personalToken)) {
       const { data: personalAllowed } = await adminClient.rpc("can_restore_personal_upload", {
         p_form_id: payload.formId, p_token: payload.personalToken, p_path: payload.path,

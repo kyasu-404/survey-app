@@ -25,10 +25,8 @@ export function AppLayout() {
     matchPath({ path, end: false }, location.pathname),
   )?.title ?? "Формы";
   const navigate = useNavigate();
-  const isLoginPage = location.pathname === routes.login;
-  const isSurveyPage = location.pathname.startsWith("/form/");
   const isOfficePage = /^\/forms\/[^/]+\/documents\//.test(location.pathname);
-  const shouldHideSidebar = isLoginPage || isSurveyPage || isOfficePage;
+  const shouldHideSidebar = isOfficePage;
   const isMobile = useMobileLayout();
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [expandedBuilderLocation, setExpandedBuilderLocation] = useState<string | null>(null);

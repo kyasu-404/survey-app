@@ -39,6 +39,7 @@ import {
   getStoragePathFromSurveyFileValue,
   MAX_STORAGE_FILE_SIZE_BYTES,
   getStoragePathsFromResponseData,
+  preparePersonalResponseUploads,
   removeFileFromStorage,
   resolveSurveyFileValueContent,
   uploadFileToStorage,
@@ -455,7 +456,7 @@ export function SurveyFormRenderer({
       setFileError(null);
       try {
         for (const file of options.files) {
-          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current }));
+          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current, personalToken }));
         }
 
         // Register all originals before SurveyJS requests their previews. The
@@ -523,6 +524,9 @@ export function SurveyFormRenderer({
 
       try {
         const payload = createSubmitPayload(formId, sender.data as Record<string, unknown>);
+        if (personalToken) {
+          await preparePersonalResponseUploads(formId, payload.answers, browserIdRef.current, personalToken);
+        }
 
         if (isEditingResponse && savedResponse) {
           const previousPaths = new Set(getStoragePathsFromResponseData(savedResponse.data));

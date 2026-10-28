@@ -8,6 +8,48 @@ const organizations = [
 ];
 const elements = [{ type: "organization", name: "org", title: "Организация", isRequired: true }, { type: "text", name: "answer", title: "Ответ", isRequired: true }];
 
+test("a legacy personal draft with disabled file previews binds its upload before submission", async ({ page }) => {
+  const organization = organizations[0];
+  const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 0, elements: [
+    elements[0], { type: "file", name: "file", title: "Файл", ...{ showPreview: false } },
+  ] });
+  const path = `public/${formId}/60000000-0000-4000-8000-000000000001.pdf`;
+  let restorations = 0;
+  let submissions = 0;
+  await page.route("**/rest/v1/rpc/*personal_form*", route => {
+    const body = route.request().postDataJSON();
+    if (route.request().url().endsWith("get_personal_form_context")) return route.fulfill({ json: organization });
+    if (route.request().url().endsWith("get_personal_form_response_status")) return route.fulfill({ json: [] });
+    expect(restorations).toBe(1);
+    expect(body.p_token).toBe(organization.token);
+    expect(body.p_data.file[0].content).toBe(path);
+    submissions++;
+    return route.fulfill({ json: [{ status: "submitted", response_id: "legacy-personal", response_data: body.p_data, response_editable: false }] });
+  });
+  await page.route("**/functions/v1/form-admin", route => {
+    const body = route.request().postDataJSON();
+    expect(body.action).toBe("restore-upload");
+    expect(body.personalToken).toBe(organization.token);
+    expect(body.browserId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.path).toBe(path);
+    restorations++;
+    return route.fulfill({ json: { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=bound` } });
+  });
+  await page.evaluate(({ formId, organization, path }) => {
+    sessionStorage.setItem(`survey-response:draft:10000000-0000-4000-8000-000000000001:${formId}:organization:${organization.id}`,
+      JSON.stringify({ updatedAt: new Date().toISOString(), data: {
+        org: organization.id, file: [{ name: "legacy.pdf", type: "application/pdf", content: path }],
+      } }));
+  }, { formId, organization, path });
+  await page.goto(`/form/${formId}#personal=${organization.token}`);
+  await expect(page.getByRole("button", { name: "Отправить", exact: true })).toBeVisible();
+  expect(restorations).toBe(0);
+  await page.getByRole("button", { name: "Отправить", exact: true }).click();
+  await expect.poll(() => submissions).toBe(1);
+  await expect(page.getByText("Спасибо за Ваш ответ!")).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
 for (const width of [1440, 320]) {
   test(`personal links generation and XLSX at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 950 });

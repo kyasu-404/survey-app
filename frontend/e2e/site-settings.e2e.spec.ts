@@ -13,6 +13,7 @@ for(const width of [1440,390,320]) {
   await page.route("**/rest/v1/app_branding?*",route=>route.fulfill({json:{sidebar_logo_path:null,updated_at:null}}));
   await page.route("**/functions/v1/mail-admin",route=>route.fulfill({json:{settings:null}}));
   await page.route("**/functions/v1/form-admin",route=>route.fulfill({json:{retentionHours:168,lastRun:null}}));
+  await page.route("**/api/office/settings",route=>route.fulfill({json:{enabled:false,has_secret:false}}));
   await page.route("**/storage/v1/object/public/app-favicons/*",route=>route.fulfill({contentType:"image/png",body:readFileSync('src/img/favicon.png')}));
   await page.route("**/functions/v1/app-settings",route=>{
    const body=route.request().postDataJSON();
@@ -60,7 +61,7 @@ for(const width of [1440,390,320]) {
   expect(pageErrors).toEqual([]);
  });
 }
-test('administrator who is not the author cannot see personalized sharing or open coverage',async({page})=>{
+test('administrator who is not the author can read coverage without personalized sharing or reminder actions',async({page})=>{
  const {form,formId,pageErrors}=await openSurveyApp(page,{responseCount:1,elements:[{type:'organization',name:'org',title:'Организация'}]});
  form.author_id='10000000-0000-4000-8000-000000000002';
  await page.route('**/rest/v1/rpc/list_forms_keyset?*',route=>route.fulfill({json:[form]}));
@@ -70,5 +71,11 @@ test('administrator who is not the author cannot see personalized sharing or ope
  await expect(dialog.getByRole('textbox',{name:'Ссылка на форму'})).toBeVisible();
  await dialog.getByRole('button',{name:'Закрыть окно поделиться'}).click();
  await page.goto(`/dashboard/forms/${formId}/responses`);await page.getByRole('button',{name:'Отчёт',exact:true}).click();
- await expect(page.getByRole('tab',{name:'Учёт сдавших'})).toBeDisabled();expect(pageErrors).toEqual([]);
+ const report=page.getByRole('dialog',{name:'Отчёт по ответам'});
+ await expect(report.getByRole('tab',{name:'Учёт сдавших'})).toBeEnabled();
+ await report.getByRole('tab',{name:'Учёт сдавших'}).click();
+ await expect(report.getByRole('heading',{name:'Статус сдачи'})).toBeVisible();
+ await expect(report.getByRole('button',{name:'Отправить напоминание'})).toHaveCount(0);
+ await expect(report.getByRole('button',{name:'Статусы отправки'})).toHaveCount(0);
+ expect(pageErrors).toEqual([]);
 });

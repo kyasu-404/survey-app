@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Model, type QuestionCustomModel, type QuestionDropdownModel, type QuestionPanelDynamicModel } from "survey-core";
+import { EventBase, Model, type QuestionCustomModel, type QuestionDropdownModel, type QuestionPanelDynamicModel } from "survey-core";
 import { registerCustomSurveyQuestionTypes } from "../survey/model/surveyQuestionTypes";
 import { applyOrganizationChoicesToSurvey, lockPersonalOrganization } from "./surveyQuestion";
 
@@ -8,8 +8,10 @@ describe("applyOrganizationChoicesToSurvey", () => {
     const organizationContent = { choices: [] as Array<{ value: string; text: string }> };
     const regularContent = { choices: [{ value: "keep", text: "Keep" }] };
     const model = {
+      onQuestionCreated: new EventBase(),
+      onValueChanged: new EventBase(),
       getAllQuestions: () => [
-        { getType: () => "organization", contentQuestion: organizationContent },
+        { getType: () => "organization", getValueName: () => "org", contentQuestion: organizationContent },
         { getType: () => "dropdown", contentQuestion: regularContent },
       ],
     } as unknown as Model;
@@ -25,6 +27,41 @@ describe("applyOrganizationChoicesToSurvey", () => {
     ]);
     expect(regularContent.choices).toEqual([{ value: "keep", text: "Keep" }]);
   });
+});
+
+it("keeps archives at their saved valueName and dynamic entry paths when editing is opened later", async () => {
+  registerCustomSurveyQuestionTypes();
+  const model = new Model({ elements: [
+    { type: "organization", name: "root", valueName: "institution" },
+    { type: "paneldynamic", name: "entries", valueName: "records", templateElements: [
+      { type: "panel", name: "details", elements: [{ type: "organization", name: "org", valueName: "institution" }] },
+      { type: "paneldynamic", name: "children", templateElements: [{ type: "organization", name: "nested" }] },
+    ] },
+  ] });
+  const savedData = { institution: "archive-1", records: [
+    { institution: "archive-2", children: [{ nested: "archive-1" }] },
+    { institution: "active" },
+  ] };
+  const active = [{ id: "active", organization_type: "school" as const, number: "1", alias: "School" }];
+  const archived = [1, 2].map(i => ({ id: `archive-${i}`, organization_type: "school" as const, number: String(i + 1), alias: "School" }));
+  applyOrganizationChoicesToSurvey(model, active, archived, savedData);
+  model.data = savedData;
+  await Promise.resolve();
+  const entries = model.getQuestionByName("entries") as QuestionPanelDynamicModel;
+  expect(model.getQuestionByName("root").displayValue).toBe("School 2");
+  expect(entries.panels[0].getQuestionByName("org").displayValue).toBe("School 3");
+  const children = entries.panels[0].getQuestionByName("children") as QuestionPanelDynamicModel;
+  expect(children.panels[0].getQuestionByName("nested").displayValue).toBe("School 2");
+  expect(((entries.panels[1].getQuestionByName("org") as QuestionCustomModel).contentQuestion as QuestionDropdownModel).choices.map(c => c.value)).toEqual(["active"]);
+  entries.addPanel();
+  const added = entries.panels[2].getQuestionByName("org") as QuestionCustomModel;
+  expect((added.contentQuestion as QuestionDropdownModel).choices.map(c => c.value)).toEqual(["active"]);
+  // Repeated directory loads must update the single creation handler.
+  applyOrganizationChoicesToSurvey(model, [{ ...active[0], id: "updated" }], archived, savedData);
+  children.addPanel();
+  const nestedAdded = children.panels[1].getQuestionByName("nested") as QuestionCustomModel;
+  expect((nestedAdded.contentQuestion as QuestionDropdownModel).choices.map(c => c.value)).toEqual(["updated"]);
+  model.dispose();
 });
 
 it("keeps a saved archive readable and selectable only in its original question", () => {

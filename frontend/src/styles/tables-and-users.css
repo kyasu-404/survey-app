@@ -230,9 +230,10 @@ button.dashboard-qr-download-button:focus-visible {
 }
 
 .responses-table .responses-table-date-column {
-  width: 10ch;
-  min-width: 10ch;
-  max-width: 10ch;
+  /* Cells use border-box: leave room for both horizontal paddings and borders. */
+  width: calc(10ch + 26px);
+  min-width: calc(10ch + 26px);
+  max-width: none;
   white-space: normal;
 }
 
@@ -366,7 +367,8 @@ button.dashboard-qr-download-button:focus-visible {
 
 .responses-table-date-cell {
   display: grid;
-  width: 10ch;
+  width: max-content;
+  font-variant-numeric: tabular-nums;
   line-height: 1.25;
 }
 

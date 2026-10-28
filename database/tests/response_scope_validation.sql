@@ -66,6 +66,9 @@ do $$ declare s jsonb; payload jsonb; begin
   assert not public.response_data_matches_form(s,array['school'],null), 'SQL NULL accepted';
   assert not public.response_data_matches_form(s,array['school'],'null'), 'JSON NULL accepted';
   assert public.response_data_matches_form('{"elements":[{"type":"paneldynamic","name":"empty","templateElements":[]}]}',array['school'],'{"empty":[{}]}');
+  assert public.response_data_matches_form('{"pages":null,"elements":[{"type":"paneldynamic","name":"empty","templateElements":null}]}',array['school'],'{"empty":[{}]}');
+  assert public.response_data_matches_form('{"pages":[{"elements":null}]}',array['school'],'{}');
+  assert (select count(*)=1 from public.survey_response_bindings('{"elements":[{"type":"paneldynamic","name":"entries","templateElements":[{"name":"omittedType"}]}]}','{"entries":[{}]}'));
   assert not public.response_data_matches_form('{"elements":[{"type":"paneldynamic","name":"empty","templateElements":[]}]}',array['school'],'{"empty":[{"foreign":1}]}');
 end $$;
 

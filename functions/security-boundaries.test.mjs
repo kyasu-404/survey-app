@@ -13,8 +13,8 @@ function handlerFor(name, environment = {}, client = {}) {
     { env: { get: key => env[key] }, serve: callback => { handler = callback; } },
     () => client, webcrypto, { info() {}, error() {} },
   );
-  return (origin, method = "OPTIONS", payload = {}) => handler(new Request("https://api.test/functions", {
-    method, headers: origin === null ? {} : { Origin: origin },
+  return (origin, method = "OPTIONS", payload = {}, headers = {}) => handler(new Request("https://api.test/functions", {
+    method, headers: { ...(origin === null ? {} : { Origin: origin }), ...headers },
     ...(method === "POST" ? { body: JSON.stringify(payload) } : {}),
   }));
 }
@@ -79,6 +79,46 @@ test("delete-upload denies missing/foreign capabilities and lookup failure befor
     });
     assert.equal(response.status, status);
     assert.ok(effects.every(effect => effect.name === "can_restore_survey_upload"));
+  }
+});
+
+test("reserve-upload routes personal tokens to the atomic personal reservation RPC", async () => {
+  for (const personalToken of [undefined, browserId, "invalid"]) {
+    const calls = [];
+    const client = { rpc: async (name, args) => { calls.push({ name, args }); return { data: path }; } };
+    const response = await handlerFor("form-admin", {}, client)(null, "POST", {
+      action: "reserve-upload", formId, browserId, size: 1, extension: ".txt", personalToken,
+    }, { "x-survey-client-ip": "127.0.0.1" });
+    assert.equal(response.status, personalToken === "invalid" ? 400 : 200);
+    if (personalToken === "invalid") { assert.deepEqual(calls, []); continue; }
+    assert.equal(calls[0].name, personalToken ? "reserve_personal_survey_upload" : "reserve_survey_upload");
+    assert.equal(calls[0].args.p_browser_id, browserId);
+    assert.equal(calls[0].args.p_token, personalToken);
+    assert.match(calls[0].args.p_client_hash, /^[a-f0-9]{64}$/);
+  }
+});
+
+test("restoring an existing personal draft binds both capabilities before signing", async () => {
+  for (const bound of [true, false]) {
+    const calls = [];
+    const client = {
+      rpc: async (name, args) => {
+        calls.push({ name, args });
+        return { data: name === "can_restore_survey_upload" ? true : bound };
+      },
+      storage: { from: () => ({ createSignedUrl: async () => {
+        calls.push({ name: "sign" });
+        return { data: { signedUrl: `https://api.test/storage/v1/object/sign/survey-files/${path}?token=test` } };
+      } }) },
+    };
+    const response = await handlerFor("form-admin", {}, client)(null, "POST", {
+      action: "restore-upload", formId, browserId, path, personalToken: browserId,
+    });
+    assert.equal(response.status, bound ? 200 : 410);
+    assert.deepEqual(calls[1], { name: "bind_personal_survey_upload", args: {
+      p_form_id: formId, p_token: browserId, p_browser_id: browserId, p_path: path,
+    } });
+    assert.equal(calls.some(c => c.name === "sign"), bound);
   }
 });
 

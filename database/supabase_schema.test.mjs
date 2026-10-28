@@ -553,7 +553,14 @@ test("public response payloads are checked against the form schema and organizat
 
 test("the scope validation migration installs the same functions as a fresh database", () => {
   const migration = readFileSync(new URL("./migrations/202610270900_response_scope_validation.sql", import.meta.url), "utf8");
-  for (const name of ["survey_response_bindings", "survey_organization_values", "response_data_matches_form", "validate_response_payload", "list_saved_form_organizations"]) {
+  for (const name of ["survey_organization_values", "response_data_matches_form", "validate_response_payload", "list_saved_form_organizations"]) {
+    assert.ok(migration.includes(getFunctionDefinition(name)), name);
+  }
+});
+
+test("attachment ownership migration matches bootstrap traversal, trigger and personal reservation helpers", () => {
+  const migration = readFileSync(new URL("./migrations/202610281600_response_attachment_ownership.sql", import.meta.url), "utf8");
+  for (const name of ["survey_response_bindings", "sync_response_file_references", "reserve_personal_survey_upload", "bind_personal_survey_upload"]) {
     assert.ok(migration.includes(getFunctionDefinition(name)), name);
   }
 });

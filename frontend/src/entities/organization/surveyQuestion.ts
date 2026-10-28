@@ -3,6 +3,22 @@ import { getOrganizationDisplayName, ORGANIZATION_QUESTION_TYPE } from "./model"
 import type { SelectableOrganization } from "./types";
 
 const personalOrganizationLocks = new WeakMap<Model, SelectableOrganization>();
+const organizationChoiceHandlers = new WeakMap<Model, (question: Question) => void>();
+
+function savedQuestionValue(question: Question, savedData: Record<string, unknown>): unknown {
+  const path = [question.getValueName()];
+  let current = question;
+  while (current.parentQuestion?.getType() === "paneldynamic") {
+    const parent = current.parentQuestion as QuestionPanelDynamicModel;
+    const index = parent.panels.findIndex(panel => panel.containsElement(current));
+    if (index < 0) return undefined; // Template questions have no saved entry.
+    path.unshift(parent.getValueName(), String(index));
+    current = parent;
+  }
+  return path.reduce<unknown>((value, name) => (
+    value && typeof value === "object" ? (value as Record<string, unknown>)[name] : undefined
+  ), savedData);
+}
 
 function protectPersonalOrganizationValue(question: Question | null | undefined, value: unknown, organizationId: string): unknown {
   if (question?.getType() === ORGANIZATION_QUESTION_TYPE) return organizationId;
@@ -33,17 +49,27 @@ export function applyOrganizationChoicesToSurvey(
     text: getOrganizationDisplayName(organization),
   }));
 
-  model.getAllQuestions(false, false, true).forEach((question) => {
+  const applyChoices = (question: Question) => {
     if (question.getType() !== ORGANIZATION_QUESTION_TYPE) {
       return;
     }
 
     const contentQuestion = (question as QuestionCustomModel).contentQuestion as QuestionDropdownModel;
-    const savedOrganization = savedOrganizations.find((organization) => organization.id === savedData[question.name]);
+    const savedValue = savedQuestionValue(question, savedData);
+    const savedOrganization = savedOrganizations.find((organization) => organization.id === savedValue);
     contentQuestion.choices = savedOrganization && !organizations.some((organization) => organization.id === savedOrganization.id)
       ? [...choices, { value: savedOrganization.id, text: getOrganizationDisplayName(savedOrganization) }]
       : choices;
-  });
+  };
+  if (!organizationChoiceHandlers.has(model)) {
+    model.onQuestionCreated.add((_sender, { question }) => {
+      organizationChoiceHandlers.get(model)?.(question);
+      // SurveyJS assigns dynamic parents after firing onQuestionCreated.
+      queueMicrotask(() => organizationChoiceHandlers.get(model)?.(question));
+    });
+  }
+  organizationChoiceHandlers.set(model, applyChoices);
+  model.getAllQuestions(false, false, true).forEach(applyChoices);
 }
 
 /** Applies after drafts and before render; the server independently checks the binding. */
