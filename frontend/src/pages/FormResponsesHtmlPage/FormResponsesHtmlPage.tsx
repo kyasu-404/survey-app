@@ -18,7 +18,7 @@ import {
   createResponsesHtmlReport,
   downloadHtmlDocument,
   formatResponsesForTable,
-} from "../../shared/lib/responsesExport";
+} from "../../entities/response/lib/responsesExport";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { RESPONSES_HTML_LAYOUT_CSS } from "../../shared/lib/responsesHtmlLayout";
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SurveySchema } from "../../entities/survey/types";
-import { formatResponsesForTable, createResponsesHtmlDocument, getResponseAnswerColumns, getResponsesPrintBlocks } from "./responsesExport";
-import { createResponseReport } from "./responseReport";
+import { formatResponsesForTable, createResponsesHtmlDocument, getResponseAnswerColumns, getResponsesPrintBlocks } from "../../entities/response/lib/responsesExport";
+import { createResponseReport } from "../../entities/response/lib/responseReport";
 import { createExcelWorkbook } from "./export";
 
 const schema: SurveySchema = { pages: [

@@ -8,7 +8,7 @@ const { prepareFormMail, previewFormMail, queueFormInvitations, queueFormReminde
   prepareFormMail: vi.fn(), previewFormMail: vi.fn(), queueFormInvitations: vi.fn(), queueFormReminders: vi.fn(),
 }));
 vi.mock("../../entities/mail/api", () => ({ prepareFormMail, previewFormMail, queueFormInvitations, queueFormReminders }));
-vi.mock("../../pages/FormResponsesPage/MailDeliveryPanel", () => ({ MailDeliveryPanel: () => <p>Журнал доставки</p> }));
+vi.mock("./MailDeliveryPanel", () => ({ MailDeliveryPanel: () => <p>Журнал доставки</p> }));
 const recipients = [1, 2].map(n => ({ id: `org${n}`, name: `Школа ${n}`, email: `org${n}@test.ru`, organizationType: "school", canSend: true }));
 const composition = { personal: true, smtpEnabled: true, template: { subject: "Форма", bodyText: "Заполните {Ссылка}" }, recipients };
 function mount(kind: "invitation" | "reminder" = "invitation") {

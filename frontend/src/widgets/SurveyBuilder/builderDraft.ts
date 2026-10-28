@@ -1,7 +1,7 @@
 import type { ITheme } from "survey-core";
-import type { SurveySchema } from "../../entities/survey/types";
 import { sanitizeSurveySchema } from "../../entities/survey/model/surveySchemaSecurity";
 import { resolveSurveyTheme, sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
+import type { SurveySchema } from "../../entities/survey/types";
 
 const BUILDER_DRAFT_STORAGE_PREFIX = "survey-builder:draft";
 const BUILDER_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,15 +33,12 @@ export function loadSurveyBuilderDraft(userId: string, formId?: string): SurveyB
     return null;
   }
 
-  // Never restore drafts created before owner scoping was introduced.
-  window.localStorage.removeItem(getLegacySurveyBuilderDraftStorageKey(formId));
   const storageKey = getSurveyBuilderDraftStorageKey(userId, formId);
-  const rawDraft = window.localStorage.getItem(storageKey);
-  if (!rawDraft) {
-    return null;
-  }
-
   try {
+    // Never restore drafts created before owner scoping was introduced.
+    window.localStorage.removeItem(getLegacySurveyBuilderDraftStorageKey(formId));
+    const rawDraft = window.localStorage.getItem(storageKey);
+    if (!rawDraft) return null;
     const parsedDraft = JSON.parse(rawDraft) as BuilderDraftPayload;
     const updatedAt = Date.parse(parsedDraft.updatedAt);
     if (
@@ -60,7 +57,7 @@ export function loadSurveyBuilderDraft(userId: string, formId?: string): SurveyB
     };
   } catch (error) {
     console.warn("Не удалось восстановить черновик конструктора", error);
-    window.localStorage.removeItem(storageKey);
+    clearSurveyBuilderDraft(userId, formId);
   }
 
   return null;
@@ -77,15 +74,19 @@ export function saveSurveyBuilderDraft(
     return;
   }
 
-  const payload: BuilderDraftPayload = {
-    schema: sanitizeSurveySchema(schema),
-    theme: sanitizeSurveyTheme(theme),
-    ...(assetFormId ? { assetFormId } : {}),
-    ownerId: userId,
-    updatedAt: new Date().toISOString(),
-  };
+  try {
+    const payload: BuilderDraftPayload = {
+      schema: sanitizeSurveySchema(schema),
+      theme: sanitizeSurveyTheme(theme),
+      ...(assetFormId ? { assetFormId } : {}),
+      ownerId: userId,
+      updatedAt: new Date().toISOString(),
+    };
 
-  window.localStorage.setItem(getSurveyBuilderDraftStorageKey(userId, formId), JSON.stringify(payload));
+    window.localStorage.setItem(getSurveyBuilderDraftStorageKey(userId, formId), JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Не удалось сохранить черновик конструктора", error);
+  }
 }
 
 export function clearSurveyBuilderDraft(userId: string, formId?: string) {
@@ -93,6 +94,10 @@ export function clearSurveyBuilderDraft(userId: string, formId?: string) {
     return;
   }
 
-  window.localStorage.removeItem(getSurveyBuilderDraftStorageKey(userId, formId));
-  window.localStorage.removeItem(getLegacySurveyBuilderDraftStorageKey(formId));
+  try {
+    window.localStorage.removeItem(getSurveyBuilderDraftStorageKey(userId, formId));
+    window.localStorage.removeItem(getLegacySurveyBuilderDraftStorageKey(formId));
+  } catch (error) {
+    console.warn("Не удалось удалить черновик конструктора", error);
+  }
 }

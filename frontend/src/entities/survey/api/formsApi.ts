@@ -1,0 +1,844 @@
+import { apiClient, publicApiClient, supabaseClient } from "../../../shared/api/client";
+import { applyDeadlineStatePatch, buildDeadlineUpdatePayload, getDeadlineStatePatch } from "../model/deadlineState";
+import { TEMPLATE_FORM_TYPE } from "../model/surveyModel";
+import { resolveSurveyTheme, sanitizeSurveyTheme } from "../model/surveyTheme";
+import {
+  DEFAULT_FORM_ORGANIZATION_TYPES,
+  normalizeOrganizationTypes,
+} from "../../organization/model";
+import type { OrganizationType } from "../../organization/types";
+import type { ITheme } from "survey-core";
+import type {
+  DashboardFormsStats,
+  FormsCursor,
+  FormsSort,
+  PaginatedSurveyFormSummaries,
+  SurveyForm,
+  SurveyFormSummary,
+  SurveySchema,
+} from "../types";
+import { runRequest } from "../../../shared/api/request";
+import {
+  createSurveyAssetFormId,
+  getSurveyThemeAssetPaths,
+  materializeSurveyThemeAssets,
+  removeSurveyAssetPaths,
+  resolveSurveyThemeAssetUrls,
+  serializeSurveyThemeAssetUrls,
+} from "./themeAssets";
+
+export type FormsFilters = {
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  authorId?: string;
+  formType?: string;
+  formReason?: string;
+  isPublic?: boolean;
+};
+
+export type SchemaUpdateResult = {
+  status: "updated" | "confirmation_required" | "blocked";
+  safeChanges: string[];
+  warnings: string[];
+  breakingChanges: string[];
+};
+
+type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
+  responses_count?: number | null;
+  allow_response_editing?: boolean | null;
+  organization_types?: OrganizationType[] | null;
+};
+
+type RawFormSummary = Pick<
+  SurveyFormSummary,
+  "id" | "title" | "form_type" | "form_reason" | "is_public" | "author_id" | "author_name" | "created_at"
+> &
+  Partial<Pick<SurveyFormSummary, "deadline_at" | "max_responses">> & {
+  responses_count?: number | null;
+};
+
+type RawDashboardFormsStats = {
+  total_count?: number | string | null;
+  active_count?: number | string | null;
+  forms_with_deadline_count?: number | string | null;
+};
+
+type FetchFormsPageOptions = {
+  sort?: FormsSort;
+  pageSize: number;
+  cursor?: FormsCursor | null;
+  filters?: FormsFilters;
+  signal?: AbortSignal;
+};
+
+type RequestSignalOptions = {
+  signal?: AbortSignal;
+};
+
+const DASHBOARD_FORMS_SUMMARY_SELECT = `
+  id,
+  title,
+  form_type,
+  form_reason,
+  is_public,
+  deadline_at,
+  max_responses,
+  author_id,
+  author_name,
+  created_at,
+  responses_count
+`;
+
+const TEMPLATE_FORMS_SUMMARY_SELECT = `
+  id,
+  title,
+  form_type,
+  form_reason,
+  is_public,
+  author_id,
+  author_name,
+  created_at
+`;
+
+const DASHBOARD_FORMS_STATS_RPC = "get_dashboard_forms_stats";
+
+function normalizeFormsPageSize(pageSize: number) {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 999) {
+    throw new Error("Размер страницы должен быть целым числом от 1 до 999");
+  }
+  return pageSize;
+}
+
+function buildFormsCursorParams(cursor?: FormsCursor | null) {
+  // Omit nullable GET arguments to use SQL defaults on the first page.
+  return cursor ? { p_before_created_at: cursor.createdAt, p_before_id: cursor.id } : {};
+}
+
+function createPaginatedFormSummaries(
+  forms: SurveyFormSummary[],
+  pageSize: number,
+): PaginatedSurveyFormSummaries {
+  const hasMore = forms.length > pageSize;
+  const items = forms.slice(0, pageSize);
+  const loadedCountLowerBound = items.length + (hasMore ? 1 : 0);
+
+  return {
+    hasMore,
+    items,
+    totalCount: loadedCountLowerBound,
+  };
+}
+
+async function getFunctionErrorMessage(error: unknown, response?: Response): Promise<string> {
+  const errorResponse = response ?? (error instanceof Error && "context" in error ? error.context : undefined);
+
+  if (errorResponse instanceof Response) {
+    const contentType = errorResponse.headers.get("Content-Type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      const payload: unknown = await errorResponse
+        .clone()
+        .json()
+        .catch((): null => null);
+      const message =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof payload.error === "string"
+          ? payload.error.trim()
+          : "";
+
+      if (message) {
+        return message;
+      }
+    }
+  }
+
+  return error instanceof Error && error.message.trim() ? error.message : "Не удалось удалить форму";
+}
+
+function resolveInitialPublicationState(formType: string, isPublic?: boolean) {
+  if (typeof isPublic === "boolean") {
+    return isPublic;
+  }
+
+  return formType === "template" ? false : true;
+}
+
+function normalizeMaxResponses(maxResponses?: number | null) {
+  return typeof maxResponses === "number" && Number.isFinite(maxResponses)
+    ? Math.max(1, Math.trunc(maxResponses))
+    : null;
+}
+
+function isSchemaUpdateResult(value: unknown): value is SchemaUpdateResult {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Partial<SchemaUpdateResult>;
+
+  return (
+    (result.status === "updated" || result.status === "confirmation_required" || result.status === "blocked")
+    && Array.isArray(result.safeChanges)
+    && result.safeChanges.every((item) => typeof item === "string")
+    && Array.isArray(result.warnings)
+    && result.warnings.every((item) => typeof item === "string")
+    && Array.isArray(result.breakingChanges)
+    && result.breakingChanges.every((item) => typeof item === "string")
+  );
+}
+
+function syncFetchedDeadlineState<T extends Pick<SurveyForm, "deadline_at" | "form_type" | "is_public">>(form: T): T {
+  const deadlineStatePatch = getDeadlineStatePatch(form);
+
+  if (!deadlineStatePatch) {
+    return form;
+  }
+
+  return applyDeadlineStatePatch(form, deadlineStatePatch);
+}
+
+function syncFetchedResponseLimitState<
+  T extends Pick<SurveyForm, "is_public"> & Partial<Pick<SurveyForm, "max_responses" | "responses_count">>,
+>(form: T): T {
+  const maxResponses = form.max_responses;
+  const responsesCount = form.responses_count ?? 0;
+
+  if (typeof maxResponses === "number" && maxResponses > 0 && responsesCount >= maxResponses) {
+    return {
+      ...form,
+      is_public: false,
+    };
+  }
+
+  return form;
+}
+
+function syncFetchedFormState<
+  T extends Pick<SurveyForm, "deadline_at" | "form_type" | "is_public"> &
+    Partial<Pick<SurveyForm, "max_responses" | "responses_count">>,
+>(form: T): T {
+  return syncFetchedResponseLimitState(syncFetchedDeadlineState(form));
+}
+
+function mapRawForm(form: RawForm): SurveyForm {
+  return {
+    ...form,
+    theme: resolveSurveyTheme(resolveSurveyThemeAssetUrls(form.theme)),
+    author_email: null,
+    author_name: form.author_name ?? null,
+    responses_count: form.responses_count ?? 0,
+    allow_response_editing: form.allow_response_editing ?? false,
+    organization_types: normalizeOrganizationTypes(form.organization_types),
+  };
+}
+
+function mapRawFormSummary(form: RawFormSummary): SurveyFormSummary {
+  return {
+    ...form,
+    deadline_at: form.deadline_at ?? null,
+    author_email: null,
+    author_name: form.author_name ?? null,
+    responses_count: form.responses_count ?? 0,
+  };
+}
+
+function normalizeSearchValue(search: string) {
+  return search.trim().replace(/[,()]/g, " ");
+}
+
+function toCount(value: number | string | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function buildDashboardStatsParams(filters?: FormsFilters) {
+  const search = filters?.search ? normalizeSearchValue(filters.search) : "";
+
+  return {
+    p_author_id: filters?.authorId ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_form_reason: filters?.formReason ?? null,
+    p_form_type: filters?.formType ?? null,
+    p_is_public: filters?.isPublic ?? null,
+    p_search: search || null,
+  };
+}
+
+function applyFormsFilters<TQuery extends {
+  or: (filter: string) => TQuery;
+  gte: (column: string, value: string) => TQuery;
+  lte: (column: string, value: string) => TQuery;
+  eq: (column: string, value: string | boolean) => TQuery;
+}>(query: TQuery, filters?: FormsFilters) {
+  const normalizedSearch = filters?.search ? normalizeSearchValue(filters.search) : "";
+
+  if (normalizedSearch) {
+    const wildcard = `%${normalizedSearch.replace(/[\\%_]/g, "\\$&")}%`;
+    // Quote PostgREST values separately from escaping SQL LIKE metacharacters.
+    const quoted = `"${wildcard.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    query = query.or(`title.ilike.${quoted},author_name.ilike.${quoted}`);
+  }
+
+  if (filters?.dateFrom) {
+    query = query.gte("created_at", filters.dateFrom);
+  }
+
+  if (filters?.dateTo) {
+    query = query.lte("created_at", filters.dateTo);
+  }
+
+  if (filters?.authorId) {
+    query = query.eq("author_id", filters.authorId);
+  }
+
+  if (filters?.formType) {
+    query = query.eq("form_type", filters.formType);
+  }
+
+  if (filters?.formReason) {
+    query = query.eq("form_reason", filters.formReason);
+  }
+
+  if (typeof filters?.isPublic === "boolean") {
+    if (filters.formType === TEMPLATE_FORM_TYPE) {
+      return query.eq("is_public", filters.isPublic);
+    }
+    const now = new Date().toISOString();
+    query = filters.isPublic
+      ? query.eq("is_public", true).or(`deadline_at.is.null,deadline_at.gt.${now}`)
+      : query.or(`is_public.eq.false,deadline_at.lte.${now}`);
+  }
+
+  return query;
+}
+
+function applyAbortSignal<TQuery>(query: TQuery, signal?: AbortSignal): TQuery {
+  if (!signal) {
+    return query;
+  }
+
+  const abortableQuery = query as TQuery & {
+    abortSignal?: (signal: AbortSignal) => TQuery;
+  };
+
+  return typeof abortableQuery.abortSignal === "function" ? abortableQuery.abortSignal(signal) : query;
+}
+
+async function getAuthenticatedUserId(): Promise<string> {
+  const {
+    data: { user },
+    error,
+  } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user?.id) {
+    throw new Error("Пользователь не авторизован");
+  }
+
+  return user.id;
+}
+
+export async function fetchForms(filters?: FormsFilters, options: RequestSignalOptions = {}): Promise<SurveyForm[]> {
+  let query = apiClient
+    .from("forms")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+  query = applyFormsFilters(query, filters);
+
+  const { data, error } = await runRequest(
+    "forms.fetchList",
+    (signal) => applyAbortSignal(query, signal),
+    {
+      signal: options.signal,
+      context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
+    },
+  );
+  if (error) throw error;
+
+  const forms = ((data ?? []) as RawForm[]).map(mapRawForm);
+
+  return forms.map((form) => syncFetchedFormState(form));
+}
+
+export async function fetchDashboardFormsPage(
+  options: FetchFormsPageOptions,
+): Promise<PaginatedSurveyFormSummaries> {
+  const pageSize = normalizeFormsPageSize(options.pageSize);
+
+  // Keep the established indexed path for the default order and template lists.
+  if (options.sort && (options.sort.field !== "created_at" || options.sort.direction !== "desc")) {
+    return fetchSortedDashboardFormsPage(options, pageSize);
+  }
+
+  // GET lets PostgREST inline typed cursor parameters into the index condition.
+  let query = apiClient
+    .rpc("list_forms_keyset", buildFormsCursorParams(options.cursor), { get: true })
+    .select(DASHBOARD_FORMS_SUMMARY_SELECT)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .neq("form_type", TEMPLATE_FORM_TYPE);
+
+  query = applyFormsFilters(query, options.filters);
+
+  const { data, error } = await runRequest(
+    "forms.fetchDashboardPage",
+    (signal) => applyAbortSignal(query, signal).limit(pageSize + 1),
+    {
+      signal: options.signal,
+      context: {
+        authorId: options.filters?.authorId ?? null,
+        hasSearch: Boolean(options.filters?.search),
+        hasCursor: Boolean(options.cursor),
+        pageSize,
+      },
+    },
+  );
+  if (error) {
+    throw error;
+  }
+
+  const forms = ((data ?? []) as RawFormSummary[])
+    .map(mapRawFormSummary)
+    .map((form) => syncFetchedFormState(form));
+
+  return createPaginatedFormSummaries(forms, pageSize);
+}
+
+export async function fetchTemplateFormsPage(
+  options: FetchFormsPageOptions,
+): Promise<PaginatedSurveyFormSummaries> {
+  const pageSize = normalizeFormsPageSize(options.pageSize);
+
+  // GET lets PostgREST inline typed cursor parameters into the index condition.
+  let query = apiClient
+    .rpc("list_forms_keyset", buildFormsCursorParams(options.cursor), { get: true })
+    .select(TEMPLATE_FORMS_SUMMARY_SELECT)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  query = applyFormsFilters(query, options.filters);
+
+  const { data, error } = await runRequest(
+    "forms.fetchTemplatePage",
+    (signal) => applyAbortSignal(query, signal).limit(pageSize + 1),
+    {
+      signal: options.signal,
+      context: {
+        authorId: options.filters?.authorId ?? null,
+        isPublic: options.filters?.isPublic ?? null,
+        hasCursor: Boolean(options.cursor),
+        pageSize,
+      },
+    },
+  );
+  if (error) {
+    throw error;
+  }
+
+  const forms = ((data ?? []) as RawFormSummary[]).map(mapRawFormSummary);
+
+  return createPaginatedFormSummaries(forms, pageSize);
+}
+
+export async function fetchDashboardFormsStats(
+  filters?: FormsFilters,
+  options: RequestSignalOptions = {},
+): Promise<DashboardFormsStats> {
+  const { data, error } = await runRequest<{
+    data: RawDashboardFormsStats[] | null;
+    error: unknown | null;
+  }>(
+    "forms.fetchDashboardStats",
+    (signal) => applyAbortSignal(apiClient.rpc(DASHBOARD_FORMS_STATS_RPC, buildDashboardStatsParams(filters)), signal),
+    {
+      signal: options.signal,
+      context: { authorId: filters?.authorId ?? null, hasSearch: Boolean(filters?.search) },
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  const stats = data?.[0];
+
+  return {
+    totalCount: toCount(stats?.total_count),
+    activeCount: toCount(stats?.active_count),
+    formsWithDeadlineCount: toCount(stats?.forms_with_deadline_count),
+  };
+}
+
+export async function fetchFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm> {
+  const { data, error } = await runRequest(
+    "forms.fetchById",
+    (signal) => applyAbortSignal(apiClient.from("forms").select("*").eq("id", id), signal).single(),
+    { signal: options.signal, context: { formId: id } },
+  );
+  if (error) throw error;
+  return syncFetchedFormState(mapRawForm(data as RawForm));
+}
+
+export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
+  const { data, error } = await runRequest(
+    "forms.fetchPublicById",
+    (signal) => applyAbortSignal(publicApiClient.from("forms").select("*").eq("id", id), signal).maybeSingle(),
+    { signal: options.signal, context: { formId: id } },
+  );
+  if (error) throw error;
+
+  if (!data) {
+    return null;
+  }
+
+  return syncFetchedFormState(mapRawForm(data as RawForm));
+}
+
+export async function insertForm(payload: {
+  id?: string;
+  title: string;
+  formType: string;
+  formReason: string;
+  schema: SurveySchema;
+  theme?: ITheme;
+  authorId: string;
+  deadlineAt?: string | null;
+  maxResponses?: number | null;
+  allowResponseEditing?: boolean;
+  organizationTypes?: OrganizationType[];
+  isPublic?: boolean;
+}) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (payload.authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
+  const normalizedMaxResponses = normalizeMaxResponses(payload.maxResponses);
+  const deadlinePayload = buildDeadlineUpdatePayload(payload.deadlineAt ?? null);
+  const initialPublicationState = resolveInitialPublicationState(payload.formType, payload.isPublic);
+  const resolvedPublicationState = initialPublicationState && deadlinePayload.is_public !== false;
+  const targetFormId = payload.id ?? createSurveyAssetFormId();
+  const materialized = await materializeSurveyThemeAssets(resolveSurveyTheme(payload.theme), targetFormId, currentUserId);
+
+  const { data, error } = await runRequest(
+    "forms.insert",
+    () =>
+      apiClient
+        .from("forms")
+        .insert({
+          id: targetFormId,
+          title: payload.title,
+          form_type: payload.formType,
+          form_reason: payload.formReason,
+          schema: payload.schema,
+          theme: serializeSurveyThemeAssetUrls(materialized.theme),
+          deadline_at: deadlinePayload.deadline_at ?? null,
+          max_responses: normalizedMaxResponses,
+          allow_response_editing: payload.allowResponseEditing ?? false,
+          organization_types: normalizeOrganizationTypes(
+            payload.organizationTypes ?? DEFAULT_FORM_ORGANIZATION_TYPES,
+          ),
+          author_id: currentUserId,
+          is_public: resolvedPublicationState,
+        })
+        .select("id")
+        .single(),
+    { context: { formId: targetFormId, authorId: currentUserId, formType: payload.formType } },
+  );
+
+  if (error) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw error;
+  }
+  return data;
+}
+
+export async function createFormFromTemplate(templateForm: SurveyForm, authorId: string) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
+  const schema: SurveySchema = {
+    ...templateForm.schema,
+    title: templateForm.title,
+  };
+
+  return insertForm({
+    id: createSurveyAssetFormId(),
+    title: templateForm.title,
+    formType: "anketa",
+    formReason: "plan",
+    schema,
+    theme: templateForm.theme,
+    organizationTypes: templateForm.organization_types,
+    authorId: currentUserId,
+    isPublic: true,
+  });
+}
+
+export async function updateFormTitle(id: string, title: string) {
+  const { data: form, error: fetchError } = await runRequest(
+    "forms.fetchSchemaForTitleUpdate",
+    () => apiClient
+      .from("forms")
+      .select("schema, theme, allow_response_editing, organization_types")
+      .eq("id", id)
+      .single(),
+    { context: { formId: id } },
+  );
+  if (fetchError) throw fetchError;
+
+  const currentForm = form as {
+    allow_response_editing?: boolean | null;
+    organization_types?: OrganizationType[] | null;
+    schema?: SurveySchema | null;
+    theme?: ITheme | null;
+  } | null;
+  const currentSchema = (currentForm?.schema ?? { pages: [] }) as SurveySchema;
+  const schema: SurveySchema = {
+    ...currentSchema,
+    title,
+  };
+
+  const result = await updateFormSchema(
+    id,
+    schema,
+    resolveSurveyTheme(currentForm?.theme),
+    title,
+    currentForm?.allow_response_editing ?? false,
+    normalizeOrganizationTypes(currentForm?.organization_types),
+  );
+
+  if (result.status !== "updated") {
+    throw new Error("Не удалось безопасно обновить название формы");
+  }
+}
+
+export async function updateFormSchema(
+  id: string,
+  schema: SurveySchema,
+  theme: ITheme,
+  title: string,
+  allowResponseEditing: boolean,
+  organizationTypes: OrganizationType[],
+  confirmWarnings = false,
+) {
+  const currentUserId = await getAuthenticatedUserId();
+  const { data: currentForm, error: fetchError } = await runRequest(
+    "forms.fetchThemeForUpdate",
+    () => apiClient.from("forms").select("theme").eq("id", id).single(),
+    { context: { formId: id } },
+  );
+  if (fetchError) throw fetchError;
+
+  const previousAssetPaths = getSurveyThemeAssetPaths((currentForm as { theme?: unknown } | null)?.theme);
+  const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
+  const {
+    data: { session },
+  } = await runRequest(
+    "auth.getSession",
+    () => apiClient.auth.getCurrentSession(),
+    { context: { formId: id, action: "update-schema" } },
+  );
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
+  const { data, error, response } = await runRequest(
+    "functions.form-admin.update-schema",
+    (_signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
+      body: {
+        action: "update-schema",
+        formId: id,
+        schema,
+        theme: serializeSurveyThemeAssetUrls(materialized.theme),
+        title,
+        allowResponseEditing,
+        organizationTypes: normalizeOrganizationTypes(organizationTypes),
+        confirmWarnings,
+      },
+      headers: {
+        ...traceContext.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }),
+    { context: { formId: id, pageCount: schema.pages.length, confirmWarnings } },
+  );
+  if (error) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw new Error(await getFunctionErrorMessage(error, response));
+  }
+
+  if (!isSchemaUpdateResult(data)) {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    throw new Error("Сервер вернул некорректный результат проверки формы");
+  }
+
+  if (data.status !== "updated") {
+    await removeSurveyAssetPaths(materialized.uploadedPaths);
+    return data;
+  }
+
+  const nextAssetPaths = new Set(getSurveyThemeAssetPaths(materialized.theme));
+  await removeSurveyAssetPaths(previousAssetPaths.filter((path) => !nextAssetPaths.has(path)));
+  return data;
+}
+
+export async function updateFormStatus(id: string, isPublic: boolean) {
+  const statusPayload = isPublic
+    ? { is_public: true, deadline_at: null }
+    : { is_public: false, deadline_at: null };
+
+  const { data, error } = await runRequest(
+    "forms.updateStatus",
+    () => apiClient.from("forms").update(statusPayload).eq("id", id).select("*").single(),
+    { context: { formId: id, isPublic } },
+  );
+  if (error) throw error;
+
+  const updatedForm = syncFetchedFormState(mapRawForm(data as RawForm));
+
+  if (updatedForm.is_public !== isPublic) {
+    throw new Error(
+      isPublic
+        ? "Форма осталась закрытой. Проверьте дедлайн или лимит ответов."
+        : "Форма осталась открытой. Попробуйте обновить страницу.",
+    );
+  }
+
+  return updatedForm;
+}
+
+export async function updateFormDeadline(id: string, deadlineAt: string | null) {
+  const payload = buildDeadlineUpdatePayload(deadlineAt);
+  const { error } = await runRequest(
+    "forms.updateDeadline",
+    () => apiClient.from("forms").update(payload).eq("id", id),
+    {
+      context: {
+        formId: id,
+        hasDeadline: Boolean(payload.deadline_at),
+        isPublic: payload.is_public ?? null,
+      },
+    },
+  );
+  if (error) throw error;
+}
+
+export async function updateFormResponseLimit(id: string, maxResponses: number | null) {
+  const normalizedLimit = normalizeMaxResponses(maxResponses);
+
+  const { error } = await runRequest(
+    "forms.updateResponseLimit",
+    () => apiClient.from("forms").update({ max_responses: normalizedLimit }).eq("id", id),
+    {
+      context: {
+        formId: id,
+        maxResponses: normalizedLimit,
+      },
+    },
+  );
+  if (error) throw error;
+}
+
+export async function deleteForm(id: string) {
+  const {
+    data: { session },
+  } = await runRequest("auth.getSession", () => apiClient.auth.getCurrentSession(), { context: { formId: id } });
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
+  const { error, response } = await runRequest(
+    "functions.form-admin",
+    (_signal, traceContext) =>
+      supabaseClient.functions.invoke("form-admin", {
+        body: { action: "delete", formId: id },
+        headers: {
+          ...traceContext.headers,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }),
+    { context: { formId: id, action: "delete" } },
+  );
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error, response));
+  }
+}
+
+export async function duplicateForm(form: SurveyForm, authorId: string) {
+  const currentUserId = await getAuthenticatedUserId();
+
+  if (authorId !== currentUserId) {
+    throw new Error("author_id должен совпадать с текущим пользователем");
+  }
+
+  const title = `${form.title} (копия)`;
+
+  return insertForm({
+    id: createSurveyAssetFormId(),
+    title,
+    formType: form.form_type,
+    formReason: form.form_reason,
+    schema: form.schema,
+    theme: sanitizeSurveyTheme(form.theme),
+    maxResponses: form.max_responses ?? null,
+    allowResponseEditing: form.allow_response_editing,
+    organizationTypes: form.organization_types,
+    authorId: currentUserId,
+  });
+}
+
+async function fetchSortedDashboardFormsPage(options: FetchFormsPageOptions, pageSize: number) {
+  const sort = options.sort!;
+  const cursor = options.cursor;
+  if (cursor && (cursor.sort?.field !== sort.field || cursor.sort?.direction !== sort.direction)) {
+    throw new Error("Сортировка изменилась. Обновите список форм.");
+  }
+  const params = {
+    ...buildDashboardStatsParams(options.filters),
+    p_sort_field: sort.field,
+    p_sort_direction: sort.direction,
+    p_page_size: pageSize,
+    p_after_id: cursor?.id ?? null,
+    p_after_value: cursor?.sortValue ?? null,
+    p_reference_time: cursor?.referenceTime ?? null,
+  };
+  const { data, error } = await runRequest(
+    "forms.fetchSortedDashboardPage",
+    (signal) => apiClient.rpc("list_forms_sorted", params).abortSignal(signal),
+    { signal: options.signal, context: { sort, hasCursor: Boolean(cursor), pageSize } },
+  );
+  if (error) throw error;
+  type SortedRow = RawFormSummary & { sort_value: string; sort_reference_at: string };
+  const forms = ((data ?? []) as SortedRow[]).map(({ sort_value, sort_reference_at, ...row }) => ({
+    ...syncFetchedFormState(mapRawFormSummary(row)),
+    list_cursor: {
+      id: row.id, createdAt: row.created_at, sort,
+      sortValue: sort_value, referenceTime: sort_reference_at,
+    },
+  }));
+  return createPaginatedFormSummaries(forms, pageSize);
+}

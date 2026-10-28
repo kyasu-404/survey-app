@@ -1,13 +1,12 @@
-import userEvent from "@testing-library/user-event";
-import { logout } from "../../features/auth/api";
-import { ThemeProvider } from "../../shared/theme/ThemeProvider";
-import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
+import { logout } from "../../features/auth/api";
+import { ThemeProvider } from "../../shared/theme/ThemeProvider";
+import { readAppCss } from "../../test/readAppCss";
 import { Sidebar } from "./Sidebar";
 
 const { authState, getAppBranding } = vi.hoisted(() => ({
@@ -43,9 +42,7 @@ function renderSidebar() {
   );
 }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 describe("Sidebar", () => {
   beforeEach(() => {

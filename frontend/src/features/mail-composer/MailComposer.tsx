@@ -5,7 +5,7 @@ import type { FormMailDraft, FormMailKind, MailPreview, MailTemplate } from "../
 import { getOrganizationTypeLabel } from "../../entities/organization/model";
 import type { OrganizationType } from "../../entities/organization/types";
 import { getErrorMessage } from "../../shared/lib/error";
-import { MailDeliveryPanel } from "../../pages/FormResponsesPage/MailDeliveryPanel";
+import { MailDeliveryPanel } from "./MailDeliveryPanel";
 
 const steps = ["Получатели", "Письмо", "Проверка"];
 const variables = ["Организация", "Название формы", "Дедлайн", "Ссылка"];

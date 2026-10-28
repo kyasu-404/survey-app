@@ -8,8 +8,8 @@ import type {
   ResponseReportGroup,
   ResponseReportMetric,
   ResponseReportValue,
-} from "../../shared/lib/responseReport";
-import { MailDeliveryPanel } from "./MailDeliveryPanel";
+} from "../../entities/response/lib/responseReport";
+import { MailDeliveryPanel } from "../../features/mail-composer/MailDeliveryPanel";
 import { ReminderConfirmationModal } from "./ReminderConfirmationModal";
 
 const ANALYSIS_KIND_LABELS: Record<ResponseQuestionAnalysisKind, string> = {

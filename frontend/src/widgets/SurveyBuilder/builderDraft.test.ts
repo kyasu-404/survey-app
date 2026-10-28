@@ -13,9 +13,9 @@ const schema: SurveySchema = {
 
 describe("builderDraft", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     window.localStorage.clear();
     vi.useRealTimers();
-    vi.restoreAllMocks();
   });
 
   it("scopes keys by user and form", () => {
@@ -49,5 +49,32 @@ describe("builderDraft", () => {
     clearSurveyBuilderDraft("user-1", "form-7");
     expect(loadSurveyBuilderDraft("user-1", "form-7")).toBeNull();
     expect(loadSurveyBuilderDraft("user-2", "form-7")).toMatchObject({ schema, theme: expect.any(Object) });
+  });
+
+  it("keeps the last valid draft when the storage quota is exhausted", () => {
+    saveSurveyBuilderDraft("user-1", undefined, schema);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    expect(() => saveSurveyBuilderDraft("user-1", undefined, { ...schema, title: "Changed" })).not.toThrow();
+    expect(loadSurveyBuilderDraft("user-1")?.schema).toEqual(schema);
+  });
+
+  it("continues without drafts when browser storage is unavailable", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("Access denied", "SecurityError");
+    });
+    expect(loadSurveyBuilderDraft("user-1")).toBeNull();
+    expect(() => saveSurveyBuilderDraft("user-1", undefined, schema)).not.toThrow();
+    expect(() => clearSurveyBuilderDraft("user-1")).not.toThrow();
+  });
+
+  it("discards a malformed draft even if removal fails", () => {
+    window.localStorage.setItem(getSurveyBuilderDraftStorageKey("user-1"), "invalid json");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => { throw new Error("Unavailable"); });
+    expect(loadSurveyBuilderDraft("user-1")).toBeNull();
   });
 });

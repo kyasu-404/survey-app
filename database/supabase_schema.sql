@@ -1299,141 +1299,13 @@ before update on public.mail_queue
 for each row execute procedure public.set_mail_record_updated_at();
 
 create or replace function public.can_read_mail_batch(target_batch_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select public.request_is_enabled()
-    and exists (
-      select 1
-      from public.mail_batches b
-      left join public.forms f on f.id = b.form_id
-      where b.id = target_batch_id
-        and (
-          b.created_by = auth.uid()
-          or f.author_id = auth.uid()
-          or public.request_role() = 'admin'
-        )
-    );
-$$;
-
-create or replace function public.list_missing_form_organizations(p_form_id uuid)
-returns table (
-  id uuid,
-  organization_type text,
-  number text,
-  alias text,
-  email text
-)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  with target_form as (
-    select f.id, f.schema, f.organization_types
-    from public.forms f
-    where f.id = p_form_id
-  ),
-  question_names as (
-    select distinct question_name.value #>> '{}' as name
-    from target_form f
-    cross join lateral jsonb_path_query(
-      f.schema,
-      '$.** ? (@.type == "organization").name',
-      '{}'::jsonb,
-      true
-    ) as question_name(value)
-  )
-  select o.id, o.organization_type, o.number, o.alias, o.email
-  from public.education_organizations o
-  join target_form f on o.organization_type = any(f.organization_types)
-  where not o.is_archived
-    and exists (select 1 from question_names)
-    and not exists (
-      select 1
-      from public.responses r
-      cross join question_names q
-      where r.form_id = f.id
-        and r.data ->> q.name = o.id::text
-    )
-  order by
-    case o.organization_type
-      when 'school' then 1
-      when 'kindergarten' then 2
-      when 'odo' then 3
-      else 4
-    end,
-    o.number nulls last,
-    o.alias;
-$$;
-
-create or replace function public.enqueue_mail_reminder_batch(
-  p_batch_id uuid,
-  p_form_id uuid,
-  p_created_by uuid,
-  p_jobs jsonb
-)
-returns integer
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $$
-declare
-  job_count integer;
-begin
-  if p_batch_id is null or p_form_id is null or p_created_by is null or jsonb_typeof(p_jobs) <> 'array' then
-    raise exception 'Invalid reminder batch' using errcode = '22023';
-  end if;
-
-  job_count := jsonb_array_length(p_jobs);
-  if job_count not between 1 and 5000
-    or exists (select 1 from jsonb_array_elements(p_jobs) job where jsonb_typeof(job) <> 'object')
-  then
-    raise exception 'Invalid reminder jobs' using errcode = '22023';
-  end if;
-
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended('mail-reminder/' || p_form_id::text, 0)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select public.request_is_enabled() and exists (
+    select 1 from public.mail_batches b left join public.forms f on f.id=b.form_id
+    where b.id=target_batch_id and (f.author_id=auth.uid() or (b.form_id is null and b.created_by=auth.uid()))
   );
-
-  if exists (
-    select 1
-    from public.mail_queue q
-    where q.form_id = p_form_id
-      and q.status in ('queued', 'processing')
-  ) then
-    raise exception 'Previous reminder run is still active' using errcode = '55000';
-  end if;
-
-  insert into public.mail_batches (id, kind, form_id, created_by, total_count)
-  values (p_batch_id, 'reminder', p_form_id, p_created_by, job_count);
-
-  insert into public.mail_queue (
-    batch_id,
-    form_id,
-    organization_id,
-    recipient_email,
-    recipient_name,
-    subject,
-    body_text
-  )
-  select
-    p_batch_id,
-    p_form_id,
-    (job ->> 'organization_id')::uuid,
-    lower(btrim(job ->> 'recipient_email')),
-    btrim(job ->> 'recipient_name'),
-    job ->> 'subject',
-    job ->> 'body_text'
-  from jsonb_array_elements(p_jobs) job;
-
-  return job_count;
-end;
 $$;
+
 
 create or replace function public.claim_mail_jobs(
   p_worker_id text,
@@ -1511,13 +1383,9 @@ end;
 $$;
 
 revoke all on function public.can_read_mail_batch(uuid) from public;
-revoke all on function public.list_missing_form_organizations(uuid) from public;
-revoke all on function public.enqueue_mail_reminder_batch(uuid, uuid, uuid, jsonb) from public;
 revoke all on function public.claim_mail_jobs(text, integer) from public;
 revoke all on function public.finish_mail_job(uuid, text, boolean, text) from public;
 grant execute on function public.can_read_mail_batch(uuid) to authenticated, service_role;
-grant execute on function public.list_missing_form_organizations(uuid) to service_role;
-grant execute on function public.enqueue_mail_reminder_batch(uuid, uuid, uuid, jsonb) to service_role;
 grant execute on function public.claim_mail_jobs(text, integer) to service_role;
 grant execute on function public.finish_mail_job(uuid, text, boolean, text) to service_role;
 
@@ -2412,7 +2280,6 @@ end $$;
 
 create trigger forms_office_question_ids before insert or update of schema on public.forms
 for each row execute function public.office_preserve_question_ids();
-update public.forms set schema = schema;
 revoke all on function public.office_assign_question_ids(jsonb,jsonb), public.office_preserve_question_ids() from public;
 
 create table public.onlyoffice_settings (
@@ -2496,7 +2363,6 @@ insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
 values ('survey-documents','survey-documents',false,104857600,array['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
 
 
-
 -- Persist individual document generations in private Storage.
 create table public.office_generation_results (
   id uuid primary key default gen_random_uuid(),
@@ -2518,35 +2384,6 @@ create trigger office_results_cleanup after delete on public.office_generation_r
 for each row execute function public.office_queue_storage_cleanup();
 update storage.buckets set allowed_mime_types=array['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'] where id='survey-documents';
 
-create or replace function public.list_orphan_office_documents(
-  cutoff timestamptz default (now() - interval '168 hours'), batch_limit integer default 500
-)
-returns table (name text) language sql stable security definer set search_path = '' as $$
-  select o.name from storage.objects o where o.bucket_id='survey-documents'
-    and o.created_at < least(cutoff, now() - interval '168 hours')
-    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
-    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
-    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
-    -- Superseded objects can still be used by a one-hour editor capability.
-    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
-  order by o.created_at,o.id limit least(greatest(batch_limit,1),500);
-$$;
-create or replace function public.confirm_orphan_office_documents(cutoff timestamptz, object_names text[])
-returns table (name text) language sql stable security definer set search_path = '' as $$
-  select o.name from storage.objects o where o.bucket_id='survey-documents'
-    and cardinality(object_names) between 1 and 500 and o.name=any(object_names)
-    and o.created_at < least(cutoff, now() - interval '168 hours')
-    and o.name ~ '^forms/[0-9a-f-]{36}/(documents/[0-9a-f-]{36}/[0-9a-f-]{36}\.(docx|xlsx)|results/[0-9a-f-]{36}\.zip)$'
-    and not exists (select 1 from public.office_documents d where d.storage_path=o.name)
-    and not exists (select 1 from public.office_generation_results r where r.storage_path=o.name)
-    -- Superseded objects can still be used by a one-hour editor capability.
-    and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
-  order by o.name;
-$$;
-revoke all on function public.list_orphan_office_documents(timestamptz,integer) from public;
-revoke all on function public.confirm_orphan_office_documents(timestamptz,text[]) from public;
-grant execute on function public.list_orphan_office_documents(timestamptz,integer) to service_role;
-grant execute on function public.confirm_orphan_office_documents(timestamptz,text[]) to service_role;
 
 -- Preserve directory references in historical responses.
 create or replace function public.archive_education_organization()
@@ -2720,19 +2557,6 @@ $$;
 revoke all on function public.export_form_responses(uuid,uuid[]) from public, anon;
 grant execute on function public.export_form_responses(uuid,uuid[]) to authenticated, service_role;
 
--- Preserve the entire reminder audience (or reject >5000) in one SQL snapshot.
-create or replace function public.list_missing_form_organizations_snapshot(p_form_id uuid)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(jsonb_agg(to_jsonb(o)), '[]'::jsonb)
-  from (select * from public.list_missing_form_organizations(p_form_id) limit 5001) o;
-$$;
-revoke all on function public.list_missing_form_organizations_snapshot(uuid) from public, anon, authenticated;
-grant execute on function public.list_missing_form_organizations_snapshot(uuid) to service_role;
 
 
 create or replace function public.list_expired_survey_uploads(batch_limit integer default 100)
@@ -2809,7 +2633,10 @@ returns table (name text) language sql stable security definer set search_path =
     and not exists (select 1 from public.office_storage_cleanup q where q.storage_path=o.name and q.created_at>=now()-interval '2 hours')
   order by o.name;
 $$;
-
+revoke all on function public.list_orphan_office_documents(timestamptz,integer) from public;
+grant execute on function public.list_orphan_office_documents(timestamptz,integer) to service_role;
+revoke all on function public.confirm_orphan_office_documents(timestamptz,text[]) from public;
+grant execute on function public.confirm_orphan_office_documents(timestamptz,text[]) to service_role;
 
 
 -- Storage may first authorize an empty metadata placeholder and write the actual
@@ -2885,7 +2712,7 @@ begin
   end if;
   select * into f from public.forms where id = p_form_id;
   if not found then raise exception 'Форма не найдена' using errcode = 'P0002'; end if;
-  can_manage := f.author_id = auth.uid() or public.request_role() = 'admin';
+  can_manage := f.author_id = auth.uid();
   if can_manage then
     select coalesce(jsonb_agg(jsonb_build_object(
       'id', o.id, 'organization_type', o.organization_type, 'number', o.number,
@@ -2911,7 +2738,7 @@ begin
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('mail-reminder/' || p_form_id::text, 0));
   select * into f from public.forms where id = p_form_id for update;
-  if not found or not (f.author_id = auth.uid() or public.request_role() = 'admin') then
+  if not found or not (f.author_id = auth.uid()) then
     raise exception 'Нет прав на управление персональными ссылками' using errcode = '42501';
   end if;
   if p_enabled is null then raise exception 'Укажите состояние переключателя' using errcode = '22023'; end if;
@@ -3100,7 +2927,7 @@ begin
     raise exception 'Настройки формы изменились. Повторите рассылку.' using errcode = '22023';
   end if;
   if not exists (select 1 from public.profiles p where p.id = p_created_by and not p.is_disabled
-    and (p.id = f.author_id or p.role = 'admin')) then
+    and p.id = f.author_id) then
     raise exception 'Нет прав на рассылку по этой форме' using errcode = '42501';
   end if;
   if exists (select 1 from public.mail_queue q where q.form_id = p_form_id and q.status in ('queued','processing')) then
@@ -3137,14 +2964,7 @@ $$;
 revoke all on function public.can_restore_personal_upload(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.can_restore_personal_upload(uuid, uuid, text) to service_role;
 
-notify pgrst, 'reload schema';
-
-commit;
-
-
--- Site settings and author-only form mailing.
-begin;
-set local lock_timeout = '5s';
+-- Site settings. All bootstrap DDL stays in the same transaction.
 
 create or replace function public.valid_embedding_origins(origins text[])
 returns boolean language plpgsql immutable set search_path = '' as $$
@@ -3236,102 +3056,7 @@ $$;
 revoke all on function public.set_app_favicon(text,text,uuid) from public,anon,authenticated;
 grant execute on function public.set_app_favicon(text,text,uuid) to service_role;
 
--- Form mail and capabilities are owned by the form's author, including when
--- another user is an administrator. Administrative test mail remains private.
-create or replace function public.can_read_mail_batch(target_batch_id uuid)
-returns boolean language sql stable security definer set search_path = '' as $$
-  select public.request_is_enabled() and exists (
-    select 1 from public.mail_batches b left join public.forms f on f.id=b.form_id
-    where b.id=target_batch_id and (f.author_id=auth.uid() or (b.form_id is null and b.created_by=auth.uid()))
-  );
-$$;
 
-create or replace function public.get_form_personal_links(p_form_id uuid)
-returns jsonb language plpgsql stable security definer set search_path = '' as $$
-declare f public.forms%rowtype; can_manage boolean; links jsonb;
-begin
-  if not public.request_is_enabled() then
-    raise exception 'Требуется действующая учётная запись' using errcode = '42501';
-  end if;
-  select * into f from public.forms where id = p_form_id;
-  if not found then raise exception 'Форма не найдена' using errcode = 'P0002'; end if;
-  can_manage := f.author_id = auth.uid();
-  if can_manage then
-    select coalesce(jsonb_agg(jsonb_build_object(
-      'id', o.id, 'organization_type', o.organization_type, 'number', o.number,
-      'alias', o.alias, 'email', o.email, 'token', l.token
-    ) order by o.organization_type, o.number, o.alias, o.id), '[]'::jsonb) into links
-    from public.form_personal_links l
-    join public.education_organizations o on o.id = l.organization_id
-    where l.form_id = f.id and not o.is_archived and o.organization_type = any(f.organization_types);
-  end if;
-  return jsonb_build_object('available', jsonb_path_exists(f.schema, '$.** ? (@.type == "organization")'),
-    'canManage', can_manage, 'enabled', f.personal_links_enabled, 'links', coalesce(links, '[]'::jsonb));
-end;
-$$;
-
-create or replace function public.set_form_personal_links(p_form_id uuid, p_enabled boolean)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare f public.forms%rowtype;
-begin
-  if not public.request_is_enabled() then
-    raise exception 'Требуется действующая учётная запись' using errcode = '42501';
-  end if;
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('mail-reminder/' || p_form_id::text, 0));
-  select * into f from public.forms where id = p_form_id for update;
-  if not found or not (f.author_id = auth.uid()) then
-    raise exception 'Нет прав на управление персональными ссылками' using errcode = '42501';
-  end if;
-  if p_enabled is null then raise exception 'Укажите состояние переключателя' using errcode = '22023'; end if;
-  if p_enabled and not jsonb_path_exists(f.schema, '$.** ? (@.type == "organization")') then
-    raise exception 'Добавьте в форму вопрос «Организация»' using errcode = '22023';
-  end if;
-  if p_enabled is distinct from f.personal_links_enabled and exists (
-    select 1 from public.mail_queue where form_id = p_form_id and status in ('queued', 'processing')
-  ) then
-    raise exception 'Дождитесь завершения текущей рассылки по форме' using errcode = '55000';
-  end if;
-  update public.forms set personal_links_enabled = p_enabled where id = p_form_id;
-  if p_enabled then perform public.ensure_form_personal_links(p_form_id); end if;
-  return public.get_form_personal_links(p_form_id);
-end;
-$$;
-
-create or replace function public.enqueue_form_mail_batch(
-  p_batch_id uuid, p_form_id uuid, p_created_by uuid, p_jobs jsonb, p_kind text, p_personal boolean
-)
-returns integer language plpgsql security definer set search_path = '' as $$
-declare job_count integer; f public.forms%rowtype;
-begin
-  if p_batch_id is null or p_form_id is null or p_created_by is null or p_jobs is null
-    or jsonb_typeof(p_jobs) <> 'array' or p_kind is null or p_kind not in ('reminder','invitation') then
-    raise exception 'Некорректная рассылка' using errcode = '22023';
-  end if;
-  job_count := jsonb_array_length(p_jobs);
-  if job_count not between 1 and 5000 then raise exception 'Некорректное число писем' using errcode = '22023'; end if;
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('mail-reminder/' || p_form_id::text, 0));
-  select * into f from public.forms where id = p_form_id for update;
-  if not found or not public.is_public_active_form(p_form_id)
-    or f.personal_links_enabled is distinct from p_personal or (p_kind = 'invitation' and not p_personal)
-    or not jsonb_path_exists(f.schema, '$.** ? (@.type == "organization")') then
-    raise exception 'Настройки формы изменились. Повторите рассылку.' using errcode = '22023';
-  end if;
-  if not exists (select 1 from public.profiles p where p.id = p_created_by and not p.is_disabled
-    and p.id = f.author_id) then
-    raise exception 'Нет прав на рассылку по этой форме' using errcode = '42501';
-  end if;
-  if exists (select 1 from public.mail_queue q where q.form_id = p_form_id and q.status in ('queued','processing')) then
-    raise exception 'Previous reminder run is still active' using errcode = '55000';
-  end if;
-  insert into public.mail_batches(id, kind, form_id, created_by, total_count)
-  values (p_batch_id, p_kind, p_form_id, p_created_by, job_count);
-  insert into public.mail_queue(batch_id, form_id, organization_id, recipient_email, recipient_name, subject, body_text)
-  select p_batch_id, p_form_id, (job ->> 'organization_id')::uuid,
-    lower(btrim(job ->> 'recipient_email')), btrim(job ->> 'recipient_name'), job ->> 'subject', job ->> 'body_text'
-  from jsonb_array_elements(p_jobs) job;
-  return job_count;
-end;
-$$;
 
 notify pgrst, 'reload schema';
 commit;

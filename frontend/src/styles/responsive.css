@@ -1,0 +1,118 @@
+@media (max-width: 760px) {
+  .settings-page-card {
+    padding: 18px;
+  }
+
+  .settings-page-header,
+  .settings-area-heading,
+  .settings-backend-warning,
+  .settings-section-heading,
+  .settings-test-row,
+  .settings-cleanup-actions,
+  .settings-cleanup-confirmation,
+  .response-report-coverage-heading {
+    display: grid;
+  }
+
+  .smtp-enable-control {
+    width: fit-content;
+  }
+
+  .settings-fields-grid,
+  .settings-form-skeleton,
+  .settings-branding-content,
+  .settings-branding-skeleton,
+  .settings-cleanup-skeleton,
+  .mail-delivery-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-branding-preview {
+    justify-items: start;
+  }
+
+  .settings-branding-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .settings-branding-actions .app-button,
+  .settings-branding-actions .button-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .settings-cleanup-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-cleanup-schedule-badge {
+    width: fit-content;
+  }
+
+  .settings-cleanup-button {
+    width: 100%;
+  }
+
+  .settings-cleanup-confirmation-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-field-wide {
+    grid-column: auto;
+  }
+
+  .response-report-mail-actions {
+    justify-content: stretch;
+  }
+
+  .response-report-mail-actions button {
+    flex: 1 1 160px;
+  }
+
+  .mail-batch-select {
+    grid-template-columns: 1fr;
+  }
+
+  .organizations-page-card {
+    padding: 18px;
+  }
+
+  .organizations-page-header {
+    display: grid;
+  }
+
+  .organizations-toolbar {
+    align-items: stretch;
+  }
+
+  .organizations-toolbar button {
+    flex: 1 1 145px;
+  }
+
+  .response-report-question-heading {
+    display: grid;
+  }
+
+  .response-report-tabs {
+    display: grid;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card {
+    border-radius: 20px !important;
+  }
+
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root-modern__wrapper,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-container-modern,
+  .survey-page.survey-page-shell:not(.builder-preview-tab-shell) .survey-page-card .sd-root_background-image {
+    border-radius: 20px;
+  }
+
+  .survey-runtime-surface.survey-page-card .sd-container-modern__title,
+  .survey-runtime-surface.survey-page-card .sv-header {
+    border-radius: 20px 20px 0 0;
+  }
+}
+

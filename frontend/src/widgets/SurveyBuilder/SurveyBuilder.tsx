@@ -1,40 +1,33 @@
-import { canManageSurveyForm, FORM_EDIT_PERMISSION_ERROR } from "../../entities/survey/model/formAccess";
-import { Presence } from "../../shared/ui/Presence";
-import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { type ITheme } from "survey-core";
 import {
-  editorLocalization,
-  registerCreatorTheme,
-  registerSurveyTheme,
-  type ICreatorTheme,
-  type ICreatorPlugin,
-  type UploadFileEvent,
+  type UploadFileEvent
 } from "survey-creator-core";
 import { SurveyCreator, SurveyCreatorComponent } from "survey-creator-react";
-import { Serializer, SvgRegistry, surveyLocalization, type ITheme } from "survey-core";
-import SurveyTheme from "survey-core/themes";
-import "survey-creator-core/survey-creator-core.css";
-import "survey-core/survey-core.css";
-import "survey-core/i18n/russian";
-import "survey-creator-core/i18n/russian";
-import phoneIcon from "../../img/constructor/Phone.svg?raw";
-import emailIcon from "../../img/constructor/Email.svg?raw";
-import floatIcon from "../../img/constructor/float.svg?raw";
-import integerIcon from "../../img/constructor/integer.svg?raw";
-import dateIcon from "../../img/constructor/Date.svg?raw";
-import timeIcon from "../../img/constructor/Time.svg?raw";
-import dateTimeIcon from "../../img/constructor/Date-Time.svg?raw";
-import sectionTitleIcon from "../../img/constructor/Title.svg?raw";
+import { canManageSurveyForm, FORM_EDIT_PERMISSION_ERROR } from "../../entities/survey/model/formAccess";
+import { Presence } from "../../shared/ui/Presence";
+import { BuilderCompatibilityDialog, BuilderFormSettingsDialog, BuilderResetDialog } from "./BuilderDialogs";
+import type { CompatibilityDialogState, ExistingFormSaveRequest, PostSaveSettingsState } from "./builderTypes";
+import {
+  applyThemeToBuilderDesigners,
+  applyThemeToCreatorAndEditor,
+  createCreatorInstance,
+  createEmptyBuilderSchema,
+  enableThemePageTitleFontEditor,
+  getSchemaTitle,
+  getSerializedBuilderSchema,
+  toBuilderSchema,
+  updateRuntimePreviewBridgeFromCreator,
+} from "./creatorSetup";
+import { useSafeSchemaEditing } from "./useSafeSchemaEditing";
 
 import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import {
   DEFAULT_FORM_ORGANIZATION_TYPES,
-  hasOrganizationQuestion,
-  normalizeOrganizationTypes,
-  ORGANIZATION_TYPE_OPTIONS,
+  normalizeOrganizationTypes
 } from "../../entities/organization/model";
 import type { OrganizationType } from "../../entities/organization/types";
 import {
@@ -42,63 +35,38 @@ import {
   getFormById,
   saveSurveySchema,
 } from "../../entities/survey/api/surveysApi";
-import type { SchemaUpdateResult } from "../../entities/survey/api/surveysApi";
+import { createSurveyAssetFormId, uploadSurveyBackground } from "../../entities/survey/api/themeAssets";
 import {
-  FORM_REASON_OPTIONS,
-  REGULAR_FORM_TYPE_OPTIONS,
-} from "../../entities/survey/model/formOptions";
-import {
-  resolveDefaultSurveyLogo,
-  serializeDefaultSurveyLogo,
+  resolveDefaultSurveyLogo
 } from "../../entities/survey/model/defaultSurveyLogo";
-import { normalizeSurveyQuestionNumbers } from "../../entities/survey/model/normalizeSurveyQuestionNumbers";
 import {
-  DEFAULT_SURVEY_THEME,
-  resolveBuilderDesignerTheme,
-  resolveSurveyTheme,
-  sanitizeSurveyTheme,
-  withSurveyBackground,
-  withUploadedSurveyThemeImage,
-} from "../../entities/survey/model/surveyTheme";
-import { TEMPLATE_FORM_TYPE, createEmptySurveySchema, isTemplateForm } from "../../entities/survey/model/surveyModel";
-import {
-  QUESTION_TYPE_DEFINITIONS,
-  QUESTION_TYPES,
-  registerCustomSurveyQuestionTypes,
-  type SurveyQuestionType,
-} from "../../entities/survey/model/surveyQuestionTypes";
-import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
-import { sanitizeSurveySchema } from "../../entities/survey/model/surveySchemaSecurity";
-import type { SurveySchema } from "../../entities/survey/types";
-import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
-import { getErrorMessage, isAbortError } from "../../shared/lib/error";
-import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
-import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
-import {
-  DASHBOARD_FORMS_QUERY_ROOT,
   DASHBOARD_FORM_STATS_QUERY_ROOT,
+  DASHBOARD_FORMS_QUERY_ROOT,
   getFormQueryKey,
   getSurveyFormQueryKey,
   TEMPLATE_FORMS_QUERY_ROOT,
 } from "../../entities/survey/model/queryKeys";
-import { InlineSpinner } from "../../shared/ui/InlineSpinner";
-import { Skeleton } from "../../shared/ui/Skeleton";
-import { useTheme } from "../../shared/theme/ThemeProvider";
-import { creatorThemes } from "../../shared/theme/themeRegistry";
-import { createSurveyAssetFormId, uploadSurveyBackground } from "../../shared/api/themeAssets";
+import { createEmptySurveySchema, isTemplateForm, TEMPLATE_FORM_TYPE } from "../../entities/survey/model/surveyModel";
 import {
-  BUILDER_PREVIEW_COMPONENT_NAME,
-  BUILDER_PREVIEW_TAB_ID,
-  registerBuilderPreviewTabComponent,
-} from "./BuilderPreviewTab";
-import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
+  DEFAULT_SURVEY_THEME,
+  resolveSurveyTheme,
+  sanitizeSurveyTheme,
+  withSurveyBackground,
+  withUploadedSurveyThemeImage
+} from "../../entities/survey/model/surveyTheme";
+import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
+import type { SurveySchema } from "../../entities/survey/types";
+import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
+import { getErrorMessage, isAbortError } from "../../shared/lib/error";
+import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
+import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
+import { useTheme } from "../../shared/theme/ThemeProvider";
+import { Skeleton } from "../../shared/ui/Skeleton";
+import { useMobileLayout } from "../../shared/ui/useMobileLayout";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
-import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
+import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { MobileBuilderToolbar } from "./MobileBuilderToolbar";
-import { MOBILE_LAYOUT_QUERY, useMobileLayout } from "../../shared/ui/useMobileLayout";
-
-registerSurveyTheme(SurveyTheme);
-registerCreatorTheme(...Object.values(creatorThemes));
+import { ThemeBackgroundGallery } from "./ThemeBackgroundGallery";
 
 type SurveyBuilderProps = {
   canAdministerAllForms?: boolean;
@@ -107,430 +75,7 @@ type SurveyBuilderProps = {
   userId: string;
 };
 
-type BuilderSchema = SurveySchema & {
-  questionDescriptionLocation?: string;
-};
-
-type CreatorToolboxItem = {
-  name: string;
-  iconName: string;
-  title: string;
-  category: string;
-  json: Record<string, unknown>;
-  items?: CreatorToolboxItem[];
-};
-
-type PostSaveSettingsState = {
-  title: string;
-  schema: SurveySchema;
-  theme: ITheme;
-  assetFormId: string;
-  deadlineValue: string;
-  responseLimitValue: string;
-  formTypeValue: string;
-  formReasonValue: string;
-  allowResponseEditing: boolean;
-  organizationTypes: OrganizationType[];
-};
-
-type ExistingFormSaveRequest = {
-  allowResponseEditing: boolean;
-  callback: (saveNo: number, isSuccess: boolean) => void;
-  id: string;
-  isTemplate: boolean;
-  saveNo: number;
-  schema: SurveySchema;
-  selectedOrganizationTypes: OrganizationType[];
-  theme: ITheme;
-  title: string;
-};
-
-type CompatibilityDialogState = {
-  request: ExistingFormSaveRequest;
-  result: SchemaUpdateResult;
-};
-
-function OrganizationTypeSettings({
-  selectedTypes,
-  onChange,
-  disabled = false,
-  className = "",
-}: {
-  selectedTypes: OrganizationType[];
-  onChange: (types: OrganizationType[]) => void;
-  disabled?: boolean;
-  className?: string;
-}) {
-  const toggleType = (type: OrganizationType) => {
-    const nextTypes = selectedTypes.includes(type)
-      ? selectedTypes.filter((item) => item !== type)
-      : [...selectedTypes, type];
-    if (nextTypes.length > 0) {
-      onChange(nextTypes);
-    }
-  };
-
-  return (
-    <fieldset className={`builder-organization-settings ${className}`.trim()}>
-      <legend>Организации для выбора:</legend>
-      <div className="builder-organization-options">
-        {ORGANIZATION_TYPE_OPTIONS.map((option) => (
-          <label key={option.value}>
-            <input
-              type="checkbox"
-              checked={selectedTypes.includes(option.value)}
-              onChange={() => toggleType(option.value)}
-              disabled={disabled || (selectedTypes.length === 1 && selectedTypes[0] === option.value)}
-            />
-            <span>{option.selectionLabel}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;
-const builderDesignerSurveys = new WeakMap<SurveyCreator, Set<{ applyTheme: (theme: ITheme) => void }>>();
-
-function applyThemeToBuilderDesigners(creator: SurveyCreator) {
-  const designerTheme = resolveBuilderDesignerTheme(creator.theme);
-  builderDesignerSurveys.get(creator)?.forEach((survey) => survey.applyTheme(designerTheme));
-}
-
-function enableThemePageTitleFontEditor(creator: SurveyCreator) {
-  const pageTitleFontEditor = creator.themeEditor.propertyGrid.survey.getQuestionByName("pageTitle");
-
-  if (pageTitleFontEditor) {
-    pageTitleFontEditor.readOnly = false;
-  }
-}
-
-function configureCreatorLocalization() {
-  surveyLocalization.defaultLocale = "ru";
-  editorLocalization.currentLocale = "ru";
-  const ruEditorStrings = editorLocalization.getLocaleStrings("ru");
-  if (ruEditorStrings?.ed) {
-    ruEditorStrings.ed.panelPlaceHolder = "Перетащите элемент с панели инструментов";
-    ruEditorStrings.ed.panelPlaceHolderMobile = "Перетащите элемент с панели инструментов";
-    ruEditorStrings.ed.pagePlaceHolder =
-      "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
-    ruEditorStrings.ed.pagePlaceHolderMobile =
-      "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u043f\u0443\u0441\u0442\u0430. \u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0441 \u043f\u0430\u043d\u0435\u043b\u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u043e\u0432 \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043d\u0430 \u043d\u0435\u0433\u043e";
-  }
-  if (ruEditorStrings?.qt) ruEditorStrings.qt.panel = "Раздел";
-  if (ruEditorStrings?.tabs) {
-    ruEditorStrings.tabs.designer = "\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440";
-    ruEditorStrings.tabs.preview = "\u041f\u0440\u0435\u0432\u044c\u044e";
-    ruEditorStrings.tabs.logic = "\u041b\u043e\u0433\u0438\u043a\u0430 \u0444\u043e\u0440\u043c\u044b";
-    ruEditorStrings.tabs.theme = "\u0422\u0435\u043c\u044b";
-  }
-}
-
-function configureCreatorToolbox(creator: SurveyCreator) {
-  const toolbox = creator.toolbox;
-  toolbox.showCategoryTitles = true;
-  toolbox.clearItems();
-
-  QUESTION_TYPE_DEFINITIONS.forEach((definition, index) => {
-    const item: CreatorToolboxItem = {
-      name: definition.name,
-      iconName: definition.iconName,
-      title: definition.title,
-      category: definition.category,
-      json: {
-        type: definition.name,
-        ...(definition.defaultQuestionTitle ? { title: definition.defaultQuestionTitle } : {}),
-        ...(definition.name === "file" ? { allowMultiple: true } : {}),
-      },
-    };
-
-    toolbox.addItem(item, index);
-  });
-
-  const textItem = toolbox.getItemByName("text") as
-    | (ReturnType<typeof toolbox.getItemByName> & { items?: CreatorToolboxItem[]; clearSubitems?: () => void })
-    | null;
-
-  textItem?.clearSubitems?.();
-  if (textItem) {
-    textItem.items = [];
-  }
-
-  toolbox.categories.forEach((category) => {
-    if (category.name === "basic") {
-      category.title = "Базовые";
-    }
-
-    if (category.name === "advanced") {
-      category.title = "Расширенные";
-    }
-  });
-}
-
-function registerCustomIcons() {
-  if (!SvgRegistry || typeof SvgRegistry.registerIconFromSvg !== "function") {
-    return;
-  }
-
-  const registerSvgIcon = (iconName: string, iconSvg: string) => {
-    SvgRegistry.registerIconFromSvg(iconName, iconSvg);
-  };
-
-  registerSvgIcon("icon-toolbox-phone-custom", phoneIcon);
-  registerSvgIcon("icon-toolbox-email-custom", emailIcon);
-  registerSvgIcon("icon-toolbox-float-custom", floatIcon);
-  registerSvgIcon("icon-toolbox-integer-custom", integerIcon);
-  registerSvgIcon("icon-toolbox-date-custom", dateIcon);
-  registerSvgIcon("icon-toolbox-time-custom", timeIcon);
-  registerSvgIcon("icon-toolbox-datetime-custom", dateTimeIcon);
-  registerSvgIcon("icon-toolbox-sectiontitle-custom", sectionTitleIcon);
-}
-
-function configureCreatorQuestionTypes() {
-  registerCustomSurveyQuestionTypes();
-  [
-    ["text", "inputType"],
-    ["survey", "showQuestionNumbers"],
-    ["survey", "questionStartIndex"],
-    ["survey", "questionTitlePattern"],
-    ["question", "showNumber"],
-    ["question", "hideNumber"],
-    ["panel", "showNumber"],
-    ["panel", "showQuestionNumbers"],
-    ["paneldynamic", "showNumber"],
-    ["paneldynamic", "showQuestionNumbers"],
-  ].forEach(([typeName, propertyName]) => {
-    const property = Serializer.getProperty(typeName, propertyName);
-    if (property) {
-      property.visible = false;
-    }
-  });
-}
-
-function createCreatorInstance(
-  formId: string | undefined,
-  creatorTheme: ICreatorTheme,
-  safeEditingMode: boolean,
-) {
-  if (!Serializer.getProperty("question", "integrationId")) {
-    Serializer.addProperty("question", { name: "integrationId", visible: false });
-  }
-  configureCreatorLocalization();
-  registerCustomIcons();
-  configureCreatorQuestionTypes();
-  const patchedDesignerSurveys = new WeakSet<object>();
-  const htmlPatchedSurveys = new WeakSet<object>();
-  const designerSurveys = new Set<{ applyTheme: (theme: ITheme) => void }>();
-
-  const creator = new SurveyCreator({
-    questionTypes: [...QUESTION_TYPES],
-    showDesignerTab: true,
-    showLogicTab: true,
-    showPreviewTab: false,
-    showJSONEditorTab: false,
-    showTranslationTab: false,
-    showThemeTab: true,
-    showSaveButton: true,
-    isAutoSave: false,
-    showAddQuestionButton: false,
-    showSurveyHeader: true,
-    propertyGridNavigationMode: "accordion",
-    showCreatorThemeSettings: false,
-    previewAllowSimulateDevices: true,
-    previewAllowSelectLanguage: false,
-    previewAllowHiddenElements: false,
-    previewAllowSelectPage: true,
-    useElementTitles: true,
-  });
-
-  creator.locale = "ru";
-  // Keep the add button compact and its type picker reachable on phones.
-  creator.rememberLastQuestionType = false;
-  creator.applyCreatorTheme(creatorTheme);
-  creator.onSurveyInstanceCreated.add((_sender, options) => {
-    if (["designer-tab", "preview-tab", "theme-tab"].includes(options.area) && !htmlPatchedSurveys.has(options.survey)) {
-      htmlPatchedSurveys.add(options.survey);
-      options.survey.onProcessHtml.add((_survey, htmlOptions) => {
-        htmlOptions.html = sanitizeSurveyHtml(htmlOptions.html);
-      });
-    }
-    if (options.area === "designer-tab" && !patchedDesignerSurveys.has(options.survey)) {
-      patchedDesignerSurveys.add(options.survey);
-      designerSurveys.add(options.survey);
-      options.survey.applyTheme(resolveBuilderDesignerTheme(creator.theme));
-    }
-  });
-  builderDesignerSurveys.set(creator, designerSurveys);
-  creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
-  creator.JSON = resolveDefaultSurveyLogo(createEmptyBuilderSchema());
-  creator.allowCollapseSidebar = true;
-  creator.showSidebar = !(window.matchMedia?.(MOBILE_LAYOUT_QUERY).matches ?? false);
-
-  configureCreatorToolbox(creator);
-  registerBuilderPreviewTab(creator, formId);
-
-  creator.onQuestionAdded.add((_sender, options) => {
-    if (options.question) {
-      const questionType = (options.question as { getType?: () => string }).getType?.();
-      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !safeEditingMode;
-      options.question.descriptionLocation = "underTitle";
-      (options.question as { showNumber?: boolean }).showNumber = false;
-      if (questionType === "panel" || questionType === "paneldynamic") {
-        (options.question as { showQuestionNumbers?: string }).showQuestionNumbers = "off";
-      }
-    }
-  });
-
-  creator.onElementAllowOperations.add((_sender, options) => {
-    const currentType = options.obj?.getType?.();
-
-    options.allowChangeInputType = false;
-    if (currentType === "sectiontitle") options.allowChangeRequired = false;
-    if (!currentType) {
-      return;
-    }
-
-    options.allowChangeType = QUESTION_TYPES.includes(currentType as SurveyQuestionType);
-  });
-
-  creator.onPropertyGetReadOnly.add((_sender, options) => {
-    const propertyName = options.property?.name;
-    const elementType = options.element?.getType?.();
-    if (propertyName === "name" && elementType !== "survey") {
-      options.readOnly = true;
-    }
-  });
-
-  creator.onPropertyShowing.add((_sender, options) => {
-    if (options.element?.getType?.() === "sectiontitle" && ["isRequired", "valueName", "defaultValue", "correctAnswer", "requiredIf", "validators"].includes(options.property.name)) {
-      options.show = false;
-    }
-  });
-
-  return creator;
-}
-
-function cloneSchema(schema: SurveySchema): SurveySchema {
-  return sanitizeSurveySchema(schema);
-}
-
-function getSerializedBuilderSchema(creator: SurveyCreator): SurveySchema {
-  return normalizeSurveyQuestionNumbers(
-    serializeDefaultSurveyLogo(creator.JSON as SurveySchema),
-  );
-}
-
-function getRuntimePreviewSchema(creator: SurveyCreator): SurveySchema {
-  return getSerializedBuilderSchema(creator);
-}
-
-function updateRuntimePreviewBridgeFromCreator(creator: SurveyCreator, formId?: string) {
-  updateBuilderPreviewBridge({
-    previewSchema: getRuntimePreviewSchema(creator),
-    previewTheme: sanitizeSurveyTheme(creator.theme),
-    formId,
-  });
-}
-
-function applyThemeToCreatorAndEditor(creator: SurveyCreator, theme: ITheme) {
-  creator.theme = theme;
-  creator.themeEditor.themeModel.setTheme(theme);
-}
-
-function registerBuilderPreviewTab(creator: SurveyCreator, formId?: string) {
-  registerBuilderPreviewTabComponent();
-
-  const syncPreview = () => {
-    updateRuntimePreviewBridgeFromCreator(creator, formId);
-  };
-  const runtimePreviewPlugin: ICreatorPlugin = {
-    model: creator,
-    activate: syncPreview,
-    update: syncPreview,
-    deactivate: () => true,
-  };
-
-  creator.addPluginTab(
-    BUILDER_PREVIEW_TAB_ID,
-    runtimePreviewPlugin,
-    "Превью",
-    BUILDER_PREVIEW_COMPONENT_NAME,
-    1,
-  );
-}
-
-function getSchemaTitle(schema: SurveySchema, fallbackTitle: string) {
-  const normalizedTitle = schema.title?.trim();
-  return normalizedTitle || fallbackTitle;
-}
-
-function toBuilderSchema(schema: SurveySchema, fallbackTitle: string): BuilderSchema {
-  const builderSchema = normalizeSurveyQuestionNumbers(cloneSchema(schema)) as BuilderSchema;
-
-  return {
-    ...builderSchema,
-    title: getSchemaTitle(builderSchema, fallbackTitle),
-    locale: builderSchema.locale ?? "ru",
-    questionDescriptionLocation: builderSchema.questionDescriptionLocation ?? "underTitle",
-  };
-}
-
-function createEmptyBuilderSchema(title = "Новая форма") {
-  return toBuilderSchema(createEmptySurveySchema(title), title);
-}
-
-const GUARDED_COLLECTION_PROPERTIES = ["choices", "rows", "columns", "rateValues", "items"] as const;
-
-function getProtectedCollectionItemIdentity(propertyName: string, item: unknown) {
-  if (item && typeof item === "object" && !Array.isArray(item)) {
-    const itemRecord = item as Record<string, unknown>;
-    const technicalValue = (
-      (propertyName === "items" || propertyName === "columns")
-      && itemRecord.name !== undefined
-      && itemRecord.value === undefined
-    )
-      ? itemRecord.name
-      : itemRecord.value;
-    if (technicalValue !== undefined) {
-      return JSON.stringify(technicalValue);
-    }
-  }
-
-  return JSON.stringify(item);
-}
-
-function collectOriginalSchemaProtection(schema: SurveySchema) {
-  const questionNames = new Set<string>();
-  const collectionItems = new Set<string>();
-  const stack: unknown[] = schema.pages.flatMap((page) => page.elements);
-
-  while (stack.length > 0) {
-    const element = stack.pop();
-    if (!element || typeof element !== "object" || Array.isArray(element)) continue;
-    const elementRecord = element as Record<string, unknown>;
-    const name = typeof elementRecord.name === "string" ? elementRecord.name : "";
-
-    if (name) {
-      questionNames.add(name);
-      GUARDED_COLLECTION_PROPERTIES.forEach((propertyName) => {
-        const items = elementRecord[propertyName];
-        if (!Array.isArray(items)) return;
-        items.forEach((item) => {
-          collectionItems.add(`${name}:${propertyName}:${getProtectedCollectionItemIdentity(propertyName, item)}`);
-        });
-      });
-    }
-
-    for (const propertyName of ["elements", "templateElements"]) {
-      const nestedElements = elementRecord[propertyName];
-      if (Array.isArray(nestedElements)) stack.push(...nestedElements);
-    }
-  }
-
-  return { questionNames, collectionItems };
-}
-
 export function SurveyBuilder({
   canAdministerAllForms = false,
   formId,
@@ -737,98 +282,7 @@ export function SurveyBuilder({
     setOrganizationTypes(normalizeOrganizationTypes(editableForm?.organization_types));
   }, [editableForm?.organization_types, formId]);
 
-  useEffect(() => {
-    if (!creator || !editableForm || !isSafeEditingMode) {
-      return;
-    }
-
-    const protection = collectOriginalSchemaProtection(editableForm.schema);
-    const handleElementOperations = (_sender: unknown, rawOptions: unknown) => {
-      const options = rawOptions as {
-        allowChangeInputType?: boolean;
-        allowChangeType?: boolean;
-        allowDelete?: boolean;
-        allowDrag?: boolean;
-        allowEdit?: boolean;
-        element?: { name?: string };
-        obj?: { name?: string };
-      };
-      const elementName = options.element?.name ?? options.obj?.name;
-      if (!elementName || !protection.questionNames.has(elementName)) return;
-
-      options.allowDelete = false;
-      options.allowChangeType = false;
-      options.allowChangeInputType = false;
-      options.allowDrag = true;
-      options.allowEdit = true;
-    };
-    const handleCollectionOperations = (_sender: unknown, rawOptions: unknown) => {
-      const options = rawOptions as {
-        allowDelete?: boolean;
-        element?: { name?: string };
-        item?: unknown;
-        propertyName?: string;
-      };
-      const questionName = options.element?.name;
-      const propertyName = options.propertyName;
-      if (!questionName || !propertyName || !GUARDED_COLLECTION_PROPERTIES.includes(
-        propertyName as (typeof GUARDED_COLLECTION_PROPERTIES)[number],
-      )) {
-        return;
-      }
-
-      const key = `${questionName}:${propertyName}:${getProtectedCollectionItemIdentity(propertyName, options.item)}`;
-      if (protection.collectionItems.has(key)) {
-        options.allowDelete = false;
-      }
-    };
-    const handleReadOnlyProperty = (_sender: unknown, rawOptions: unknown) => {
-      const options = rawOptions as {
-        element?: unknown;
-        parentElement?: { name?: string };
-        parentProperty?: { name?: string };
-        property?: { name?: string };
-        readOnly?: boolean;
-      };
-      const questionName = options.parentElement?.name;
-      const collectionName = options.parentProperty?.name;
-      const itemRecord = options.element && typeof options.element === "object" && !Array.isArray(options.element)
-        ? options.element as Record<string, unknown>
-        : {};
-      const technicalPropertyName = (
-        (collectionName === "items" || collectionName === "columns")
-        && itemRecord.name !== undefined
-        && itemRecord.value === undefined
-      )
-        ? "name"
-        : "value";
-      if (
-        !questionName
-        || !collectionName
-        || options.property?.name !== technicalPropertyName
-        || !GUARDED_COLLECTION_PROPERTIES.includes(
-          collectionName as (typeof GUARDED_COLLECTION_PROPERTIES)[number],
-        )
-      ) {
-        return;
-      }
-
-      const key = `${questionName}:${collectionName}:${getProtectedCollectionItemIdentity(collectionName, options.element)}`;
-      if (protection.collectionItems.has(key)) {
-        options.readOnly = true;
-      }
-    };
-
-    creator.onElementAllowOperations.add(handleElementOperations);
-    creator.onCollectionItemAllowOperations.add(handleCollectionOperations);
-    creator.onPropertyGetReadOnly.add(handleReadOnlyProperty);
-
-    return () => {
-      creator.onElementAllowOperations.remove(handleElementOperations);
-      creator.onCollectionItemAllowOperations.remove(handleCollectionOperations);
-      creator.onPropertyGetReadOnly.remove(handleReadOnlyProperty);
-    };
-  }, [creator, editableForm, isSafeEditingMode]);
+  useSafeSchemaEditing(creator, editableForm?.schema, isSafeEditingMode);
 
   useEffect(() => {
     if (!creator) {
@@ -1478,242 +932,33 @@ export function SurveyBuilder({
       )}</Presence>
 
       <Presence kind="modal">{isResetConfirmOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-card card builder-reset-modal">
-            <h3 className="builder-reset-title">Сбросить конструктор?</h3>
-            <p className="builder-template-subtitle">
-              Все несохранённые вопросы и поля будут очищены. Это действие нельзя отменить.
-            </p>
-            <div className="deadline-modal-actions">
-              <button
-                type="button"
-                className="deadline-action-cancel-button"
-                onClick={() => setIsResetConfirmOpen(false)}
-                disabled={isSurveyMutationBusy || isTemplateBusy}
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                className="deadline-clear-button"
-                onClick={handleResetBuilder}
-                disabled={isSurveyMutationBusy || isTemplateBusy}
-              >
-                Сбросить
-              </button>
-            </div>
-          </div>
-        </div>
+        <BuilderResetDialog
+            isSurveyMutationBusy={isSurveyMutationBusy}
+            isTemplateBusy={isTemplateBusy}
+            setIsResetConfirmOpen={setIsResetConfirmOpen}
+            handleResetBuilder={handleResetBuilder}
+        />
       )}</Presence>
 
       <Presence kind="modal">{compatibilityDialog && (
-        <div className="modal-backdrop">
-          <div
-            className="modal-card card builder-compatibility-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={compatibilityDialog.result.status === "blocked"
-              ? "Несовместимые изменения формы"
-              : "Предупреждение об изменениях формы"}
-          >
-            <h3 className="builder-reset-title">
-              {compatibilityDialog.result.status === "blocked"
-                ? "Некоторые изменения несовместимы с полученными ответами"
-                : "Подтвердите изменения формы"}
-            </h3>
-            <p className="builder-template-subtitle">
-              {compatibilityDialog.result.status === "blocked"
-                ? "Эти изменения нельзя сохранить в текущей форме. Создайте копию, чтобы продолжить без риска для ответов."
-                : "Изменения будут применяться только к новым ответам. Ранее полученные ответы останутся без новых значений."}
-            </p>
-            <ul className="builder-compatibility-list">
-              {(compatibilityDialog.result.status === "blocked"
-                ? compatibilityDialog.result.breakingChanges
-                : compatibilityDialog.result.warnings
-              ).map((message) => <li key={message}>{message}</li>)}
-            </ul>
-            <div className="deadline-modal-actions">
-              {compatibilityDialog.result.status === "blocked" ? (
-                <>
-                  <button
-                    type="button"
-                    className="deadline-save-button"
-                    onClick={() => void handleCreateCompatibilityCopy()}
-                    disabled={isCompatibilityCopying}
-                  >
-                    {isCompatibilityCopying && <InlineSpinner />}
-                    Создать копию
-                  </button>
-                  <button
-                    type="button"
-                    className="deadline-action-cancel-button"
-                    onClick={handleCloseCompatibilityDialog}
-                    disabled={isCompatibilityCopying}
-                  >
-                    Вернуться к форме
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="deadline-save-button"
-                    onClick={() => void handleConfirmCompatibilityWarnings()}
-                    disabled={isSaving}
-                  >
-                    {isSaving && <InlineSpinner />}
-                    Сохранить изменения
-                  </button>
-                  <button
-                    type="button"
-                    className="deadline-action-cancel-button"
-                    onClick={handleCloseCompatibilityDialog}
-                    disabled={isSaving}
-                  >
-                    Отмена
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        <BuilderCompatibilityDialog
+            compatibilityDialog={compatibilityDialog}
+            isCompatibilityCopying={isCompatibilityCopying}
+            isSaving={isSaving}
+            handleCreateCompatibilityCopy={handleCreateCompatibilityCopy}
+            handleCloseCompatibilityDialog={handleCloseCompatibilityDialog}
+            handleConfirmCompatibilityWarnings={handleConfirmCompatibilityWarnings}
+        />
       )}</Presence>
 
       <Presence kind="modal">{postSaveSettings && (
-        <div className="modal-backdrop">
-          <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
-            <h3 className="deadline-modal-title">Настройки формы</h3>
-            <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
-            <div className="deadline-modal-primary-grid">
-              <label className="deadline-field">
-                <span>
-                  Тип формы <span className="deadline-required-mark" aria-hidden="true">*</span>
-                </span>
-                <div className="deadline-select-shell">
-                  <select
-                    aria-label="Тип формы"
-                    value={postSaveSettings.formTypeValue}
-                    onChange={(event) =>
-                      setPostSaveSettings((current) =>
-                        current ? { ...current, formTypeValue: event.target.value } : current,
-                      )
-                    }
-                  >
-                    <option value="" disabled hidden />
-                    {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {!postSaveSettings.formTypeValue && (
-                    <span className="deadline-select-placeholder" aria-hidden="true">
-                      Выберите тип
-                    </span>
-                  )}
-                </div>
-              </label>
-              <label className="deadline-field">
-                <span>
-                  Основание формы <span className="deadline-required-mark" aria-hidden="true">*</span>
-                </span>
-                <div className="deadline-select-shell">
-                  <select
-                    aria-label="Основание формы"
-                    value={postSaveSettings.formReasonValue}
-                    onChange={(event) =>
-                      setPostSaveSettings((current) =>
-                        current ? { ...current, formReasonValue: event.target.value } : current,
-                      )
-                    }
-                  >
-                    <option value="" disabled hidden />
-                    {FORM_REASON_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {!postSaveSettings.formReasonValue && (
-                    <span className="deadline-select-placeholder" aria-hidden="true">
-                      Выберите основание
-                    </span>
-                  )}
-                </div>
-              </label>
-            </div>
-            <label className="deadline-field">
-              <span>Дедлайн</span>
-              <input
-                type="datetime-local"
-                value={postSaveSettings.deadlineValue}
-                onChange={(event) =>
-                  setPostSaveSettings((current) =>
-                    current ? { ...current, deadlineValue: event.target.value } : current,
-                  )
-                }
-              />
-            </label>
-            <label className="deadline-field">
-              <span>Лимит ответов</span>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                value={postSaveSettings.responseLimitValue}
-                onChange={(event) =>
-                  setPostSaveSettings((current) =>
-                    current ? { ...current, responseLimitValue: event.target.value } : current,
-                  )
-                }
-              />
-            </label>
-            <div className="builder-response-settings builder-response-settings-modal">
-              <div>
-                <strong>Редактирование ответов</strong>
-                <span>Разрешить респонденту менять уже отправленный ответ.</span>
-              </div>
-              <button
-                type="button"
-                className={`settings-toggle ${postSaveSettings.allowResponseEditing ? "settings-toggle-active" : ""}`.trim()}
-                role="switch"
-                aria-checked={postSaveSettings.allowResponseEditing}
-                aria-label="Редактирование ответов"
-                onClick={() => setPostSaveSettings((current) => current ? {
-                  ...current,
-                  allowResponseEditing: !current.allowResponseEditing,
-                } : current)}
-                disabled={isPostSaveSettingsSaving}
-              >
-                <span aria-hidden="true" />
-              </button>
-            </div>
-            {hasOrganizationQuestion(postSaveSettings.schema) && (
-              <OrganizationTypeSettings
-                className="builder-organization-settings-modal"
-                selectedTypes={postSaveSettings.organizationTypes}
-                onChange={(types) => setPostSaveSettings((current) => current ? {
-                  ...current,
-                  organizationTypes: types,
-                } : current)}
-                disabled={isPostSaveSettingsSaving}
-              />
-            )}
-            <p className="deadline-modal-hint">
-              Дедлайн и лимит ответов можно оставить пустыми.
-            </p>
-            <div className="deadline-modal-actions">
-              <button type="button" className="deadline-action-cancel-button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
-                Отмена
-              </button>
-              <button type="button" className="deadline-save-button" onClick={() => void handleSavePostSaveSettings()} disabled={isPostSaveSettingsSaving}>
-                {isPostSaveSettingsSaving && <InlineSpinner />}
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
+        <BuilderFormSettingsDialog
+            postSaveSettings={postSaveSettings}
+            setPostSaveSettings={setPostSaveSettings}
+            isPostSaveSettingsSaving={isPostSaveSettingsSaving}
+            closePostSaveSettings={closePostSaveSettings}
+            handleSavePostSaveSettings={handleSavePostSaveSettings}
+        />
       )}</Presence>
     </div>
   );

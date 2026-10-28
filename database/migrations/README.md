@@ -2,6 +2,14 @@
 
 Production-изменения БД хранятся здесь как SQL-файлы с датой в имени.
 
+`202610281300_remove_legacy_mail_rpcs.sql` удаляет неиспользуемые
+`enqueue_mail_reminder_batch`, `list_missing_form_organizations` и
+`list_missing_form_organizations_snapshot`. Текущая рассылка использует
+`prepare_form_mail_recipients` и `enqueue_form_mail_batch`. Миграция применяется
+после всех предыдущих, не меняет данные и не использует `CASCADE`.
+Проверка bootstrap и миграции, ограничения и порядок отката описаны в
+[отчёте по архитектуре](../../docs/review-architecture-2026-10-28.md).
+
 Правила:
 
 - не редактируйте миграцию после применения в shared-окружении;

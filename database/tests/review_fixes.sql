@@ -61,8 +61,8 @@ begin
     values(organization_form,'Reminder review',owner_id,true,'anketa','plan','{"pages":[{"elements":[{"type":"organization","name":"org"}]}]}');
   insert into public.education_organizations(organization_type,number,alias,email)
     select 'school',g::text,'Review '||g,'review'||g||'@example.invalid' from generate_series(1,1001) g;
-  select jsonb_array_length(public.list_missing_form_organizations_snapshot(organization_form)) into n;
+  select jsonb_array_length((public.prepare_form_mail_recipients(organization_form,'reminder')->'recipients')) into n;
   assert n >= 1001, 'A scalar snapshot must preserve more than 1000 recipients';
-  assert not has_function_privilege('authenticated','public.list_missing_form_organizations_snapshot(uuid)','execute');
+  assert not has_function_privilege('authenticated','public.prepare_form_mail_recipients(uuid,text)','execute');
 end $$;
 rollback;

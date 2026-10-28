@@ -50,4 +50,24 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ["src/shared/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [{
+        group: ["**/entities/**", "**/features/**", "**/widgets/**", "**/pages/**", "**/app/**"],
+        message: "Shared modules must not depend on application or domain layers.",
+      }] }],
+    },
+  },
+  {
+    files: ["src/features/**/*.{ts,tsx}", "src/entities/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [{
+        group: ["**/pages/**", "**/widgets/**"],
+        message: "Features and entities must not import pages or widgets.",
+      }] }],
+    },
+  },
 );

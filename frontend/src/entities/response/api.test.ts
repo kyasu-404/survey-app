@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deleteResponses as deleteResponsesRequest } from "../../shared/api";
+import { deleteResponses as deleteResponsesRequest } from "./responsesApi";
 import { deleteResponses } from "./api";
 
-vi.mock("../../shared/api", () => ({ deleteResponses: vi.fn() }));
+vi.mock("./responsesApi", () => ({ deleteResponses: vi.fn() }));
 
 describe("deleting responses from the full list", () => {
   beforeEach(() => vi.resetAllMocks());

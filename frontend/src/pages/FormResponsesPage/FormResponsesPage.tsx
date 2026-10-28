@@ -26,12 +26,12 @@ import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
-import { getFileQuestions } from "../../shared/lib/responseFiles";
+import { getFileQuestions } from "../../entities/response/lib/responseFiles";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
-import type { ResponsesTableRow, ResponsesTableColumn } from "../../shared/lib/responsesExport";
+import type { ResponsesTableRow, ResponsesTableColumn } from "../../entities/response/lib/responsesExport";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
-import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../shared/lib/responsesExport";
-import { createResponseReport, type ResponseReport } from "../../shared/lib/responseReport";
+import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../entities/response/lib/responsesExport";
+import { createResponseReport, type ResponseReport } from "../../entities/response/lib/responseReport";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { ResponsePreviewSheet } from "./ResponsePreviewSheet";
 import { ResponseReportModal } from "./ResponseReportModal";
@@ -389,7 +389,7 @@ export default function FormResponsesPage() {
     zipControllerRef.current = controller;
     setZipProgress({ completed: 0, total: 0 });
     try {
-      const { exportResponseFilesZip } = await import("../../shared/lib/responseFilesZip");
+      const { exportResponseFilesZip } = await import("../../entities/response/lib/responseFilesZip");
       const result = await exportResponseFilesZip(await loadExportResponses(controller.signal), formQuery.data.schema, formQuery.data.title, {
         signal: controller.signal,
         onProgress: (completed, total) => {

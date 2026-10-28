@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SurveySchema } from "../../entities/survey/types";
 import { TEST_SIGNATURE_PNG } from "../../test/signatures";
-import { createResponsesHtmlDocument, formatResponsesForTable, getResponsesPrintBlocks, RESPONSE_DATE_KEY } from "./responsesExport";
+import { createResponsesHtmlDocument, formatResponsesForTable, getResponsesPrintBlocks, RESPONSE_DATE_KEY } from "../../entities/response/lib/responsesExport";
 
 const questions = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({ type: "text", name: `q${start + index}`, title: "Одинаковый заголовок" }));
 const response = { id: "r", form_id: "f", created_at: "2026-09-11T09:00:00Z", data: {} };

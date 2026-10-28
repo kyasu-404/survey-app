@@ -1,5 +1,5 @@
 import type { FormsCursor, FormsSort } from "../../../entities/survey/types";
-import { createBatchedFormsQuery, getFormsNextCursor } from "../../../shared/lib/batchedInfiniteQuery";
+import { createBatchedFormsQuery, getFormsNextCursor } from "../../../entities/survey/model/batchedInfiniteQuery";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboardFormsPage } from "../../../entities/survey/api/surveysApi";

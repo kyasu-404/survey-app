@@ -1,17 +1,15 @@
-import { getFormsNextCursor } from "../../shared/lib/batchedInfiniteQuery";
-import type { FormsCursor } from "../../entities/survey/types";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
-import { getDashboardFormStatsQueryKey, getDashboardFormsQueryKey } from "../../entities/survey/model/queryKeys";
-import type { SurveyForm } from "../../entities/survey/types";
-import DashboardPage from "./DashboardPage";
+import { getFormsNextCursor } from "../../entities/survey/model/batchedInfiniteQuery";
+import { getDashboardFormsQueryKey, getDashboardFormStatsQueryKey } from "../../entities/survey/model/queryKeys";
+import type { FormsCursor, SurveyForm } from "../../entities/survey/types";
 import { copyTextToClipboard } from "../../shared/lib/browser";
+import { readAppCss } from "../../test/readAppCss";
+import DashboardPage from "./DashboardPage";
 
 const {
   showToast,
@@ -223,9 +221,7 @@ function renderPage(
   return { queryClient, ...renderResult };
 }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

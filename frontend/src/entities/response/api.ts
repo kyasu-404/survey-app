@@ -7,7 +7,7 @@ import {
   deleteResponses as deleteResponsesRequest,
   type FetchResponsesByFormOptions,
   type PaginatedResponses,
-} from "../../shared/api";
+} from "./responsesApi";
 
 export async function getExistingResponse(
   formId: string,

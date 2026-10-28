@@ -50,7 +50,7 @@ import {
   loadSurveyResponseDraft,
   saveSurveyResponseDraft,
 } from "./responseDraft";
-import { getOrCreateResponseBrowserId } from "./responseBrowserId";
+import { getOrCreateResponseBrowserId } from "../../shared/lib/responseBrowserId";
 import { readLocalSurveyFile } from "./surveyFilePreview";
 import { installRatingFeedback } from "./ratingFeedback";
 import "./SurveyFormRenderer.css";

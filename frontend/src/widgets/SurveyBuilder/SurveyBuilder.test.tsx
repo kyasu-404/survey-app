@@ -1,18 +1,19 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
-import { SidebarAccountMenu } from "../Sidebar/SidebarAccountMenu";
-import { ThemeProvider } from "../../shared/theme/ThemeProvider";
-import { SurveyBuilder } from "./SurveyBuilder";
-import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
-import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
 import type { SurveySchema } from "../../entities/survey/types";
 import { SUPABASE_URL } from "../../shared/config/env";
+import { ThemeProvider } from "../../shared/theme/ThemeProvider";
+import { readAppCss } from "../../test/readAppCss";
+import { SidebarAccountMenu } from "../Sidebar/SidebarAccountMenu";
+import { SurveyBuilder } from "./SurveyBuilder";
+import { getSurveyBuilderDraftStorageKey } from "./builderDraft";
+import { getBuilderPreviewSnapshot } from "./builderPreviewBridge";
 
 const DEFAULT_SURVEY_LOGO_TOKEN = "__APP_DEFAULT_CARD_LOGO__";
 const UPLOADED_BACKGROUND_PATH = "forms/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333.png";
@@ -109,7 +110,7 @@ vi.mock("../../entities/survey/api/surveysApi", () => ({
   setFormResponseLimit,
 }));
 
-vi.mock("../../shared/api/themeAssets", () => ({
+vi.mock("../../entities/survey/api/themeAssets", () => ({
   SURVEY_BACKGROUND_ACCEPT: "image/jpeg,image/png,image/webp",
   createSurveyAssetFormId,
   listCommonSurveyBackgrounds: vi.fn().mockResolvedValue([]),
@@ -303,12 +304,12 @@ function renderBuilder(formId?: string, safeEditingResponseCount = 0, queryClien
   );
 }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 function readSurveyBuilderSource() {
-  return readFileSync(join(process.cwd(), "src/widgets/SurveyBuilder/SurveyBuilder.tsx"), "utf8");
+  return ["SurveyBuilder.tsx", "creatorSetup.ts", "BuilderDialogs.tsx"].map((name) =>
+    readFileSync(join(process.cwd(), "src/widgets/SurveyBuilder", name), "utf8"),
+  ).join("\n");
 }
 
 function createTemplateForm(overrides: Partial<SurveySchema & { id: string; title: string; schema: SurveySchema }> = {}) {
@@ -422,6 +423,26 @@ describe("SurveyBuilder", () => {
         expect.objectContaining({ themeName: "survey-app-creator-graphite" }),
       );
     });
+  });
+
+  it("keeps editing and preview synchronization working after a draft quota error", async () => {
+    renderBuilder();
+    await waitFor(() => expect(creatorInstances).toHaveLength(1));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    try {
+      const creator = creatorInstances[0];
+      act(() => {
+        creator.JSON = { title: "Изменено без хранилища", pages: [{ elements: [] }] };
+        expect(() => creator.onModified.fire(creator, { type: "PROPERTY_CHANGED" })).not.toThrow();
+      });
+      await waitFor(() => expect(getBuilderPreviewSnapshot().previewSchema.title).toBe("Изменено без хранилища"));
+    } finally {
+      write.mockRestore();
+      warn.mockRestore();
+    }
   });
 
   it("restores a saved draft and persists later changes", async () => {

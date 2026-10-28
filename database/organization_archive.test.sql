@@ -1,4 +1,4 @@
--- Run on a disposable production copy after 202609160200_organization_archive.sql.
+-- Run on a disposable production copy after all current migrations.
 \set ON_ERROR_STOP on
 begin;
 set local statement_timeout = '30s';
@@ -85,7 +85,7 @@ do $$ declare response_id uuid; begin
     raise exception 'Switched to a different archive';
   exception when invalid_parameter_value then null; end;
 end $$;
-select pg_temp.assert_true((select count(*) = 0 from public.list_missing_form_organizations('b2000000-0000-4000-8000-000000000001') where id::text like 'e2000000-%'), 'reminders exclude archived organizations');
+select pg_temp.assert_true((select count(*) = 0 from jsonb_array_elements(public.prepare_form_mail_recipients('b2000000-0000-4000-8000-000000000001','reminder')->'recipients') recipient where recipient->>'id' like 'e2000000-%'), 'reminders exclude archived organizations');
 
 -- Matching import restores UUIDs, including null UDOD numbers, and updates email.
 select set_config('request.jwt.claim.sub','a2000000-0000-4000-8000-000000000001',true);
@@ -98,7 +98,7 @@ on conflict (organization_type, number, alias) do update set email = excluded.em
 select pg_temp.assert_true((select count(*) = 3 and bool_and(not is_archived) from public.education_organizations where id::text like 'e2000000-%'), 'import restores original IDs, including UDOD');
 select pg_temp.assert_true((select email = 'changed@example.invalid' from public.education_organizations where id = 'e2000000-0000-4000-8000-000000000001'), 'import updates email');
 reset role;
-select pg_temp.assert_true((select count(*) = 1 from public.list_missing_form_organizations('b2000000-0000-4000-8000-000000000001') where id::text like 'e2000000-%'), 'restored submitted organization still counted as submitted');
+select pg_temp.assert_true((select count(*) = 1 from jsonb_array_elements(public.prepare_form_mail_recipients('b2000000-0000-4000-8000-000000000001','reminder')->'recipients') recipient where recipient->>'id' like 'e2000000-%'), 'restored submitted organization still counted as submitted');
 select set_config('request.jwt.claim.sub','',true);
 set local role anon;
 select * from public.submit_form_response('b2000000-0000-4000-8000-000000000001',

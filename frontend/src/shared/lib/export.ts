@@ -1,4 +1,8 @@
-import { getResponseAnswerColumns, getResponseHeaderLevels, type ResponsesTableColumn } from "./responsesExport";
+import {
+  getTableValueColumns,
+  getTableHeaderLevels,
+  type TableColumn,
+} from "./tableColumns";
 import { getSignatureImage, getExcelSignatureImage, SIGNATURE_UNAVAILABLE } from "./signatureImage";
 
 const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -48,13 +52,13 @@ function downloadBlob(blob: Blob, fileName: string) {
 export async function createExcelWorkbook(
   data: Array<Record<string, unknown>>,
   worksheetName = "Ответы",
-  columns?: ResponsesTableColumn[],
+  columns?: TableColumn[],
 ) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
-  const exportColumns = getResponseAnswerColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
-  const groupLevels = getResponseHeaderLevels(exportColumns);
+  const exportColumns = getTableValueColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
+  const groupLevels = getTableHeaderLevels(exportColumns);
   worksheet.columns = exportColumns.map(({ key, answerType }) => ({ key, width: answerType === "paneldynamic" ? 44 : 28 }));
 
   groupLevels.forEach(({ kind: level, groupOf }) => {
@@ -144,7 +148,7 @@ export async function exportToExcel(
   data: Array<Record<string, unknown>>,
   fileName = "responses",
   worksheetName = "Ответы",
-  columns?: ResponsesTableColumn[],
+  columns?: TableColumn[],
 ) {
   if (!data.length) return;
   const workbook = await createExcelWorkbook(data, worksheetName, columns);

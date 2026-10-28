@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readAppCss } from "../../test/readAppCss";
 import SurveyPage from "./SurveyPage";
 
 const { authState, getExistingResponse, getFormById, getPublicFormById, showToast } = vi.hoisted(() => ({
@@ -32,8 +31,8 @@ vi.mock("../../entities/response/api", () => ({
   getExistingResponse,
 }));
 
-vi.mock("../../widgets/SurveyRenderer/SurveyRenderer", () => ({
-  SurveyRenderer: ({ existingResponse, isPreview, renderMode }: {
+vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
+  SurveyFormRenderer: ({ existingResponse, isPreview, renderMode }: {
     existingResponse?: { responseId: string } | null;
     isPreview?: boolean;
     renderMode?: string;
@@ -55,9 +54,7 @@ function createQueryClient() {
   });
 }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 function renderSurveyPage({
   queryClient = createQueryClient(),

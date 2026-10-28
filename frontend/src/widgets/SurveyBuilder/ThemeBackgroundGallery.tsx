@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { getErrorMessage } from "../../shared/lib/error";
 import {
   SURVEY_BACKGROUND_ACCEPT,
   listCommonSurveyBackgrounds,
@@ -7,7 +6,8 @@ import {
   removeSurveyBackground,
   uploadSurveyBackground,
   type SurveyBackgroundAsset,
-} from "../../shared/api/themeAssets";
+} from "../../entities/survey/api/themeAssets";
+import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 
 type ThemeBackgroundGalleryProps = {

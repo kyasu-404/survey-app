@@ -1,0 +1,223 @@
+/* Survey Creator follows the application's color temperature without taking
+   over the survey theme. Toolbar, side panels and workspace are separate
+   surface levels; the survey canvas continues to use creator.theme. */
+.builder-creator-shell .svc-creator {
+  --sjs-primary-backcolor: var(--creator-accent) !important;
+  --sjs-primary-backcolor-dark: var(--theme-accent-strong) !important;
+  --sjs-primary-backcolor-light: color-mix(in srgb, var(--creator-accent) 10%, transparent) !important;
+  --sjs-primary-background-500: var(--creator-accent) !important;
+  --sjs-primary-background-400: var(--theme-accent-strong) !important;
+  --sjs-primary-background-10: color-mix(in srgb, var(--creator-accent) 8%, transparent) !important;
+  --sjs-general-backcolor: var(--creator-control) !important;
+  --sjs-general-backcolor-dim: var(--creator-panel) !important;
+  --sjs-general-backcolor-dim-light: var(--creator-toolbar) !important;
+  --sjs-general-backcolor-dark: var(--creator-border) !important;
+  --sjs-general-forecolor: var(--creator-text) !important;
+  --sjs-general-forecolor-light: var(--creator-text-muted) !important;
+  --sjs-layer-1-foreground-100: var(--creator-text) !important;
+  --sjs-layer-1-foreground-50: var(--creator-text-muted) !important;
+  --sjs-layer-1-background-500: var(--creator-control) !important;
+  --sjs-layer-3-background-500: var(--creator-control) !important;
+  --sjs-special-background: var(--creator-panel-muted) !important;
+  --sjs2-color-utility-surface-designer: var(--creator-workspace) !important;
+  --ctr-surface-background-color: var(--creator-workspace) !important;
+  --ctr-property-grid-form-background-color: var(--creator-panel) !important;
+  --ctr-editor-background-color: var(--creator-control) !important;
+  --ctr-button-group-item-text-color-selected: var(--creator-accent) !important;
+  --ctr-button-group-item-icon-color-selected: var(--creator-accent) !important;
+  --ctr-button-group-border-color-focused: var(--creator-accent) !important;
+  --ctr-survey-action-button-text-color-positive: var(--creator-accent) !important;
+  --ctr-menu-item-border-color-selected: var(--creator-accent) !important;
+  --ctr-property-grid-header-border-color: var(--creator-accent) !important;
+  --ctr-editor-border-color-focused: var(--creator-accent) !important;
+  --ctr-editor-border-color-highlighted: color-mix(in srgb, var(--creator-accent) 24%, transparent) !important;
+  border-color: var(--creator-border-strong);
+  background: var(--creator-panel);
+  box-shadow: 0 18px 36px var(--theme-shadow-color);
+}
+
+.builder-creator-shell .svc-tabbed-menu {
+  border-color: var(--creator-border-strong);
+  background: var(--creator-toolbar) !important;
+}
+
+.builder-creator-shell .svc-tabbed-menu-item,
+.builder-creator-shell .svc-tabbed-menu-item__title,
+.builder-creator-shell .svc-toolbox__category-title {
+  color: var(--creator-text) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item-title {
+  color: var(--creator-text-muted) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover .svc-toolbox__item-title,
+.builder-creator-shell .svc-toolbox__item:focus .svc-toolbox__item-title {
+  color: var(--creator-text) !important;
+}
+
+.builder-creator-shell .svc-tabbed-menu-item--selected,
+.builder-creator-shell .svc-property-grid__header,
+.builder-creator-shell .svc-side-bar__content-tabs .svc-tabbed-menu-item--selected,
+.builder-creator-shell .svc-panel__add-new-question .svc-add-new-item-button__text,
+.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question .svc-add-new-item-button__text {
+  color: var(--creator-accent) !important;
+}
+
+.builder-creator-shell .svc-tabbed-menu-item--selected::after {
+  background: var(--creator-accent) !important;
+}
+
+.builder-creator-shell .svc-toolbox,
+.builder-creator-shell .svc-panel__add-new-question,
+.builder-creator-shell .svc-panel__add-new-question-wrapper .svc-element__add-new-question {
+  border-color: var(--creator-border);
+  background: var(--creator-panel) !important;
+}
+
+.builder-creator-shell .svc-toolbox {
+  border-right: 1px solid var(--creator-border);
+}
+
+.builder-creator-shell .svc-side-bar,
+.builder-creator-shell .svc-side-bar__container,
+.builder-creator-shell .svc-side-bar__container-wrapper,
+.builder-creator-shell .svc-side-bar__content,
+.builder-creator-shell .svc-side-bar__content-wrapper {
+  border-color: var(--creator-border);
+  background: var(--creator-panel) !important;
+}
+
+.builder-creator-shell .svc-side-bar {
+  border-left: 1px solid var(--creator-border);
+}
+
+.builder-creator-shell svc-tab-designer,
+.builder-creator-shell .svc-tab-designer {
+  border-color: var(--creator-border);
+  background: var(--creator-workspace) !important;
+}
+
+.builder-creator-shell .svc-designer-header,
+.builder-creator-shell .svc-designer-header .svc-surface-header,
+.builder-creator-shell .svc-designer-header .sd-container-modern__title {
+  border-color: var(--creator-border);
+  background: var(--creator-workspace) !important;
+}
+
+.builder-creator-shell .svc-tab-designer .svc-designer-header {
+  border-bottom: 2px solid var(--creator-accent);
+}
+
+/* Preview chrome belongs to the application theme; the survey surface inside
+   keeps its own independently selected form theme. */
+.template-preview-drawer,
+.response-preview-drawer {
+  background: var(--theme-surface-muted);
+}
+
+:root[data-theme="sand"] .template-preview-drawer,
+:root[data-theme="sand"] .response-preview-drawer {
+  background: #ffffff;
+}
+
+.template-preview-body.survey-page-card,
+.response-preview-body.survey-page-card {
+  padding: 0;
+  border-color: var(--theme-border) !important;
+  background: transparent !important;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover,
+.builder-creator-shell .svc-toolbox__item:focus,
+.builder-creator-shell .svc-toolbox__tool--has-subitems:hover > .svc-toolbox__tool-content > .svc-toolbox__item,
+.builder-creator-shell .spg-button-group__item--selected {
+  color: var(--creator-text) !important;
+  border-color: color-mix(in srgb, var(--creator-accent) 38%, transparent) !important;
+  background: var(--creator-hover) !important;
+}
+
+.builder-creator-shell .svc-toolbox__item {
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.builder-creator-shell .svc-toolbox__item:hover,
+.builder-creator-shell .svc-toolbox__item:focus {
+  box-shadow: inset 3px 0 0 var(--creator-accent) !important;
+  transform: translateX(2px);
+}
+
+.builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover,
+.builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):focus {
+  color: var(--creator-text) !important;
+  background: var(--creator-hover) !important;
+  box-shadow: inset 0 -1px 0 var(--creator-border-strong) !important;
+}
+
+.builder-creator-shell .svc-string-editor__border.svc-string-editor__border--focus,
+.builder-creator-shell .svc-string-editor:focus-within .svc-string-editor__border--focus {
+  border-color: color-mix(in srgb, var(--creator-accent) 58%, transparent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--creator-accent) 14%, transparent) !important;
+}
+
+.builder-creator-shell .svc-surface-placeholder__text {
+  color: var(--creator-text-muted);
+}
+
+.builder-creator-shell .svc-toolbox__category-header {
+  border-color: var(--creator-border);
+  background: var(--creator-panel-muted) !important;
+}
+
+.builder-creator-shell .svc-toolbox__search-container,
+.builder-creator-shell .svc-toolbox .svc-search,
+.builder-creator-shell .svc-side-bar .svc-search,
+.builder-creator-shell .spg-input,
+.builder-creator-shell .spg-input-container,
+.builder-creator-shell .spg-dropdown,
+.builder-creator-shell .spg-tagbox {
+  border-color: var(--creator-border) !important;
+  background: var(--creator-control) !important;
+}
+
+.builder-creator-shell .svc-question__content:focus,
+.builder-creator-shell .svc-hovered > .svc-question__content {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--creator-accent) 28%, transparent) !important;
+}
+
+.builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) {
+  box-shadow:
+    0 0 0 1px var(--creator-accent) !important;
+}
+
+.builder-creator-shell .svc-question__content--collapsed-drag-over-inside:not(.svc-question__content--dragged) {
+  background: var(--creator-selected) !important;
+}
+
+.builder-creator-shell .builder-toolbar-action-button,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary {
+  color: var(--creator-text) !important;
+  border-color: color-mix(in srgb, var(--creator-text) 24%, transparent) !important;
+  background: var(--creator-control) !important;
+  box-shadow: none !important;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.builder-creator-shell .builder-toolbar-action-button:hover,
+.builder-creator-shell .builder-toolbar-action-button:focus-visible,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:hover,
+.builder-creator-shell .builder-toolbar-action-button.builder-toolbar-action-button-secondary:focus-visible {
+  color: var(--creator-text) !important;
+  border-color: var(--creator-border-strong) !important;
+  background: var(--creator-hover) !important;
+  box-shadow: none !important;
+  transform: none;
+}
+

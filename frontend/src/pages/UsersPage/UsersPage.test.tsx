@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readAppCss } from "../../test/readAppCss";
 import UsersPage from "./UsersPage";
 
 const {
@@ -58,9 +57,7 @@ function createQueryClient() {
   });
 }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 describe("UsersPage", () => {
   beforeEach(() => {

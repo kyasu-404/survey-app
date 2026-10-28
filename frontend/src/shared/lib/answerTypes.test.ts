@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { Model } from "survey-core";
 import { QUESTION_TYPES, registerCustomSurveyQuestionTypes } from "../../entities/survey/model/surveyQuestionTypes";
 import type { SurveyQuestion, SurveySchema } from "../../entities/survey/types";
-import { formatResponsesForTable, createResponsesHtmlDocument } from "./responsesExport";
+import { formatResponsesForTable, createResponsesHtmlDocument } from "../../entities/response/lib/responsesExport";
 import { createExcelWorkbook } from "./export";
-import { createResponseReport } from "./responseReport";
+import { createResponseReport } from "../../entities/response/lib/responseReport";
 
 const choice = [{ value: "a", text: "Первый" }, { value: "b", text: "Второй" }];
 const cases: Array<[string, unknown, string, Record<string, unknown>?]> = [

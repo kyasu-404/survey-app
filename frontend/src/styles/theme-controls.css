@@ -1,0 +1,402 @@
+/* Keep every application scheme inside one color temperature. The accent is
+   intentionally concentrated in actions and selected states; backgrounds,
+   cards and controls use the quieter surface scale above. */
+:root {
+  --card-bg: var(--theme-card-background);
+  --card-border: var(--theme-border);
+  --sidebar-border: var(--theme-border);
+  --text-muted: var(--theme-text-muted);
+  --surface-muted: var(--theme-surface-muted);
+  --shadow-lg: 0 28px 64px var(--theme-shadow-color);
+  --shadow-md: 0 18px 36px var(--theme-shadow-color);
+  --shadow-sm: 0 10px 24px var(--theme-shadow-color);
+}
+
+.app-button,
+.button-link,
+.sidebar-toggle-button,
+.sidebar-open-button,
+.logout-button,
+.dashboard-refresh-button,
+.dashboard-info-button,
+.form-menu-trigger,
+.icon-action-button,
+.dashboard-load-more-button,
+.dashboard-view-button {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-control-background);
+  box-shadow: var(--shadow-sm), var(--surface-inset);
+}
+
+.app-button:hover,
+.button-link:hover,
+.sidebar-toggle-button:hover,
+.sidebar-open-button:hover,
+.logout-button:hover,
+.dashboard-refresh-button:hover,
+.dashboard-info-button:hover,
+.form-menu-trigger:hover,
+.icon-action-button:hover,
+.dashboard-load-more-button:hover,
+.dashboard-view-button:hover {
+  color: var(--theme-text);
+  border-color: color-mix(in srgb, var(--theme-accent) 36%, transparent);
+  background: var(--theme-surface-light);
+  box-shadow: 0 16px 30px var(--theme-shadow-color), var(--surface-inset);
+}
+
+
+.sidebar-toggle-button,
+.sidebar-toggle-button:hover,
+.sidebar-toggle-button:focus-visible,
+.sidebar-open-button,
+.sidebar-open-button:hover,
+.sidebar-open-button:focus-visible,
+.sidebar .logout-button,
+.sidebar .logout-button:hover,
+.sidebar .logout-button:focus-visible {
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface-light);
+  box-shadow: 0 8px 18px var(--theme-shadow-color);
+}
+
+.button-primary,
+.button-primary:hover,
+.nav-link-active,
+.nav-link-active:hover {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+}
+
+input,
+select,
+textarea {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-light);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--theme-accent) 56%, transparent);
+  background: var(--theme-popover-background);
+  box-shadow: 0 0 0 4px var(--theme-accent-soft);
+}
+
+.dashboard-toolbar input,
+.dashboard-toolbar select,
+.users-page-controls input,
+.users-page-controls select,
+.users-filters-grid input,
+.users-filters-grid select,
+.dashboard-toolbar input:focus,
+.dashboard-toolbar select:focus,
+.users-page-controls input:focus,
+.users-page-controls select:focus,
+.users-filters-grid input:focus,
+.users-filters-grid select:focus {
+  background: var(--theme-control-background);
+}
+
+.dashboard-toolbar select option,
+.users-page-controls select option,
+.users-filters-grid select option {
+  color: var(--theme-text);
+  background: var(--theme-popover-background);
+}
+
+.dashboard-info-button,
+.dashboard-info-button:hover,
+.dashboard-info-button:focus-visible {
+  background: var(--theme-surface-light);
+}
+
+.users-page-controls .app-button,
+.dashboard-refresh-button,
+button.organizations-file-button,
+button.responses-report-button,
+.users-page-controls .app-button:hover,
+.users-page-controls .app-button:focus-visible,
+.dashboard-refresh-button:hover,
+.dashboard-refresh-button:focus-visible,
+button.organizations-file-button:hover,
+button.organizations-file-button:focus-visible,
+button.responses-report-button:hover,
+button.responses-report-button:focus-visible,
+.users-page-controls .app-button:disabled,
+.dashboard-refresh-button:disabled,
+button.organizations-file-button:disabled,
+button.responses-report-button:disabled {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-control-background);
+}
+
+.responses-page-toolbar button.dashboard-refresh-button,
+.responses-page-toolbar button.dashboard-refresh-button:hover,
+.responses-page-toolbar button.dashboard-refresh-button:focus-visible,
+.responses-page-toolbar button.dashboard-refresh-button:disabled {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-control-background);
+}
+
+.form-menu-trigger,
+.form-menu-trigger:hover,
+.form-menu-trigger:focus-visible {
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface-light);
+}
+
+.form-menu-trigger {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.form-menu-trigger:hover,
+.form-menu-trigger:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px var(--theme-shadow-color);
+}
+
+.organizations-row-actions .organization-edit-button,
+.organizations-row-actions .organization-edit-button:hover,
+.organizations-row-actions .organization-edit-button:focus-visible {
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+}
+
+.organizations-row-actions .organization-delete-button,
+.organizations-row-actions .organization-delete-button:hover,
+.organizations-row-actions .organization-delete-button:focus-visible {
+  color: #7f1d1d;
+  border-color: rgba(185, 28, 28, 0.34);
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.dashboard-main-card,
+.templates-main-card,
+.responses-page-card,
+.users-page-card,
+.organizations-page-card,
+.login-card,
+.modal-card {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-page-surface);
+}
+
+.dashboard-toolbar,
+.users-page-controls,
+.organizations-type-switcher,
+.response-report-tabs {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-muted);
+}
+
+.dashboard-form-card,
+.builder-template-card,
+.response-report-question {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-control-background);
+  box-shadow: 0 20px 42px var(--theme-shadow-color), var(--surface-inset);
+}
+
+.dashboard-form-card {
+  background: var(--theme-form-card-background);
+}
+
+.dashboard-form-card-interactive:hover,
+.dashboard-form-card-interactive:focus-visible,
+.dashboard-form-card-static:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, transparent);
+  background: var(--theme-card-background);
+  box-shadow:
+    0 26px 54px var(--theme-shadow-color),
+    0 0 0 1px var(--theme-accent-soft),
+    var(--surface-inset);
+}
+
+.dashboard-form-card::before {
+  background: radial-gradient(circle, var(--theme-accent-soft), transparent 64%);
+}
+
+.dashboard-form-card::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--theme-accent);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.dashboard-form-title,
+.templates-page-title,
+.templates-card-title,
+.users-page-title,
+.responses-page-title,
+.login-title {
+  color: var(--theme-text);
+}
+
+.dashboard-filter-field,
+.deadline-field,
+.deadline-field span,
+.templates-segment,
+.dashboard-loading-text,
+.dashboard-form-classification,
+.dashboard-meta-item,
+.dashboard-meta-pill,
+.dashboard-owner-badge,
+.templates-card-meta-line,
+.builder-template-card-meta,
+.responses-page-meta-item,
+.responses-page-header-copy,
+.users-role-chip-static,
+.users-page-status,
+.responses-pagination,
+.organizations-page-header p {
+  color: var(--theme-text-muted);
+}
+
+.dashboard-empty-state,
+.builder-template-empty-state,
+.users-page-error,
+.response-report-summary > div,
+.response-report-metrics > div,
+.response-report-group,
+.response-report-coverage-note,
+.response-report-empty {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-muted);
+}
+
+.dashboard-stats-popover,
+.form-menu-dropdown,
+.dashboard-status-dropdown,
+
+.form-menu-dropdown,
+.form-menu-dropdown-inline,
+.dashboard-status-dropdown {
+  background: var(--theme-popover-background) !important;
+}
+
+.dashboard-stats-popover {
+  background: var(--theme-popover-background);
+}
+
+.dashboard-stats-item span,
+.dashboard-stats-item strong {
+  color: var(--theme-text);
+}
+
+.dashboard-status-dropdown::before {
+  border-color: var(--theme-border);
+  background: var(--theme-popover-background);
+}
+
+.dashboard-stats-item,
+.dashboard-stat-card,
+.dashboard-status-pill,
+.dashboard-owner-badge,
+.dashboard-meta-pill,
+.templates-segmented-control,
+.template-preview-body,
+.users-table-shell,
+.responses-page-table-shell,
+.response-report-missing-table-shell {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-muted);
+}
+
+.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visible {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+}
+
+.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visible {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: linear-gradient(180deg, var(--theme-surface-light), var(--theme-surface));
+}
+
+.form-menu-item:hover,
+.form-menu-item:focus-visible,
+.dashboard-status-dropdown .form-menu-item:hover,
+.dashboard-status-dropdown .form-menu-item:focus-visible,
+.templates-segment:hover {
+  color: var(--theme-text);
+  background: var(--theme-accent-soft);
+}
+
+.templates-segment-active,
+.templates-segment-active:hover {
+  color: #ffffff;
+  background: var(--theme-accent-gradient);
+}
+
+.form-menu-item-danger:hover,
+.form-menu-item-danger:focus-visible {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.responses-table th,
+.responses-table td {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+}
+
+.responses-table th {
+  background: var(--theme-surface);
+}
+
+.users-table-shell,
+.responses-page-table-shell,
+.response-report-missing-table-shell,
+.responses-table td {
+  background: var(--theme-surface-light);
+}
+
+.responses-table tbody td {
+  background: var(--theme-surface-light);
+}
+
+.dashboard-responses-link,
+.dashboard-responses-link:hover {
+  color: var(--theme-text);
+}
+
+.dashboard-responses-link-limit-reached,
+.dashboard-responses-link-limit-reached:hover,
+.dashboard-responses-link-limit-reached:focus-visible {
+  color: #b91c1c;
+}
+
+.organizations-table td a {
+  color: var(--theme-accent-strong);
+}
+

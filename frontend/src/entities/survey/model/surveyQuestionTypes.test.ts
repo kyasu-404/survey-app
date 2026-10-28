@@ -3,8 +3,8 @@ import { Model } from "survey-core";
 import { QUESTION_TYPES, QUESTION_TYPE_DEFINITIONS, registerCustomSurveyQuestionTypes } from "./surveyQuestionTypes";
 import { sanitizeSurveySchema } from "./surveySchemaSecurity";
 import type { SurveySchema } from "../types";
-import { formatResponsesForTable } from "../../../shared/lib/responsesExport";
-import { createResponseReport } from "../../../shared/lib/responseReport";
+import { formatResponsesForTable } from "../../response/lib/responsesExport";
+import { createResponseReport } from "../../response/lib/responseReport";
 
 describe("section panels", () => {
   it("round-trips a standalone heading without an answer or required validation", () => {

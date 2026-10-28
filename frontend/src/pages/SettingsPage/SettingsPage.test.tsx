@@ -2,8 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readAppCss } from "../../test/readAppCss";
 import SettingsPage from "./SettingsPage";
 
 const {
@@ -201,7 +200,7 @@ describe("SettingsPage", () => {
   });
 
   it("separates settings areas, nested sections, and editable fields", () => {
-    const css = readFileSync(join(process.cwd(), "src/app.css"), "utf8");
+    const css = readAppCss();
 
     expect(css).toMatch(/\.settings-page-card\s*\{[^}]*background:\s*transparent;/);
     expect(css).toMatch(/\.settings-area\s*\{[^}]*border:\s*1px solid var\(--theme-border\);[^}]*border-radius:\s*22px;[^}]*background:\s*var\(--theme-panel-background\);/s);

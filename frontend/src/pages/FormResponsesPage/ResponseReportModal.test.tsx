@@ -1,14 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ResponseReport } from "../../shared/lib/responseReport";
+import type { ResponseReport } from "../../entities/response/lib/responseReport";
 import { ResponseReportModal } from "./ResponseReportModal";
 
 vi.mock("./ReminderConfirmationModal", () => ({
   ReminderConfirmationModal: ({ formId }: { formId: string }) => <div>Редактор напоминаний {formId}</div>,
 }));
 
-vi.mock("./MailDeliveryPanel", () => ({
+vi.mock("../../features/mail-composer/MailDeliveryPanel", () => ({
   MailDeliveryPanel: () => <div>Журнал отправки</div>,
 }));
 

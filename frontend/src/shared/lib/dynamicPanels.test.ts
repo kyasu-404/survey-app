@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { SurveySchema } from "../../entities/survey/types";
-import { formatResponsesForTable, createResponsesHtmlDocument } from "./responsesExport";
+import { formatResponsesForTable, createResponsesHtmlDocument } from "../../entities/response/lib/responsesExport";
 import { createExcelWorkbook } from "./export";
-import { createResponseReport } from "./responseReport";
+import { createResponseReport } from "../../entities/response/lib/responseReport";
 
 const response = { id: "r", form_id: "f", created_at: "2026-09-24T09:00:00Z" };
 const schema: SurveySchema = { pages: [{ title: "Сведения", elements: [

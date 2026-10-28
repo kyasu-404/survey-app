@@ -11,7 +11,7 @@ const { getPersonalLinks, setPersonalLinks, onCompose, exportPersonalLinksXlsx, 
 vi.mock("../../../entities/personal-link/api", () => ({ getPersonalLinks, setPersonalLinks }));
 vi.mock("../../../entities/personal-link/xlsx", () => ({ exportPersonalLinksXlsx }));
 vi.mock("../../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
-vi.mock("../../FormResponsesPage/MailDeliveryPanel", () => ({ MailDeliveryPanel: () => <p>Статусы отправки</p> }));
+vi.mock("../../../features/mail-composer/MailDeliveryPanel", () => ({ MailDeliveryPanel: () => <p>Статусы отправки</p> }));
 const enabled = { available: true, canManage: true, enabled: true, links: [{ id: "org", token: "token" }] };
 function mount(isPublic = true, queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(<QueryClientProvider client={queryClient}>

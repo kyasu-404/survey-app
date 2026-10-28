@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
+import { readAppCss } from "../../test/readAppCss";
 import FormResponsesHtmlPage from "./FormResponsesHtmlPage";
 
 const { getFormById, getOrganizations, getAllResponsesByForm, downloadHtmlDocument, createResponsesHtmlDocument } = vi.hoisted(() => ({
@@ -28,8 +29,8 @@ vi.mock("../../entities/response/api", () => ({
   getAllResponsesByForm,
 }));
 
-vi.mock("../../shared/lib/responsesExport", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../shared/lib/responsesExport")>();
+vi.mock("../../entities/response/lib/responsesExport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../entities/response/lib/responsesExport")>();
   createResponsesHtmlDocument.mockImplementation(actual.createResponsesHtmlDocument);
   return {
     ...actual,
@@ -61,9 +62,7 @@ function renderHtmlPage() {
 
 function createResponsesPage(data: SurveyResponse[]) { return data; }
 
-function readAppCss() {
-  return readFileSync(join(process.cwd(), "src/app.css"), "utf8");
-}
+
 
 describe("FormResponsesHtmlPage", () => {
   beforeEach(() => {

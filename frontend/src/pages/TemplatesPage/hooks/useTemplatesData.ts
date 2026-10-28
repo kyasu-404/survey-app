@@ -1,5 +1,5 @@
 import type { FormsCursor } from "../../../entities/survey/types";
-import { createBatchedFormsQuery, getFormsNextCursor } from "../../../shared/lib/batchedInfiniteQuery";
+import { createBatchedFormsQuery, getFormsNextCursor } from "../../../entities/survey/model/batchedInfiniteQuery";
 import { useEffect, useMemo } from "react";
 import { supabaseClient } from "../../../shared/api";
 import { useToast } from "../../../app/providers/ToastProvider";

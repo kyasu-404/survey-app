@@ -15,3 +15,7 @@ office-service/node_modules
 .worktrees
 .codex
 __pycache__/
+
+# Generated browser diagnostics and brainstorming session state
+/output/
+/.superpowers/

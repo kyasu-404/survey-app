@@ -570,14 +570,14 @@ test("anonymous upload reservations isolate visitors and enforce an independent 
 });
 
 test("reminder batches are enqueued atomically under a per-form lock", () => {
-  const enqueue = getFunctionDefinition("enqueue_mail_reminder_batch");
+  const enqueue = getFunctionDefinition("enqueue_form_mail_batch");
 
   assert.match(enqueue, /pg_advisory_xact_lock/i);
-  assert.match(enqueue, /status in \('queued', 'processing'\)/i);
+  assert.match(enqueue, /status in \('queued',\s*'processing'\)/i);
   assert.match(enqueue, /insert into public\.mail_batches/i);
   assert.match(enqueue, /insert into public\.mail_queue/i);
-  assert.match(schema, /grant execute on function public\.enqueue_mail_reminder_batch\(uuid, uuid, uuid, jsonb\) to service_role;/i);
-  assert.doesNotMatch(schema, /grant execute on function public\.enqueue_mail_reminder_batch[^;]+to authenticated/i);
+  assert.match(schema, /grant execute on function public\.enqueue_form_mail_batch\(uuid, uuid, uuid, jsonb, text, boolean\) to service_role;/i);
+  assert.doesNotMatch(schema, /grant execute on function public\.enqueue_form_mail_batch[^;]+to authenticated/i);
 });
 
 test("dashboard active statistics treat expired forms as closed", () => {
@@ -585,4 +585,16 @@ test("dashboard active statistics treat expired forms as closed", () => {
 
   assert.match(statsFunction, /f\.is_public = true\s+and \(f\.deadline_at is null or f\.deadline_at > now\(\)\)/i);
   assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at > now\(\)\)/i);
+});
+
+
+test("bootstrap has one atomic transaction and one canonical definition per function", () => {
+  assert.equal([...schema.matchAll(/^begin;$/gim)].length, 1);
+  assert.equal([...schema.matchAll(/^commit;$/gim)].length, 1);
+  assert.doesNotMatch(schema, /update public\.forms set schema = schema/i);
+  const names = [...schema.matchAll(/create (?:or replace )?function public\.(\w+)\(/gi)].map(match => match[1]);
+  assert.equal(new Set(names).size, names.length, "Duplicate bootstrap function definitions");
+  for (const name of ["list_missing_form_organizations", "list_missing_form_organizations_snapshot", "enqueue_mail_reminder_batch"]) {
+    assert.doesNotMatch(schema, new RegExp(`function public\\.${name}\\(`, "i"));
+  }
 });

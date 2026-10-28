@@ -1,0 +1,412 @@
+/* Application color schemes. Form themes remain owned by SurveyJS and are not
+   replaced by these interface-only tokens. */
+:root,
+:root[data-theme="sand"] {
+  --app-bg:
+    radial-gradient(circle at 90% 0%, rgba(152, 80, 54, 0.08), transparent 28%),
+    linear-gradient(145deg, #f3f0ec 0%, #ebe6e0 55%, #e4ddd6 100%);
+  --sidebar-bg: rgba(246, 241, 235, 0.98);
+  --theme-card-background: #fcfaf7;
+  --theme-page-surface: var(--theme-card-background);
+  --theme-panel-background: #f2ece5;
+  --theme-surface: #e7ddd3;
+  --theme-surface-light: #fffdf9;
+  --theme-surface-muted: #efe8e0;
+  --theme-control-background: #fffdfa;
+  --theme-form-card-background: #ffffff;
+  --theme-popover-background: #ffffff;
+  --theme-container-high: #e7dbd0;
+  --theme-row-alt: #f6f1eb;
+  --theme-border: rgba(66, 52, 43, 0.17);
+  --theme-text: #2f2925;
+  --theme-muted: #6d655f;
+  --theme-text-muted: var(--theme-muted);
+  --theme-shadow-color: rgba(56, 43, 35, 0.09);
+  --theme-accent: #0b57d0;
+  --theme-accent-strong: #0842a0;
+  --theme-accent-soft: rgba(11, 87, 208, 0.12);
+  --theme-accent-gradient: linear-gradient(#0b57d0, #0b57d0);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #fcfaf7;
+  --creator-panel: #fffdf9;
+  --creator-panel-muted: #ece7e2;
+  --creator-workspace: #f4f2ef;
+  --creator-control: #ffffff;
+  --creator-border: #d6d0ca;
+  --creator-border-strong: #c4bcb5;
+  --creator-hover: #e8f0fe;
+  --creator-selected: #d3e3fd;
+  --creator-text: #2f2925;
+  --creator-text-muted: #6d655f;
+  --creator-accent: #0b57d0;
+}
+
+
+:root[data-theme="graphite"] {
+  color-scheme: dark;
+  --app-bg: #1b1b1b;
+  --sidebar-bg: #1b1b1b;
+  --theme-card-background: #1e1f20;
+  --theme-page-surface: #131314;
+  --theme-panel-background: #18191a;
+  --theme-surface: #282a2c;
+  --theme-surface-light: #1e1f20;
+  --theme-surface-muted: #232527;
+  --theme-control-background: #282a2c;
+  --theme-form-card-background: #1e1f20;
+  --theme-popover-background: #282a2c;
+  --theme-container-high: #333537;
+  --theme-row-alt: #232527;
+  --theme-border: #3c4043;
+  --theme-text: #e3e3e3;
+  --theme-muted: #c4c7c5;
+  --theme-text-muted: var(--theme-muted);
+  --theme-shadow-color: rgba(0, 0, 0, 0.3);
+  --theme-updated-text: #94bba2;
+  --theme-accent: #a8c7fa;
+  --theme-accent-strong: #c2d7fc;
+  --theme-accent-soft: rgba(168, 199, 250, 0.12);
+  --theme-accent-gradient: linear-gradient(#a8c7fa, #a8c7fa);
+  --accent: var(--theme-accent);
+  --accent-strong: var(--theme-accent-strong);
+  --accent-soft: var(--theme-accent-soft);
+  --creator-toolbar: #1e1f20;
+  --creator-panel: #242628;
+  --creator-panel-muted: #282a2c;
+  --creator-workspace: #18191a;
+  --creator-control: #282a2c;
+  --creator-border: #3c4043;
+  --creator-border-strong: #5f6368;
+  --creator-hover: #353739;
+  --creator-selected: #004a77;
+  --creator-text: #e3e3e3;
+  --creator-text-muted: #c4c7c5;
+  --creator-accent: #a8c7fa;
+  --surface-inset: none;
+}
+
+body,
+.app-shell,
+.app-shell-monochrome {
+  color: var(--theme-text);
+  background: var(--app-bg);
+}
+
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right-color: var(--theme-border);
+}
+
+.dashboard-main-card,
+.responses-page-card,
+.users-page-card,
+.login-card,
+.modal-card {
+  border-color: var(--theme-border);
+  background: var(--theme-card-background);
+}
+
+.nav-link {
+  color: var(--theme-text);
+}
+
+.nav-link:hover {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-accent-soft);
+}
+
+.nav-link-active,
+.nav-link-active:hover,
+.button-primary,
+.button-primary:hover {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+}
+
+.sidebar-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+/* Let the footer popup leave the sidebar stacking context and render above the
+   Builder surface. The navigation list keeps its own independent scrolling. */
+.sidebar {
+  overflow: visible;
+  z-index: 500;
+}
+
+
+/* Public runtime and the Builder preview share the same neutral backdrop. */
+.app-main-public,
+.builder-creator-shell .svc-creator-tab:has(> .builder-preview-tab-shell) {
+  background:
+    radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.8), transparent 26%),
+    linear-gradient(180deg, #f7f2ea 0%, #ebe2d6 100%);
+}
+
+.builder-preview-tab-shell {
+  background: transparent;
+}
+
+.builder-preview-tab-shell::before {
+  content: none;
+}
+
+.survey-runtime-surface.survey-page-card {
+  padding: 0;
+  border: 1px solid rgba(78, 57, 39, 0.12);
+  border-radius: 28px;
+  background: transparent !important;
+  box-shadow: 0 22px 48px rgba(73, 53, 36, 0.13);
+}
+
+.survey-runtime-surface.survey-page-card .sd-root-modern,
+.survey-runtime-surface.survey-page-card .sd-root-modern__wrapper,
+.survey-runtime-surface.survey-page-card .sd-container-modern,
+.survey-runtime-surface.survey-page-card .sd-root_background-image {
+  border-radius: 27px;
+  background-clip: padding-box;
+}
+
+.survey-runtime-surface.survey-page-card .sd-container-modern__title,
+.survey-runtime-surface.survey-page-card .sv-header {
+  border-radius: 27px 27px 0 0;
+  background-clip: padding-box;
+}
+
+/* Survey Creator uses a fixed neutral interface theme. This fallback keeps
+   the canvas neutral and prevents the built-in aqua default from flashing
+   before the Creator model applies its theme through applyCreatorTheme(). */
+.builder-creator-shell svc-tab-designer,
+.builder-creator-shell .svc-tab-designer {
+  background: #f7f8f9 !important;
+}
+
+.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-active:focus-visible {
+  color: #ffffff;
+  border-color: transparent;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 8px 18px var(--theme-accent-soft);
+}
+
+.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:hover,
+button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:focus-visible {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: linear-gradient(180deg, var(--theme-surface-light), var(--theme-surface));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 8px 18px var(--theme-accent-soft);
+}
+
+.organizations-page-card {
+  min-width: 0;
+  padding: 28px;
+}
+
+.organizations-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.organizations-page-header h1,
+.organization-edit-modal h3 {
+  margin: 0;
+  color: var(--theme-text);
+}
+
+.organizations-page-header p {
+  margin: 8px 0 0;
+  color: var(--theme-text-muted);
+}
+
+.organizations-toolbar,
+.organizations-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.organizations-toolbar .organizations-delete-all-button {
+  min-height: 42px;
+}
+
+button.organizations-file-button,
+button.responses-report-button,
+.responses-page-toolbar button.dashboard-refresh-button {
+  border-color: var(--theme-border);
+  background: var(--theme-surface-light);
+  color: var(--theme-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 10px 22px rgba(17, 17, 17, 0.1);
+}
+
+button.organizations-file-button:hover,
+button.organizations-file-button:focus-visible,
+button.responses-report-button:hover,
+button.responses-report-button:focus-visible,
+.responses-page-toolbar button.dashboard-refresh-button:hover,
+.responses-page-toolbar button.dashboard-refresh-button:focus-visible {
+  border-color: rgba(17, 17, 17, 0.28);
+  background: #ffffff;
+  color: #111111;
+}
+
+.organizations-file-button .toolbar-icon,
+.responses-report-button .toolbar-icon,
+.responses-page-toolbar .dashboard-refresh-button .toolbar-icon {
+  width: 18px;
+  height: 18px;
+  filter: none;
+}
+
+.organizations-type-switcher {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-surface-muted);
+}
+
+.organizations-type-switcher button {
+  flex: 1 0 auto;
+  min-height: 38px;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--theme-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.organizations-type-switcher button:not(.active):hover,
+.organizations-type-switcher button:not(.active):focus-visible {
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+  transform: translateY(-1px);
+}
+
+.organizations-type-switcher button.active {
+  color: #fff;
+  background: var(--theme-accent-gradient);
+  box-shadow: 0 8px 18px var(--theme-accent-soft);
+}
+
+.organizations-table-shell {
+  margin-top: 0;
+}
+
+.organizations-table td,
+.organizations-table th {
+  vertical-align: middle;
+}
+
+.organizations-table td a {
+  color: var(--theme-accent-strong);
+}
+
+.organizations-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.organizations-row-actions button:not(:disabled):hover,
+.organizations-row-actions button:not(:disabled):focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px var(--theme-shadow-color);
+}
+
+.organizations-row-actions button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.organizations-row-actions button.danger {
+  color: #991b1b;
+  border-color: rgba(185, 28, 28, 0.28);
+}
+
+.organizations-row-actions img {
+  width: 15px;
+  height: 15px;
+}
+
+.organizations-table-skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.organizations-skeleton-row {
+  min-height: 52px;
+}
+
+.organization-edit-modal {
+  width: min(520px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+}
+
+.organization-edit-modal label {
+  display: grid;
+  gap: 7px;
+  color: var(--theme-text);
+  font-weight: 600;
+}
+
+.organization-edit-modal input,
+.organization-edit-modal select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-text);
+  background: var(--theme-surface-light);
+}
+
+.organization-edit-modal input:disabled {
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-muted);
+}
+
+.response-report-backdrop {
+  z-index: 900;
+}
+
+.response-report-modal {
+  width: min(1080px, calc(100vw - 32px));
+  height: min(90dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+

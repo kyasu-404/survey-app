@@ -16,7 +16,7 @@ import { Skeleton } from "../../shared/ui/Skeleton";
 import { LazySurveyRenderer } from "../../widgets/SurveyRenderer/LazySurveyRenderer";
 import { SurveyRuntimeSurface } from "../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 import type { SurveyRenderMode } from "../../features/render-form/SurveyFormRenderer";
-import { getOrCreateResponseBrowserId } from "../../features/render-form/responseBrowserId";
+import { getOrCreateResponseBrowserId } from "../../shared/lib/responseBrowserId";
 
 function SurveyNotFound() {
   return (
