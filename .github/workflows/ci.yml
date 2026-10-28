@@ -87,6 +87,9 @@ jobs:
         working-directory: frontend
         run: npm run test:coverage
 
+      - name: Test Edge Function authorization and origin behavior
+        run: node --test functions/security-boundaries.test.mjs functions/app-settings/index.test.mjs functions/app-settings/favicon.test.mjs
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build

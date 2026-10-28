@@ -2,13 +2,48 @@ import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { XMLParser, XMLValidator, XMLBuilder } from "npm:fast-xml-parser@5.11.1";
 import { validateFavicon, MAX_FAVICON_BYTES } from "./favicon.mjs";
 
+const defaultAllowedOrigins = new Set(["https://forms.imc-mosk.ru", "http://localhost:5173", "http://127.0.0.1:5173"]);
+const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
+
+function getAllowedOrigins() {
+  const configured = Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS")
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return new Set(configured ?? defaultAllowedOrigins);
+}
+
+function isPrivateNetworkHostname(hostname: string) {
+  const octets = hostname.split(".");
+  if (octets.length !== 4 || octets.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+  const [first, second] = octets.map(Number);
+  return first === 10 || (first === 192 && second === 168) || (first === 172 && second >= 16 && second <= 31);
+}
+
+function isDefaultLocalDevelopmentOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname.replace(/^\[|\]$/g, "");
+    const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+    return url.origin === origin && (url.protocol === "http:" || url.protocol === "https:")
+      && defaultAllowedDevelopmentPorts.has(url.port)
+      && (isLoopback || isPrivateNetworkHostname(hostname));
+  } catch {
+    return false;
+  }
+}
+
+function isOriginAllowed(origin: string | null) {
+  return !origin || getAllowedOrigins().has(origin)
+    || (Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS") === undefined && isDefaultLocalDevelopmentOrigin(origin));
+}
+
 const cors = { "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, traceparent, x-client-release", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" };
 Deno.serve(async req => {
   const origin = req.headers.get("Origin");
-  const allowed = (Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS") ?? "https://forms.imc-mosk.ru,http://localhost:5173,http://127.0.0.1:5173").split(",").map(value => value.trim());
-  const headers = { ...cors, ...(origin && allowed.includes(origin) ? { "Access-Control-Allow-Origin": origin } : {}), "Content-Type": "application/json", "Cache-Control": "no-store" };
+  const headers = { ...cors, ...(origin && isOriginAllowed(origin) ? { "Access-Control-Allow-Origin": origin } : {}), "Content-Type": "application/json", "Cache-Control": "no-store" };
   const json = (status: number, data: unknown) => new Response(JSON.stringify(data), { status, headers });
-  if (origin && !allowed.includes(origin)) return json(403, { error: "Origin не разрешён" });
+  if (origin && !isOriginAllowed(origin)) return json(403, { error: "Origin не разрешён" });
   if (req.method === "OPTIONS") return new Response("ok", { headers });
   if (req.method !== "POST") return json(405, { error: "Метод не поддерживается" });
   const token = req.headers.get("Authorization")?.replace(/^Bearer /, "");

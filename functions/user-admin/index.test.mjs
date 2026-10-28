@@ -23,7 +23,7 @@ test("allows private-network development origins without wildcard CORS", () => {
   assert.match(source, /USER_ADMIN_ALLOWED_ORIGINS/);
   assert.match(source, /isDefaultLocalDevelopmentOrigin/);
   assert.match(source, /isPrivateNetworkHostname/);
-  assert.match(source, /172\\\.\(1\[6-9\]\|2\\d\|3\[0-1\]\)\\\./);
+  assert.match(source, /octets.length !== 4/);
   assert.match(source, /defaultAllowedDevelopmentPorts/);
 });
 

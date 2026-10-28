@@ -288,14 +288,15 @@ function createQueryClient() {
   });
 }
 
-function renderBuilder(formId?: string, safeEditingResponseCount = 0) {
+function renderBuilder(formId?: string, safeEditingResponseCount = 0, queryClient = createQueryClient(), canAdministerAllForms = false) {
   return render(
     <MemoryRouter>
-      <QueryClientProvider client={createQueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <SurveyBuilder
           formId={formId}
           userId="user-1"
           safeEditingResponseCount={safeEditingResponseCount}
+          canAdministerAllForms={canAdministerAllForms}
         />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -1705,6 +1706,26 @@ describe("SurveyBuilder", () => {
       expect(showToast).toHaveBeenCalledWith("У вас нет прав на редактирование этой формы", "error");
     });
     expect(creatorInstances[0].JSON.title).not.toBe("Приватная форма другого автора");
+  });
+
+  it("rejects a foreign form already in the shared fresh cache", async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(["form", "victim-form"], createTemplateForm({ id: "victim-form", title: "Foreign cached form", author_id: "victim-user" } as never));
+    renderBuilder("victim-form", 0, queryClient);
+    expect(await screen.findByRole("alert")).toHaveTextContent("У вас нет прав на редактирование этой формы");
+    expect(getFormById).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("survey-creator")).not.toBeInTheDocument();
+    expect(creatorInstances[0].JSON.title).not.toBe("Foreign cached form");
+    expect(cloneForm).not.toHaveBeenCalled();
+    expect(saveSurveySchema).not.toHaveBeenCalled();
+  });
+
+  it("allows an administrator to hydrate another author's cached form", async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(["form", "victim-form"], createTemplateForm({ id: "victim-form", title: "Foreign cached form", author_id: "victim-user" } as never));
+    renderBuilder("victim-form", 0, queryClient, true);
+    await waitFor(() => expect(creatorInstances[0].JSON.title).toBe("Foreign cached form"));
+    expect(getFormById).not.toHaveBeenCalled();
   });
 
   it("normalizes old numbering flags before loading an existing form and before saving it", async () => {

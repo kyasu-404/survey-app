@@ -20,3 +20,23 @@ it("validates actual favicon content and square dimensions before preview",async
  await expect(validateFaviconFile(svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 20"/>'))).rejects.toThrow("квадратной");
  await expect(validateFaviconFile(svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><image href="https://evil.test"/></svg>'))).rejects.toThrow("внешние ссылки");
 });
+
+it("rejects SVG namespace, attribute, animation and XML variants before preview", async () => {
+ const svg=(body:string)=>file(new TextEncoder().encode(body),"icon.svg");
+ for (const text of [
+  '<svg xmlns="https://foreign.test" viewBox="0 0 32 32"><path/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><g xmlns="http://www.w3.org/1999/xhtml"><path/></g></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path unknown="value"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path src="https://evil.test"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" xmlns:s="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><s:path/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><set attributeName="onload" to="alert(1)"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><animate/></svg>',
+  '<?xml-stylesheet href="https://evil.test"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"/>',
+  '<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"/>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>&amp;</title></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="20"/>',
+ ]) await expect(validateFaviconFile(svg(text)), text).rejects.toThrow();
+ const passive = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs><linearGradient id="a"><stop offset="0" stop-color="#fff"/></linearGradient></defs><path fill="url(#a)" d="M0 0L32 32"/></svg>';
+ await expect(validateFaviconFile(svg(passive))).resolves.toBeUndefined();
+ await expect(validateFaviconFile(svg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'+'<g>'.repeat(33)+'<path/>'+'</g>'.repeat(33)+'</svg>'))).rejects.toThrow("Слишком сложный SVG");
+});

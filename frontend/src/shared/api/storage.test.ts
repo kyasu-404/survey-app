@@ -210,7 +210,7 @@ describe("storage api", () => {
       formId: "form-1",
     });
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", {
-      body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt" },
+      body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt", browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
     });
     expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
 

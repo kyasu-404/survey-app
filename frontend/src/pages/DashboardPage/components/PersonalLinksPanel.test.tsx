@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { PersonalLinksPanel } from "./PersonalLinksPanel";
+import { refreshAuthDependentQueries } from "../../../app/providers/authCache";
 
 const { getPersonalLinks, setPersonalLinks, onCompose, exportPersonalLinksXlsx, showToast } = vi.hoisted(() => ({
   getPersonalLinks: vi.fn(), setPersonalLinks: vi.fn(), onCompose: vi.fn(), exportPersonalLinksXlsx: vi.fn(), showToast: vi.fn(),
@@ -12,8 +13,8 @@ vi.mock("../../../entities/personal-link/xlsx", () => ({ exportPersonalLinksXlsx
 vi.mock("../../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 vi.mock("../../FormResponsesPage/MailDeliveryPanel", () => ({ MailDeliveryPanel: () => <p>Статусы отправки</p> }));
 const enabled = { available: true, canManage: true, enabled: true, links: [{ id: "org", token: "token" }] };
-function mount(isPublic = true) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+function mount(isPublic = true, queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  return render(<QueryClientProvider client={queryClient}>
     <PersonalLinksPanel formId="form" title="Отчёт" isPublic={isPublic} onCompose={onCompose} />
   </QueryClientProvider>);
 }
@@ -52,4 +53,22 @@ it("preserves disabled state after a failed generation and reports its cause", a
   await userEvent.click(screen.getByRole("switch"));
   await waitFor(() => expect(showToast).toHaveBeenCalledWith("Ошибка сервера", "error"));
   expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+});
+
+it.each(["toggle", "download"])("discards a late %s result after switching users", async action => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  getPersonalLinks.mockResolvedValue(enabled);
+  let resolve!: (value: typeof enabled) => void;
+  setPersonalLinks.mockImplementation(() => new Promise(done => { resolve = done; }));
+  const { unmount } = mount(true, queryClient);
+  const button = action === "toggle" ? screen.getByRole("switch") : await screen.findByRole("button", { name: "Скачать XLSX" });
+  await waitFor(() => expect(button).toBeEnabled());
+  await userEvent.click(button);
+  expect(setPersonalLinks).toHaveBeenCalledOnce();
+  unmount();
+  refreshAuthDependentQueries(queryClient);
+  await act(async () => { resolve(enabled); });
+  expect(queryClient.getQueryData(["form-personal-links", "form"])).toBeUndefined();
+  expect(exportPersonalLinksXlsx).not.toHaveBeenCalled();
+  expect(showToast).not.toHaveBeenCalled();
 });

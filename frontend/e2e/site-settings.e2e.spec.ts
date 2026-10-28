@@ -39,6 +39,14 @@ for(const width of [1440,390,320]) {
   await expect(page.getByText('Поддерживаются только PNG, SVG и ICO',{exact:true})).toBeVisible();
   await input.setInputFiles({name:'unsafe.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><script>alert(1)</script></svg>')});
   await expect(page.getByText(/SVG не должен содержать/)).toBeVisible();
+  for (const markup of [
+   '<svg xmlns="https://foreign.test" viewBox="0 0 32 32"><path/></svg>',
+   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path custom="unsupported"/></svg>',
+  ]) {
+   await input.setInputFiles({name:'unsafe.svg',mimeType:'image/svg+xml',buffer:Buffer.from(markup)});
+   await expect(page.getByText(/SVG не должен содержать/)).toBeVisible();
+   await expect(page.getByRole('button',{name:'Сохранить favicon',exact:true})).toBeDisabled();
+  }
   expect(uploads).toBe(0);
   await input.setInputFiles({name:'icon.png',mimeType:'image/png',buffer:readFileSync('src/img/favicon.png')});
   await page.getByRole('button',{name:'Сохранить favicon',exact:true}).click();

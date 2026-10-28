@@ -148,6 +148,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (previousUserIdRef.current !== nextUserId) {
         previousUserIdRef.current = nextUserId;
+        clearProfile();
         refreshAuthDependentQueries(queryClient);
       }
 

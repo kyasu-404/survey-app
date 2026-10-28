@@ -48,13 +48,14 @@ function getAllowedOrigins() {
     ?.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  return new Set(configured?.length ? configured : defaultAllowedOrigins);
+  return new Set(configured ?? defaultAllowedOrigins);
 }
 
 function isPrivateNetworkHostname(hostname: string) {
-  return /^10\./.test(hostname)
-    || /^192\.168\./.test(hostname)
-    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+  const octets = hostname.split(".");
+  if (octets.length !== 4 || octets.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+  const [first, second] = octets.map(Number);
+  return first === 10 || (first === 192 && second === 168) || (first === 172 && second >= 16 && second <= 31);
 }
 
 function isDefaultLocalDevelopmentOrigin(origin: string) {
@@ -62,7 +63,7 @@ function isDefaultLocalDevelopmentOrigin(origin: string) {
     const url = new URL(origin);
     const hostname = url.hostname.replace(/^\[|\]$/g, "");
     const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-    return (url.protocol === "http:" || url.protocol === "https:")
+    return url.origin === origin && (url.protocol === "http:" || url.protocol === "https:")
       && defaultAllowedDevelopmentPorts.has(url.port)
       && (isLoopback || isPrivateNetworkHostname(hostname));
   } catch {
@@ -71,7 +72,8 @@ function isDefaultLocalDevelopmentOrigin(origin: string) {
 }
 
 function isOriginAllowed(origin: string | null) {
-  return !origin || getAllowedOrigins().has(origin) || isDefaultLocalDevelopmentOrigin(origin);
+  return !origin || getAllowedOrigins().has(origin)
+    || (Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS") === undefined && isDefaultLocalDevelopmentOrigin(origin));
 }
 
 function corsHeaders(req: Request) {

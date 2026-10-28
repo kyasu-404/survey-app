@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EMBEDDING_QUERY_KEY, getEmbeddingSettings, normalizeEmbeddingOrigin, saveEmbeddingSettings } from "../../entities/site-settings/api";
 import { useToast } from "../../app/providers/ToastProvider";
 import { getErrorMessage } from "../../shared/lib/error";
+import { createAuthCacheGuard } from "../../app/providers/authCache";
 
 export function EmbeddingSettingsSection() {
   const queryClient=useQueryClient(); const {showToast}=useToast();
@@ -17,7 +18,8 @@ export function EmbeddingSettingsSection() {
   };
   const save=async()=>{
     if(busy)return;setBusy(true);setError(null);
-    try {const next=await saveEmbeddingSettings(origins);queryClient.setQueryData(EMBEDDING_QUERY_KEY,next);setDraft(null);showToast("Разрешённые сайты сохранены","success");}
+    const isCurrentUser=createAuthCacheGuard(queryClient);
+    try {const next=await saveEmbeddingSettings(origins);if(!isCurrentUser())return;queryClient.setQueryData(EMBEDDING_QUERY_KEY,next);setDraft(null);showToast("Разрешённые сайты сохранены","success");}
     catch(cause){setError(getErrorMessage(cause,"Не удалось сохранить сайты"));}finally{setBusy(false);}
   };
   return <section className="settings-area" aria-labelledby="embedding-heading">

@@ -544,16 +544,18 @@ test("public response payloads are checked against the form schema and organizat
   const submitFunction = getFunctionDefinition("submit_form_response");
   const updateFunction = getFunctionDefinition("update_form_response");
 
-  assert.match(validator, /jsonb_object_keys\(response_data\)/i);
-  assert.match(validator, /jsonb_path_query\(form_schema, '\$\.\*\* \? \(@\.type\(\) == "object"\)'/i);
+  assert.match(validator, /jsonb_object_keys\(s\.data\)/i);
+  assert.match(validator, /public\.survey_response_bindings\(form_schema, response_data\)/i);
   assert.match(validator, /from public\.education_organizations/i);
   assert.match(submitFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
   assert.match(updateFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
 });
 
-test("the comment hotfix installs the same response validator as a fresh database", () => {
-  const migration = readFileSync(new URL("./migrations/202609241610_response_value_names.sql", import.meta.url), "utf8");
-  assert.ok(migration.includes(getFunctionDefinition("response_data_matches_form")));
+test("the scope validation migration installs the same functions as a fresh database", () => {
+  const migration = readFileSync(new URL("./migrations/202610270900_response_scope_validation.sql", import.meta.url), "utf8");
+  for (const name of ["survey_response_bindings", "survey_organization_values", "response_data_matches_form", "validate_response_payload", "list_saved_form_organizations"]) {
+    assert.ok(migration.includes(getFunctionDefinition(name)), name);
+  }
 });
 
 test("anonymous upload reservations isolate visitors and enforce an independent client budget", () => {

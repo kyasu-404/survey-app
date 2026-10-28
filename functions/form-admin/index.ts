@@ -6,7 +6,7 @@ type FormAdminAction =
   | { action: "delete-responses"; formId: string; responseIds: string[] }
   | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string }
   | { action: "restore-upload"; formId: string; browserId: string; path: string; personalToken?: string }
-  | { action: "delete-upload"; formId: string; path: string }
+  | { action: "delete-upload"; formId: string; browserId: string; path: string }
   | { action: "get-cleanup-status" }
   | { action: "cleanup-orphans" }
   | {
@@ -75,21 +75,20 @@ function getAllowedOrigins() {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  return new Set(configuredOrigins?.length ? configuredOrigins : defaultAllowedOrigins);
+  return new Set(configuredOrigins ?? defaultAllowedOrigins);
 }
 
 function isPrivateNetworkHostname(hostname: string) {
-  return (
-    /^10\./.test(hostname) ||
-    /^192\.168\./.test(hostname) ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
-  );
+  const octets = hostname.split(".");
+  if (octets.length !== 4 || octets.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+  const [first, second] = octets.map(Number);
+  return first === 10 || (first === 192 && second === 168) || (first === 172 && second >= 16 && second <= 31);
 }
 
 function isDefaultLocalDevelopmentOrigin(origin: string) {
   try {
     const url = new URL(origin);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
+    if (url.origin !== origin || (url.protocol !== "http:" && url.protocol !== "https:")) {
       return false;
     }
 
@@ -106,7 +105,8 @@ function isDefaultLocalDevelopmentOrigin(origin: string) {
 }
 
 function isOriginAllowed(origin: string | null) {
-  return !origin || getAllowedOrigins().has(origin) || isDefaultLocalDevelopmentOrigin(origin);
+  return !origin || getAllowedOrigins().has(origin)
+    || (Deno.env.get("FORM_ADMIN_ALLOWED_ORIGINS") === undefined && isDefaultLocalDevelopmentOrigin(origin));
 }
 
 function buildCorsHeaders(req: Request) {
@@ -478,9 +478,16 @@ Deno.serve(async (req) => {
       operation: "form-admin.delete-upload",
       formId: payload.formId,
     };
-    if (!isUuid(payload.formId) || !isAnonymousUploadPath(payload.path, payload.formId)) {
+    if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !isAnonymousUploadPath(payload.path, payload.formId)) {
       return errorResponse(req, 400, "Invalid upload path", actionLogContext);
     }
+
+    // A known path is not a capability: require the browser that reserved it.
+    const { data: browserAllowed, error: ownershipError } = await adminClient.rpc("can_restore_survey_upload", {
+      p_path: payload.path, p_browser_id: payload.browserId,
+    });
+    if (ownershipError) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", actionLogContext);
+    if (browserAllowed !== true) return errorResponse(req, 403, "Нет прав на удаление файла", actionLogContext);
 
     const { data: activeForm, error: formError } = await adminClient
       .from("forms")

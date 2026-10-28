@@ -71,3 +71,20 @@ RPC заголовка CSP, метаданные favicon и отдельный b
 Применяется перед обновлением frontend. Проверки: `database/personal_links.test.sql`
 и `database/tests/nested_personal_organizations.sql` на изолированной
 `survey_personal_check_*`; тестовые записи откатываются.
+
+`202610270900_response_scope_validation.sql` проверяет ключи ответа в их реальных
+областях данных, включая каждую запись `paneldynamic`, вложенные панели, `valueName`
+и комментарии SurveyJS. Все присутствующие организации проходят проверку UUID,
+справочника и разрешённого типа; триггер блокирует их `FOR SHARE` и разрешает архив
+только по прежнему пути (включая индекс записи) в том же ответе. RPC сохранённых
+организаций использует тот же обход, сохраняя ограничения доступа к истории.
+Существующие ответы миграция не переписывает. Старые некорректные данные будут
+отклонены при следующем сохранении; на staging проверьте их до production.
+
+Проверки: `database/tests/response_scope_validation.sql`,
+`database/tests/response_comments.sql`, `database/tests/nested_personal_organizations.sql`
+и `database/personal_links.test.sql` на изолированной `survey_personal_check_*`,
+а также `database/organization_archive.test.sql` на `survey_archive_check_*`.
+После миграции обновите `form-admin`, `user-admin`, `mail-admin`, `app-settings`
+и frontend: удаление публичного вложения теперь требует `browserId` владельца
+резервации. Файлы, отсоединённые на другом устройстве, очищаются штатной уборкой.

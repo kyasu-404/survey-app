@@ -1,3 +1,4 @@
+import { canManageSurveyForm, FORM_EDIT_PERMISSION_ERROR } from "../../entities/survey/model/formAccess";
 import { Presence } from "../../shared/ui/Presence";
 import { sanitizeSurveyHtml } from "../../entities/survey/model/surveyHtml";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -626,15 +627,15 @@ export function SurveyBuilder({
   );
 
   const {
-    data: editableForm,
+    data: loadedForm,
     isLoading: isEditableFormLoading,
     error: editableFormError,
   } = useQuery({
     queryKey: getFormQueryKey(formId),
     queryFn: async ({ signal }) => {
       const form = await getFormById(formId ?? "", { signal });
-      if (form && form.author_id !== userId && !canAdministerAllForms) {
-        throw new Error("У вас нет прав на редактирование этой формы");
+      if (form && !canManageSurveyForm(form, userId, canAdministerAllForms)) {
+        throw new Error(FORM_EDIT_PERMISSION_ERROR);
       }
       return form;
     },
@@ -647,6 +648,9 @@ export function SurveyBuilder({
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
+
+  const canEditLoadedForm = Boolean(loadedForm && canManageSurveyForm(loadedForm, userId, canAdministerAllForms));
+  const editableForm = canEditLoadedForm ? loadedForm : undefined;
 
   useEffect(() => {
     assetFormIdRef.current = formId ?? createSurveyAssetFormId();
@@ -1424,6 +1428,11 @@ export function SurveyBuilder({
   const handleBackgroundGalleryError = useCallback((message: string) => {
     showToast(message, "error");
   }, [showToast]);
+
+  if (isEditMode && !canEditLoadedForm) {
+    if (isEditableFormLoading) return <Skeleton className="builder-loading-skeleton-line" />;
+    return <p role="alert">{loadedForm ? FORM_EDIT_PERMISSION_ERROR : getErrorMessage(editableFormError, "Форма не найдена")}</p>;
+  }
 
   return (
     <div className="builder-host">

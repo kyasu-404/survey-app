@@ -48,12 +48,13 @@ const answeredForm = {
   responses_count: 2,
 };
 
-function renderBuilderPage() {
+function renderBuilderPage(cachedForm?: typeof answeredForm) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
     },
   });
+  if (cachedForm) queryClient.setQueryData(["form", cachedForm.id], cachedForm);
 
   return render(
     <MemoryRouter initialEntries={["/builder/form-1"]}>
@@ -121,5 +122,24 @@ describe("BuilderPage", () => {
 
     expect(await screen.findByText("Мои формы")).toBeInTheDocument();
     expect(cloneForm).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 2])("rejects another author's freshly cached form with %i responses before offering edit/copy", async (responses_count) => {
+    const form = { ...answeredForm, author_id: "other-user", responses_count };
+    getFormById.mockResolvedValue(form);
+    renderBuilderPage(form);
+    expect(await screen.findByRole("alert")).toHaveTextContent("У вас нет прав на редактирование этой формы");
+    expect(getFormById).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("survey-builder")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Создать копию" })).not.toBeInTheDocument();
+    expect(cloneForm).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrator safely edit another author's cached form", async () => {
+    authState.profile = { role: "admin" };
+    renderBuilderPage({ ...answeredForm, author_id: "other-user" });
+    fireEvent.click(await screen.findByRole("button", { name: "Редактировать безопасно" }));
+    expect(await screen.findByTestId("survey-builder")).toBeInTheDocument();
   });
 });

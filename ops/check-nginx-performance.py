@@ -2,6 +2,7 @@
 """Exercise repo Nginx configs on loopback with a dummy upstream; never contact the API."""
 import concurrent.futures
 import http.server
+import http.client
 import json
 import pathlib
 import re
@@ -10,8 +11,6 @@ import subprocess
 import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 import sys
 
 root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
@@ -21,6 +20,8 @@ class Stub(http.server.BaseHTTPRequestHandler):
     def respond(self):
         self.send_response(200)
         self.send_header("Content-Length", "2")
+        self.send_header("X-Upstream-Path", self.path)
+        self.send_header("X-Survey-Client-IP", self.headers.get("X-Survey-Client-IP", ""))
         self.end_headers()
         self.wfile.write(b"ok")
     do_GET = do_POST = do_OPTIONS = respond
@@ -54,6 +55,7 @@ with tempfile.TemporaryDirectory(prefix="survey-nginx-test-") as directory:
     frontend = frontend[frontend.index("server {"):].replace("listen 8080;", f"listen 127.0.0.1:{frontend_port};")
     frontend = frontend.replace("root /usr/share/nginx/html;", f'root {temp};\n  add_header X-Test-Policy new;')
     upstream_port = upstream.server_address[1]
+    api = api.replace("proxy_pass http://127.0.0.1:8095;", f"proxy_pass http://127.0.0.1:{upstream_port};")
     config = f"""pid {temp}/nginx.pid;
 error_log {temp}/error.log;
 events {{ worker_connections 1024; }}
@@ -72,36 +74,36 @@ http {{
   {api}
 }}
 """
-    path = temp / "nginx.conf"
-    baseline = config.replace("_v2", "").replace("X-Test-Policy new", "X-Test-Policy old")
+    config_path = temp / "nginx.conf"
+    baseline = config.replace("_v2", "").replace("_v1", "").replace("X-Test-Policy new", "X-Test-Policy old")
     baseline = baseline.replace("limit_req_zone $survey_api_key", "limit_req_zone $binary_remote_addr")
     baseline = baseline.replace("limit_req_zone $survey_upload_key", "limit_req_zone $binary_remote_addr")
     baseline = baseline.replace("zone=survey_responses:10m rate=20r/s", "zone=survey_responses:10m rate=3r/s")
     baseline = baseline.replace("zone=survey_responses burst=200", "zone=survey_responses burst=6")
-    path.write_text(baseline)
-    subprocess.run([nginx, "-p", str(temp), "-c", str(path), "-t"], check=True, capture_output=True)
-    subprocess.run([nginx, "-p", str(temp), "-c", str(path)], check=True)
+    config_path.write_text(baseline)
+    subprocess.run([nginx, "-p", str(temp), "-c", str(config_path), "-t"], check=True, capture_output=True)
+    subprocess.run([nginx, "-p", str(temp), "-c", str(config_path)], check=True)
     try:
-        def request(port_number, path, method="GET", headers=None):
-            req = urllib.request.Request(f"http://127.0.0.1:{port_number}{path}", method=method, headers=headers or {})
+        def request(port_number, path, method="GET", headers=None, source_ip="127.0.0.1"):
+            connection = http.client.HTTPConnection("127.0.0.1", port_number, timeout=15, source_address=(source_ip, 0))
             try:
-                response = urllib.request.urlopen(req, timeout=15)
-            except urllib.error.HTTPError as error:
-                response = error
-            with response:
+                connection.request(method, path, headers=headers or {})
+                response = connection.getresponse()
                 response.read()
-                return response.status, dict(response.headers)
+                return response.status, dict(response.getheaders())
+            finally:
+                connection.close()
 
         # Reload from the old shared-memory key as well as validating syntax.
         # Reusing old zone names with a different key would reject a live reload.
-        path.write_text(config)
-        subprocess.run([nginx, "-p", str(temp), "-c", str(path), "-s", "reload"], check=True)
+        config_path.write_text(config)
+        subprocess.run([nginx, "-p", str(temp), "-c", str(config_path), "-s", "reload"], check=True)
         for attempt in range(100):
             if request(frontend_port, "/assets/app-12345678.js")[1].get("X-Test-Policy") == "new":
                 break
             time.sleep(0.02)
         else:
-            raise AssertionError("Nginx did not activate the new config during graceful reload")
+            raise AssertionError("Nginx did not activate the new config during graceful reload\n" + (temp / "error.log").read_text())
         time.sleep(0.5)  # allow old workers to stop accepting new connections
         cache_results = []
         for port_number in [frontend_port, api_port]:
@@ -127,10 +129,10 @@ http {{
             assert request(port_number, "/assets/app-12345678.js", headers={"If-None-Match": headers["ETag"]})[0] == 304
             cache_results.append({"immutable_assets": True, "html_revalidated": True, "missing_asset_404": True, "security_headers_preserved": True})
 
-        def burst(path, method, count):
+        def burst(path, method, count, source_ip="127.0.0.1"):
             start = time.monotonic()
             with concurrent.futures.ThreadPoolExecutor(max_workers=40) as pool:
-                statuses = list(pool.map(lambda _: request(api_port, path, method)[0], range(count)))
+                statuses = list(pool.map(lambda _: request(api_port, path, method, source_ip=source_ip)[0], range(count)))
             return {"requests": count, "method": method, "seconds": round(time.monotonic() - start, 3), "statuses": {str(status): statuses.count(status) for status in set(statuses)}}
 
         # Preflights must not spend the response/upload write budgets.
@@ -141,7 +143,32 @@ http {{
         assert all(result["statuses"] == {"200": 200} for result in [preflight, responses, uploads, reads]), [preflight, responses, uploads, reads]
         overload = burst("/api/rest/v1/rpc/submit_form_response", "POST", 400)
         assert int(overload["statuses"].get("429", 0)) > 0, overload
-        print(json.dumps({"graceful_reload": True, "cache": cache_results, "preflight": preflight, "responses": responses, "uploads": uploads, "reads": reads, "overload": overload}, indent=2))
+        rpc_paths = [f"/api/rest/v1/rpc/{name}" for name in [
+            "submit_form_response", "submit_personal_form_response", "update_form_response", "update_personal_form_response"
+        ]]
+        for path in rpc_paths:
+            status, forwarded = request(api_port, path + "/?test=1", "POST", {"X-Survey-Client-IP": "untrusted"}, "127.0.0.2")
+            assert status == 200 and forwarded["X-Upstream-Path"] == path.removeprefix("/api") + "/?test=1", (status, forwarded)
+            assert forwarded["X-Survey-Client-IP"] == "127.0.0.2"
+        # Reuse one actual source IP: changing RPC, suffix or caller headers must
+        # not create a new budget. OPTIONS still succeeds after budget exhaustion.
+        protected = []
+        for path in rpc_paths + ["/api/rest/v1/rpc/%75pdate_form_response/"]:
+            result = burst(path, "POST", 300, "127.0.0.2")
+            assert result["statuses"].get("429", 0) > 0, (path, result)
+            assert request(api_port, path, "OPTIONS", source_ip="127.0.0.2")[0] == 200
+            protected.append({"path": path, **result})
+        for path, source_ip in [("/api/functions/v1/form-admin", "127.0.0.3"),
+                                ("/api/functions/v1/form-admin/extra", "127.0.0.3"),
+                                ("/api/office/documents/example/generate", "127.0.0.4")]:
+            result = burst(path, "POST", 350, source_ip)
+            assert result["statuses"].get("429", 0) > 0, (path, result)
+            assert request(api_port, path, "OPTIONS", source_ip=source_ip)[0] == 200
+            protected.append({"path": path, **result})
+        for path in ["/api/office/plugin/config.json", "/api/office/file/example?token=test", "/api/office/probe?token=test"]:
+            assert request(api_port, path, source_ip="127.0.0.5")[0] == 200
+        assert request(api_port, "/api/office/callback/example", "POST", source_ip="127.0.0.5")[0] == 200
+        print(json.dumps({"graceful_reload": True, "cache": cache_results, "preflight": preflight, "responses": responses, "uploads": uploads, "reads": reads, "overload": overload, "protected_routes": protected}, indent=2))
     finally:
-        subprocess.run([nginx, "-p", str(temp), "-c", str(path), "-s", "quit"], check=True)
+        subprocess.run([nginx, "-p", str(temp), "-c", str(config_path), "-s", "quit"], check=True)
         upstream.shutdown()

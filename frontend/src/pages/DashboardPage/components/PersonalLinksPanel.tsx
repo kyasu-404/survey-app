@@ -4,6 +4,7 @@ import { useToast } from "../../../app/providers/ToastProvider";
 import { getPersonalLinks, setPersonalLinks } from "../../../entities/personal-link/api";
 import { getFormQueryKey } from "../../../entities/survey/model/queryKeys";
 import { getErrorMessage } from "../../../shared/lib/error";
+import { createAuthCacheGuard } from "../../../app/providers/authCache";
 
 export function PersonalLinksPanel({ formId, title, isPublic, onCompose }: { formId: string; title: string; isPublic: boolean; onCompose: () => void }) {
   const { showToast } = useToast();
@@ -23,20 +24,25 @@ export function PersonalLinksPanel({ formId, title, isPublic, onCompose }: { for
     finally { busyRef.current = false; setBusy(false); }
   };
   const toggle = () => run(async () => {
+    const isCurrentUser = createAuthCacheGuard(queryClient);
     const next = await setPersonalLinks(formId, !state?.enabled);
+    if (!isCurrentUser()) return;
     queryClient.setQueryData(queryKey, next);
     await queryClient.invalidateQueries({ queryKey: getFormQueryKey(formId) });
     showToast(next.enabled ? `Персональные ссылки готовы: ${next.links.length}` : "Персональные ссылки отключены", "success");
   });
   const download = () => run(async () => {
+    const isCurrentUser = createAuthCacheGuard(queryClient);
     // Include newly added organizations without replacing previously issued tokens.
     const next = await setPersonalLinks(formId, true);
+    if (!isCurrentUser()) return;
     queryClient.setQueryData(queryKey, next);
     if (!next.links.length) {
       showToast("Нет действующих организаций выбранных типов ОУ", "warning");
       return;
     }
     const { exportPersonalLinksXlsx } = await import("../../../entities/personal-link/xlsx");
+    if (!isCurrentUser()) return;
     await exportPersonalLinksXlsx(formId, title, next.links);
   });
   return <section className="personal-links-panel" aria-label="Персональные ссылки">

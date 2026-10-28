@@ -158,4 +158,26 @@ describe("AuthProvider", () => {
 
     expect(clearSpy).not.toHaveBeenCalled();
   });
+
+  it("clears the previous profile and private cache before loading the next user's profile", async () => {
+    let authListener: ((event: string, session: { user: { id: string } } | null) => Promise<void>) | undefined;
+    const nextProfile = createDeferred<{ data: { id: string; role: string; is_disabled: boolean }; error: null }>();
+    const single = vi.fn().mockResolvedValue({ data: { id: "admin", role: "admin", is_disabled: false }, error: null });
+    from.mockReturnValue({ select: () => ({ eq: () => ({ single }) }) });
+    getCurrentSession.mockResolvedValue({ data: { session: { user: { id: "admin" } } } });
+    onAuthStateChange.mockImplementation(listener => {
+      authListener = listener;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    const { queryClient } = renderWithAuthProvider(<AuthStateProbe />);
+    await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:admin:admin"));
+    queryClient.setQueryData(["office-documents", "private"], { document: "previous user's data" });
+    single.mockReturnValueOnce(nextProfile.promise);
+
+    await act(async () => { await authListener?.("SIGNED_IN", { user: { id: "employee" } }); });
+    expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:employee:no-profile");
+    expect(queryClient.getQueryData(["office-documents", "private"])).toBeUndefined();
+    await act(async () => { nextProfile.resolve({ data: { id: "employee", role: "user", is_disabled: false }, error: null }); });
+    await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:employee:user"));
+  });
 });

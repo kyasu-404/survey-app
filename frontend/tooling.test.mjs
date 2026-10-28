@@ -68,12 +68,20 @@ test("production proxy applies a dedicated anonymous upload rate limit", () => {
 });
 
 test("production proxy rate-limits the actual response RPC and handles realtime upgrades", () => {
-  assert.match(productionProxy, /location\s+=\s+\/api\/rest\/v1\/rpc\/submit_form_response/);
+  assert.match(productionProxy, /location\s+~\s+\^\/api\/rest\/v1\/rpc\/\(submit_form_response\|submit_personal_form_response\|update_form_response\|update_personal_form_response\)/);
   assert.match(productionProxy, /limit_req\s+zone=survey_responses_v2\s+burst=200\s+nodelay;/);
   assert.match(productionProxy, /limit_except\s+POST\s+OPTIONS\s+\{\s*deny all;\s*\}/);
   assert.doesNotMatch(productionProxy, /location\s+=\s+\/api\/rest\/v1\/responses/);
   assert.match(productionProxy, /location\s+\^~\s+\/api\/realtime\//);
   assert.match(productionProxy, /proxy_set_header\s+Upgrade\s+\$http_upgrade;/);
+});
+
+test("production proxy limits Office and form-admin writes without bypassing normalized RPC matches", () => {
+  assert.match(productionProxy, /location\s+\^~\s+\/api\/office\/\s*\{\s*limit_req zone=survey_office_v1/);
+  assert.match(productionProxy, /map "\$request_method:\$uri" \$survey_form_admin_key/);
+  assert.match(productionProxy, /form-admin\(\/\|\$\)/);
+  assert.match(productionProxy, /location \/api\/ \{[\s\S]*?limit_req zone=survey_form_admin_v1/);
+  assert.doesNotMatch(productionProxy, /location \^~ \/api\/ \{/);
 });
 
 test("production proxy redirects HTTP and does not allow arbitrary remote theme images", () => {

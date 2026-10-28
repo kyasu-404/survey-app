@@ -7,6 +7,7 @@ import { useToast } from "../../app/providers/ToastProvider";
 import { routes } from "../../app/routes";
 import { cloneForm, getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormQueryKey } from "../../entities/survey/model/queryKeys";
+import { canManageSurveyForm, FORM_EDIT_PERMISSION_ERROR } from "../../entities/survey/model/formAccess";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -20,6 +21,7 @@ export default function BuilderPage() {
   const queryClient = useQueryClient();
   const [isCopying, setIsCopying] = useState(false);
   const [isSafeEditingConfirmed, setIsSafeEditingConfirmed] = useState(false);
+  const canAdministerAllForms = profile?.role === "admin";
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
     queryFn: ({ signal }) => getFormById(id ?? "", { signal }),
@@ -33,7 +35,7 @@ export default function BuilderPage() {
   }
 
   const handleCreateCopy = async () => {
-    if (!formQuery.data) {
+    if (!formQuery.data || !canManageSurveyForm(formQuery.data, user.id, canAdministerAllForms)) {
       return;
     }
 
@@ -64,6 +66,12 @@ export default function BuilderPage() {
   if (id && formQuery.error) {
     return <p>{getErrorMessage(formQuery.error, "Не удалось открыть форму")}</p>;
   }
+
+  // Cached form data is shared with read-only views; fetching it does not grant edit rights.
+  if (id && formQuery.data && !canManageSurveyForm(formQuery.data, user.id, canAdministerAllForms)) {
+    return <p role="alert">{FORM_EDIT_PERMISSION_ERROR}</p>;
+  }
+  if (id && !formQuery.data) return <p role="alert">Форма не найдена</p>;
 
   const responsesCount = formQuery.data?.responses_count ?? 0;
 
@@ -111,9 +119,10 @@ export default function BuilderPage() {
       )}</Presence>
       {!showWarning && <div className="builder-container">
         <SurveyBuilder
+          key={user.id}
           formId={id}
           userId={user.id}
-          canAdministerAllForms={profile?.role === "admin"}
+          canAdministerAllForms={canAdministerAllForms}
           safeEditingResponseCount={responsesCount}
         />
       </div>}

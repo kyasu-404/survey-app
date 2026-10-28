@@ -214,7 +214,20 @@ FORM_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://17
 MAIL_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://172.28.140.10:5173
 ```
 
-Локально функции по умолчанию разрешают `http://localhost:5173`, `http://127.0.0.1:5173` и private-network origin-ы на dev-портах `3000`, `4173`, `5173`, `8000` для запуска через IP машины или WSL. Для production или нестандартного порта задайте origin точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эти переменные задаются в `supabase/docker/.env` и передаются в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.  
+`app-settings` использует тот же `MAIL_ADMIN_ALLOWED_ORIGINS`, что и `mail-admin`. Если переменная задана (включая пустую строку), разрешены только явно перечисленные origin-ы; локальные адреса автоматически не добавляются.
+
+Когда соответствующая переменная не задана, функции по умолчанию разрешают `http://localhost:5173`, `http://127.0.0.1:5173` и private-network origin-ы на dev-портах `3000`, `4173`, `5173`, `8000` для запуска через IP машины или WSL. Для production или нестандартного порта задайте origin точно в виде `scheme://host:port`, без `/` в конце. В self-hosted Docker эти переменные задаются в `supabase/docker/.env` и передаются в контейнер Edge Functions через `supabase/docker/docker-compose.yml`.
+
+В `nginx.conf` обычная и персональная отправка/правка ответов используют общий
+лимит на IP `20r/s burst=200`; `form-admin` — `10r/s burst=200`, включая резервирование,
+восстановление и удаление вложений. Office использует отдельный лимит `20r/s burst=100`
+для запросов чтения и записи, включая callback. OPTIONS не расходует эти бюджеты.
+При перегрузке возвращается HTTP 429. Для проверки конфигурации, маршрутов,
+заголовков и graceful reload без обращения к рабочему API:
+
+```bash
+python3 ops/check-nginx-performance.py /path/to/repository /usr/sbin/nginx
+```
 
 ## Отображение списка форм
 
@@ -242,7 +255,7 @@ MAIL_ADMIN_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://17
 
 Архивные ОУ исключены из отчёта о несдавших и новых рассылок. При редактировании сохранённого ответа можно оставить его прежнюю архивную ОУ либо выбрать действующую; использовать архивную ОУ в новом ответе или другом поле нельзя. Уже физически удалённые записи эта миграция не восстанавливает.
 
-Импорт принимает файл `.xlsx` с первой строкой заголовков:
+Импорт принимает файл `.xlsx` размером до 10 МБ с первой строкой заголовков:
 
 | Тип ОУ | Номер | Алиасы | Email |
 | --- | --- | --- | --- |
@@ -475,6 +488,12 @@ node --test \
   frontend/tooling.test.mjs \
   frontend/Dockerfile.test.mjs \
   mail-worker/Dockerfile.test.mjs
+```
+
+Поведенческие тесты Edge Functions запускаются после установки зависимостей `frontend` и `office-service`:
+
+```bash
+node --test functions/security-boundaries.test.mjs functions/app-settings/index.test.mjs
 ```
 
 Основной frontend suite запускается из `frontend/`:

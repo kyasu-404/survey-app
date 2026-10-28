@@ -23,6 +23,8 @@ const TYPE_ALIASES = new Map<string, OrganizationType>([
   ["udod", "udod"],
 ]);
 
+export const MAX_ORGANIZATIONS_XLSX_BYTES = 10 * 1024 * 1024;
+
 function normalizeHeader(value: string) {
   return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, " ");
 }
@@ -33,6 +35,9 @@ function parseOrganizationType(value: string) {
 }
 
 export async function parseOrganizationsXlsx(file: File): Promise<EducationOrganizationInput[]> {
+  if (file.size > MAX_ORGANIZATIONS_XLSX_BYTES) {
+    throw new Error("Размер XLSX не должен превышать 10 МБ");
+  }
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
@@ -83,13 +88,13 @@ export async function parseOrganizationsXlsx(file: File): Promise<EducationOrgan
       throw new Error(`Строка ${rowIndex}: ${validationError}`);
     }
     inputs.push(input);
+    if (inputs.length > 5000) {
+      throw new Error("За один раз можно импортировать не более 5000 организаций");
+    }
   }
 
   if (inputs.length === 0) {
     throw new Error("В XLSX нет организаций для импорта");
-  }
-  if (inputs.length > 5000) {
-    throw new Error("За один раз можно импортировать не более 5000 организаций");
   }
   return inputs;
 }

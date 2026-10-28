@@ -390,7 +390,7 @@ export async function removeFileFromStorage(path: string, options: RemoveFileFro
     const { error } = await runRequest(
       "storage.removeAnonymousUpload",
       () => publicSupabaseClient.functions.invoke("form-admin", {
-        body: { action: "delete-upload", formId: options.formId, path },
+        body: { action: "delete-upload", formId: options.formId, path, browserId: getOrCreateResponseBrowserId() },
       }),
       { context: { bucket: SUPABASE_STORAGE_BUCKET, formId: options.formId ?? null } },
     );

@@ -69,18 +69,46 @@ export async function validateFaviconFile(file: File) {
     if(bytes.length<22 || view.getUint16(0,true)!==0 || view.getUint16(2,true)!==1 || view.getUint16(4,true)<1) throw new Error("Повреждённый ICO-файл");
     width=bytes[6]||256;height=bytes[7]||256;max=256;
   } else {
-    const text=new TextDecoder().decode(bytes);
-    const document=new DOMParser().parseFromString(text,"image/svg+xml");
-    const root=document.documentElement;
-    if(root.localName!=="svg" || document.querySelector("parsererror") || /<!|&(?!amp;|lt;|gt;|quot;|apos;)/.test(text)) throw new Error("Некорректный SVG-файл");
-    const allowed=new Set("svg g path rect circle ellipse line polyline polygon defs linearGradient radialGradient stop clipPath mask title desc".split(" "));
-    for(const node of [root,...root.querySelectorAll("*")]) {
-      if(!allowed.has(node.localName) || [...node.attributes].some(attr => /^on/i.test(attr.name) || /^(style|href|xlink:href)$/i.test(attr.name)
-        || /url\s*\(/i.test(attr.value) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(attr.value))) throw new Error("SVG не должен содержать скрипты, стили и внешние ссылки");
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+      .replace(/^\uFEFF/, "").replace(/^\s*<\?xml\s[^?]*\?>/, "");
+    const document = new DOMParser().parseFromString(text, "image/svg+xml");
+    const root = document.documentElement;
+    if (root.localName !== "svg" || document.querySelector("parsererror") || /<!|<\?|&/.test(text)) {
+      throw new Error("Некорректный SVG-файл");
     }
-    const box=root.getAttribute("viewBox")?.trim().split(/[ ,]+/).map(Number);
-    width=box?.length===4?box[2]:Number(root.getAttribute("width")?.replace(/px$/,""));
-    height=box?.length===4?box[3]:Number(root.getAttribute("height")?.replace(/px$/,""));
+    // Match the server's passive SVG subset before exposing a preview URL.
+    const tags = new Set("svg g path rect circle ellipse line polyline polygon defs linearGradient radialGradient stop clipPath mask title desc".split(" "));
+    const attributes = new Set("xmlns viewBox width height x y x1 y1 x2 y2 cx cy r rx ry d points fill fill-rule fill-opacity stroke stroke-width stroke-linecap stroke-linejoin stroke-miterlimit stroke-dasharray stroke-dashoffset stroke-opacity opacity transform id gradientUnits gradientTransform spreadMethod offset stop-color stop-opacity clip-path clip-rule mask maskUnits maskContentUnits preserveAspectRatio".split(" "));
+    const pending: Array<{ node: Element; depth: number }> = [{ node: root, depth: 0 }];
+    let count = 0;
+    while (pending.length) {
+      const { node, depth } = pending.pop()!;
+      if (++count > 10000 || depth > 32) throw new Error("Слишком сложный SVG");
+      if (node.namespaceURI !== "http://www.w3.org/2000/svg" || node.prefix || !tags.has(node.localName)) {
+        throw new Error("SVG не должен содержать скрипты, стили, внешние ссылки и другие пространства имён");
+      }
+      for (const attribute of node.attributes) {
+        const namespaceAllowed = attribute.name === "xmlns"
+          ? attribute.namespaceURI === "http://www.w3.org/2000/xmlns/" && attribute.value === "http://www.w3.org/2000/svg"
+          : attribute.namespaceURI === null;
+        if (!namespaceAllowed || !attributes.has(attribute.name) || /[<>\\]/.test(attribute.value)
+          || /url\s*\(/i.test(attribute.value) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(attribute.value)) {
+          throw new Error("SVG не должен содержать скрипты, стили и внешние ссылки; атрибут не поддерживается");
+        }
+      }
+      pending.push(...Array.from(node.children, node => ({ node, depth: depth + 1 })));
+    }
+    const box = root.getAttribute("viewBox")?.trim().split(/[ ,]+/).map(Number);
+    const explicitWidth = Number(root.getAttribute("width")?.replace(/px$/, ""));
+    const explicitHeight = Number(root.getAttribute("height")?.replace(/px$/, ""));
+    if (root.hasAttribute("width") || root.hasAttribute("height")) {
+      if (!Number.isInteger(explicitWidth) || explicitWidth !== explicitHeight || explicitWidth < 16 || explicitWidth > max) {
+        throw new Error(`Иконка должна быть квадратной, от 16 до ${max} пикселей`);
+      }
+    }
+    const hasViewBox = box?.length === 4 && box.every(Number.isFinite);
+    width = hasViewBox ? box[2] : explicitWidth;
+    height = hasViewBox ? box[3] : explicitHeight;
   }
   if(!Number.isInteger(width)||width!==height||width<16||width>max) throw new Error(`Иконка должна быть квадратной, от 16 до ${max} пикселей`);
 }
