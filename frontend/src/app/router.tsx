@@ -1,4 +1,4 @@
-import { Navigate, Outlet, createBrowserRouter, useParams } from "react-router-dom";
+import { Navigate, Outlet, createBrowserRouter, useLocation, useParams } from "react-router-dom";
 import { routes } from "./routes";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import { AdminRoute } from "./router/AdminRoute";
@@ -16,11 +16,12 @@ async function loadDashboardRoute(viewMode: "mine" | "all") {
 
 function LegacySurveyRedirect() {
   const { id } = useParams();
+  const { search, hash } = useLocation();
   if (!id) {
     return <Navigate to={routes.dashboardMy} replace />;
   }
 
-  return <Navigate to={routes.survey(id)} replace />;
+  return <Navigate to={{ pathname: routes.survey(id), search, hash }} replace />;
 }
 
 async function loadOfficeEditorRoute() {

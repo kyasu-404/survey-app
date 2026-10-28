@@ -1,5 +1,6 @@
 const RESPONSE_BROWSER_ID_KEY = "survey-response:browser-id";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let fallbackBrowserId: string | undefined;
 
 function createUuid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -14,22 +15,24 @@ function createUuid() {
 }
 
 export function getOrCreateResponseBrowserId() {
-  const browserId = createUuid();
-
   if (typeof window === "undefined") {
-    return browserId;
+    return fallbackBrowserId ??= createUuid();
   }
 
   try {
     const savedBrowserId = window.localStorage.getItem(RESPONSE_BROWSER_ID_KEY);
     if (savedBrowserId && UUID_PATTERN.test(savedBrowserId)) {
+      fallbackBrowserId = savedBrowserId;
       return savedBrowserId;
     }
 
+    const browserId = createUuid();
     window.localStorage.setItem(RESPONSE_BROWSER_ID_KEY, browserId);
+    fallbackBrowserId = browserId;
+    return browserId;
   } catch (error) {
     console.warn("Не удалось сохранить идентификатор браузера для ответа", error);
   }
 
-  return browserId;
+  return fallbackBrowserId ??= createUuid();
 }

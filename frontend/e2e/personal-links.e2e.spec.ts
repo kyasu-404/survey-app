@@ -74,6 +74,13 @@ test("personal forms lock organization, isolate drafts, submit and reopen the sa
   await page.screenshot({ path: testInfo.outputPath("personal-form.png") });
   await page.getByRole("button", { name: "Отправить", exact: true }).click();
   await expect.poll(() => saved.size).toBe(1);
+  await expect(page.getByText("Спасибо за Ваш ответ!")).toBeVisible();
+  await page.getByRole("button", { name: "Редактировать", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Ответ" })).toHaveValue("Черновик первой организации");
+  await page.getByRole("textbox", { name: "Ответ" }).fill("Изменение без перезагрузки");
+  await page.getByRole("button", { name: "Сохранить изменения", exact: true }).click();
+  await expect.poll(() => saved.get(organizations[0].token)?.response_data.answer).toBe("Изменение без перезагрузки");
+  await expect(page.getByRole("button", { name: "Редактировать", exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText(/Вы уже отправляли ответ/)).toBeVisible();
   await page.getByRole("button", { name: "Редактировать", exact: true }).click();

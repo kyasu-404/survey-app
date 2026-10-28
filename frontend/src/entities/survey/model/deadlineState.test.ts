@@ -31,16 +31,13 @@ describe("deadlineState", () => {
     });
   });
 
-  it("reopens a closed form while its future deadline has not arrived", () => {
+  it("keeps a manually or automatically closed form closed before its deadline", () => {
     const form = createForm({
       is_public: false,
       deadline_at: "2026-04-09T12:00:00.000Z",
     });
 
-    expect(getDeadlineStatePatch(form, new Date("2026-04-09T10:00:00.000Z"))).toEqual({
-      is_public: true,
-      deadline_at: "2026-04-09T12:00:00.000Z",
-    });
+    expect(getDeadlineStatePatch(form, new Date("2026-04-09T10:00:00.000Z"))).toBeNull();
   });
 
   it("applies a deadline patch to the displayed form state", () => {

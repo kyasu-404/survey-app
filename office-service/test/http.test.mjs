@@ -8,8 +8,9 @@ import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
 const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx'};
-async function setup(t,{disabled=false,role='user',result}={}){
+async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead}={}){
  const statements=[];
+ let documentReads=0;
  const query=async(sql,args=[])=>{
   statements.push({sql,args});
   if(sql.includes('as total'))return {rows:[{total:0,own:0,bytes:0}]};
@@ -19,12 +20,20 @@ async function setup(t,{disabled=false,role='user',result}={}){
   if(sql.includes('select id,name,role,is_disabled'))return {rows:[{id:userId,role,is_disabled:disabled,name:'Test'}]};
   if(sql.startsWith('select * from public.office_generation_results'))return {rows:result?[result]:[]};
   if(sql.startsWith('select * from public.forms'))return {rows:[{id:formId}]};
-  if(sql.startsWith('select * from public.office_documents'))return {rows:[doc]};
+  if(sql.startsWith('select * from public.office_documents')) {
+   const current=documentAtRead ? documentAtRead(++documentReads) : doc;
+   return {rows:current ? [{...current}] : []};
+  }
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})};
  const store={download(){if(result)return {data:new Blob([zipSync({'first.xlsx':strToU8('first'), 'second.xlsx':strToU8('second')})])};throw new Error('Unexpected Storage request');},upload(){throw new Error('Unexpected Storage request');}};
  const supabase={storage:{from:()=>store},auth:{getUser:async(token)=>({data:{user:token==='employee' ? {id:userId}:null},error:token==='employee' ? null : new Error()})}};
+ if(commandResult) {
+  const originalFetch=globalThis.fetch;
+  t.mock.method(globalThis,'fetch',(url,options)=>String(url)==='http://onlyoffice/command'
+   ? Promise.resolve(Response.json(commandResult)) : originalFetch(url,options));
+ }
  const app=createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64')}});
  const server=createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(r=>server.close(r)));
  const base=`http://127.0.0.1:${server.address().port}/api/office`;
@@ -113,4 +122,32 @@ test('valid generation queues a durable job without downloading or processing in
  const r=await request(`/documents/${documentId}/generate`,{method:'POST',headers:{Authorization:'Bearer employee','Content-Type':'application/json'},body:JSON.stringify({response_ids:[userId]})});
  assert.equal(r.status,202);assert.equal((await r.json()).state,'queued');
  assert.ok(statements.some(s=>s.sql.startsWith('insert into public.office_generation_jobs')));
+});
+
+test('force save waits past an old error until a new callback commits the file',async t=>{
+ const previous={...doc,last_save_error:'Previous autosave failed',last_save_error_at:'2026-10-28T09:00:00Z'};
+ const {request,statements}=await setup(t,{commandResult:{error:0},documentAtRead:n=>n<3 ? previous : {...previous,storage_path:'private/new.docx',last_save_error:null,last_save_error_at:null}});
+ const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true});
+ assert.equal(statements.filter(s=>s.sql.startsWith('select * from public.office_documents')).length,3);
+});
+
+test('force save detects a fresh callback failure even when its message repeats',async t=>{
+ const previous={...doc,last_save_error:'Same failure',last_save_error_at:'2026-10-28T09:00:00Z'};
+ const {request}=await setup(t,{commandResult:{error:0},documentAtRead:n=>n===1 ? previous : {...previous,last_save_error_at:'2026-10-28T09:01:00Z'}});
+ const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
+ assert.equal(r.status,502);
+});
+
+test('force save with no changes succeeds immediately without polling',async t=>{
+ const {request,statements}=await setup(t,{commandResult:{error:4}});
+ const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true,unchanged:true});
+ assert.equal(statements.filter(s=>s.sql.startsWith('select * from public.office_documents')).length,1);
+});
+
+test('force save notices document deletion while awaiting a callback',async t=>{
+ const {request}=await setup(t,{commandResult:{error:0},documentAtRead:n=>n===1 ? doc : null});
+ const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
+ assert.equal(r.status,404);
 });

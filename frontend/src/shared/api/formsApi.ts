@@ -282,8 +282,10 @@ function applyFormsFilters<TQuery extends {
   const normalizedSearch = filters?.search ? normalizeSearchValue(filters.search) : "";
 
   if (normalizedSearch) {
-    const wildcard = `%${normalizedSearch}%`;
-    query = query.or(`title.ilike.${wildcard},author_name.ilike.${wildcard}`);
+    const wildcard = `%${normalizedSearch.replace(/[\\%_]/g, "\\$&")}%`;
+    // Quote PostgREST values separately from escaping SQL LIKE metacharacters.
+    const quoted = `"${wildcard.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    query = query.or(`title.ilike.${quoted},author_name.ilike.${quoted}`);
   }
 
   if (filters?.dateFrom) {
@@ -307,7 +309,13 @@ function applyFormsFilters<TQuery extends {
   }
 
   if (typeof filters?.isPublic === "boolean") {
-    query = query.eq("is_public", filters.isPublic);
+    if (filters.formType === TEMPLATE_FORM_TYPE) {
+      return query.eq("is_public", filters.isPublic);
+    }
+    const now = new Date().toISOString();
+    query = filters.isPublic
+      ? query.eq("is_public", true).or(`deadline_at.is.null,deadline_at.gt.${now}`)
+      : query.or(`is_public.eq.false,deadline_at.lte.${now}`);
   }
 
   return query;

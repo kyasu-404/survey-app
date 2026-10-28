@@ -11,6 +11,7 @@ const STORAGE_TRANSFER_TIMEOUT_MS = 60_000;
 
 type StorageAuthOptions = {
   allowAnonymous?: boolean;
+  browserId?: string;
   signal?: AbortSignal;
   restoreDraft?: boolean;
   personalToken?: string;
@@ -20,6 +21,7 @@ type UploadFileToStorageOptions = StorageAuthOptions;
 
 type RemoveFileFromStorageOptions = {
   allowAnonymous?: boolean;
+  browserId?: string;
   formId?: string;
 };
 
@@ -57,14 +59,14 @@ function buildUserStoragePath(userId: string, formId: string, fileName: string) 
   return `${userId}/${formId}/${generateStorageObjectId()}${getFileExtension(fileName)}`;
 }
 
-async function reservePublicStoragePath(formId: string, file: File, signal?: AbortSignal) {
+async function reservePublicStoragePath(formId: string, file: File, options: StorageAuthOptions) {
   const { data, error } = await runRequest(
     "storage.reserveUpload",
     (requestSignal) => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "reserve-upload", formId, browserId: getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name) },
+      body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name) },
       signal: requestSignal,
     }),
-    { signal },
+    { signal: options.signal },
   );
   if (error || typeof data?.path !== "string" || !data.path.startsWith(`public/${formId}/`)) {
     throw new Error(data?.error || "Не удалось подготовить загрузку. Повторите позже.");
@@ -230,7 +232,7 @@ export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
 async function createSignedUrlForStoragePath(path: string, options: StorageAuthOptions) {
   if (options.allowAnonymous && options.restoreDraft && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
     const { data, error } = await runRequest("storage.restoreUpload", signal => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: getOrCreateResponseBrowserId(), ...(options.personalToken ? { personalToken: options.personalToken } : {}) }, signal,
+      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: options.browserId ?? getOrCreateResponseBrowserId(), ...(options.personalToken ? { personalToken: options.personalToken } : {}) }, signal,
     }), { signal: options.signal });
     if (error || typeof data?.signedUrl !== "string") {
       const response = error && "context" in error ? error.context : undefined;
@@ -349,7 +351,7 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
 
   const filePath = currentUserId
     ? buildUserStoragePath(currentUserId, formId, file.name)
-    : await reservePublicStoragePath(formId, file, options.signal);
+    : await reservePublicStoragePath(formId, file, options);
   const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
   const bucket = bucketClient.storage.from(SUPABASE_STORAGE_BUCKET);
 
@@ -390,7 +392,7 @@ export async function removeFileFromStorage(path: string, options: RemoveFileFro
     const { error } = await runRequest(
       "storage.removeAnonymousUpload",
       () => publicSupabaseClient.functions.invoke("form-admin", {
-        body: { action: "delete-upload", formId: options.formId, path, browserId: getOrCreateResponseBrowserId() },
+        body: { action: "delete-upload", formId: options.formId, path, browserId: options.browserId ?? getOrCreateResponseBrowserId() },
       }),
       { context: { bucket: SUPABASE_STORAGE_BUCKET, formId: options.formId ?? null } },
     );

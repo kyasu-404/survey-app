@@ -215,7 +215,7 @@ function applyRenderMode(model: Model, renderMode: SurveyRenderMode) {
   model.currentPageNo = 0;
 }
 
-async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>, onError: (message: string) => void, personalToken?: string) {
+async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: boolean, uploadedFiles: Map<string, File>, onError: (message: string) => void, browserId: string, personalToken?: string) {
   try {
     const content = isRecord(options.fileValue) ? options.fileValue.content : options.fileValue;
     if (typeof content === "string" && content.startsWith("blob:")) {
@@ -227,7 +227,7 @@ async function handleDownloadFile(options: DownloadFileOptions, allowAnonymous: 
     const localFile = path ? uploadedFiles.get(path) : undefined;
     const fileContent = localFile
       ? await readLocalSurveyFile(localFile)
-      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous, restoreDraft: allowAnonymous, personalToken });
+      : await resolveSurveyFileValueContent(options.fileValue, { allowAnonymous, restoreDraft: allowAnonymous, browserId, personalToken });
     options.callback("success", fileContent);
   } catch (error) {
     console.error(error);
@@ -292,7 +292,7 @@ export function SurveyFormRenderer({
       options.allow = isSafeSurveyNavigationUrl(options.url);
     });
     // Register before restoring data, and keep the handler for this model's lifetime.
-    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles, setFileError, personalToken));
+    nextModel.onDownloadFile.add((_sender, options) => handleDownloadFile(options, allowAnonymousUploads, localFiles, setFileError, browserIdRef.current, personalToken));
     nextModel.fitToContainer = false;
     nextModel.locale = resolvedSchema.locale ?? "ru";
     (nextModel as Model & { showQuestionNumbers?: boolean | string }).showQuestionNumbers = false;
@@ -455,7 +455,7 @@ export function SurveyFormRenderer({
       setFileError(null);
       try {
         for (const file of options.files) {
-          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads }));
+          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current }));
         }
 
         // Register all originals before SurveyJS requests their previews. The
@@ -476,7 +476,7 @@ export function SurveyFormRenderer({
         // Recover the input before waiting for best-effort storage cleanup.
         await Promise.allSettled(
           uploaded.map((item) =>
-            removeFileFromStorage(item.path, { allowAnonymous: allowAnonymousUploads, formId }),
+            removeFileFromStorage(item.path, { allowAnonymous: allowAnonymousUploads, formId, browserId: browserIdRef.current }),
           ),
         );
       }
@@ -498,12 +498,15 @@ export function SurveyFormRenderer({
       // Failed deletions are retried by scheduled orphan cleanup after its grace period.
       paths.forEach((path) => uploadedFiles.delete(path));
       options.callback("success");
-      if (isEditingResponse) return;
+      // Keep persisted attachments until the edited response is committed. New
+      // uploads (including restored draft files) can be removed immediately.
+      const savedPaths = new Set(savedResponse ? getStoragePathsFromResponseData(savedResponse.data) : []);
+      const removablePaths = paths.filter((path) => !savedPaths.has(path));
 
       try {
-        if (paths.length > 0) {
+        if (removablePaths.length > 0) {
           await Promise.all(
-            paths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId })),
+            removablePaths.map((path) => removeFileFromStorage(path, { allowAnonymous: allowAnonymousUploads, formId, browserId: browserIdRef.current })),
           );
         }
       } catch (error) {
@@ -537,6 +540,7 @@ export function SurveyFormRenderer({
             removedPaths.map((path) => removeFileFromStorage(path, {
               allowAnonymous: allowAnonymousUploads,
               formId,
+              browserId: browserIdRef.current,
             })),
           );
           setSavedResponse({
@@ -574,6 +578,7 @@ export function SurveyFormRenderer({
             unusedAttemptPaths.map((path) => removeFileFromStorage(path, {
               allowAnonymous: allowAnonymousUploads,
               formId,
+              browserId: browserIdRef.current,
             })),
           );
           return;
@@ -650,9 +655,9 @@ export function SurveyFormRenderer({
     <div className={isSubmitting ? "survey-renderer survey-renderer-submitting" : "survey-renderer"}>
       {fileError && <p role="alert">{fileError}</p>}
       {submitError && <p style={{ color: "#991b1b", marginBottom: 10 }}>Ошибка отправки: {submitError}</p>}
-      {savedResponse?.status === "already_submitted" && !isEditingResponse && (
+      {savedResponse && (savedResponse.status === "already_submitted" || canEditSavedResponse) && !isEditingResponse && (
         <div className="survey-response-already-submitted" role="status">
-          <p>Вы уже отправляли ответ на эту форму.</p>
+          {savedResponse.status === "already_submitted" && <p>Вы уже отправляли ответ на эту форму.</p>}
           {canEditSavedResponse && (
             <button type="button" onClick={handleStartResponseEditing}>Редактировать</button>
           )}

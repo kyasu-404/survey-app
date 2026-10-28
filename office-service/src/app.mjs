@@ -130,7 +130,7 @@ export function createApp({pool, supabase, env = process.env}) {
         const doc=(await db.query('select * from public.office_documents where id=$1 for update',[id])).rows[0];
         if(!isCurrent(doc)) return false;
         if([3,7].includes(payload.status)) {
-          await db.query('update public.office_documents set last_save_error=$2,last_callback_at=now() where id=$1',[id,'ONLYOFFICE сообщил об ошибке сохранения']); return;
+          await db.query('update public.office_documents set last_save_error=$2,last_save_error_at=clock_timestamp(),last_callback_at=now() where id=$1',[id,'ONLYOFFICE сообщил об ошибке сохранения']); return;
         }
         if(!savesFile) {
           await db.query('update public.office_documents set last_callback_at=now() where id=$1',[id]); return;
@@ -139,7 +139,7 @@ export function createApp({pool, supabase, env = process.env}) {
         requireValue(payload.status!==6 || forceTime || doc.storage_path===snapshot.storage_path,'Документ изменился во время сохранения. Повторите сохранение.',409);
         const userId=Array.isArray(payload.users) && uuid(payload.users[0]) ? payload.users[0] : null;
         await db.query(`update public.office_documents set storage_path=$2,size_bytes=$3,version=version+$4,updated_at=now(),last_callback_at=now(),
-            last_save_error=null,last_force_save_at=$5,template_field_count=$7,updated_by=coalesce((select id from public.profiles where id=$6),updated_by) where id=$1`,
+            last_save_error=null,last_save_error_at=null,last_force_save_at=$5,template_field_count=$7,updated_by=coalesce((select id from public.profiles where id=$6),updated_by) where id=$1`,
             [id,uploadedPath,bytes.length,payload.status===2 ? 1 : 0,payload.status===2 ? 0 : Math.max(Number(doc.last_force_save_at || 0),forceTime),userId,fieldCount]);
         return true;
       });
@@ -147,7 +147,7 @@ export function createApp({pool, supabase, env = process.env}) {
       send(res,200,{error:0});
     } catch(error) {
       await removeUnusedUpload();
-      if(snapshot) await query('update public.office_documents set last_save_error=$2 where id=$1 and version=$3 and storage_path=$4',[id,'Не удалось сохранить документ. Повторите сохранение в редакторе.',snapshot.version,snapshot.storage_path]).catch(()=>{});
+      if(snapshot) await query('update public.office_documents set last_save_error=$2,last_save_error_at=clock_timestamp() where id=$1 and version=$3 and storage_path=$4',[id,'Не удалось сохранить документ. Повторите сохранение в редакторе.',snapshot.version,snapshot.storage_path]).catch(()=>{});
       throw error;
     }
   }
@@ -328,8 +328,13 @@ export function createApp({pool, supabase, env = process.env}) {
         for(let i=0;i<30;i++) {
           await new Promise(resolve=>setTimeout(resolve,1000));
           const current=(await query('select * from public.office_documents where id=$1',[doc.id]))[0];
-          requireValue(current && !current.last_save_error,'Сохранение не завершено. Не закрывайте редактор.',502);
-          if(current.storage_path!==doc.storage_path) return send(res,200,{saved:true});
+          requireValue(current,'Документ не найден',404);
+          // An earlier failed autosave remains visible until a successful callback.
+          // Only a newly recorded failure should abort this save attempt.
+          const newError=current.last_save_error && (current.last_save_error!==doc.last_save_error ||
+            String(current.last_save_error_at ?? '')!==String(doc.last_save_error_at ?? ''));
+          requireValue(!newError,'Сохранение не завершено. Не закрывайте редактор.',502);
+          if(!current.last_save_error && current.storage_path!==doc.storage_path) return send(res,200,{saved:true});
         }
         throw new HttpError(504,'Сохранение ещё не подтверждено. Подождите и попробуйте снова.');
       }

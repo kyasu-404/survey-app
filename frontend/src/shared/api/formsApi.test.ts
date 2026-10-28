@@ -221,7 +221,31 @@ describe("fetchForms", () => {
 
 describe("fetchDashboardFormsPage", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.resetAllMocks();
+  });
+
+  it.each([true, false])("filters by effective publication state before pagination: %s", async (isPublic) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T10:00:00Z"));
+    const query = createSummaryQuery({ data: [], error: null });
+    vi.mocked(apiClient.rpc).mockReturnValue(query as never);
+    await fetchDashboardFormsPage({ pageSize: 20, filters: { isPublic } });
+    if (isPublic) {
+      expect(query.eq).toHaveBeenCalledWith("is_public", true);
+      expect(query.or).toHaveBeenCalledWith("deadline_at.is.null,deadline_at.gt.2026-10-28T10:00:00.000Z");
+    } else {
+      expect(query.eq).not.toHaveBeenCalledWith("is_public", false);
+      expect(query.or).toHaveBeenCalledWith("is_public.eq.false,deadline_at.lte.2026-10-28T10:00:00.000Z");
+    }
+    expect(query.limit).toHaveBeenCalledWith(21);
+  });
+
+  it("escapes LIKE metacharacters and quotes the PostgREST search value", async () => {
+    const query = createSummaryQuery({ data: [], error: null });
+    vi.mocked(apiClient.rpc).mockReturnValue(query as never);
+    await fetchDashboardFormsPage({ pageSize: 20, filters: { search: String.raw`50%_\ "Отчёт"` } });
+    expect(query.or).toHaveBeenCalledWith(String.raw`title.ilike."%50\\%\\_\\\\ \"Отчёт\"%",author_name.ilike."%50\\%\\_\\\\ \"Отчёт\"%"`);
   });
 
   it.each([fetchDashboardFormsPage, fetchTemplateFormsPage])("seeks from a precise cursor and reserves a lookahead row", async (fetchPage) => {

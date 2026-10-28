@@ -52,6 +52,30 @@ describe("storage api", () => {
     vi.useRealTimers();
   });
 
+  it("honors an external browser capability throughout the public file lifecycle", async () => {
+    const formId = "10000000-0000-4000-8000-000000000000";
+    const browserId = "20000000-0000-4000-8000-000000000000";
+    const path = `public/${formId}/file.txt`;
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Must not read localStorage"); });
+    vi.mocked(publicSupabaseClient.functions.invoke).mockImplementation(async (_name, options) => {
+      const { action } = options?.body as { action: string };
+      return { data: action === "reserve-upload" ? { path } : action === "restore-upload"
+        ? { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=fresh` } : { success: true }, error: null } as never;
+    });
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) } as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("file")));
+    const options = { allowAnonymous: true, browserId, formId, restoreDraft: true };
+    await uploadFileToStorage(formId, new File(["file"], "file.txt"), options);
+    await resolveSurveyFileValueContent({ content: path }, options);
+    await removeFileFromStorage(path, options);
+    const bodies = vi.mocked(publicSupabaseClient.functions.invoke).mock.calls.map(([, options]) => options?.body);
+    expect(bodies).toEqual([
+      expect.objectContaining({ action: "reserve-upload", browserId }),
+      expect.objectContaining({ action: "restore-upload", browserId }),
+      expect.objectContaining({ action: "delete-upload", browserId }),
+    ]);
+  });
+
   it("restores an anonymous draft file with its browser capability and a fresh signed URL", async () => {
     const path = "public/10000000-0000-4000-8000-000000000000/file.txt";
     vi.mocked(publicSupabaseClient.functions.invoke).mockResolvedValue({ data: { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=short-lived` }, error: null } as never);

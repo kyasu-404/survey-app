@@ -183,9 +183,9 @@ describe("FormResponsesPage", () => {
     resetRealtimeChannel();
   });
 
-  it("exports selected answers to ZIP, shows progress and matches the XLSX button", async () => {
+  it.each(["user-1", "another-author"])("exports selected answers to ZIP and XLSX for author %s", async (authorId) => {
     const schema = { pages: [{ elements: [{ type: "panel", name: "panel", elements: [{ type: "file", name: "files" }] }] }] };
-    getFormById.mockResolvedValue({ id: "form-1", title: "Вложения", author_id: "user-1", schema });
+    getFormById.mockResolvedValue({ id: "form-1", title: "Вложения", author_id: authorId, schema });
     const responses = [createResponse(1), createResponse(2)];
     loadResponseRows.mockResolvedValue(responses);
     const deferred = createDeferred<{ downloaded: number; failed: number }>();
@@ -205,6 +205,10 @@ describe("FormResponsesPage", () => {
     expect(button.querySelector('[data-icon="download"]')).toBeInTheDocument();
     expect(xlsx.querySelector('[data-icon="download"]')).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("checkbox", { name: /^Выбрать Ответ/ })[0]);
+    if (authorId !== "user-1") expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+    await userEvent.click(xlsx);
+    await waitFor(() => expect(exportToExcel).toHaveBeenCalledWith(expect.any(Array), "ответы-Вложения", "Ответы", expect.any(Array)));
+    expect(exportToExcel.mock.calls[0][0]).toHaveLength(1);
     await userEvent.click(button);
     await waitFor(() => expect(button).toHaveTextContent("1/2"));
     expect(button).toBeDisabled();

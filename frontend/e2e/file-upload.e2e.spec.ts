@@ -4,6 +4,50 @@ import { openSurveyApp } from "./fixtures/surveyApp";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64");
 const file = (name: string) => ({ name, mimeType: "image/png", buffer: png });
 
+test("editing deletes new uploads immediately and saved attachments only after commit", async ({ page }) => {
+  const { formId, form, pageErrors } = await openSurveyApp(page, { responseCount: 0, elements: [
+    { type: "file", name: "files", title: "Файлы", allowMultiple: true, needConfirmRemoveFile: false },
+  ] });
+  Object.assign(form, { allow_response_editing: true });
+  const savedPath = `public/${formId}/10000000-0000-4000-8000-000000000001.png`;
+  const newPath = `public/${formId}/10000000-0000-4000-8000-000000000002.png`;
+  const deleted: string[] = [];
+  let committed = false;
+  await page.route("**/rest/v1/rpc/get_form_response_status", route => route.fulfill({ json: [{
+    response_id: "30000000-0000-4000-8000-000000000001", response_editable: true,
+    response_data: { files: [{ name: "saved.png", content: savedPath }] },
+  }] }));
+  await page.route("**/rest/v1/rpc/update_form_response", route => {
+    committed = true;
+    return route.fulfill({ json: [{ response_id: "30000000-0000-4000-8000-000000000001", response_data: route.request().postDataJSON().p_data }] });
+  });
+  await page.route("**/functions/v1/form-admin", route => {
+    const body = route.request().postDataJSON();
+    if (body.action === "reserve-upload") return route.fulfill({ json: { path: newPath } });
+    if (body.action === "restore-upload") return route.fulfill({ json: { signedUrl: `/storage/v1/object/sign/survey-files/${body.path}?token=fresh` } });
+    expect(body.action).toBe("delete-upload");
+    if (body.path === savedPath) expect(committed).toBe(true);
+    deleted.push(body.path);
+    return route.fulfill({ json: { success: true } });
+  });
+  await page.route("**/storage/v1/object/**", route => route.request().method() === "GET"
+    ? route.fulfill({ contentType: "image/png", body: png }) : route.fulfill({ json: { Key: newPath } }));
+  await page.goto(`/form/${formId}`);
+  await page.getByRole("button", { name: "Редактировать", exact: true }).click();
+  await expect(page.locator(".sd-file img")).toHaveCount(1);
+  await chooseFiles(page, ["new.png"]);
+  await expect(page.locator(".sd-file img")).toHaveCount(2);
+  await page.locator(".sd-file__preview-item").filter({ hasText: "new.png" }).locator(".sd-context-btn").click();
+  await expect.poll(() => deleted).toEqual([newPath]);
+  await page.locator(".sd-file__preview-item").filter({ hasText: "saved.png" }).locator(".sd-context-btn").click();
+  await expect(page.locator(".sd-file img")).toHaveCount(0);
+  expect(deleted).toEqual([newPath]);
+  await page.getByRole("button", { name: "Сохранить изменения", exact: true }).click();
+  await expect.poll(() => deleted).toEqual([newPath, savedPath]);
+  await expect(page.getByRole("button", { name: "Редактировать", exact: true })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
 test("an expired upload restored from a draft names the file and allows replacement", async ({ page }) => {
   const { formId } = await openSurveyApp(page, { responseCount: 0, elements: [{ type: "file", name: "file", title: "Файл", ...{ needConfirmRemoveFile: false } }] });
   await page.route("**/functions/v1/form-admin", route => {

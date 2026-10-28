@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,7 +41,7 @@ const {
     updateMutateAsync: vi.fn().mockRejectedValue(new Error("api failed")),
     registeredCustomQuestionTypes,
     getStoragePathFromSurveyFileValue: vi.fn(),
-    getStoragePathsFromResponseData: vi.fn(() => []),
+    getStoragePathsFromResponseData: vi.fn((): string[] => []),
     removeFileFromStorage: vi.fn(),
     resolveSurveyFileValueContent: vi.fn(),
     uploadFileToStorage: vi.fn(),
@@ -365,6 +365,9 @@ describe("SurveyFormRenderer", () => {
     expect(await screen.findByText("Спасибо за Ваш ответ!")).toBeInTheDocument();
     expect(createdModels[0]).toMatchObject({ showCompletePage: true });
     expect(screen.queryByText("Вы уже отправляли ответ на эту форму.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+    expect(createdModels[0]).toMatchObject({ data: { email: "a@b.com" }, completeText: "Сохранить изменения" });
+    expect(screen.queryByRole("button", { name: "Редактировать" })).not.toBeInTheDocument();
   });
 
   it("shows an existing response before the form and only offers editing when enabled", async () => {
@@ -615,7 +618,7 @@ describe("SurveyFormRenderer", () => {
 
     await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
 
-    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: false, restoreDraft: false });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, expect.objectContaining({ allowAnonymous: false, restoreDraft: false, browserId: expect.any(String) }));
     expect(callback).toHaveBeenCalledWith("success", "file-content");
   });
 
@@ -640,7 +643,7 @@ describe("SurveyFormRenderer", () => {
         name: "answer.xlsx",
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         content: "public/form-1/file.xlsx",
-      }, { allowAnonymous: false, restoreDraft: false });
+      }, expect.objectContaining({ allowAnonymous: false, restoreDraft: false, browserId: expect.any(String) }));
     });
     expect(downloadEventsDuringDataAssignment).toEqual(["data:application/octet-stream;base64,UEsDBA=="]);
   });
@@ -657,7 +660,7 @@ describe("SurveyFormRenderer", () => {
     const callback = vi.fn();
     await model.onDownloadFile.fire(model, { fileValue: { content: "public/form-1/file.txt" }, callback });
     expect(callback).toHaveBeenCalledExactlyOnceWith("success", "data:text/plain;base64,aGVsbG8=");
-    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, { allowAnonymous: true, restoreDraft: true });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: "public/form-1/file.txt" }, expect.objectContaining({ allowAnonymous: true, restoreDraft: true, browserId: expect.any(String) }));
   });
 
   it("adds a submitting hook while the response is being sent", async () => {
@@ -1093,6 +1096,43 @@ describe("SurveyFormRenderer", () => {
     ]);
   });
 
+  it("uses the supplied browser capability for upload, restore, deletion and submission", async () => {
+    const browserId = "10000000-0000-4000-8000-000000000001";
+    const file = new File(["hello"], "new.txt");
+    const path = "public/form-1/new.txt";
+    getStoragePathFromSurveyFileValue.mockReturnValue(path);
+    uploadFileToStorage.mockResolvedValue({ file, path });
+    resolveSurveyFileValueContent.mockResolvedValue("data:text/plain;base64,aA==");
+    render(<SurveyFormRenderer formId="form-1" responseBrowserId={browserId} allowAnonymousUploads schema={{ pages: [] }} />);
+    const model = createdModels[0] as unknown as {
+      onUploadFiles: FakeSurveyEvent;
+      onDownloadFile: FakeSurveyEvent;
+      onClearFiles: FakeSurveyEvent;
+    };
+    await model.onDownloadFile.fire(model, { fileValue: { content: path }, callback: vi.fn() });
+    await model.onUploadFiles.fire(model, { files: [file], callback: vi.fn() });
+    await model.onClearFiles.fire(model, { value: { content: path }, callback: vi.fn() });
+    await userEvent.click(screen.getByRole("button", { name: "Отправить" }));
+    expect(uploadFileToStorage).toHaveBeenCalledWith("form-1", file, { allowAnonymous: true, browserId });
+    expect(resolveSurveyFileValueContent).toHaveBeenCalledWith({ content: path }, expect.objectContaining({ browserId }));
+    expect(removeFileFromStorage).toHaveBeenCalledWith(path, expect.objectContaining({ browserId }));
+    expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ browserId }));
+  });
+
+  it("removes new files during response editing while preserving saved attachments until commit", async () => {
+    const savedPath = "public/form-1/saved.txt", newPath = "public/form-1/new.txt";
+    getStoragePathFromSurveyFileValue.mockImplementation((value: { content: string }) => value.content);
+    getStoragePathsFromResponseData.mockReturnValue([savedPath]);
+    render(<SurveyFormRenderer formId="form-1" allowAnonymousUploads allowResponseEditing
+      schema={{ pages: [] }} existingResponse={{ responseId: "saved", editable: true, data: { file: [{ content: savedPath }] } }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+    const model = createdModels[0] as unknown as { onClearFiles: FakeSurveyEvent };
+    const callback = vi.fn();
+    await act(async () => { await model.onClearFiles.fire(model, { value: [{ content: savedPath }, { content: newPath }], callback }); });
+    expect(callback).toHaveBeenCalledExactlyOnceWith("success");
+    expect(removeFileFromStorage).toHaveBeenCalledExactlyOnceWith(newPath, expect.objectContaining({ formId: "form-1" }));
+  });
+
   it("deletes an anonymous public upload when the respondent clears it", async () => {
     const callback = vi.fn();
     getStoragePathFromSurveyFileValue.mockReturnValue("public/form-1/file-id.txt");
@@ -1120,7 +1160,7 @@ describe("SurveyFormRenderer", () => {
 
     expect(removeFileFromStorage).toHaveBeenCalledWith(
       "public/form-1/file-id.txt",
-      { allowAnonymous: true, formId: "form-1" },
+      { allowAnonymous: true, formId: "form-1", browserId: expect.any(String) },
     );
     expect(callback).toHaveBeenCalledWith("success");
   });
@@ -1147,7 +1187,7 @@ describe("SurveyFormRenderer", () => {
       value: [{ name: "keep.txt", content: "public/form-1/keep.txt" }, { name: "remove.txt", content: "public/form-1/remove.txt" }],
       fileName: "remove.txt", callback: vi.fn(),
     });
-    expect(removeFileFromStorage).toHaveBeenCalledExactlyOnceWith("public/form-1/remove.txt", { allowAnonymous: true, formId: "form-1" });
+    expect(removeFileFromStorage).toHaveBeenCalledExactlyOnceWith("public/form-1/remove.txt", { allowAnonymous: true, formId: "form-1", browserId: expect.any(String) });
   });
 
   it("reports an upload error before waiting for cleanup of a partially uploaded batch", async () => {

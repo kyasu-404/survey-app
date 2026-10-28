@@ -1006,6 +1006,9 @@ begin
   values (p_form_id, public.browser_capability_hash(p_browser_id), p_submission_id, p_data)
   returning * into inserted_response;
 
+  -- AFTER INSERT may close the form when this response reaches max_responses.
+  select f.* into target_form from public.forms f where f.id = p_form_id;
+
   return query select
     'submitted'::text,
     inserted_response.id,
@@ -1198,6 +1201,17 @@ $$;
 revoke all on function public.list_forms_keyset(timestamptz, uuid) from public, anon;
 grant execute on function public.list_forms_keyset(timestamptz, uuid) to authenticated, service_role;
 
+-- Escape user input as a literal substring for ILIKE (the surrounding % are added by callers).
+create or replace function public.escape_forms_search(search_text text)
+returns text
+language sql immutable strict parallel safe
+set search_path = ''
+as $$
+  select replace(replace(replace(search_text, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_');
+$$;
+revoke all on function public.escape_forms_search(text) from public;
+grant execute on function public.escape_forms_search(text) to authenticated, service_role;
+
 create or replace function public.get_dashboard_forms_stats(
   p_search text default null,
   p_date_from timestamptz default null,
@@ -1228,8 +1242,8 @@ as $$
     and (
       p_search is null
       or p_search = ''
-      or f.title ilike '%' || p_search || '%'
-      or f.author_name ilike '%' || p_search || '%'
+      or f.title ilike '%' || public.escape_forms_search(p_search) || '%'
+      or f.author_name ilike '%' || public.escape_forms_search(p_search) || '%'
     )
     and (p_date_from is null or f.created_at >= p_date_from)
     and (p_date_to is null or f.created_at <= p_date_to)
@@ -1706,6 +1720,7 @@ create table public.survey_upload_reservations (
   size_bytes bigint not null check (size_bytes between 0 and 10485760),
   attached boolean not null default false,
   cleanup_claimed boolean not null default false,
+  cleanup_claimed_at timestamptz,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '8 hours')
 );
@@ -2430,6 +2445,7 @@ create table public.office_documents (
   last_opened_at timestamptz,
   last_callback_at timestamptz,
   last_save_error text,
+  last_save_error_at timestamptz,
   last_force_save_at bigint not null default 0
 ,
   file_type text not null default 'docx' check(file_type in ('docx','xlsx')),
@@ -2626,7 +2642,7 @@ begin
     when 'responses_count' then sort_expression := 'coalesce(f.responses_count, 0)'; sort_type := 'integer';
     when 'status' then
       -- Match the displayed deadline state. Freeze the clock across a cursor chain.
-      sort_expression := '(case when f.max_responses > 0 and f.responses_count >= f.max_responses then false when f.deadline_at is not null then f.deadline_at > $1 else f.is_public end)';
+      sort_expression := '(f.is_public and (f.deadline_at is null or f.deadline_at > $1) and (f.max_responses is null or f.responses_count < f.max_responses))';
       sort_type := 'boolean';
     when 'classification' then
       sort_expression := $expr$(case f.form_type
@@ -2654,12 +2670,12 @@ begin
       and ($5 is null or f.author_id = $5)
       and ($6 is null or f.form_type = $6)
       and ($7 is null or f.form_reason = $7)
-      and ($8 is null or f.is_public = $8)
+      and ($8 is null or (f.is_public and (f.deadline_at is null or f.deadline_at > now())) = $8)
       and ($9 is null or ((%1$s), f.id) %2$s (($10)::%3$s, $9))
     order by %1$s %4$s, f.id %4$s
     limit $11
   $query$, sort_expression, comparison, sort_type, p_sort_direction)
-  using reference_time, p_search, p_date_from, p_date_to, p_author_id,
+  using reference_time, public.escape_forms_search(p_search), p_date_from, p_date_to, p_author_id,
     p_form_type, p_form_reason, p_is_public, p_after_id, p_after_value, p_page_size + 1;
 end;
 $$;
@@ -2726,12 +2742,14 @@ as $$
   with candidates as (
     select r.object_path from public.survey_upload_reservations r
     where r.expires_at < now() and not r.attached
+      and (not r.cleanup_claimed or r.cleanup_claimed_at is null
+        or r.cleanup_claimed_at < now() - interval '10 minutes')
       and exists (select 1 from storage.objects o where o.bucket_id = 'survey-files' and o.name = r.object_path)
       and not exists (select 1 from public.response_file_references rf where rf.object_path = r.object_path)
     order by r.expires_at, r.object_path limit least(greatest(batch_limit, 1), 500)
     for update skip locked
   )
-  update public.survey_upload_reservations r set cleanup_claimed = true
+  update public.survey_upload_reservations r set cleanup_claimed = true, cleanup_claimed_at = now()
   from candidates c where r.object_path = c.object_path and not r.attached
   returning r.object_path;
 $$;

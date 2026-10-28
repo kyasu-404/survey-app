@@ -114,8 +114,8 @@ export function ResponseReportModal({
             role="tab"
             aria-selected={activeTab === "coverage"}
             className={activeTab === "coverage" ? "active" : ""}
-            disabled={!coverage || !canSendReminders}
-            title={!canSendReminders ? "Учёт сдавших доступен только автору формы" : !coverage ? "Добавьте в форму поле «Организация», чтобы включить учёт сдавших" : undefined}
+            disabled={!coverage}
+            title={!coverage ? "Добавьте в форму поле «Организация», чтобы включить учёт сдавших" : undefined}
             onClick={() => setActiveTab("coverage")}
           >
             Учёт сдавших
@@ -163,7 +163,7 @@ export function ResponseReportModal({
           </div>
         )}
 
-        {activeTab === "coverage" && coverage && canSendReminders && (
+        {activeTab === "coverage" && coverage && (
           <div role="tabpanel" className="response-report-tab-panel">
             <div className="response-report-summary">
               <div><span>Всего организаций</span><strong>{coverage.expectedCount}</strong></div>
@@ -228,7 +228,7 @@ export function ResponseReportModal({
               )}
             </section>
 
-            {isMailActivityOpen && (
+            {isMailActivityOpen && canSendReminders && (
               <MailDeliveryPanel
                 formId={formId}
                 preferredBatchId={null}

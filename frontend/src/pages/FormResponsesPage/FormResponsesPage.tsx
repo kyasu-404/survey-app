@@ -623,13 +623,11 @@ export default function FormResponsesPage() {
                         <img src={pinBlackIcon} className="responses-pin-icon-light" alt="" aria-hidden="true" />
                         <img src={pinWhiteIcon} className="responses-pin-icon-dark" alt="" aria-hidden="true" />
                       </button>
-                      {canDeleteResponses && (
-                        <SelectAllResponsesCheckbox
-                          checked={allVisibleResponsesSelected}
-                          indeterminate={selectedVisibleResponses > 0 && !allVisibleResponsesSelected}
-                          onChange={toggleAllVisibleResponses}
-                        />
-                      )}
+                      <SelectAllResponsesCheckbox
+                        checked={allVisibleResponsesSelected}
+                        indeterminate={selectedVisibleResponses > 0 && !allVisibleResponsesSelected}
+                        onChange={toggleAllVisibleResponses}
+                      />
                     </div>
                   </th>
                   {columns.map((column) => {
@@ -669,7 +667,7 @@ export default function FormResponsesPage() {
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                       >
-                        {canDeleteResponses && response && (
+                        {response && (
                           <input
                             type="checkbox"
                             aria-label={`Выбрать ${previewLabel}`}

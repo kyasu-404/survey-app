@@ -21,13 +21,6 @@ export function getDeadlineStatePatch(form: DeadlineTrackedForm, now = new Date(
     };
   }
 
-  if (!form.is_public) {
-    return {
-      is_public: true,
-      deadline_at: form.deadline_at,
-    };
-  }
-
   return null;
 }
 

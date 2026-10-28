@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { render, waitFor } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { routes } from "./routes";
 
 const pageLoads = vi.hoisted(() => ({
@@ -129,4 +131,22 @@ describe("router", () => {
     router.dispose();
     window.history.replaceState(null, "", "/");
   }, 15_000);
+  it.each(["?org=token#section", "#org=token", "?source=old#personal=token"])("preserves legacy form query and hash: %s", async (suffix) => {
+    window.history.replaceState(null, "", "/form/public-test");
+    const { router } = await import("./router");
+    const legacyRoute = router.routes.flatMap(route => route.children ?? []).find(route => route.path === routes.legacySurveyById)!;
+    const memoryRouter = createMemoryRouter([
+      legacyRoute,
+      { path: routes.surveyById, element: <div>Форма</div> },
+    ], { initialEntries: [`/survey/form-1${suffix}`] });
+    const view = render(<RouterProvider router={memoryRouter} />);
+    await waitFor(() => {
+      const { pathname, search, hash } = memoryRouter.state.location;
+      expect(pathname).toBe(routes.survey("form-1"));
+      expect(search + hash).toBe(suffix);
+      expect(memoryRouter.state.historyAction).toBe("REPLACE");
+    });
+    view.unmount();
+    memoryRouter.dispose();
+  });
 });

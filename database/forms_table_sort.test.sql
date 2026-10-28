@@ -42,7 +42,7 @@ begin
       when 'title' then 'lower(f.title)'
       when 'author_name' then 'lower(coalesce(nullif(f.author_name, ''''), f.author_id::text))'
       when 'responses_count' then 'coalesce(f.responses_count,0)'
-      when 'status' then '(case when f.max_responses > 0 and f.responses_count >= f.max_responses then false when f.deadline_at is not null then f.deadline_at > now() else f.is_public end)'
+      when 'status' then '(f.is_public and (f.deadline_at is null or f.deadline_at > now()) and (f.max_responses is null or f.responses_count < f.max_responses))'
       when 'classification' then $e$(case f.form_type when 'anketa' then 'Анкетирование' when 'request' then 'Запрос' else 'Голосование' end || ' • ' || case f.form_reason when 'plan' then 'План работ' else 'Запрос' end)$e$
     end;
     foreach direction in array array['asc','desc'] loop

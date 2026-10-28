@@ -124,8 +124,11 @@ describe("ResponseReportModal", () => {
 });
 
 
-it("disables submission tracking for a non-author even with coverage data",()=>{
+it("lets non-authors view coverage without offering mail actions", async () => {
   render(<ResponseReportModal report={{...baseReport,organizationCoverage:{expectedCount:1,submittedCount:0,submittedOrganizations:[],missingOrganizations:[missingOrganization]}}} formId="form" organizationTypes={["school"]} canSendReminders={false} onClose={vi.fn()}/>);
-  expect(screen.getByRole("tab",{name:"Учёт сдавших"})).toBeDisabled();
+  await userEvent.click(screen.getByRole("tab", { name: "Учёт сдавших" }));
+  expect(screen.getByRole("heading", { name: "Статус сдачи" })).toBeVisible();
+  expect(screen.getByText(missingOrganization.email)).toBeVisible();
   expect(screen.queryByRole("button",{name:"Отправить напоминание"})).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Статусы отправки" })).not.toBeInTheDocument();
 });
