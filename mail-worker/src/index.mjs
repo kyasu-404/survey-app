@@ -1,7 +1,7 @@
 import http from "node:http";
 import os from "node:os";
-import nodemailer from "nodemailer";
-import { createTransportOptions, decryptPassword, toPublicSmtpError } from "./config.mjs";
+import { toPublicSmtpError } from "./config.mjs";
+import { createSmtpTransportManager } from "./smtpTransport.mjs";
 import { isWorkerHealthy } from "./health.mjs";
 import {
   DEFAULT_STORAGE_CLEANUP_INTERVAL_HOURS,
@@ -15,6 +15,7 @@ const encryptionKey = String(process.env.MAIL_SETTINGS_ENCRYPTION_KEY ?? "");
 const workerId = `${os.hostname()}:${process.pid}`;
 const pollIntervalMs = Math.max(1000, Number(process.env.MAIL_WORKER_POLL_INTERVAL_MS) || 3000);
 const concurrency = Math.min(20, Math.max(1, Number(process.env.MAIL_WORKER_CONCURRENCY) || 5));
+const smtpTransports = createSmtpTransportManager({ encryptionKey, concurrency });
 const healthPort = Math.min(65535, Math.max(1, Number(process.env.MAIL_WORKER_HEALTH_PORT) || 8080));
 const cleanupRetentionHours = Math.min(
   720,
@@ -139,13 +140,13 @@ async function poll() {
   if (state.busy) return;
   state.busy = true;
   state.lastPollAt = new Date().toISOString();
-  let transporter;
   let completed = false;
 
   try {
     const settings = await loadSettings();
     state.configured = Boolean(settings?.enabled);
     if (!settings?.enabled) {
+      smtpTransports.close();
       state.lastError = null;
       completed = true;
       return;
@@ -159,8 +160,7 @@ async function poll() {
     }
 
     try {
-      const password = decryptPassword(settings.password_encrypted, encryptionKey);
-      transporter = nodemailer.createTransport(createTransportOptions(settings, password));
+      const transporter = smtpTransports.get(settings);
       await Promise.all(jobs.map((job) => sendJob(transporter, settings, job)));
       state.lastError = null;
       completed = true;
@@ -174,7 +174,6 @@ async function poll() {
     console.error("mail worker poll failed", { message: error instanceof Error ? error.message : String(error) });
   } finally {
     if (completed) state.lastSuccessfulPollAt = new Date().toISOString();
-    transporter?.close();
     state.busy = false;
   }
 }
@@ -274,6 +273,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     clearInterval(cleanupTimer);
     clearInterval(expiredUploadsTimer);
     await Promise.all([activePoll, activeCleanup]);
+    smtpTransports.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   });

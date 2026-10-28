@@ -36,7 +36,9 @@ const budgets = {
   // Self-hosted variable Roboto (8 Unicode/style subsets), SIL license and UI
   // changes add 281.0 KiB measured. Reserve 288 KiB; JS/CSS startup, dependency
   // and icon-font limits stay fixed. Each text subset is capped at 48 KiB.
-  total: { raw: 7_357_332 },
+  // Lazy public/private routes add 12.3 KiB of shared chunks and manifest entries.
+  // Reserve 16 KiB; startup and dependency limits remain unchanged.
+  total: { raw: 7_373_716 },
 };
 
 function formatBytes(bytes) {
@@ -105,6 +107,22 @@ function visitEntry(key) {
 }
 for (const [key, chunk] of Object.entries(manifest)) {
   if (chunk.isEntry) visitEntry(key);
+}
+// Route-level guards catch heavy imports even when the entry remains lazy.
+for (const [entry, forbidden] of [
+  ["src/pages/TemplatesPage/TemplatesPage.tsx", /survey-(?:core|creator|react)|SurveyFormRenderer/],
+  ["src/pages/SurveyPage/SurveyPage.tsx", /DashboardPage|LoginPage|AppLayout/],
+]) {
+  const visitedRoute = new Set();
+  function visitRoute(key) {
+    if (visitedRoute.has(key)) return;
+    visitedRoute.add(key);
+    const chunk = manifest[key];
+    if (forbidden.test(chunk.file)) failures.push(`Unexpected static dependency of ${entry}: ${chunk.file}`);
+    for (const dependency of chunk.imports ?? []) visitRoute(dependency);
+  }
+  if (!manifest[entry]) failures.push(`Missing route chunk: ${entry}`);
+  else visitRoute(entry);
 }
 let initialRaw = 0;
 let initialGzip = 0;

@@ -39,6 +39,14 @@ const RESPONSE_DATE_HEADER = "Дата ответа";
 const NON_ANSWER_TYPES = new Set(["panel", "html", "image"]);
 const MAX_EXPORT_VALUE_DEPTH = 32;
 const MAX_EXPORT_VALUE_NODES = 10_000;
+const RESPONSE_DATE_FORMAT = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
@@ -183,16 +191,7 @@ function sanitizeFileName(fileName: string) {
 }
 
 function formatResponseDate(value: string) {
-  const formatter = new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(new Date(value));
+  const parts = RESPONSE_DATE_FORMAT.formatToParts(new Date(value));
   const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   const datePart = [getPart("day"), getPart("month"), getPart("year")].filter(Boolean).join(".");
   const timePart = [getPart("hour"), getPart("minute")].filter(Boolean).join(":");
@@ -362,8 +361,7 @@ export function createResponsesHtmlReport({ title, columns, rows, generatedAt = 
   )}</dd></div></dl></header>${body}</article>`;
 }
 
-export function createResponsesHtmlDocument(input: ResponsesHtmlInput) {
-  const report = createResponsesHtmlReport(input);
+export function createResponsesHtmlDocument(input: ResponsesHtmlInput, report = createResponsesHtmlReport(input)) {
   const title = escapeHtml(input.title);
 
   return `<!doctype html>

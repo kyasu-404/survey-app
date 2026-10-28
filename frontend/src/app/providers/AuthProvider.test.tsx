@@ -58,6 +58,44 @@ function renderWithAuthProvider(children: ReactNode, queryClient = new QueryClie
 }
 
 describe("AuthProvider", () => {
+  it.each(["session", "event"])("loads a restored profile once when %s arrives first", async first => {
+    const sessionRequest = createDeferred<{ data: { session: { user: { id: string } } } }>();
+    const profileRequest = createDeferred<{ data: { id: string; role: string; is_disabled: boolean }; error: null }>();
+    const single = vi.fn(() => profileRequest.promise);
+    const session = { user: { id: "restored-user" } };
+    let listener!: (event: string, nextSession: typeof session | null) => Promise<void>;
+    getCurrentSession.mockReturnValue(sessionRequest.promise);
+    onAuthStateChange.mockImplementation(callback => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    from.mockReturnValue({ select: () => ({ eq: () => ({ single }) }) });
+    renderWithAuthProvider(<AuthStateProbe />);
+    if (first === "session") {
+      await act(async () => { sessionRequest.resolve({ data: { session } }); });
+      await act(async () => { await listener("INITIAL_SESSION", session); });
+    } else {
+      await act(async () => { await listener("INITIAL_SESSION", session); });
+      await act(async () => { sessionRequest.resolve({ data: { session } }); });
+    }
+    expect(single).toHaveBeenCalledTimes(1);
+    await act(async () => { profileRequest.resolve({ data: { id: "restored-user", role: "user", is_disabled: false }, error: null }); });
+    expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:restored-user:user");
+  });
+
+  it("ignores a stale restored session after a sign-out event", async () => {
+    const sessionRequest = createDeferred<{ data: { session: { user: { id: string } } } }>();
+    let listener!: (event: string, session: null) => Promise<void>;
+    getCurrentSession.mockReturnValue(sessionRequest.promise);
+    onAuthStateChange.mockImplementation(callback => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    renderWithAuthProvider(<AuthStateProbe />);
+    await act(async () => { await listener("SIGNED_OUT", null); });
+    await act(async () => { sessionRequest.resolve({ data: { session: { user: { id: "stale-user" } } } }); });
+    expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:anonymous:no-profile");
+  });
   it("marks auth as ready after session restoration before the profile request resolves", async () => {
     const profileRequest = createDeferred<{
       data: {
@@ -159,7 +197,7 @@ describe("AuthProvider", () => {
     expect(clearSpy).not.toHaveBeenCalled();
   });
 
-  it("clears the previous profile and private cache before loading the next user's profile", async () => {
+  it.each(["SIGNED_IN", "INITIAL_SESSION"])("clears the previous profile and private cache before loading another user on %s", async event => {
     let authListener: ((event: string, session: { user: { id: string } } | null) => Promise<void>) | undefined;
     const nextProfile = createDeferred<{ data: { id: string; role: string; is_disabled: boolean }; error: null }>();
     const single = vi.fn().mockResolvedValue({ data: { id: "admin", role: "admin", is_disabled: false }, error: null });
@@ -174,7 +212,7 @@ describe("AuthProvider", () => {
     queryClient.setQueryData(["office-documents", "private"], { document: "previous user's data" });
     single.mockReturnValueOnce(nextProfile.promise);
 
-    await act(async () => { await authListener?.("SIGNED_IN", { user: { id: "employee" } }); });
+    await act(async () => { await authListener?.(event, { user: { id: "employee" } }); });
     expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:employee:no-profile");
     expect(queryClient.getQueryData(["office-documents", "private"])).toBeUndefined();
     await act(async () => { nextProfile.resolve({ data: { id: "employee", role: "user", is_disabled: false }, error: null }); });

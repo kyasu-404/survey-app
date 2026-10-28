@@ -18,6 +18,7 @@ test("preview keeps files local, allows required-file navigation and returns to 
     if (request.method() !== "GET" && /\/storage\/v1\/|\/functions\/v1\/|\/rest\/v1\/(responses|rpc\/submit)/.test(request.url())) mutations.push(request.url());
   });
   await page.getByRole("link", { name: "Все формы", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/all$/);
   const originalUrl = page.url();
   const filteredList = page.waitForResponse(response => {
     const url = new URL(response.url());

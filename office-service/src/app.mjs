@@ -91,39 +91,63 @@ export function createApp({pool, supabase, env = process.env}) {
     // The signed payload is authoritative. Never substitute unsigned body fields.
     const payload=signed.payload || signed;
     requireValue(typeof payload.key==='string' && [1,2,3,4,6,7].includes(payload.status),'Некорректный подписанный callback');
+    const forceTime=Number(payload.lastsave || 0);
+    requireValue(Number.isFinite(forceTime) && forceTime>=0,'Некорректное время сохранения');
+    const isCurrent = doc => {
+      requireValue(doc,'Документ удалён',404);
+      if(payload.key!==documentKey(doc)) {
+        // Completed sessions may retry; never let them replace a newer version.
+        const prefixKey=`survey_${id.replaceAll('-','')}_v`;
+        const oldVersion=payload.key.startsWith(prefixKey) ? Number(payload.key.slice(prefixKey.length)) : NaN;
+        requireValue(Number.isInteger(oldVersion) && oldVersion>0 && oldVersion<doc.version,'Ключ документа не совпадает',409);
+        return false;
+      }
+      return !(payload.status===6 && forceTime && forceTime<=Number(doc.last_force_save_at));
+    };
+    let snapshot, uploadedPath;
+    // Storage paths are unique per attempt. If COMMIT acknowledgement is lost,
+    // delete only after verifying the file is not the committed document.
+    const removeUnusedUpload = async () => {
+      if(!uploadedPath) return;
+      try {
+        const [current]=await query('select storage_path from public.office_documents where id=$1',[id]);
+        if(current?.storage_path!==uploadedPath) await store.remove([uploadedPath]);
+      } catch { /* Leave uncertain files for orphan cleanup. */ }
+    };
     try {
-      await transaction(async db => {
+      snapshot=(await query('select * from public.office_documents where id=$1',[id]))[0];
+      if(!isCurrent(snapshot)) return send(res,200,{error:0});
+      let bytes, fieldCount;
+      const savesFile=[2,6].includes(payload.status);
+      if(savesFile) {
+        // No checked-out DB connection or row lock during HTTP/worker waits.
+        bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
+        ({fieldCount}=await runOfficeTask({task:'inspect',bytes,format:snapshot.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024}));
+        uploadedPath=`forms/${snapshot.form_id}/documents/${id}/${randomUUID()}.${snapshot.file_type || 'docx'}`;
+        await upload(uploadedPath,bytes,snapshot.file_type || 'docx');
+      }
+      const saved=await transaction(async db => {
         const doc=(await db.query('select * from public.office_documents where id=$1 for update',[id])).rows[0];
-        requireValue(doc,'Документ удалён',404);
-        if(payload.key!==documentKey(doc)) {
-          // A retried completed callback is acknowledged without overwriting newer data.
-          const prefixKey=`survey_${id.replaceAll('-','')}_v`;
-          const oldVersion=payload.key.startsWith(prefixKey) ? Number(payload.key.slice(prefixKey.length)) : NaN;
-          requireValue(Number.isInteger(oldVersion) && oldVersion>0 && oldVersion<doc.version,'Ключ документа не совпадает',409);
-          return;
-        }
+        if(!isCurrent(doc)) return false;
         if([3,7].includes(payload.status)) {
           await db.query('update public.office_documents set last_save_error=$2,last_callback_at=now() where id=$1',[id,'ONLYOFFICE сообщил об ошибке сохранения']); return;
         }
-        if(![2,6].includes(payload.status)) {
+        if(!savesFile) {
           await db.query('update public.office_documents set last_callback_at=now() where id=$1',[id]); return;
         }
-        const forceTime=Number(payload.lastsave || 0);
-        if(payload.status===6 && forceTime && forceTime<Number(doc.last_force_save_at)) return;
-        const bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
-        const path=`forms/${doc.form_id}/documents/${id}/${randomUUID()}.${doc.file_type || "docx"}`;
-        const {fieldCount}=await runOfficeTask({task:'inspect',bytes,format:doc.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024});
-        await upload(path,bytes,doc.file_type || 'docx');
-        try {
-          const userId=Array.isArray(payload.users) && uuid(payload.users[0]) ? payload.users[0] : null;
-          await db.query(`update public.office_documents set storage_path=$2,size_bytes=$3,version=version+$4,updated_at=now(),last_callback_at=now(),
+        // Without a timestamp, concurrent force saves cannot be ordered safely.
+        requireValue(payload.status!==6 || forceTime || doc.storage_path===snapshot.storage_path,'Документ изменился во время сохранения. Повторите сохранение.',409);
+        const userId=Array.isArray(payload.users) && uuid(payload.users[0]) ? payload.users[0] : null;
+        await db.query(`update public.office_documents set storage_path=$2,size_bytes=$3,version=version+$4,updated_at=now(),last_callback_at=now(),
             last_save_error=null,last_force_save_at=$5,template_field_count=$7,updated_by=coalesce((select id from public.profiles where id=$6),updated_by) where id=$1`,
-            [id,path,bytes.length,payload.status===2 ? 1 : 0,payload.status===2 ? 0 : Math.max(Number(doc.last_force_save_at),forceTime || 0),userId,fieldCount]);
-        } catch(error) {await store.remove([path]); throw error;}
+            [id,uploadedPath,bytes.length,payload.status===2 ? 1 : 0,payload.status===2 ? 0 : Math.max(Number(doc.last_force_save_at || 0),forceTime),userId,fieldCount]);
+        return true;
       });
+      if(!saved) await removeUnusedUpload();
       send(res,200,{error:0});
     } catch(error) {
-      await query('update public.office_documents set last_save_error=$2 where id=$1',[id,'Не удалось сохранить DOCX. Повторите сохранение в редакторе.']).catch(()=>{});
+      await removeUnusedUpload();
+      if(snapshot) await query('update public.office_documents set last_save_error=$2 where id=$1 and version=$3 and storage_path=$4',[id,'Не удалось сохранить документ. Повторите сохранение в редакторе.',snapshot.version,snapshot.storage_path]).catch(()=>{});
       throw error;
     }
   }

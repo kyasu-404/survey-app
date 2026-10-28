@@ -435,13 +435,14 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
 
-    emitRealtimeChange();
+    emitRealtimeChange("responses");
 
     await waitFor(() => {
       expect(loadResponseRows).toHaveBeenCalledTimes(2);
     });
 
     expect(await screen.findByText("Борис")).toBeInTheDocument();
+    expect(getFormById).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes response rows when only the form counter realtime update is delivered", async () => {

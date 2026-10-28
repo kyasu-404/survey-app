@@ -217,6 +217,70 @@ vi.mock("../../shared/api/storage", () => ({
 }));
 
 describe("SurveyFormRenderer", () => {
+  it("coalesces draft writes and flushes pending data on pagehide and unmount", async () => {
+    vi.useFakeTimers();
+    const view = render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={{ pages: [{ elements: [{ type: "text", name: "email" }] }] }} />);
+    const model = createdModels[0] as unknown as { data: Record<string, unknown>; onValueChanged: FakeSurveyEvent; onUIStateChanged: FakeSurveyEvent };
+    const write = vi.spyOn(Storage.prototype, "setItem");
+    const draftKey = "survey-response:draft:user-1:form-1";
+    const writes = () => write.mock.calls.filter(([key]) => key === draftKey).length;
+    try {
+      for (let i = 0; i < 10; i++) {
+        model.data = { email: `answer-${i}` };
+        await model.onValueChanged.fire(model);
+        await model.onUIStateChanged.fire(model);
+      }
+      expect(writes()).toBe(0);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(writes()).toBe(1);
+      expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "answer-9" } });
+      model.data = { email: "leaving" };
+      await model.onValueChanged.fire(model);
+      window.dispatchEvent(new Event("pagehide"));
+      expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "leaving" } });
+      model.data = { email: "unmounting" };
+      await model.onValueChanged.fire(model);
+      view.unmount();
+      expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "unmounting" } });
+      const finalWrites = writes();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(writes()).toBe(finalWrites);
+    } finally {
+      view.unmount();
+      write.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels pending writes on submission without resurrecting a completed draft", async () => {
+    vi.useFakeTimers();
+    mutateAsync.mockResolvedValueOnce({ status: "submitted", responseId: "saved", data: {}, editable: false });
+    const view = render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={{ pages: [{ elements: [{ type: "text", name: "email" }] }] }} />);
+    const model = createdModels[0] as unknown as { data: Record<string, unknown>; onValueChanged: FakeSurveyEvent; onCompleting: FakeSurveyEvent };
+    try {
+      model.data = { email: "submitted" };
+      await model.onValueChanged.fire(model);
+      await model.onCompleting.fire(model, { allowComplete: true, allow: true });
+      view.unmount();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sessionStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+
+  it("discards a pending draft when the server supplies an existing response", async () => {
+    vi.useFakeTimers();
+    const schema = { pages: [{ elements: [{ type: "text", name: "email" }] }] };
+    const view = render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={schema} />);
+    const model = createdModels[0] as unknown as { data: Record<string, unknown>; onValueChanged: FakeSurveyEvent };
+    try {
+      model.data = { email: "pending" };
+      await model.onValueChanged.fire(model);
+      view.rerender(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={schema} existingResponse={{ responseId: "existing", data: {}, editable: false }} />);
+      await vi.advanceTimersByTimeAsync(1000);
+      view.unmount();
+      expect(sessionStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
   beforeEach(() => {
     createdModels.length = 0;
     createdModelSchemas.length = 0;
@@ -367,9 +431,11 @@ describe("SurveyFormRenderer", () => {
     model.data = { email: "draft@example.com" };
     await model.onValueChanged.fire(model);
 
-    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
-      data: { email: "draft@example.com" },
-      submissionId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    await waitFor(() => {
+      expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+        data: { email: "draft@example.com" },
+        submissionId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      });
     });
 
     await model.onCompleting.fire(model, { allowComplete: true, allow: true });
@@ -777,11 +843,13 @@ describe("SurveyFormRenderer", () => {
     await model.onValueChanged.fire(model);
 
     expect(window.localStorage.getItem("survey-response:draft:user-1:form-1")).toBeNull();
-    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
-      data: { email: "draft@example.com" },
-      uiState: { questions: { email: { collapsed: false } } },
-      currentPageNo: 0,
-      updatedAt: expect.any(String),
+    await waitFor(() => {
+      expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+        data: { email: "draft@example.com" },
+        uiState: { questions: { email: { collapsed: false } } },
+        currentPageNo: 0,
+        updatedAt: expect.any(String),
+      });
     });
   });
 
@@ -814,6 +882,7 @@ describe("SurveyFormRenderer", () => {
 
     await model.onValueChanged.fire(model);
 
+    await waitFor(() => expect(window.sessionStorage.getItem("survey-response:draft:user-1:form-1")).not.toBeNull());
     const storedDraft = JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}") as {
       data?: Record<string, unknown>;
     };
@@ -842,9 +911,11 @@ describe("SurveyFormRenderer", () => {
 
     await model.onValueChanged.fire(model);
 
-    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
-      data: { email: "draft@example.com" },
-      updatedAt: expect.any(String),
+    await waitFor(() => {
+      expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:user-1:form-1") ?? "{}")).toMatchObject({
+        data: { email: "draft@example.com" },
+        updatedAt: expect.any(String),
+      });
     });
   });
 
@@ -869,8 +940,10 @@ describe("SurveyFormRenderer", () => {
     await model.onValueChanged.fire(model);
 
     expect(window.localStorage.getItem("survey-response:draft:anon-browser:form-1")).toBeNull();
-    expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:anon-browser:form-1") ?? "{}")).toMatchObject({
-      data: { name: "Анонимный респондент" },
+    await waitFor(() => {
+      expect(JSON.parse(window.sessionStorage.getItem("survey-response:draft:anon-browser:form-1") ?? "{}")).toMatchObject({
+        data: { name: "Анонимный респондент" },
+      });
     });
   });
 

@@ -1,5 +1,6 @@
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
-import { SurveyRenderer } from "../../../widgets/SurveyRenderer/SurveyRenderer";
+import { Suspense } from "react";
+import { LazySurveyRenderer } from "../../../widgets/SurveyRenderer/LazySurveyRenderer";
 import { SurveyRuntimeSurface } from "../../../widgets/SurveyRenderer/SurveyRuntimeSurface";
 import type { SurveyForm, SurveyFormSummary } from "../../../entities/survey/types";
 
@@ -31,15 +32,17 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
           )}
 
           {previewTemplate && (
-            <SurveyRenderer
-              schema={{
-                ...previewTemplate.schema,
-                title: previewTemplate.title,
-              }}
-              theme={previewTemplate.theme}
-              formId={previewTemplate.id}
-              renderMode="readonly-navigable"
-            />
+            <Suspense fallback={<InlineSpinner />}>
+              <LazySurveyRenderer
+                schema={{
+                  ...previewTemplate.schema,
+                  title: previewTemplate.title,
+                }}
+                theme={previewTemplate.theme}
+                formId={previewTemplate.id}
+                renderMode="readonly-navigable"
+              />
+            </Suspense>
           )}
         </SurveyRuntimeSurface>
       </aside>

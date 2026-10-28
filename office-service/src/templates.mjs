@@ -91,8 +91,8 @@ export function readTemplate(bytes,format,maxBytes=100*1024*1024){
  requireValue(bindings.length<=1000,'В макете более 1000 полей');
  return {format,files,parts,bindings};
 }
-export function checkTemplate(template,form){
- const questions=new Map(templateSources(form.schema).map(q=>[q.integrationId.toLowerCase(),q]));
+export function checkTemplate(template,form,sources=templateSources(form.schema)){
+ const questions=new Map(sources.map(q=>[q.integrationId.toLowerCase(),q]));
  return template.bindings.map(b=>({kind:b.kind,id:b.id,location:b.address ? b.part+'!'+b.address : b.part,label:b.kind==='question' ? questions.get(b.id)?.title : systemFields.find(f=>f.id===b.id)?.label,error:b.error || (b.kind==='question' ? !questions.has(b.id) ? 'Вопрос удалён или относится к другой форме' : questions.get(b.id).unsupported : undefined)}));
 }
 function panelFields(elements, prefix = [], depth = 0) {
@@ -158,7 +158,7 @@ function displayValue(value,definition,orgs,depth=0,siblings={},suffix='-Comment
  if(definition?.type==='file')return (Array.isArray(value)?value:[value]).map(v=>v?.name || 'Файл').join('; ');
  if(definition?.type==='paneldynamic' && Array.isArray(value))return displayPanel(value,definition,orgs,depth,suffix);
  if(Array.isArray(value))return value.map((v,i)=>(definition?.type==='ranking' ? `${i+1}. ` : '')+displayValue(v,definition,orgs,depth+1,siblings,suffix)).join(definition?.type==='ranking' ? '\n' : '; ');
- if(definition?.type==='organization'){const org=orgs.find(o=>o.id===value);return org ? [org.alias,org.number].filter(Boolean).join(' ') : String(value);}
+ if(definition?.type==='organization'){const org=orgs.get(value);return org ? [org.alias,org.number].filter(Boolean).join(' ') : String(value);}
  if(typeof value==='object' && Object.hasOwn(value,definition?.valuePropertyName || 'value'))return [displayValue(value[definition?.valuePropertyName || 'value'],definition,orgs,depth+1,siblings,suffix),plain(value[definition?.commentPropertyName || 'comment'])].filter(Boolean).join(': ');
  const choices=definition?.type==='rating' ? definition.rateValues : definition?.choices;
  const choice=(choices || []).find(c=>String(typeof c==='object'?c.value:c)===String(value));
@@ -166,27 +166,29 @@ function displayValue(value,definition,orgs,depth=0,siblings={},suffix='-Comment
  if(typeof value==='object')return Object.entries(value).map(([k,v])=>`${k}: ${display(v,null,orgs,depth+1)}`).join('\n');
  return typeof value==='boolean' ? value ? 'Да':'Нет' : String(value);
 }
-export function responseValues(form,response,organizations=[]){
+const RESPONSE_DATE_FORMAT=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+function responseValueContext(form,organizations){return {sources:templateSources(form.schema),commentSuffix:form.schema.commentSuffix || '-Comment',organizations:new Map(organizations.map(org=>[org.id,org]))};}
+export function responseValues(form,response,organizations=[],context=responseValueContext(form,organizations)){
  const values=new Map();
- for(const q of templateSources(form.schema)){
-  const raw=response.data?.[q.valueName];let value=display(raw,q.definition,organizations,0,response.data,form.schema.commentSuffix || "-Comment");
+ for(const q of context.sources){
+  const raw=response.data?.[q.valueName];let value=display(raw,q.definition,context.organizations,0,response.data,context.commentSuffix);
   if((q.inputType==='number'||['number','integer','rating'].includes(q.type)) && typeof raw==='number' && Number.isFinite(raw))value=raw;
   values.set('question:'+q.integrationId.toLowerCase(),value);
  }
- const date=v=>v ? new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}) : '';
+ const date=v=>v ? RESPONSE_DATE_FORMAT.format(new Date(v)) : '';
  for(const [id,value] of Object.entries({form_title:form.title,response_id:response.id,response_date:date(response.created_at),response_updated_at:date(response.updated_at || response.created_at)}))values.set('system:'+id,value);
  return values;
 }
 function wordRun(text,format){return {'w:r':[...(format?[structuredClone(format)]:[]),...String(text).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').split(/\r\n|\r|\n/).flatMap((line,i)=>[...(i?[{'w:br':[]}]:[]),{'w:t':[{'#text':line}],':@':{'@_xml:space':'preserve'}}])]};}
 
-function wrapSpreadsheetText(parts, files, sheet, cell, value, styleCache) {
+function wrapSpreadsheetText(parts, files, sheet, cell, value, styleCache, readPart) {
  const stylePath = 'xl/styles.xml';
  if(!parts.has(stylePath)) {
-  if(files[stylePath]) parts.set(stylePath, parse(files[stylePath]));
+  if(files[stylePath]) readPart(stylePath);
   else {
    parts.set(stylePath, parse(strToU8('<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>')));
    const relPath = 'xl/_rels/workbook.xml.rels';
-   if(!parts.has(relPath)) parts.set(relPath, parse(files[relPath]));
+   readPart(relPath);
    const rels = find(parts.get(relPath), 'Relationships').Relationships;
    const styleType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
    if(!rels.some(node => attr(node, 'Type') === styleType)) {
@@ -195,7 +197,7 @@ function wrapSpreadsheetText(parts, files, sheet, cell, value, styleCache) {
     rels.push({Relationship: [], ':@': {'@_Id': id, '@_Type': styleType, '@_Target': 'styles.xml'}});
    }
    const typesPath = '[Content_Types].xml';
-   if(!parts.has(typesPath)) parts.set(typesPath, parse(files[typesPath]));
+   readPart(typesPath);
    const types = find(parts.get(typesPath), 'Types').Types;
    if(!types.some(node => attr(node, 'PartName') === '/xl/styles.xml')) types.push({Override: [], ':@': {'@_PartName': '/xl/styles.xml', '@_ContentType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml'}});
   }
@@ -225,9 +227,39 @@ function wrapSpreadsheetText(parts, files, sheet, cell, value, styleCache) {
  }
 }
 
+// Normalize response-independent XML once per batch. Unmodified ZIP members
+// retain their original bytes, and each response clones only parts it edits.
+const renderPlans=new WeakMap();
+function renderPlan(template){
+ if(renderPlans.has(template))return renderPlans.get(template);
+ const parts=structuredClone(template.parts),files={...template.files},dirty=new Set();
+ const part=name=>{if(!parts.has(name))parts.set(name,parse(files[name]));return parts.get(name);};
+ if(template.format==='xlsx'){
+  for(const name of Object.keys(files).filter(n=>/^xl\/threadedComments\/[^/]+\.xml$/.test(n))){
+   const nodes=part(name);let changed=false;walk(nodes,n=>{if(Array.isArray(n[key(n)])){const before=n[key(n)];n[key(n)]=before.filter(c=>key(c)!=='ThreadedComment' && key(c)!=='threadedComment' || !tagSource(contentText(c[key(c)]).trim()));if(before.length!==n[key(n)].length)changed=true;}});if(changed)dirty.add(name);
+  }
+  for(const binding of template.bindings.filter(b=>b.commentPath)){
+   const list=find(part(binding.commentPath),'commentList');if(list){const before=list.commentList;list.commentList=before.filter(n=>key(n)!=='comment' || attr(n,'ref')!==binding.address);if(before.length!==list.commentList.length)dirty.add(binding.commentPath);}
+  }
+  const wb=find(part('xl/workbook.xml'),'workbook');dirty.add('xl/workbook.xml');
+  const names=children(wb.workbook,'definedNames')[0];if(names)names.definedNames=names.definedNames.filter(n=>!nameSource(attr(n,'name')));
+  let calc=children(wb.workbook,'calcPr')[0];if(!calc){calc={calcPr:[]};wb.workbook.push(calc);}calc[':@']={...(calc[':@']||{}),'@_fullCalcOnLoad':'1','@_forceFullCalc':'1','@_calcMode':'auto'};
+  // Leave formulas and their styles intact; discard cached results so Excel recalculates.
+  for(const name of Object.keys(files).filter(n=>/^xl\/worksheets\/[^/]+\.xml$/.test(n))){walk(part(name),n=>{if(key(n)==='c' && children(n.c,'f').length){const before=n.c;n.c=before.filter(c=>key(c)!=='v');if(before.length!==n.c.length)dirty.add(name);if(n[':@']?.['@_t']==='e'){delete n[':@']['@_t'];dirty.add(name);}}});}
+ }
+ for(const name of dirty)files[name]=encode(parts.get(name));
+ const plan={parts,files,dynamic:new Set(template.bindings.map(binding=>binding.part).filter(Boolean))};
+ renderPlans.set(template,plan);return plan;
+}
+
 export function renderTemplate(template,values){
  // Each response starts from an independent tree; original ZIP bytes never change.
- const parts=structuredClone(template.parts),files={...template.files};
+ const plan=renderPlan(template),parts=new Map(),files={...plan.files};
+ const readPart=name=>{
+  if(!parts.has(name)){if(!plan.parts.has(name))plan.parts.set(name,parse(files[name]));parts.set(name,structuredClone(plan.parts.get(name)));}
+  return parts.get(name);
+ };
+ for(const name of plan.dynamic)readPart(name);
  if(template.format==='docx'){
   for(const nodes of parts.values())walk(nodes,node=>{if(key(node)!=='w:sdt')return;const pr=children(node['w:sdt'],'w:sdtPr')[0],source=pr && tagSource(attr(find(pr['w:sdtPr'],'w:tag'),'w:val'));if(!source || source.error)return;
    const content=children(node['w:sdt'],'w:sdtContent')[0],old=content['w:sdtContent'],run=wordRun(values.get(source.kind+':'+source.id) ?? '',find(old,'w:rPr'));
@@ -240,33 +272,24 @@ export function renderTemplate(template,values){
    const value=values.get(binding.kind+':'+binding.id) ?? '';
    if(typeof value==='number'){cell[':@']['@_t']='n';cell.c=[{v:[{'#text':value}]}];}
    else {requireValue(String(value).length<=32767,'Ответ превышает 32767 символов в ячейке XLSX');cell[':@']['@_t']='inlineStr';cell.c=[{is:[{t:[{'#text':String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'')}],':@':{'@_xml:space':'preserve'}}]}];}
-   if(typeof value === 'string' && /[\r\n]/.test(value)) wrapSpreadsheetText(parts, files, parts.get(binding.part), cell, value, wrappedStyles);
+   if(typeof value === 'string' && /[\r\n]/.test(value)) wrapSpreadsheetText(parts, files, parts.get(binding.part), cell, value, wrappedStyles, readPart);
   }
-  for(const name of Object.keys(files).filter(n=>/^xl\/threadedComments\/[^/]+\.xml$/.test(n))){
-   const nodes=parse(files[name]);walk(nodes,n=>{if(Array.isArray(n[key(n)]))n[key(n)]=n[key(n)].filter(c=>key(c)!=='ThreadedComment' && key(c)!=='threadedComment' || !tagSource(contentText(c[key(c)]).trim()));});parts.set(name,nodes);
-  }
-  for(const binding of template.bindings.filter(b=>b.commentPath)){
-   const list=find(parts.get(binding.commentPath),'commentList');if(list)list.commentList=list.commentList.filter(n=>key(n)!=='comment' || attr(n,'ref')!==binding.address);
-  }
-  const wb=find(parts.get('xl/workbook.xml'),'workbook');
-  const names=children(wb.workbook,'definedNames')[0];if(names)names.definedNames=names.definedNames.filter(n=>!nameSource(attr(n,'name')));
-  let calc=children(wb.workbook,'calcPr')[0];if(!calc){calc={calcPr:[]};wb.workbook.push(calc);}calc[':@']={...(calc[':@']||{}),'@_fullCalcOnLoad':'1','@_forceFullCalc':'1','@_calcMode':'auto'};
-  // Leave formulas and their styles intact; discard cached results so Excel recalculates.
-  for(const name of Object.keys(files).filter(n=>/^xl\/worksheets\/[^/]+\.xml$/.test(n))){if(!parts.has(name))parts.set(name,parse(files[name]));walk(parts.get(name),n=>{if(key(n)==='c' && children(n.c,'f').length){n.c=n.c.filter(c=>key(c)!=='v');if(n[':@']?.['@_t']==='e')delete n[':@']['@_t'];}});}
+
  }
  for(const [name,nodes] of parts)files[name]=encode(nodes);
  return Buffer.from(zipSync(files,{level:6}));
 }
 export function generateArchive({bytes,format,form,responses,organizations=[],nameQuestionId,name,includeManifest=false}){
  requireValue(responses.length>0 && responses.length<=500,'Выберите от 1 до 500 ответов');
- const template=readTemplate(Buffer.from(bytes),format),checked=checkTemplate(template,form);
+ const context=responseValueContext(form,organizations);
+ const template=readTemplate(Buffer.from(bytes),format),checked=checkTemplate(template,form,context.sources);
  requireValue(checked.length>0,'В макете нет полей. Откройте редактор и вставьте вопросы.');
  const broken=checked.filter(b=>b.error);requireValue(!broken.length,broken.map(b=>(b.label || b.id || 'Поле')+': '+b.error).join('; ').slice(0,1500));
- if(nameQuestionId)requireValue(templateSources(form.schema).some(q=>q.integrationId===nameQuestionId && !q.unsupported),'Вопрос для имени файла удалён');
+ if(nameQuestionId)requireValue(context.sources.some(q=>q.integrationId===nameQuestionId && !q.unsupported),'Вопрос для имени файла удалён');
  const safe=v=>{let text=String(v).normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g,'_').replace(/^[. ]+|[. ]+$/g,'');while(Buffer.byteLength(text)>70)text=Array.from(text).slice(0,-1).join('');return text || 'Ответ';};
  const outputs={};let total=0;
  for(const [index,response] of responses.entries()){
-  const values=responseValues(form,response,organizations),file=renderTemplate(template,values);total+=file.length;
+  const values=responseValues(form,response,organizations,context),file=renderTemplate(template,values);total+=file.length;
   requireValue(total<=90*1024*1024,'Результат больше 90 МБ. Выберите меньше ответов.');
   const prefix=nameQuestionId ? values.get('question:'+nameQuestionId.toLowerCase()) : 'Ответ';
   const filename=`${safe(prefix)} — ${safe(name.replace(/\.(docx|xlsx)$/i,''))} — ${String(index+1).padStart(3,'0')}-${response.id}.${format}`;

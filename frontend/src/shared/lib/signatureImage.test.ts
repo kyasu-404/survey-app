@@ -1,10 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getSignatureImage } from "./signatureImage";
 import { TEST_SIGNATURE_PNG } from "../../test/signatures";
 
 const svgUrl = (body: string) => `data:image/svg+xml;base64,${btoa(body)}`;
 
 describe("signature images", () => {
+  it("reuses validated and rejected SVG results without parsing them again", () => {
+    const parse = vi.spyOn(DOMParser.prototype, "parseFromString");
+    try {
+      for (const source of [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="301" height="201"/>',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="301" height="201"><script/></svg>',
+      ]) {
+        const value = svgUrl(source);
+        const before = parse.mock.calls.length;
+        const image = getSignatureImage(value);
+        expect(getSignatureImage(value)).toBe(image);
+        expect(parse.mock.calls.length - before).toBe(1);
+      }
+    } finally { parse.mockRestore(); }
+  });
   it("recognizes embedded PNG dimensions without changing the stored value", () => {
     expect(getSignatureImage(TEST_SIGNATURE_PNG)).toEqual({ dataUrl: TEST_SIGNATURE_PNG, extension: "png", width: 1, height: 1 });
   });

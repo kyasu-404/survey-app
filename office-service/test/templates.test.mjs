@@ -108,3 +108,37 @@ test('XLSX note tags follow individual cells, survive reupload, and are removed 
  Object.values(archive).forEach((file,i)=>{const result=unzipSync(file),xml=strFromU8(result['xl/worksheets/sheet1.xml']),notes=strFromU8(result['xl/comments/comment1.xml']);assert.equal((xml.match(new RegExp(`Организация ${i+1} &amp; &lt;test&gt;`,'g'))||[]).length,2);assert.ok(!notes.includes('survey-question:'));assert.ok(notes.includes('Обычное примечание'));});
  assert.equal(readTemplate(bytes,'xlsx').bindings.length,2);
 });
+
+test('500 documents share one schema traversal and organization index', () => {
+ let traversals=0,indexReads=0;
+ const question={type:'organization',name:'org',integrationId:id};
+ const schema={pages:[{get elements(){traversals++;return [question];}}]};
+ const orgId=randomUUID(),organization={get id(){indexReads++;return orgId;},alias:'Школа',number:'7'};
+ const batch=Array.from({length:500},(_,i)=>({...responses[0],id:randomUUID(),data:{org:orgId},created_at:new Date(Date.UTC(2026,8,14,10,0,i)).toISOString()}));
+ const archive=unzipSync(generateArchive({bytes:docx(),format:'docx',form:{title:'Тест',schema},responses:batch,organizations:[organization],name:'Тест.docx'}));
+ assert.equal(Object.keys(archive).length,500);
+ assert.equal(traversals,1);
+ assert.equal(indexReads,1);
+ for(const file of Object.values(archive))assert.ok(strFromU8(unzipSync(file)['word/document.xml']).includes('Школа 7'));
+});
+
+test('unbound worksheets retain original XML bytes, while cached formulas are cleared once for every copy', () => {
+ const files=unzipSync(xlsx());
+ const unchanged=strToU8('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n  <sheetData></sheetData>\n</worksheet>');
+ files['xl/worksheets/sheet2.xml']=unchanged;
+ files['xl/worksheets/sheet3.xml']=strToU8('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="e"><f>1+2</f><v>#VALUE!</v></c></row></sheetData></worksheet>');
+ const template=readTemplate(Buffer.from(zipSync(files)),'xlsx');
+ const originalParts=structuredClone(template.parts);
+ for(const value of ['First\nMultiline','Second']) {
+  const output=unzipSync(renderTemplate(template,responseValues(form,{...responses[0],data:{org:value,count:0}})));
+  assert.deepEqual(output['xl/worksheets/sheet2.xml'],unchanged);
+  const formula=strFromU8(output['xl/worksheets/sheet3.xml']);
+  assert.ok(formula.includes('<f>1+2</f>'));
+  assert.ok(!formula.includes('<v>') && !formula.includes('t="e"'));
+  assert.ok(strFromU8(output['xl/worksheets/sheet1.xml']).includes(value));
+  assert.equal(Boolean(output['xl/styles.xml']),value.includes('\n'),'Multiline styles must not leak between responses');
+  if(!value.includes('\n'))assert.deepEqual(output['xl/_rels/workbook.xml.rels'],files['xl/_rels/workbook.xml.rels']);
+ }
+ assert.deepEqual(template.parts,originalParts);
+ assert.deepEqual(template.files,files);
+});

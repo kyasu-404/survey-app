@@ -192,7 +192,15 @@ export default function FormResponsesPage() {
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
-  const officeStatus=useQuery({queryKey:['office-status'],queryFn:()=>officeRequest<{enabled:boolean}>('/status'),staleTime:0,refetchOnMount:'always',refetchOnWindowFocus:true,refetchInterval:30000,retry:false});
+  const officeStatus = useQuery({
+    queryKey: ["office-status"],
+    queryFn: () => officeRequest<{ enabled: boolean }>("/status"),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: documentsOpen ? 30_000 : false,
+    retry: false,
+  });
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ completed: number; total: number } | null>(null);
   const zipControllerRef = useRef<AbortController | null>(null);
@@ -307,13 +315,13 @@ export default function FormResponsesPage() {
       return;
     }
 
-    const realtimeRefreshTargets = [
+    const refresh = createQueryRefreshScheduler(queryClient, `form responses realtime ${id}`, 100);
+    const refreshResponses = () => refresh.schedule([{ queryKey: getFormResponsesQueryKey(id) }]);
+    const refreshForm = () => refresh.schedule([
       { queryKey: getFormQueryKey(id) },
       { queryKey: getFormResponsesQueryKey(id) },
-    ];
-    const refresh = createQueryRefreshScheduler(queryClient, `form responses realtime ${id}`, 100);
-    const refreshResponses = () => refresh.schedule(realtimeRefreshTargets);
-    const recovery = createRealtimeRecovery(refreshResponses, showToast);
+    ]);
+    const recovery = createRealtimeRecovery(refreshForm, showToast);
 
     const channel = supabaseClient
       .channel(`form-responses:${id}`)
@@ -324,7 +332,6 @@ export default function FormResponsesPage() {
           schema: "public",
           table: "responses",
           filter: `form_id=eq.${id}`,
-          select: ["id", "form_id", "data", "created_at", "updated_at"],
         },
         refreshResponses,
       )
@@ -336,7 +343,7 @@ export default function FormResponsesPage() {
           table: "forms",
           filter: `id=eq.${id}`,
         },
-        refreshResponses,
+        refreshForm,
       )
       .subscribe((status) => {
         recovery.status(status);

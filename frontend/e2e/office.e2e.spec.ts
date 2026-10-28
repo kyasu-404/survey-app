@@ -45,3 +45,32 @@ test('template actions and persistent results, with notification above the dialo
  await page.getByRole('button',{name:'Закрыть документы'}).click();await button.click();await page.getByRole('tab',{name:'Результат'}).click();await expect(page.getByRole('button',{name:/^Скачать \d+\.xlsx$/})).toHaveCount(20);
  await page.getByRole('tab',{name:'Макеты'}).click();await menu().click();await page.getByRole('menuitem',{name:'Удалить',exact:true}).click();await page.getByRole('button',{name:'Удалить документ'}).click();await expect(page.getByText('Макетов пока нет. Загрузите файл или создайте новый.')).toBeVisible();
 });
+
+test('Office status polling runs only while the documents dialog is open', async ({ page }) => {
+ const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 1 });
+ let statusRequests = 0;
+ await page.route('**/api/office/**', route => {
+  if(new URL(route.request().url()).pathname.endsWith('/status')) {
+   statusRequests++;
+   return route.fulfill({ json: { enabled: true } });
+  }
+  return route.fulfill({ json: { documents: [], enabled: true, max_file_mb: 25, response_count: 1 } });
+ });
+ await page.goto(`/dashboard/forms/${formId}/responses`);
+ const button = page.getByRole('button', { name: 'Документы', exact: true });
+ await expect(button).toBeVisible();
+ await page.clock.install();
+ const initial = statusRequests;
+ await page.clock.runFor(60_000);
+ expect(statusRequests).toBe(initial);
+ await button.click();
+ await expect(page.getByRole('dialog')).toBeVisible();
+ await page.clock.runFor(30_100);
+ await expect.poll(() => statusRequests).toBeGreaterThan(initial);
+ await page.getByRole('button', { name: 'Закрыть документы' }).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ const afterClose = statusRequests;
+ await page.clock.runFor(60_000);
+ expect(statusRequests).toBe(afterClose);
+ expect(pageErrors).toEqual([]);
+});

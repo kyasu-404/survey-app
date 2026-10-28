@@ -48,8 +48,33 @@ function readSvg(bytes: string): SignatureImage | null {
   return { dataUrl: `data:image/svg+xml;base64,${btoa(new XMLSerializer().serializeToString(svg))}`, extension: "svg", width, height };
 }
 
+// Bound retained input AND sanitized output, including rejected SVGs.
+const signatureCache = new Map<string, SignatureImage | null>();
+const MAX_CACHE_CHARACTERS = 4 * MAX_DATA_URL_LENGTH;
+const MAX_CACHE_ENTRIES = 256;
+let cacheCharacters = 0;
+
 export function getSignatureImage(value: unknown): SignatureImage | null {
   if (typeof value !== "string" || value.length > MAX_DATA_URL_LENGTH) return null;
+  if (signatureCache.has(value)) {
+    const image = signatureCache.get(value)!;
+    signatureCache.delete(value);
+    signatureCache.set(value, image);
+    return image;
+  }
+  const image = readSignatureImage(value);
+  const size = value.length + (image?.dataUrl.length ?? 0);
+  while (signatureCache.size && (signatureCache.size >= MAX_CACHE_ENTRIES || cacheCharacters + size > MAX_CACHE_CHARACTERS)) {
+    const oldest = signatureCache.keys().next().value!;
+    cacheCharacters -= oldest.length + (signatureCache.get(oldest)?.dataUrl.length ?? 0);
+    signatureCache.delete(oldest);
+  }
+  signatureCache.set(value, image ? Object.freeze(image) : null);
+  cacheCharacters += size;
+  return image;
+}
+
+function readSignatureImage(value: string): SignatureImage | null {
   const match = /^data:image\/(png|jpeg|svg\+xml);base64,([a-z0-9+/]+={0,2})$/i.exec(value);
   if (!match) return null;
   try {

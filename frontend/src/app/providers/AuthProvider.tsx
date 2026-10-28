@@ -113,26 +113,37 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let mounted = true;
+    let receivedAuthEvent = false;
+    let initialized = false;
+
+    const applySession = (sessionUser: User | null, initial = false) => {
+      if (!mounted) return;
+      const nextUserId = sessionUser?.id ?? null;
+      const changed = previousUserIdRef.current !== nextUserId;
+      if (changed) {
+        previousUserIdRef.current = nextUserId;
+        clearProfile();
+        if (initialized || !initial) refreshAuthDependentQueries(queryClient);
+      }
+      setObservabilityUser(nextUserId);
+      setUser(sessionUser);
+      setLoading(false);
+      // INITIAL_SESSION and getSession can describe the same restoration.
+      const shouldLoad = !initialized || changed || !initial;
+      initialized = true;
+      if (sessionUser?.id) {
+        if (shouldLoad) void loadProfile(sessionUser.id);
+      } else {
+        clearProfile();
+      }
+    };
 
     runRequest("auth.getCurrentSession", () => apiClient.auth.getCurrentSession())
       .then(async ({ data }) => {
-        if (!mounted) return;
-
-        const currentUser = data.session?.user ?? null;
-        previousUserIdRef.current = currentUser?.id ?? null;
-        setObservabilityUser(currentUser?.id ?? null);
-        setUser(currentUser);
-        setLoading(false);
-
-        if (currentUser?.id) {
-          void loadProfile(currentUser.id);
-          return;
-        }
-
-        clearProfile();
+        if (!receivedAuthEvent) applySession(data.session?.user ?? null, true);
       })
       .catch((error) => {
-        if (!mounted) return;
+        if (!mounted || receivedAuthEvent) return;
 
         console.error(error);
         previousUserIdRef.current = null;
@@ -142,26 +153,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setLoading(false);
       });
 
-    const { data: listener } = apiClient.auth.onAuthStateChange(async (_event, session) => {
-      const sessionUser = session?.user ?? null;
-      const nextUserId = sessionUser?.id ?? null;
-
-      if (previousUserIdRef.current !== nextUserId) {
-        previousUserIdRef.current = nextUserId;
-        clearProfile();
-        refreshAuthDependentQueries(queryClient);
-      }
-
-      setObservabilityUser(nextUserId);
-      setUser(sessionUser);
-      setLoading(false);
-
-      if (sessionUser?.id) {
-        void loadProfile(sessionUser.id);
-        return;
-      }
-
-      clearProfile();
+    const { data: listener } = apiClient.auth.onAuthStateChange(async (event, session) => {
+      receivedAuthEvent = true;
+      applySession(session?.user ?? null, event === "INITIAL_SESSION");
     });
 
     return () => {

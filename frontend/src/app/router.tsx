@@ -1,10 +1,18 @@
-import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
-import DashboardPage from "../pages/DashboardPage/DashboardPage";
-import LoginPage from "../pages/LoginPage/LoginPage";
+import { Navigate, Outlet, createBrowserRouter, useParams } from "react-router-dom";
 import { routes } from "./routes";
-import { AppLayout } from "./layout/AppLayout";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import { AdminRoute } from "./router/AdminRoute";
+
+function PublicLayout() {
+  return <div className="app-shell app-shell-login app-shell-monochrome">
+    <main className="app-main app-main-login app-main-public"><Outlet /></main>
+  </div>;
+}
+
+async function loadDashboardRoute(viewMode: "mine" | "all") {
+  const { default: DashboardPage } = await import("../pages/DashboardPage/DashboardPage");
+  return { Component: function DashboardRoute() { return <ProtectedRoute><DashboardPage viewMode={viewMode} /></ProtectedRoute>; } };
+}
 
 function LegacySurveyRedirect() {
   const { id } = useParams();
@@ -132,7 +140,15 @@ async function loadSettingsRoute() {
 
 export const router = createBrowserRouter([
   {
-    element: <AppLayout />,
+    element: <PublicLayout />,
+    children: [
+      { path: routes.surveyById, lazy: loadSurveyRoute },
+      { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
+      { path: routes.login, lazy: async () => ({ Component: (await import("../pages/LoginPage/LoginPage")).default }) },
+    ],
+  },
+  {
+    lazy: async () => ({ Component: (await import("./layout/AppLayout")).AppLayout }),
     children: [
       {
         path: routes.home,
@@ -140,19 +156,11 @@ export const router = createBrowserRouter([
       },
       {
         path: routes.dashboardMy,
-        element: (
-          <ProtectedRoute>
-            <DashboardPage viewMode="mine" />
-          </ProtectedRoute>
-        ),
+        lazy: () => loadDashboardRoute("mine"),
       },
       {
         path: routes.dashboardAll,
-        element: (
-          <ProtectedRoute>
-            <DashboardPage viewMode="all" />
-          </ProtectedRoute>
-        ),
+        lazy: () => loadDashboardRoute("all"),
       },
       {
         path: routes.templates,
@@ -171,8 +179,6 @@ export const router = createBrowserRouter([
         lazy: loadFormResponsesHtmlRoute,
       },
       { path: "/forms/:formId/documents/:documentId", lazy: loadOfficeEditorRoute },
-      { path: routes.surveyById, lazy: loadSurveyRoute },
-      { path: routes.legacySurveyById, element: <LegacySurveyRedirect /> },
       {
         path: routes.builder,
         lazy: loadBuilderRoute,
@@ -189,7 +195,6 @@ export const router = createBrowserRouter([
         path: routes.settings,
         lazy: loadSettingsRoute,
       },
-      { path: routes.login, element: <LoginPage /> },
       { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },
     ],
   },

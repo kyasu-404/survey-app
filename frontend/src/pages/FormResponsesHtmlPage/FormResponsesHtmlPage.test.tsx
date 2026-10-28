@@ -8,11 +8,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
 import FormResponsesHtmlPage from "./FormResponsesHtmlPage";
 
-const { getFormById, getOrganizations, getAllResponsesByForm, downloadHtmlDocument } = vi.hoisted(() => ({
+const { getFormById, getOrganizations, getAllResponsesByForm, downloadHtmlDocument, createResponsesHtmlDocument } = vi.hoisted(() => ({
   getFormById: vi.fn(),
   getOrganizations: vi.fn(),
   getAllResponsesByForm: vi.fn(),
   downloadHtmlDocument: vi.fn(),
+  createResponsesHtmlDocument: vi.fn(),
 }));
 
 vi.mock("../../entities/organization/api", () => ({
@@ -29,9 +30,11 @@ vi.mock("../../entities/response/api", () => ({
 
 vi.mock("../../shared/lib/responsesExport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../shared/lib/responsesExport")>();
+  createResponsesHtmlDocument.mockImplementation(actual.createResponsesHtmlDocument);
   return {
     ...actual,
     downloadHtmlDocument,
+    createResponsesHtmlDocument,
   };
 });
 
@@ -335,7 +338,13 @@ describe("FormResponsesHtmlPage", () => {
 
     renderHtmlPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Скачать HTML" }));
+    await screen.findByText("Анна", { selector: ".responses-report-screen td" });
+    expect(createResponsesHtmlDocument).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Скачать HTML" }));
+    expect(createResponsesHtmlDocument).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ title: "Форма обратной связи" }),
+      expect.stringContaining("Анна"),
+    );
 
     await waitFor(() => {
       expect(downloadHtmlDocument).toHaveBeenCalledWith(

@@ -420,14 +420,31 @@ export function SurveyFormRenderer({
 
     cleanupExpiredSurveyResponseDrafts();
 
-    const saveCurrentDraft = (sender: Model) => {
+    let draftTimer: ReturnType<typeof setTimeout> | undefined;
+    let draftPending = false;
+    let draftCompleted = false;
+    const cancelDraftSave = () => {
+      clearTimeout(draftTimer);
+      draftPending = false;
+    };
+    const flushDraft = () => {
+      if (!draftPending) return;
+      cancelDraftSave();
       saveSurveyResponseDraft(responseDraftStorageKey, {
-        data: sender.data as Record<string, unknown>,
-        uiState: getSurveyUIState(sender),
-        currentPageNo: sender.currentPageNo,
+        data: model.data as Record<string, unknown>,
+        uiState: getSurveyUIState(model),
+        currentPageNo: model.currentPageNo,
         submissionId: submissionIdRef.current,
       });
     };
+    const scheduleDraftSave = () => {
+      if (draftCompleted || ((existingResponse || savedResponse) && !isEditingResponse)) return;
+      draftPending = true;
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(flushDraft, 300);
+    };
+    const savePageDraft = () => { scheduleDraftSave(); flushDraft(); };
+    const handleVisibilityChange = () => { if (document.visibilityState === "hidden") flushDraft(); };
     const uiStateChangedEvent = (model as SurveyModelWithOptionalUIState).onUIStateChanged;
 
     const handleUploadFiles = async (
@@ -528,6 +545,8 @@ export function SurveyFormRenderer({
             data: updatedResponse.data,
           });
           setIsEditingResponse(false);
+          draftCompleted = true;
+          cancelDraftSave();
           clearSurveyResponseDraft(responseDraftStorageKey);
           showToast("Изменения ответа сохранены", "success");
           return;
@@ -540,6 +559,9 @@ export function SurveyFormRenderer({
           browserId: browserIdRef.current,
             ...(personalToken ? { personalToken } : {}),
         });
+        draftCompleted = true;
+        cancelDraftSave();
+        clearSurveyResponseDraft(responseDraftStorageKey);
         setSavedResponse(result);
 
         if (result.status === "already_submitted") {
@@ -557,7 +579,6 @@ export function SurveyFormRenderer({
           return;
         }
 
-        clearSurveyResponseDraft(responseDraftStorageKey);
         showToast("Ответ успешно отправлен", "success");
       } catch (error) {
         options.allowComplete = false;
@@ -572,17 +593,23 @@ export function SurveyFormRenderer({
       }
     };
 
-    model.onValueChanged.add(saveCurrentDraft);
-    model.onCurrentPageChanged.add(saveCurrentDraft);
-    uiStateChangedEvent?.add(saveCurrentDraft);
+    model.onValueChanged.add(scheduleDraftSave);
+    model.onCurrentPageChanged.add(savePageDraft);
+    uiStateChangedEvent?.add(scheduleDraftSave);
+    window.addEventListener("pagehide", flushDraft);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     model.onUploadFiles.add(handleUploadFiles);
     model.onClearFiles.add(handleClearFiles);
     model.onCompleting.add(handleCompleting);
 
     return () => {
-      model.onValueChanged.remove(saveCurrentDraft);
-      model.onCurrentPageChanged.remove(saveCurrentDraft);
-      uiStateChangedEvent?.remove(saveCurrentDraft);
+      flushDraft();
+      cancelDraftSave();
+      model.onValueChanged.remove(scheduleDraftSave);
+      model.onCurrentPageChanged.remove(savePageDraft);
+      uiStateChangedEvent?.remove(scheduleDraftSave);
+      window.removeEventListener("pagehide", flushDraft);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       model.onUploadFiles.remove(handleUploadFiles);
       model.onOpenDropdownMenu.remove(handleOpenDropdownMenu);
       model.onClearFiles.remove(handleClearFiles);
@@ -590,6 +617,7 @@ export function SurveyFormRenderer({
     };
   }, [
     allowAnonymousUploads,
+    existingResponse,
     formId,
     isEditingResponse,
     isInteractiveMode,

@@ -91,10 +91,6 @@ export default function FormResponsesHtmlPage() {
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
   const generatedAt = useMemo(() => new Date(), [formTitle, table]);
-  const htmlDocument = useMemo(
-    () => createResponsesHtmlDocument({ title: formTitle, ...table, generatedAt }),
-    [formTitle, generatedAt, table],
-  );
   const htmlPreview = useMemo(
     () => createResponsesHtmlReport({ title: formTitle, ...table, generatedAt }),
     [formTitle, generatedAt, table],
@@ -107,6 +103,7 @@ export default function FormResponsesHtmlPage() {
   const canUseHtml = !isLoading && !combinedError;
 
   const handleDownload = () => {
+    const htmlDocument = createResponsesHtmlDocument({ title: formTitle, ...table, generatedAt }, htmlPreview);
     downloadHtmlDocument(htmlDocument, `ответы-${formTitle}`);
   };
 

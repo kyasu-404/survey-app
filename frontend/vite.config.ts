@@ -27,7 +27,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     watch: {
-      usePolling: true,
+      usePolling: process.env.VITE_USE_POLLING === "true",
     },
   },
 });

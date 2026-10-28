@@ -11,6 +11,8 @@ const pageLoads = vi.hoisted(() => ({
   organizations: 0,
   users: 0,
   settings: 0,
+  login: 0,
+  layout: 0,
 }));
 
 vi.mock("../pages/BuilderPage/BuilderPage", () => {
@@ -58,9 +60,8 @@ vi.mock("../pages/SettingsPage/SettingsPage", () => {
   return { default: () => null };
 });
 
-vi.mock("./layout/AppLayout", () => ({
-  AppLayout: () => null,
-}));
+vi.mock("./layout/AppLayout", () => { pageLoads.layout += 1; return { AppLayout: () => null }; });
+vi.mock("../pages/LoginPage/LoginPage", () => { pageLoads.login += 1; return { default: () => null }; });
 
 vi.mock("./router/AdminRoute", () => ({
   AdminRoute: ({ children }: { children: unknown }) => children,
@@ -71,10 +72,10 @@ vi.mock("./router/ProtectedRoute", () => ({
 }));
 
 describe("router", () => {
-  it("keeps only shell routes eager and lazy-loads form-heavy route modules", async () => {
+  it("loads public forms without loading the dashboard, login or private layout", async () => {
+    window.history.replaceState(null, "", "/form/public-test");
     const { router } = await import("./router");
-    const rootRoute = router.routes[0];
-    const childRoutes = rootRoute.children ?? [];
+    const childRoutes = router.routes.flatMap(route => route.children ?? []);
     const childPaths = childRoutes.map((route) => route.path);
     const routeByPath = new Map(childRoutes.map((route) => [route.path, route]));
 
@@ -108,17 +109,24 @@ describe("router", () => {
     expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.settings)?.lazy).toBeTypeOf("function");
 
-    expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeUndefined();
-    expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeUndefined();
+    expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.login)?.lazy).toBeTypeOf("function");
+    const surveyRoute = routeByPath.get(routes.surveyById)!;
+    if (typeof surveyRoute.lazy === "function") await surveyRoute.lazy();
 
     expect(pageLoads.builder).toBe(0);
-    expect(pageLoads.dashboard).toBe(1);
+    expect(pageLoads.dashboard).toBe(0);
+    expect(pageLoads.login).toBe(0);
+    expect(pageLoads.layout).toBe(0);
     expect(pageLoads.responses).toBe(0);
     expect(pageLoads.responsesHtml).toBe(0);
-    expect(pageLoads.survey).toBe(0);
+    expect(pageLoads.survey).toBe(1);
     expect(pageLoads.templates).toBe(0);
     expect(pageLoads.organizations).toBe(0);
     expect(pageLoads.users).toBe(0);
     expect(pageLoads.settings).toBe(0);
+    router.dispose();
+    window.history.replaceState(null, "", "/");
   }, 15_000);
 });
