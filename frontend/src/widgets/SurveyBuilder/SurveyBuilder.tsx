@@ -115,6 +115,7 @@ export function SurveyBuilder({
       title,
       allowResponseEditing,
       selectedOrganizationTypes,
+      expectedRevision,
       confirmWarnings = false,
     }: {
       id: string;
@@ -123,6 +124,7 @@ export function SurveyBuilder({
       title: string;
       allowResponseEditing: boolean;
       selectedOrganizationTypes: OrganizationType[];
+      expectedRevision: number;
       confirmWarnings?: boolean;
     }) => confirmWarnings
       ? saveSurveySchema(
@@ -132,6 +134,7 @@ export function SurveyBuilder({
           title,
           allowResponseEditing,
           selectedOrganizationTypes,
+          expectedRevision,
           true,
         )
       : saveSurveySchema(
@@ -141,16 +144,22 @@ export function SurveyBuilder({
           title,
           allowResponseEditing,
           selectedOrganizationTypes,
+          expectedRevision,
         ),
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditMode = Boolean(formId);
   const isSafeEditingMode = isEditMode && safeEditingResponseCount > 0;
+  const safeEditingModeRef = useRef(isSafeEditingMode);
+  safeEditingModeRef.current = isSafeEditingMode;
   const isSurveyMutationBusy = isSaving || saveSurveyMutation.isPending || createSurveyMutation.isPending;
   const isTemplateBusy = isTemplateActionLoading !== null;
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
+  const editorRevisionRef = useRef<number | undefined>(undefined);
+  const editorDirtyRef = useRef(false);
+  const hydratingEditorRef = useRef(false);
   const runtimePreviewSyncTimeoutRef = useRef<number | null>(null);
   const assetFormIdRef = useRef(formId ?? createSurveyAssetFormId());
   const creatorThemeRef = useRef(applicationTheme.creator);
@@ -199,10 +208,12 @@ export function SurveyBuilder({
 
   useEffect(() => {
     assetFormIdRef.current = formId ?? createSurveyAssetFormId();
-    const nextCreator = createCreatorInstance(formId, creatorThemeRef.current, isSafeEditingMode);
+    const nextCreator = createCreatorInstance(formId, creatorThemeRef.current, () => safeEditingModeRef.current);
     setCreator(nextCreator);
     setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "idle";
+    editorRevisionRef.current = undefined;
+    editorDirtyRef.current = false;
     updateRuntimePreviewBridgeFromCreator(nextCreator, formId);
 
     return () => {
@@ -214,7 +225,7 @@ export function SurveyBuilder({
       });
       nextCreator.dispose();
     };
-  }, [clearScheduledRuntimePreviewSync, formId, isSafeEditingMode]);
+  }, [clearScheduledRuntimePreviewSync, formId]);
 
   useEffect(() => {
     creator?.applyCreatorTheme(applicationTheme.creator);
@@ -241,11 +252,16 @@ export function SurveyBuilder({
 
     if (restoredDraft) {
       draftHydrationStateRef.current = "loaded";
+      editorRevisionRef.current = restoredDraft.baseRevision;
+      editorDirtyRef.current = true;
       if (!formId && restoredDraft.assetFormId) assetFormIdRef.current = restoredDraft.assetFormId;
-      creator.locale = restoredDraft.schema.locale ?? "ru";
-      creator.theme = resolveSurveyTheme(restoredDraft.theme);
-      applyThemeToBuilderDesigners(creator);
-      creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft.schema, "Новая форма"));
+      hydratingEditorRef.current = true;
+      try {
+        creator.locale = restoredDraft.schema.locale ?? "ru";
+        creator.theme = resolveSurveyTheme(restoredDraft.theme);
+        applyThemeToBuilderDesigners(creator);
+        creator.JSON = resolveDefaultSurveyLogo(toBuilderSchema(restoredDraft.schema, "Новая форма"));
+      } finally { hydratingEditorRef.current = false; }
       syncRuntimePreviewNow(creator);
       return;
     }
@@ -255,22 +271,26 @@ export function SurveyBuilder({
   }, [creator, formId, syncRuntimePreviewNow, userId]);
 
   useEffect(() => {
-    if (!creator || !editableForm || draftHydrationStateRef.current === "loaded") {
+    if (!creator || !editableForm || draftHydrationStateRef.current === "loaded" || editorDirtyRef.current) {
       return;
     }
 
-    creator.locale = editableForm.schema.locale ?? "ru";
-    creator.theme = resolveSurveyTheme(editableForm.theme);
-    applyThemeToBuilderDesigners(creator);
-    creator.JSON = resolveDefaultSurveyLogo(
-      toBuilderSchema(
-        {
-          ...editableForm.schema,
-          title: editableForm.title,
-        },
-        editableForm.title,
-      ),
-    );
+    editorRevisionRef.current = editableForm.revision ?? 0;
+    hydratingEditorRef.current = true;
+    try {
+      creator.locale = editableForm.schema.locale ?? "ru";
+      creator.theme = resolveSurveyTheme(editableForm.theme);
+      applyThemeToBuilderDesigners(creator);
+      creator.JSON = resolveDefaultSurveyLogo(
+        toBuilderSchema(
+          {
+            ...editableForm.schema,
+            title: editableForm.title,
+          },
+          editableForm.title,
+        ),
+      );
+    } finally { hydratingEditorRef.current = false; }
     syncRuntimePreviewNow(creator);
   }, [creator, editableForm, syncRuntimePreviewNow]);
 
@@ -290,12 +310,15 @@ export function SurveyBuilder({
     }
 
     const handleModified = () => {
+      if (hydratingEditorRef.current) return;
+      editorDirtyRef.current = true;
       saveSurveyBuilderDraft(
         userId,
         formId,
         getSerializedBuilderSchema(creator),
         sanitizeSurveyTheme(creator.theme),
         assetFormIdRef.current,
+        editorRevisionRef.current,
       );
 
       clearScheduledRuntimePreviewSync();
@@ -362,6 +385,7 @@ export function SurveyBuilder({
             getSerializedBuilderSchema(creator),
             creator.theme,
             assetFormIdRef.current,
+            editorRevisionRef.current,
           );
           syncRuntimePreviewNow(creator);
         }
@@ -484,7 +508,7 @@ export function SurveyBuilder({
     creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
     applyThemeToBuilderDesigners(creator);
     creator.JSON = resolveDefaultSurveyLogo(emptySchema);
-    saveSurveyBuilderDraft(userId, formId, emptySchema, creator.theme, assetFormIdRef.current);
+    saveSurveyBuilderDraft(userId, formId, emptySchema, creator.theme, assetFormIdRef.current, editorRevisionRef.current);
     draftHydrationStateRef.current = "loaded";
     syncRuntimePreviewNow(creator);
     setIsResetConfirmOpen(false);
@@ -709,7 +733,11 @@ export function SurveyBuilder({
         const isTemplate = Boolean(editableForm && isTemplateForm(editableForm));
 
         if (formId) {
+          if (editorRevisionRef.current === undefined) {
+            throw new Error("У черновика неизвестна исходная версия. Сохраните его как шаблон и откройте актуальную форму.");
+          }
           const request: ExistingFormSaveRequest = {
+            expectedRevision: editorRevisionRef.current,
             allowResponseEditing: editableForm?.allow_response_editing ?? responseEditingEnabled,
             callback,
             id: formId,
@@ -865,6 +893,7 @@ export function SurveyBuilder({
 
   const handleApplyBackground = useCallback((backgroundUrl: string) => {
     if (!creator) return;
+    editorDirtyRef.current = true;
     const themeWithBackground = withSurveyBackground(creator.theme, backgroundUrl);
     applyThemeToCreatorAndEditor(creator, themeWithBackground);
     applyThemeToBuilderDesigners(creator);
@@ -875,6 +904,7 @@ export function SurveyBuilder({
       getSerializedBuilderSchema(creator),
       creator.theme,
       assetFormIdRef.current,
+      editorRevisionRef.current,
     );
     syncRuntimePreviewNow(creator);
   }, [creator, formId, syncRuntimePreviewNow, userId]);

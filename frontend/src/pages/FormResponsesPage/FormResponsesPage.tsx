@@ -366,8 +366,14 @@ export default function FormResponsesPage() {
   });
 
   useEffect(() => {
-    if (responsesQuery.data && page > totalPages) setPage(totalPages);
-  }, [responsesQuery.data, page, totalPages]);
+    if (!responsesQuery.data) return;
+    const resolvedPage = "page" in responsesQuery.data ? responsesQuery.data.page : page;
+    if (typeof resolvedPage === "number" && resolvedPage !== page) {
+      queryClient.setQueryData(getFormResponsesQueryKey(id, "page", resolvedPage, pageSize), responsesQuery.data);
+      setPage(resolvedPage);
+    }
+    else if (page > totalPages) setPage(totalPages);
+  }, [responsesQuery.data, page, totalPages, queryClient, id, pageSize]);
 
   const handleExport = async () => {
     if (!id || !formQuery.data || isExporting) return;

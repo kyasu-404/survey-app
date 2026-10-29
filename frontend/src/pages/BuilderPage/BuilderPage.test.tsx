@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import BuilderPage from "./BuilderPage";
@@ -48,12 +48,11 @@ const answeredForm = {
   responses_count: 2,
 };
 
-function renderBuilderPage(cachedForm?: typeof answeredForm) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-    },
-  });
+function renderBuilderPage(cachedForm?: typeof answeredForm, queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+  },
+})) {
   if (cachedForm) queryClient.setQueryData(["form", cachedForm.id], cachedForm);
 
   return render(
@@ -103,6 +102,32 @@ describe("BuilderPage", () => {
 
     expect(await screen.findByTestId("survey-builder")).toHaveAttribute("data-safe-response-count", "2");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps a loaded editor mounted when a background form refresh fails", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const form = { ...answeredForm, responses_count: 0 };
+    renderBuilderPage(form, queryClient);
+    const editor = await screen.findByTestId("survey-builder");
+    await act(async () => {
+      queryClient.getQueryCache().find({ queryKey: ["form", form.id] })?.setState({ status: "error", error: new Error("Offline"), fetchStatus: "idle" });
+    });
+    expect(screen.getByTestId("survey-builder")).toBe(editor);
+    expect(editor).toBeVisible();
+  });
+
+  it("keeps the editor mounted under the first-response warning", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const form = { ...answeredForm, responses_count: 0 };
+    getFormById.mockResolvedValue(form);
+    renderBuilderPage(form, queryClient);
+    const editor = await screen.findByTestId("survey-builder");
+    await act(async () => { queryClient.setQueryData(["form", form.id], { ...form, responses_count: 1 }); });
+    expect(await screen.findByRole("alertdialog")).toBeVisible();
+    expect(editor).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать безопасно" }));
+    expect(screen.getByTestId("survey-builder")).toBe(editor);
+    expect(editor).toBeVisible();
   });
 
   it("opens the builder when the form has no responses", async () => {

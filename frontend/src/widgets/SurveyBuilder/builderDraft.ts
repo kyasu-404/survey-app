@@ -11,10 +11,12 @@ type BuilderDraftPayload = {
   theme?: ITheme;
   assetFormId?: string;
   ownerId: string;
+  baseRevision?: number;
   updatedAt: string;
 };
 
 export type SurveyBuilderDraft = {
+  baseRevision?: number;
   schema: SurveySchema;
   theme: ITheme;
   assetFormId?: string;
@@ -51,6 +53,8 @@ export function loadSurveyBuilderDraft(userId: string, formId?: string): SurveyB
     }
 
     return {
+      ...(Number.isSafeInteger(parsedDraft.baseRevision) && parsedDraft.baseRevision! >= 0
+        ? { baseRevision: parsedDraft.baseRevision } : {}),
       schema: sanitizeSurveySchema(parsedDraft.schema),
       theme: resolveSurveyTheme(parsedDraft.theme),
       assetFormId: typeof parsedDraft.assetFormId === "string" ? parsedDraft.assetFormId : undefined,
@@ -69,6 +73,7 @@ export function saveSurveyBuilderDraft(
   schema: SurveySchema,
   theme?: ITheme,
   assetFormId?: string,
+  baseRevision?: number,
 ) {
   if (typeof window === "undefined") {
     return;
@@ -80,6 +85,7 @@ export function saveSurveyBuilderDraft(
       theme: sanitizeSurveyTheme(theme),
       ...(assetFormId ? { assetFormId } : {}),
       ownerId: userId,
+      ...(Number.isSafeInteger(baseRevision) && baseRevision! >= 0 ? { baseRevision } : {}),
       updatedAt: new Date().toISOString(),
     };
 

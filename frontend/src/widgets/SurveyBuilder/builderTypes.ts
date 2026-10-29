@@ -17,6 +17,7 @@ export type PostSaveSettingsState = {
 };
 
 export type ExistingFormSaveRequest = {
+  expectedRevision: number;
   allowResponseEditing: boolean;
   callback: (saveNo: number, isSuccess: boolean) => void;
   id: string;

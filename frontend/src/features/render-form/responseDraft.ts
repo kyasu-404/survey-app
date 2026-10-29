@@ -22,7 +22,11 @@ function getSessionStorage(): Storage | null {
     return null;
   }
 
-  return window.sessionStorage;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 function getLocalStorage(): Storage | null {
@@ -30,7 +34,15 @@ function getLocalStorage(): Storage | null {
     return null;
   }
 
-  return window.localStorage;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function removeStoredDraft(storage: Storage | null, key: string) {
+  try { storage?.removeItem(key); } catch { /* Draft storage is optional. */ }
 }
 
 function createAnonymousResponseDraftId() {
@@ -161,13 +173,12 @@ function sanitizeDraftData(data: Record<string, unknown>) {
 }
 
 function removeResponseDraftKeys(storage: Storage, predicate: (storageKey: string) => boolean) {
-  for (let index = storage.length - 1; index >= 0; index -= 1) {
-    const storageKey = storage.key(index);
-
-    if (storageKey && predicate(storageKey)) {
-      storage.removeItem(storageKey);
+  try {
+    for (let index = storage.length - 1; index >= 0; index -= 1) {
+      const storageKey = storage.key(index);
+      if (storageKey && predicate(storageKey)) removeStoredDraft(storage, storageKey);
     }
-  }
+  } catch { /* A blocked Storage must not prevent form rendering. */ }
 }
 
 export function getSurveyResponseDraftStorageKey(formId: string, respondentId?: string) {
@@ -181,15 +192,12 @@ export function loadSurveyResponseDraft(storageKey: string | null): SurveyRespon
     return null;
   }
 
-  const rawDraft = storage.getItem(storageKey);
-  if (!rawDraft) {
-    return null;
-  }
-
   try {
+    const rawDraft = storage.getItem(storageKey);
+    if (!rawDraft) return null;
     const parsedDraft = parseStoredDraft(rawDraft);
     if (!parsedDraft || isExpired(parsedDraft.updatedAt)) {
-      storage.removeItem(storageKey);
+      removeStoredDraft(storage, storageKey);
       return null;
     }
 
@@ -201,7 +209,7 @@ export function loadSurveyResponseDraft(storageKey: string | null): SurveyRespon
     };
   } catch (error) {
     console.warn("Не удалось восстановить черновик ответа", error);
-    storage.removeItem(storageKey);
+    removeStoredDraft(storage, storageKey);
     return null;
   }
 }
@@ -212,15 +220,14 @@ export function saveSurveyResponseDraft(storageKey: string | null, draft: Survey
     return;
   }
 
-  const payload: StoredSurveyResponseDraft = {
-    data: sanitizeDraftData(draft.data),
-    uiState: draft.uiState,
-    currentPageNo: typeof draft.currentPageNo === "number" ? draft.currentPageNo : undefined,
-    submissionId: draft.submissionId,
-    updatedAt: new Date().toISOString(),
-  };
-
   try {
+    const payload: StoredSurveyResponseDraft = {
+      data: sanitizeDraftData(draft.data),
+      uiState: draft.uiState,
+      currentPageNo: typeof draft.currentPageNo === "number" ? draft.currentPageNo : undefined,
+      submissionId: draft.submissionId,
+      updatedAt: new Date().toISOString(),
+    };
     storage.setItem(storageKey, JSON.stringify(payload));
   } catch (error) {
     console.warn("Не удалось сохранить черновик ответа", error);
@@ -233,8 +240,8 @@ export function clearSurveyResponseDraft(storageKey: string | null) {
     return;
   }
 
-  storage?.removeItem(storageKey);
-  getLocalStorage()?.removeItem(storageKey);
+  removeStoredDraft(storage, storageKey);
+  removeStoredDraft(getLocalStorage(), storageKey);
 }
 
 export function cleanupExpiredSurveyResponseDrafts() {
@@ -252,28 +259,24 @@ export function cleanupExpiredSurveyResponseDrafts() {
     return;
   }
 
-  for (let index = storage.length - 1; index >= 0; index -= 1) {
-    const storageKey = storage.key(index);
+  removeResponseDraftKeys(storage, (storageKey) => {
     if (
-      !storageKey ||
       storageKey === ANONYMOUS_RESPONSE_DRAFT_ID_KEY ||
       !storageKey.startsWith(`${RESPONSE_DRAFT_STORAGE_PREFIX}:`)
     ) {
-      continue;
+      return false;
     }
 
     const rawDraft = storage.getItem(storageKey);
     if (!rawDraft) {
-      continue;
+      return false;
     }
 
     try {
       const parsedDraft = parseStoredDraft(rawDraft);
-      if (!parsedDraft || isExpired(parsedDraft.updatedAt)) {
-        storage.removeItem(storageKey);
-      }
+      return !parsedDraft || isExpired(parsedDraft.updatedAt);
     } catch {
-      storage.removeItem(storageKey);
+      return true;
     }
-  }
+  });
 }

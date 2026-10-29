@@ -19,14 +19,14 @@ for ipt in iptables ip6tables; do
     "$ipt" -w -N "$chain" 2>/dev/null || true
     "$ipt" -w -F "$chain"
     "$ipt" -w -A "$chain" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
-    for port in 8000 8095 5432 6543; do
+    for port in 8000 8443 8095 5432 6543; do
       # Forwarded packets are already DNATed: match their original host port.
       if [ "$parent" = DOCKER-USER ]; then
         set -- -p tcp -m conntrack --ctstate DNAT --ctorigdstport "$port"
       else
         set -- -p tcp --dport "$port"
       fi
-      if [ "$ipt" = iptables ] && { [ "$port" = 8000 ] || [ "$port" = 8095 ]; }; then
+      if [ "$ipt" = iptables ] && { [ "$port" = 8000 ] || [ "$port" = 8443 ] || [ "$port" = 8095 ]; }; then
         "$ipt" -w -A "$chain" "$@" -s "$frontend" -j RETURN
       fi
       "$ipt" -w -A "$chain" "$@" -j DROP

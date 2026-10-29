@@ -20,7 +20,6 @@ import type {
 import { runRequest } from "../../../shared/api/request";
 import {
   createSurveyAssetFormId,
-  getSurveyThemeAssetPaths,
   materializeSurveyThemeAssets,
   removeSurveyAssetPaths,
   resolveSurveyThemeAssetUrls,
@@ -597,7 +596,7 @@ export async function updateFormTitle(id: string, title: string) {
     "forms.fetchSchemaForTitleUpdate",
     () => apiClient
       .from("forms")
-      .select("schema, theme, allow_response_editing, organization_types")
+      .select("schema, theme, allow_response_editing, organization_types, revision")
       .eq("id", id)
       .single(),
     { context: { formId: id } },
@@ -605,6 +604,7 @@ export async function updateFormTitle(id: string, title: string) {
   if (fetchError) throw fetchError;
 
   const currentForm = form as {
+    revision?: number;
     allow_response_editing?: boolean | null;
     organization_types?: OrganizationType[] | null;
     schema?: SurveySchema | null;
@@ -623,6 +623,7 @@ export async function updateFormTitle(id: string, title: string) {
     title,
     currentForm?.allow_response_editing ?? false,
     normalizeOrganizationTypes(currentForm?.organization_types),
+    currentForm?.revision ?? 0,
   );
 
   if (result.status !== "updated") {
@@ -637,17 +638,16 @@ export async function updateFormSchema(
   title: string,
   allowResponseEditing: boolean,
   organizationTypes: OrganizationType[],
+  expectedRevision: number,
   confirmWarnings = false,
 ) {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new Error("Неизвестна исходная версия формы. Откройте актуальную форму перед сохранением.");
+  }
   const currentUserId = await getAuthenticatedUserId();
-  const { data: currentForm, error: fetchError } = await runRequest(
-    "forms.fetchThemeForUpdate",
-    () => apiClient.from("forms").select("theme").eq("id", id).single(),
-    { context: { formId: id } },
-  );
-  if (fetchError) throw fetchError;
 
-  const previousAssetPaths = getSurveyThemeAssetPaths((currentForm as { theme?: unknown } | null)?.theme);
+  // Existing custom images belong to the form's gallery. Changing the selected
+  // background must not delete an image the author may choose again later.
   const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
   const {
     data: { session },
@@ -675,6 +675,7 @@ export async function updateFormSchema(
         allowResponseEditing,
         organizationTypes: normalizeOrganizationTypes(organizationTypes),
         confirmWarnings,
+        expectedRevision,
       },
       headers: {
         ...traceContext.headers,
@@ -698,8 +699,6 @@ export async function updateFormSchema(
     return data;
   }
 
-  const nextAssetPaths = new Set(getSurveyThemeAssetPaths(materialized.theme));
-  await removeSurveyAssetPaths(previousAssetPaths.filter((path) => !nextAssetPaths.has(path)));
   return data;
 }
 

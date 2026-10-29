@@ -43,6 +43,7 @@ export type SurveySchema = {
 
 export type SurveyForm = {
   id: string;
+  revision?: number;
   title: string;
   form_type: string;
   form_reason: string;

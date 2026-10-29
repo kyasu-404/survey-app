@@ -18,6 +18,7 @@ vi.mock("../../../shared/api/client", () => ({
     functions: {
       invoke: vi.fn(),
     },
+    storage: { from: vi.fn() },
   },
   apiClient: {
     auth: {
@@ -829,7 +830,7 @@ describe("updateFormTitle", () => {
     await updateFormTitle("form-1", "Новое название");
 
     expect(schemaReadQuery.select).toHaveBeenCalledWith(
-      "schema, theme, allow_response_editing, organization_types",
+      "schema, theme, allow_response_editing, organization_types, revision",
     );
     expect(schemaReadQuery.eq).toHaveBeenCalledWith("id", "form-1");
     expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(
@@ -853,6 +854,22 @@ describe("updateFormTitle", () => {
 describe("updateFormSchema", () => {
   afterEach(() => {
     vi.resetAllMocks();
+  });
+
+  it("keeps the previous custom background in the gallery after switching backgrounds", async () => {
+    const formId = "b5000000-0000-4000-8000-000000000001";
+    const ownerId = "a5000000-0000-4000-8000-000000000001";
+    const oldImage = `__APP_SURVEY_ASSET__/forms/${formId}/${ownerId}/c5000000-0000-4000-8000-000000000001.png`;
+    const nextImage = `__APP_SURVEY_ASSET__/forms/${formId}/${ownerId}/c5000000-0000-4000-8000-000000000002.png`;
+    const remove = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(supabaseClient.storage.from).mockReturnValue({ remove } as never);
+    vi.mocked(apiClient.from).mockReturnValue(createSchemaReadQuery({ data: { theme: { backgroundImage: oldImage } }, error: null }) as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: ownerId } } } as never);
+    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({ data: { session: { access_token: "token" } } } as never);
+    vi.mocked(supabaseClient.functions.invoke).mockResolvedValue({ data: { status: "updated", safeChanges: [], warnings: [], breakingChanges: [] }, error: null } as never);
+    await updateFormSchema(formId, { pages: [] }, { backgroundImage: nextImage }, "Gallery", false, ["school"], 4);
+    expect(remove).not.toHaveBeenCalled();
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: expect.objectContaining({ expectedRevision: 4 }) }));
   });
 
   it("uses form-admin and returns compatibility warnings without a direct table update", async () => {
@@ -883,6 +900,7 @@ describe("updateFormSchema", () => {
       "Форма",
       false,
       ["school"],
+      0,
     )).resolves.toMatchObject({ status: "confirmation_required" });
 
     expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(

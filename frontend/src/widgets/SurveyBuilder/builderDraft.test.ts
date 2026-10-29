@@ -35,6 +35,11 @@ describe("builderDraft", () => {
     expect(window.localStorage.getItem("survey-builder:draft:form-9")).toBeNull();
   });
 
+  it("retains the original revision with an existing form draft", () => {
+    saveSurveyBuilderDraft("user-1", "form-7", schema, undefined, undefined, 4);
+    expect(loadSurveyBuilderDraft("user-1", "form-7")?.baseRevision).toBe(4);
+  });
+
   it("removes expired drafts", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));

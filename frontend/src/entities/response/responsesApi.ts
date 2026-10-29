@@ -277,6 +277,10 @@ export async function fetchResponsesByForm(
     },
   );
 
+  if (error && typeof error === "object" && "code" in error && error.code === "PGRST103" && page > 1) {
+    // Deletion can invalidate an offset before PostgREST returns a usable count.
+    return fetchResponsesByForm(formId, { ...options, page: 1 });
+  }
   if (error) throw error;
   if (typeof count !== "number") {
     throw new Error("Сервер не вернул точное количество ответов");

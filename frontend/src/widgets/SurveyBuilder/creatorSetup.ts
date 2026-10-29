@@ -188,7 +188,7 @@ export function configureCreatorQuestionTypes() {
 export function createCreatorInstance(
   formId: string | undefined,
   creatorTheme: ICreatorTheme,
-  safeEditingMode: boolean,
+  getSafeEditingMode: () => boolean,
 ) {
   if (!Serializer.getProperty("question", "integrationId")) {
     Serializer.addProperty("question", { name: "integrationId", visible: false });
@@ -250,7 +250,7 @@ export function createCreatorInstance(
   creator.onQuestionAdded.add((_sender, options) => {
     if (options.question) {
       const questionType = (options.question as { getType?: () => string }).getType?.();
-      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !safeEditingMode;
+      options.question.isRequired = questionType !== "sectiontitle" && questionType !== "expression" && !getSafeEditingMode();
       options.question.descriptionLocation = "underTitle";
       (options.question as { showNumber?: boolean }).showNumber = false;
       if (questionType === "panel" || questionType === "paneldynamic") {

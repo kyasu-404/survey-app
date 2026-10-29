@@ -4,6 +4,19 @@ import { formatResponsesForTable } from "./responsesExport";
 import type { SurveySchema } from "../../survey/types";
 import { TEST_SIGNATURE_PNG } from "../../../test/signatures";
 
+it("renders a malformed historical dynamic signature without losing other rows", () => {
+  const schema: SurveySchema = { pages: [{ elements: [{ type: "paneldynamic", name: "p", templateElements: [
+    { type: "signaturepad", name: "sig", title: "Подпись" },
+  ] }] }] };
+  const table = formatResponsesForTable([
+    { id: "bad", form_id: "f", created_at: "2026-10-29T00:00:00Z", data: { p: [{ sig: { toString: "x" } }] } },
+    { id: "good", form_id: "f", created_at: "2026-10-29T00:00:00Z", data: { p: [{ sig: TEST_SIGNATURE_PNG }] } },
+  ], schema);
+  expect(table.rows).toHaveLength(2);
+  expect(table.rows[0]["answer:p"]).toContain("Не удалось отобразить подпись");
+  expect(table.rows[1]["answer:p"]).toContain("Подпись (см. просмотр ответа)");
+});
+
 describe("export helpers", () => {
   it("embeds signatures in their answer cells with grouping offsets and leaves empty or invalid signatures readable", async () => {
     const schema: SurveySchema = { pages: [{ title: "Страница", elements: [

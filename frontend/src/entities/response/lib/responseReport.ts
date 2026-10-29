@@ -79,11 +79,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isAnswered(value: unknown) {
+function isAnswered(value: unknown, depth = 0): boolean {
+  if (depth > 32) return false;
   if (value === null || typeof value === "undefined") return false;
   if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.some(isAnswered);
-  if (typeof value === "object") return Object.values(value).some(isAnswered);
+  if (Array.isArray(value)) return value.some(item => isAnswered(item, depth + 1));
+  if (typeof value === "object") return Object.values(value).some(item => isAnswered(item, depth + 1));
   return true;
 }
 
@@ -192,7 +193,7 @@ function countValues(
 
   values.forEach((value) => {
     const formatted = isRecord(value) && typeof value.displayValue === "string";
-    const rawValue = String(formatted ? value.displayValue : value ?? "").trim();
+    const rawValue = stringifyAnswer(formatted ? value.displayValue : value).trim();
     if (!rawValue) return;
     const label = formatted ? rawValue : labelMap.get(rawValue) ?? rawValue;
     counts.set(label, (counts.get(label) ?? 0) + 1);
@@ -213,11 +214,11 @@ function toReportValues(counts: Map<string, number>, denominator: number, preser
 }
 
 function flattenAnswered(responseValues: unknown[][]) {
-  return responseValues.flatMap((values) => values.filter(isAnswered));
+  return responseValues.flatMap((values) => values.filter(value => isAnswered(value)));
 }
 
 function getAnsweredCount(responseValues: unknown[][]) {
-  return responseValues.filter((values) => values.some(isAnswered)).length;
+  return responseValues.filter((values) => values.some(value => isAnswered(value))).length;
 }
 
 function analyzeChoice(
@@ -251,6 +252,7 @@ function analyzeChoice(
 
 function toNumbers(values: unknown[]) {
   return values
+    .filter(value => typeof value === "number" || typeof value === "string")
     .map((value) => typeof value === "number" ? value : Number(String(value).replace(",", ".")))
     .filter((value) => Number.isFinite(value));
 }
@@ -311,6 +313,7 @@ function analyzeNumeric(responseValues: unknown[][], rating = false) {
 }
 
 function parseDateValue(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
   const rawValue = String(value ?? "").trim();
   if (!rawValue) return null;
   const timestamp = Date.parse(rawValue.length === 10 ? `${rawValue}T00:00:00` : rawValue);
@@ -342,6 +345,7 @@ function analyzeDate(responseValues: unknown[][]) {
 }
 
 function parseTimeMinutes(value: unknown) {
+  if (typeof value !== "string") return null;
   const match = String(value ?? "").match(/(?:T|^)(\d{2}):(\d{2})/);
   if (!match) return null;
   const hours = Number(match[1]);
@@ -376,7 +380,7 @@ function stringifyAnswer(value: unknown) {
   try {
     return readableValue(value);
   } catch {
-    return String(value);
+    return "[Не удалось отобразить значение]";
   }
 }
 
@@ -406,7 +410,7 @@ function analyzeRanking(question: SurveyQuestion, responseValues: unknown[][]) {
   flattenAnswered(responseValues).forEach((value) => {
     if (!Array.isArray(value)) return;
     value.forEach((item, index) => {
-      const rawValue = String(item ?? "");
+      const rawValue = stringifyAnswer(item);
       const label = labelMap.get(rawValue) ?? rawValue;
       positions.set(label, [...(positions.get(label) ?? []), index + 1]);
     });

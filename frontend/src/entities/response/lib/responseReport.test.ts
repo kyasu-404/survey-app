@@ -43,6 +43,24 @@ const responses: SurveyResponse[] = [
   },
 ];
 
+it("keeps reports usable with malformed historical scalar and ranking values", () => {
+  const schema = { pages: [{ elements: [
+    { type: "text", inputType: "number", name: "n" },
+    { type: "text", inputType: "date", name: "d" },
+    { type: "text", inputType: "time", name: "t" },
+    { type: "ranking", name: "r", choices: ["a", "b"] },
+  ] }] };
+  const bad = { toString: "x", valueOf: "x" };
+  const data = [
+    { id: "bad", form_id: "f", created_at: "2026-10-29T00:00:00Z", data: { n: bad, d: bad, t: bad, r: [bad] } },
+    { id: "good", form_id: "f", created_at: "2026-10-29T00:00:00Z", data: { n: 3, d: "2026-10-29", t: "12:30", r: ["a"] } },
+  ];
+  expect(() => createResponseReport(data, schema)).not.toThrow();
+  const report = createResponseReport(data, schema);
+  expect(report.totalResponses).toBe(2);
+  expect(report.questionReports.find(q => q.name === "n")?.metrics).toContainEqual({ label: "Среднее", value: "3" });
+});
+
 describe("createResponseReport", () => {
   it.each(["matrixdropdown", "matrixdynamic"])("keeps raw numeric %s cells for statistics while exporting comments", (type) => {
     const question = {

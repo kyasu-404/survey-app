@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
 import type { SurveySchema } from "../../entities/survey/types";
 import { SUPABASE_URL } from "../../shared/config/env";
@@ -338,6 +338,8 @@ function createTemplateForm(overrides: Partial<SurveySchema & { id: string; titl
 }
 
 describe("SurveyBuilder", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -1533,6 +1535,59 @@ describe("SurveyBuilder", () => {
     });
   });
 
+  it("preserves dirty edits and their original revision when realtime refreshes the form", async () => {
+    const form = { ...createTemplateForm({ id: "form-7", title: "Original" }), revision: 4 };
+    getFormById.mockResolvedValue(form as never);
+    const queryClient = createQueryClient();
+    renderBuilder("form-7", 0, queryClient);
+    await waitFor(() => expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Original" }));
+    act(() => {
+      creatorInstances[0].JSON = { ...creatorInstances[0].JSON, title: "Local edit" };
+      creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
+    });
+    await act(async () => { queryClient.setQueryData(["form", "form-7"], { ...form, revision: 5, schema: { ...form.schema, title: "Remote edit" } }); });
+    expect(creatorInstances[0].JSON.title).toBe("Local edit");
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+    expect(saveSurveySchema.mock.calls[0][6]).toBe(4);
+  });
+
+  it("retains edits and enables safe operations when the first answer arrives with storage blocked", async () => {
+    const form = { ...createTemplateForm({ id: "form-7", title: "Original" }), revision: 4 };
+    getFormById.mockResolvedValue(form as never);
+    const client = createQueryClient();
+    const view = (count: number) => <MemoryRouter><QueryClientProvider client={client}>
+      <SurveyBuilder formId="form-7" userId="user-1" safeEditingResponseCount={count} />
+    </QueryClientProvider></MemoryRouter>;
+    const { rerender } = render(view(0));
+    await waitFor(() => expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Original" }));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Full", "QuotaExceededError"); });
+    act(() => {
+      creatorInstances[0].JSON = { ...creatorInstances[0].JSON, title: "Unsaved" };
+      creatorInstances[0].onModified.fire(creatorInstances[0], { type: "PROPERTY_CHANGED" });
+    });
+    rerender(view(1));
+    await act(async () => { client.setQueryData(["form", "form-7"], { ...form, responses_count: 1 }); });
+    expect(creatorInstances).toHaveLength(1);
+    expect(creatorInstances[0].JSON.title).toBe("Unsaved");
+    const question = { getType: () => "text", isRequired: true };
+    act(() => creatorInstances[0].onQuestionAdded.fire(creatorInstances[0], { question }));
+    expect(question.isRequired).toBe(false);
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+    expect(saveSurveySchema.mock.calls[0][6]).toBe(4);
+  });
+
+  it("keeps a restored draft bound to its saved revision", async () => {
+    localStorage.setItem(getSurveyBuilderDraftStorageKey("user-1", "form-7"), JSON.stringify({
+      schema: { title: "Offline edit", pages: [] }, theme: {}, ownerId: "user-1", updatedAt: new Date().toISOString(), baseRevision: 2,
+    }));
+    getFormById.mockResolvedValue({ ...createTemplateForm({ id: "form-7", title: "Server version" }), revision: 5 } as never);
+    renderBuilder("form-7");
+    await waitFor(() => expect(creatorInstances[0]?.JSON).toMatchObject({ title: "Offline edit" }));
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+    expect(saveSurveySchema.mock.calls[0][6]).toBe(2);
+  });
+
   it("returns to the templates page with a refresh state after saving an existing template", async () => {
     getFormById.mockResolvedValue(createTemplateForm({ id: "template-7", title: "Шаблон для правки" }) as never);
 
@@ -1565,6 +1620,7 @@ describe("SurveyBuilder", () => {
       "Шаблон для правки",
       false,
       ["school", "kindergarten"],
+      0,
     );
     expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: { refreshList: true } });
   });
@@ -1608,6 +1664,7 @@ describe("SurveyBuilder", () => {
       "Форма для правки",
       true,
       ["school", "odo"],
+      0,
     );
   });
 
@@ -1659,6 +1716,7 @@ describe("SurveyBuilder", () => {
       "Форма с ответами",
       false,
       ["school", "kindergarten"],
+      0,
       true,
     ]);
     expect(callback).toHaveBeenCalledWith(1, true);
@@ -1871,6 +1929,7 @@ describe("SurveyBuilder", () => {
       "Старая форма",
       false,
       ["school", "kindergarten"],
+      0,
     );
 
     const savedSchema = saveSurveySchema.mock.calls[0]?.[1] as SurveySchema;

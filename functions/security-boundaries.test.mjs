@@ -59,7 +59,8 @@ function deletionClient({ allowed = true, ownershipError = null, referenced = fa
   return { effects, client: {
     rpc: async (name, args) => {
       effects.push({ name, args });
-      return name === "can_restore_survey_upload" ? { data: allowed, error: ownershipError } : { data: referenced };
+      return name === "can_restore_survey_upload" ? { data: allowed, error: ownershipError }
+        : { data: referenced ? [] : [path] };
     },
     from: name => ({
       select() { return this; }, eq() { return this; }, or() { return this; },
@@ -130,5 +131,65 @@ test("delete-upload preserves reference/form guards and removes only the authori
     assert.deepEqual(effects[0], { name: "can_restore_survey_upload", args: { p_path: path, p_browser_id: browserId } });
     assert.equal(effects.some(effect => effect.name === "remove"), status === 200);
     assert.equal(effects.some(effect => effect.name === "survey_upload_reservations"), status === 200);
+  }
+});
+
+test("update-schema rejects a stale editor and stale confirmation without performing a write", async () => {
+  // The handler's import is replaced with the real compatibility implementation.
+  const { analyzeSchemaCompatibility } = await import("./form-admin/schemaCompatibility.mjs");
+  globalThis.analyzeSchemaCompatibility = analyzeSchemaCompatibility;
+  try {
+    const owner = "a5000000-0000-4000-8000-000000000001";
+    let revision = 4, writes = 0;
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: owner } } }) },
+      from: table => ({
+        updating: false, predicates: {},
+        select() { return this; }, eq(key, value) { this.predicates[key] = value; return this; },
+        single: async () => ({ data: table === "profiles" ? { role: "user", is_disabled: false }
+          : { id: formId, author_id: owner, revision, schema: { pages: [{ elements: [{ type: "text", name: "q" }] }] }, responses_count: 1, organization_types: ["school"] } }),
+        update() { this.updating = true; return this; },
+        async maybeSingle() {
+          assert.equal(this.predicates.revision, revision);
+          writes++; revision++; return { data: { id: formId } };
+        },
+      }),
+    };
+    const request = handlerFor("form-admin", {}, client);
+    const payload = { action: "update-schema", formId, schema: { pages: [{ elements: [{ type: "text", name: "q" }, { type: "text", name: "new" }] }] },
+      theme: {}, title: "Changed", allowResponseEditing: false, organizationTypes: ["school"], expectedRevision: 4 };
+    const send = body => request(null, "POST", body, { Authorization: "Bearer test" });
+    assert.equal((await (await send(payload)).json()).status, "confirmation_required");
+    assert.equal(writes, 0);
+    revision = 5; // Another editor saves before the warning is confirmed.
+    assert.equal((await send({ ...payload, confirmWarnings: true })).status, 409);
+    assert.equal(writes, 0);
+    assert.equal((await send({ ...payload, expectedRevision: 5, confirmWarnings: true })).status, 200);
+    assert.equal(writes, 1);
+    assert.equal((await send({ ...payload, expectedRevision: 5, confirmWarnings: true })).status, 409);
+    assert.equal(writes, 1);
+  } finally { delete globalThis.analyzeSchemaCompatibility; }
+});
+
+test("delete-responses delegates actor authorization and the complete reference decision to SQL", async () => {
+  const owner = "a5000000-0000-4000-8000-000000000001";
+  for (const errorCode of [null, "42501", "P0002"]) {
+    const calls = [], removed = [];
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: owner } } }) },
+      from: table => {
+        assert.equal(table, "profiles");
+        return { select() { return this; }, eq() { return this; }, single: async () => ({ data: { role: "user", is_disabled: false } }) };
+      },
+      rpc: async (name, args) => {
+        calls.push({ name, args });
+        return errorCode ? { error: { code: errorCode, message: "denied" } } : { data: { deletedResponses: 1, objectPaths: [path] } };
+      },
+      storage: { from: () => ({ remove: async paths => { removed.push(...paths); return {}; } }) },
+    };
+    const response = await handlerFor("form-admin", {}, client)(null, "POST", { action: "delete-responses", formId, responseIds: [browserId] }, { Authorization: "Bearer test" });
+    assert.equal(response.status, errorCode === "42501" ? 403 : errorCode === "P0002" ? 404 : 200);
+    assert.deepEqual(calls, [{ name: "delete_form_responses_with_files", args: { p_form_id: formId, p_response_ids: [browserId], p_actor_id: owner } }]);
+    assert.deepEqual(removed, errorCode ? [] : [path]);
   }
 });

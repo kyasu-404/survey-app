@@ -2,12 +2,21 @@
 export type AnswerDefinition = Record<string, unknown>;
 export const COMPLEX_ANSWER_TYPES = new Set(["paneldynamic", "matrix", "matrixdropdown", "matrixdynamic", "multipletext", "ranking", "comment"]);
 export const isAnswerRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
-export const answerText = (value: unknown): string => {
-  if (isAnswerRecord(value)) return answerText(value.ru ?? value.default ?? Object.values(value)[0]);
+export const answerText = (value: unknown, depth = 0): string => {
+  if (depth > 32) return "[Значение превышает допустимую сложность]";
+  if (Array.isArray(value)) return value.map(item => answerText(item, depth + 1)).join(", ");
+  if (isAnswerRecord(value)) return answerText(value.ru ?? value.default ?? Object.values(value)[0], depth + 1);
   return value === null || value === undefined ? "" : String(value);
 };
+function answerKey(value: unknown): string | undefined {
+  if (value !== null && typeof value === "object") {
+    try { return JSON.stringify(value); } catch { return undefined; }
+  }
+  return String(value);
+}
 export function answerLabel(items: unknown, value: unknown): string {
-  const item = Array.isArray(items) ? items.find(item => String(isAnswerRecord(item) ? item.value ?? item.name : item) === String(value)) : undefined;
+  const key = answerKey(value);
+  const item = key !== undefined && Array.isArray(items) ? items.find(item => answerKey(isAnswerRecord(item) ? item.value ?? item.name : item) === key) : undefined;
   return (isAnswerRecord(item) ? answerText(item.text ?? item.title).trim() : "") || answerText(value);
 }
 export function answerCommentKey(question: AnswerDefinition, suffix = "-Comment") {

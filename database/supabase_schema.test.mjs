@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const schema = readFileSync(new URL("./supabase_schema.sql", import.meta.url), "utf8");
@@ -72,6 +72,16 @@ function getFunctionDefinition(functionName) {
   return match[0];
 }
 
+function latestFunctionMigrations() {
+  const definitions = new Map();
+  const dir = new URL("./migrations/", import.meta.url);
+  for (const file of readdirSync(dir).filter(name => name.endsWith(".sql")).sort()) {
+    const sql = readFileSync(new URL(file, dir), "utf8");
+    for (const match of sql.matchAll(/create or replace function public\.(\w+)\([\s\S]*?\n\$\$;/gi)) definitions.set(match[1], match[0]);
+  }
+  return definitions;
+}
+
 function getPolicyDefinition(policyName) {
   const pattern = new RegExp(`create policy "${policyName}"[\\s\\S]*?;`, "i");
   const match = schema.match(pattern);
@@ -90,17 +100,17 @@ test("new profiles always start with user role and do not copy metadata roles", 
 });
 
 test("schema baseline avoids destructive reset statements", () => {
-  const allowlistedTriggerMaintenance = schema.replace(
-    /^\s*delete\s+from\s+public\.response_file_references\s+where\s+response_id\s*=\s*new\.id;\s*$/gim,
+  const topLevelStatements = schema.replace(
+    /create or replace function public\.[\s\S]*?\bas\s+\$\$[\s\S]*?\n\$\$;/gi,
     "",
   );
 
   assert.match(schema, /^\s*(?:--[^\n]*\n\s*)*begin;/i);
   assert.match(schema, /\bcommit;\s*$/i);
 
-  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*drop\s+/im);
-  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*truncate\s+/im);
-  assert.doesNotMatch(allowlistedTriggerMaintenance, /^\s*delete\s+from\s+/im);
+  assert.doesNotMatch(topLevelStatements, /^\s*drop\s+/im);
+  assert.doesNotMatch(topLevelStatements, /^\s*truncate\s+/im);
+  assert.doesNotMatch(topLevelStatements, /^\s*delete\s+from\s+/im);
 });
 
 test("request_role only trusts the profiles table", () => {
@@ -309,9 +319,12 @@ test("storage cleanup rechecks references and never targets the shared asset gal
   const listAssets = getFunctionDefinition("list_orphan_survey_assets");
   const confirmAssets = getFunctionDefinition("confirm_orphan_survey_assets");
 
-  assert.match(confirmFiles, /o\.bucket_id = 'survey-files'/i);
-  assert.match(confirmFiles, /not exists[\s\S]*public\.response_file_references/i);
-  assert.match(confirmFiles, /o\.name = any\(object_names\)/i);
+  assert.match(confirmFiles, /o\.bucket_id\s*=\s*'survey-files'/i);
+  assert.match(confirmFiles, /public\.claim_survey_file_deletions/i);
+  const claim = getFunctionDefinition("claim_survey_file_deletions");
+  assert.match(claim, /pg_advisory_xact_lock/i);
+  assert.match(claim, /not exists[\s\S]*public\.response_file_references/i);
+  assert.match(confirmFiles, /o\.name\s*=\s*any\(object_names\)/i);
   assert.match(listAssets, /o\.bucket_id = 'survey-assets'/i);
   assert.match(listAssets, /o\.name ~\* '\^forms\//i);
   assert.match(listAssets, /not exists[\s\S]*public\.forms/i);
@@ -329,8 +342,8 @@ test("storage deletes are limited to the uploader's unreferenced object", () => 
   const deleteHelper = getFunctionDefinition("can_delete_survey_file");
   const deletePolicy = getPolicyDefinition("survey_files_authenticated_delete");
 
-  assert.match(deleteHelper, /path_parts\[1\] <> auth\.uid\(\)::text/i);
-  assert.match(deleteHelper, /not exists[\s\S]*public\.response_file_references/i);
+  assert.match(deleteHelper, /split_part\(object_name,'\/',1\)<>auth\.uid\(\)::text/i);
+  assert.match(deleteHelper, /public\.claim_survey_file_deletions/i);
   assert.match(deletePolicy, /public\.can_delete_survey_file\(name\)/i);
   assert.doesNotMatch(deletePolicy, /can_read_survey_file/i);
 });
@@ -552,16 +565,16 @@ test("public response payloads are checked against the form schema and organizat
 });
 
 test("the scope validation migration installs the same functions as a fresh database", () => {
-  const migration = readFileSync(new URL("./migrations/202610270900_response_scope_validation.sql", import.meta.url), "utf8");
+  const migrations = latestFunctionMigrations();
   for (const name of ["survey_organization_values", "response_data_matches_form", "validate_response_payload", "list_saved_form_organizations"]) {
-    assert.ok(migration.includes(getFunctionDefinition(name)), name);
+    assert.equal(migrations.get(name), getFunctionDefinition(name), name);
   }
 });
 
 test("attachment ownership migration matches bootstrap traversal, trigger and personal reservation helpers", () => {
-  const migration = readFileSync(new URL("./migrations/202610281600_response_attachment_ownership.sql", import.meta.url), "utf8");
+  const migrations = latestFunctionMigrations();
   for (const name of ["survey_response_bindings", "sync_response_file_references", "reserve_personal_survey_upload", "bind_personal_survey_upload"]) {
-    assert.ok(migration.includes(getFunctionDefinition(name)), name);
+    assert.equal(migrations.get(name), getFunctionDefinition(name), name);
   }
 });
 

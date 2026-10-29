@@ -18,6 +18,7 @@ type FormAdminAction =
       allowResponseEditing: boolean;
       organizationTypes: unknown;
       confirmWarnings?: boolean;
+      expectedRevision: number;
     };
 
 type SupabaseAdminClient = ReturnType<typeof createClient>;
@@ -168,6 +169,7 @@ function getSchemaUpdatePayload(payload: FormAdminAction) {
     || payload.title.trim().length === 0
     || payload.title.trim().length > 500
     || typeof payload.allowResponseEditing !== "boolean"
+    || !Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 0
     || !Array.isArray(payload.organizationTypes)
     || payload.organizationTypes.length === 0
     || payload.organizationTypes.length > allowedOrganizationTypes.size
@@ -197,6 +199,7 @@ function getSchemaUpdatePayload(payload: FormAdminAction) {
     allowResponseEditing: payload.allowResponseEditing,
     organizationTypes,
     confirmWarnings: payload.confirmWarnings === true,
+    expectedRevision: payload.expectedRevision,
   };
 }
 
@@ -510,10 +513,10 @@ Deno.serve(async (req) => {
       return errorResponse(req, 403, "Form is not active", actionLogContext);
     }
 
-    const { data: isReferenced, error: referenceError } = await adminClient.rpc("is_survey_file_referenced", {
-      object_name: payload.path,
+    const { data: claimedPaths, error: claimError } = await adminClient.rpc("claim_survey_file_deletions", {
+      p_paths: [payload.path],
     });
-    if (referenceError || isReferenced !== false) {
+    if (claimError || !Array.isArray(claimedPaths) || !claimedPaths.includes(payload.path)) {
       return errorResponse(req, 409, "Upload is already attached to a response", actionLogContext);
     }
 
@@ -586,6 +589,10 @@ Deno.serve(async (req) => {
 
       if (form.author_id !== requester.id && requesterProfile.role !== "admin") {
         return errorResponse(req, 403, "Forbidden", actionLogContext);
+      }
+
+      if (Number(form.revision ?? 0) !== updatePayload.expectedRevision) {
+        return errorResponse(req, 409, "Форма изменена в другой вкладке. Сохраните черновик и откройте актуальную версию.", actionLogContext);
       }
 
       let compatibility = { safeChanges: [], warnings: [], breakingChanges: [] };
@@ -792,103 +799,23 @@ Deno.serve(async (req) => {
       return errorResponse(req, 400, "Invalid delete responses payload", actionLogContext);
     }
 
-    const { data: form, error: formError } = await adminClient
-      .from("forms")
-      .select("id, author_id")
-      .eq("id", payload.formId)
-      .single();
-
-    if (formError || !form) {
-      return errorResponse(req, 404, "Form not found", actionLogContext);
-    }
-
-    if (form.author_id !== requester.id && requesterProfile.role !== "admin") {
-      return errorResponse(req, 403, "Forbidden", actionLogContext);
-    }
-
-    const { data: responses, error: responsesError } = await adminClient
-      .from("responses")
-      .select("id")
-      .eq("form_id", payload.formId)
-      .in("id", responseIds);
-
-    if (responsesError) {
-      return errorResponse(req, 400, responsesError.message, actionLogContext);
-    }
-
-    const existingResponseIds = (responses ?? [])
-      .map((response: { id?: unknown }) => response.id)
-      .filter((id: unknown): id is string => typeof id === "string");
-
-    if (existingResponseIds.length === 0) {
-      return jsonResponse(req, 200, { success: true, deletedResponses: 0, removedFiles: 0 }, actionLogContext);
-    }
-
-    const { data: fileReferences, error: referencesError } = await adminClient
-      .from("response_file_references")
-      .select("object_path")
-      .eq("form_id", payload.formId)
-      .in("response_id", existingResponseIds);
-
-    if (referencesError) {
-      return errorResponse(req, 400, referencesError.message, actionLogContext);
-    }
-
-    const referencedObjectPaths = [...new Set(
-      (fileReferences ?? [])
-        .map((reference: { object_path?: unknown }) => reference.object_path)
-        .filter((path: unknown): path is string => typeof path === "string"),
-    )];
-    const selectedResponseIdSet = new Set(existingResponseIds);
-    const objectPaths: string[] = [];
-
-    for (let index = 0; index < referencedObjectPaths.length; index += 100) {
-      const pathBatch = referencedObjectPaths.slice(index, index + 100);
-      const { data: allReferences, error: allReferencesError } = await adminClient
-        .from("response_file_references")
-        .select("response_id, object_path")
-        .in("object_path", pathBatch);
-
-      if (allReferencesError) {
-        return errorResponse(req, 400, allReferencesError.message, actionLogContext);
-      }
-
-      const sharedPaths = new Set(
-        (allReferences ?? [])
-          .filter((reference: { response_id?: unknown }) =>
-            typeof reference.response_id === "string" && !selectedResponseIdSet.has(reference.response_id),
-          )
-          .map((reference: { object_path?: unknown }) => reference.object_path)
-          .filter((path: unknown): path is string => typeof path === "string"),
-      );
-      objectPaths.push(...pathBatch.filter((path) => !sharedPaths.has(path)));
-    }
-
-    const { error: deleteError } = await adminClient
-      .from("responses")
-      .delete()
-      .eq("form_id", payload.formId)
-      .in("id", existingResponseIds);
-
-    if (deleteError) {
-      return errorResponse(req, 400, deleteError.message, actionLogContext);
-    }
-
-    const { removedCount, error: removeError } = await removeStorageObjectPaths(adminClient, objectPaths);
-    if (removeError) {
-      console.warn("form-admin storage cleanup deferred", { ...actionLogContext, error: removeError.message });
-    }
-
-    console.info("form-admin action completed", {
-      ...actionLogContext,
-      deletedResponses: existingResponseIds.length,
-      removedFiles: removedCount,
-      cleanupPending: Boolean(removeError),
+    const { data: deletion, error: deleteError } = await adminClient.rpc("delete_form_responses_with_files", {
+      p_form_id: payload.formId,
+      p_response_ids: responseIds,
+      p_actor_id: requester.id,
     });
-
+    if (deleteError) {
+      const status = deleteError.code === "42501" ? 403 : deleteError.code === "P0002" ? 404 : 400;
+      return errorResponse(req, status, deleteError.message, actionLogContext);
+    }
+    if (!deletion || !Array.isArray(deletion.objectPaths) || !Number.isInteger(deletion.deletedResponses)) {
+      return errorResponse(req, 503, "Invalid deletion result", actionLogContext);
+    }
+    const { removedCount, error: removeError } = await removeStorageObjectPaths(adminClient, deletion.objectPaths);
+    if (removeError) console.warn("form-admin storage cleanup deferred", { ...actionLogContext, error: removeError.message });
     return jsonResponse(req, 200, {
       success: true,
-      deletedResponses: existingResponseIds.length,
+      deletedResponses: deletion.deletedResponses,
       removedFiles: removedCount,
       cleanupPending: Boolean(removeError),
     }, actionLogContext);

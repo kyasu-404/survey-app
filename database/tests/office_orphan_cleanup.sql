@@ -1,12 +1,13 @@
--- Integration check against an installed database with at least one form.
+-- Integration check on a disposable database.
 -- All fixtures are rolled back; no Storage API deletions are performed.
 begin;
 do $$
 declare
- f uuid; paths text[]; candidates text[]; confirmed text[]; i integer;
+ f uuid; owner_id uuid:=gen_random_uuid(); paths text[]; candidates text[]; confirmed text[]; i integer;
 begin
- select id into f from public.forms limit 1;
- if f is null then raise exception 'This integration check requires one existing form'; end if;
+ insert into auth.users(id,email) values(owner_id,owner_id||'@example.invalid');
+ insert into public.forms(title,author_id,form_type,form_reason,schema)
+ values('Office cleanup fixture',owner_id,'anketa','plan','{"pages":[]}') returning id into f;
  for i in 1..7 loop
   paths[i]:='forms/'||f||'/documents/'||gen_random_uuid()||'/'||gen_random_uuid()||'.xlsx';
  end loop;

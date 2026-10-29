@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, useTheme } from "./ThemeProvider";
 import { creatorThemes, isThemeId, THEME_STORAGE_KEY, themeOptions, themes } from "./themeRegistry";
 
@@ -16,6 +16,18 @@ describe("ThemeProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     delete document.documentElement.dataset.theme;
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["getter", "getItem", "setItem"])("continues with an in-memory theme when storage %s is blocked", async method => {
+    const blocked = () => { throw new DOMException("Blocked", "SecurityError"); };
+    if (method === "getter") vi.spyOn(window, "localStorage", "get").mockImplementation(blocked);
+    else vi.spyOn(Storage.prototype, method as "getItem" | "setItem").mockImplementation(blocked);
+    render(<ThemeProvider><ThemeControls /></ThemeProvider>);
+    expect(document.documentElement).toHaveAttribute("data-theme", "sand");
+    await userEvent.click(screen.getByRole("button", { name: "Тёмная" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "graphite");
   });
 
   it("offers only light and dark palettes to the app and Creator", () => {

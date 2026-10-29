@@ -44,10 +44,11 @@ test("database migrations avoid destructive table and data operations", () => {
 
   for (const fileName of migrationFiles) {
     const sql = readFileSync(new URL(fileName, migrationsDir), "utf8");
-    const allowlistedTriggerMaintenance = sql.replace(
-      /^\s*delete\s+from\s+public\.response_file_references\s+where\s+response_id\s*=\s*new\.id;\s*$/gim,
+    // Function bodies run on RPC/trigger invocation, not while applying this migration.
+    const topLevelStatements = sql.replace(
+      /create or replace function public\.[\s\S]*?\bas\s+\$\$[\s\S]*?\n\$\$;/gi,
       "",
     );
-    assert.doesNotMatch(allowlistedTriggerMaintenance, destructiveStatement, `${fileName} contains a destructive operation`);
+    assert.doesNotMatch(topLevelStatements, destructiveStatement, `${fileName} contains a destructive operation`);
   }
 });

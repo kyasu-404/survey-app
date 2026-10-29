@@ -148,6 +148,19 @@ describe("fetchResponsesByForm", () => {
     vi.clearAllMocks();
   });
 
+  it("recovers from an invalid last-page offset after deletion", async () => {
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query),
+      abortSignal: vi.fn(() => query),
+      range: vi.fn()
+        .mockResolvedValueOnce({ data: null, count: null, error: { code: "PGRST103" } })
+        .mockResolvedValueOnce({ data: [], count: 50, error: null }),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+    await expect(fetchResponsesByForm("f", { page: 2, pageSize: 50 })).resolves.toMatchObject({ page: 1, count: 50, totalPages: 1 });
+    expect(query.range.mock.calls).toEqual([[50, 99], [0, 49]]);
+  });
+
   it("loads a bounded response page with an exact total count", async () => {
     const response = {
       id: "response-1",

@@ -1,5 +1,5 @@
 import { Presence } from "../../shared/ui/Presence";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -21,6 +21,7 @@ export default function BuilderPage() {
   const queryClient = useQueryClient();
   const [isCopying, setIsCopying] = useState(false);
   const [isSafeEditingConfirmed, setIsSafeEditingConfirmed] = useState(false);
+  const [openedFormId, setOpenedFormId] = useState<string | undefined | null>(null);
   const canAdministerAllForms = profile?.role === "admin";
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
@@ -29,6 +30,12 @@ export default function BuilderPage() {
     retry: 1,
     staleTime: 30_000,
   });
+
+  const responsesCount = formQuery.data?.responses_count ?? 0;
+  const showWarning = Boolean(id && responsesCount > 0 && !isSafeEditingConfirmed);
+  useEffect(() => {
+    if (!showWarning && user && (!id || formQuery.data)) setOpenedFormId(id);
+  }, [showWarning, user, id, formQuery.data]);
 
   if (!user) {
     return null;
@@ -63,7 +70,7 @@ export default function BuilderPage() {
     );
   }
 
-  if (id && formQuery.error) {
+  if (id && formQuery.error && !formQuery.data) {
     return <p>{getErrorMessage(formQuery.error, "Не удалось открыть форму")}</p>;
   }
 
@@ -72,10 +79,6 @@ export default function BuilderPage() {
     return <p role="alert">{FORM_EDIT_PERMISSION_ERROR}</p>;
   }
   if (id && !formQuery.data) return <p role="alert">Форма не найдена</p>;
-
-  const responsesCount = formQuery.data?.responses_count ?? 0;
-
-  const showWarning = Boolean(id && responsesCount > 0 && !isSafeEditingConfirmed);
 
   return (
     <div className="builder-page">
@@ -117,7 +120,7 @@ export default function BuilderPage() {
           </div>
         </div>
       )}</Presence>
-      {!showWarning && <div className="builder-container">
+      {(!showWarning || openedFormId === id) && <div className="builder-container" hidden={showWarning}>
         <SurveyBuilder
           key={user.id}
           formId={id}

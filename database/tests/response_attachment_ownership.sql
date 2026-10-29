@@ -87,6 +87,8 @@ do $$ declare browser uuid := gen_random_uuid(); own_path text; payload jsonb; b
 end $$;
 
 -- Unreserved authenticated owner uploads remain valid, foreign owner paths fail.
+insert into storage.objects(bucket_id,name,metadata) values('survey-files',
+ 'a7000000-0000-4000-8000-000000000001/b7000000-0000-4000-8000-000000000001/owned.pdf','{"size":1}');
 select set_config('request.jwt.claim.sub','a7000000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 select pg_temp.submit_upload(gen_random_uuid(),
@@ -111,6 +113,7 @@ do $$ declare token uuid; uploader uuid := gen_random_uuid(); path text; draft_p
   perform pg_temp.expect_error(format('select public.bind_personal_survey_upload(%L,%L,%L,%L)',
     'b7000000-0000-4000-8000-000000000002',gen_random_uuid(),uploader,draft_path),'42501');
   assert public.bind_personal_survey_upload('b7000000-0000-4000-8000-000000000002',token,uploader,draft_path);
+  insert into storage.objects(bucket_id,name,metadata) values('survey-files',draft_path,'{"size":1}');
   select * into result from public.submit_personal_form_response('b7000000-0000-4000-8000-000000000002',token,gen_random_uuid(),
     jsonb_build_object('org','e7000000-0000-4000-8000-000000000001','upload',jsonb_build_array(path,draft_path)));
   assert result.status='submitted';

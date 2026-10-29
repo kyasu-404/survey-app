@@ -17,7 +17,7 @@ declare
   answer jsonb := '{"выбор":["other"],"выбор-Comment":"Свой вариант","list":"other","list-Comment":"Другой пункт","text":"Текст","text-Comment":"Пояснение","plain":"Обычный ответ","matrix":{"row":"column"},"files":[{"name":"file.txt","content":"fixture"}],"signature":"data:image/png;base64,fixture","people":[{"person":"Анна","person-Comment":"Комментарий записи"}]}';
   owner_id uuid := gen_random_uuid(); target_id uuid := gen_random_uuid();
   browser_id uuid := gen_random_uuid(); submission_id uuid := gen_random_uuid();
-  result record;
+  result record; file_path text;
 begin
   assert public.response_data_matches_form(survey, array['school'], answer), 'Other/comment payload was rejected';
   assert not public.response_data_matches_form(survey, array['school'], answer || '{"foreign":"value"}'), 'Unknown answers must remain rejected';
@@ -35,6 +35,9 @@ begin
   insert into auth.users(id,email,raw_user_meta_data) values(owner_id,owner_id||'@example.invalid','{}');
   insert into public.forms(id,title,author_id,is_public,allow_response_editing,form_type,form_reason,schema)
     values(target_id,'Comment regression',owner_id,true,true,'anketa','plan',survey);
+  file_path := public.reserve_survey_upload(target_id,browser_id,repeat('d',64),1,'.txt');
+  insert into storage.objects(bucket_id,name,metadata) values('survey-files',file_path,'{"size":1}');
+  answer := jsonb_set(answer,'{files,0,content}',to_jsonb(file_path));
   select * into result from public.submit_form_response(target_id,browser_id,submission_id,answer);
   assert result.status = 'submitted' and result.response_data = answer, 'Submission must preserve every answer and comment';
   select * into result from public.submit_form_response(target_id,browser_id,submission_id,answer);

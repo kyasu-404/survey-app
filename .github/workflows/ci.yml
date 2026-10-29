@@ -30,6 +30,18 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: integration-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       VITE_SUPABASE_URL: http://127.0.0.1:54321
       VITE_SUPABASE_ANON_KEY: ci-anon-key
@@ -62,6 +74,11 @@ jobs:
       - name: Install mail worker dependencies
         working-directory: mail-worker
         run: npm ci
+
+      - name: Test SQL contracts and concurrent file lifecycle
+        env:
+          SURVEY_TEST_DATABASE_URL: postgresql://postgres:integration-test-only@127.0.0.1:5432/postgres
+        run: node --test database/integration.test.mjs
 
       - name: Audit and test mail worker
         working-directory: mail-worker

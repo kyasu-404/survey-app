@@ -146,7 +146,7 @@ function formatDynamicPanel(question: SurveyQuestion, values: unknown[], organiz
       const name = column.key.slice("answer:".length);
       const raw = Object.prototype.hasOwnProperty.call(value, name) ? value[name] : undefined;
       const answer = column.answerType === "signaturepad" && raw
-        ? (getSignatureImage(String(raw)) ? "Подпись (см. просмотр ответа)" : SIGNATURE_UNAVAILABLE)
+        ? (getSignatureImage(raw) ? "Подпись (см. просмотр ответа)" : SIGNATURE_UNAVAILABLE)
         : formatAnswerValue(meta.questionMap.get(name), raw, organizationLabels, value, suffix, depth + 1);
       const label = [...(column.sections ?? []).map(group => group.header), column.header].join(" / ");
       return answer.includes("\n") ? `${label}:\n  ${answer.replace(/\n/g, "\n  ")}` : `${label}: ${answer || "—"}`;

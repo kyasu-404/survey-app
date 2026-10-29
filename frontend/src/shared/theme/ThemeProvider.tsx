@@ -30,8 +30,10 @@ function readInitialThemeId(): ThemeId {
     return DEFAULT_THEME_ID;
   }
 
-  const storedThemeId = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return isThemeId(storedThemeId) ? storedThemeId : DEFAULT_THEME_ID;
+  try {
+    const storedThemeId = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return isThemeId(storedThemeId) ? storedThemeId : DEFAULT_THEME_ID;
+  } catch { return DEFAULT_THEME_ID; }
 }
 
 type ThemeProviderProps = PropsWithChildren<{
@@ -49,7 +51,7 @@ export function ThemeProvider({ children, isThemeApplied = true }: ThemeProvider
     }
 
     document.documentElement.dataset.theme = themeId;
-    window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    try { window.localStorage.setItem(THEME_STORAGE_KEY, themeId); } catch { /* Keep the selected theme in memory when storage is blocked. */ }
   }, [isThemeApplied, themeId]);
 
   return (

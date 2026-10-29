@@ -7,10 +7,9 @@
 В списке форм кнопка «Поделиться» открывает ссылку, QR-код и HTML-код iframe.
 Для встраивания форма должна быть открыта для приёма ответов. Код использует
 публичный адрес `/form/:id`, ширину 100% и высоту 700 пикселей, которую можно изменить.
-Конфигурации `nginx.conf` и `frontend/nginx.conf` разрешают внешние iframe только для
-публичных страниц `/form/:id`. При публикации этой возможности обновите и перезагрузите
-nginx вместе с frontend: прежние `X-Frame-Options: DENY` и `frame-ancestors 'none'`
-на публичных страницах будут блокировать встраивание. Остальные страницы сохраняют запрет.
+Конфигурации `nginx.conf` и `frontend/nginx.conf` по умолчанию запрещают встраивание.
+Разрешённые сайты задаются администратором; для публичных `/form/:id` нужно установить
+динамическую политику nginx по `docs/site-settings.md`. Остальные страницы сохраняют запрет.
 
 - `frontend/` — Vite + React приложение.
 - `database/supabase_schema.sql` — недеструктивный baseline схемы таблиц и RLS-политик для пустого Supabase-проекта.
@@ -80,7 +79,7 @@ supabase functions deploy form-admin
 ```
 
 4. Убедитесь, что в проекте Supabase доступна переменная `SUPABASE_SERVICE_ROLE_KEY` для Edge Functions.
-5. Если frontend работает не на локальных origin-ах, задайте `FORM_ADMIN_ALLOWED_ORIGINS` списком origin-ов через запятую. Bucket можно переопределить переменной `SURVEY_FILES_BUCKET`; по умолчанию используется `survey-files`.
+5. Если frontend работает не на локальных origin-ах, задайте `FORM_ADMIN_ALLOWED_ORIGINS` списком origin-ов через запятую. Имена bucket фиксированы политиками БД: `survey-files` и `survey-assets`; переменные с другими именами отклоняются при запуске.
 
 ## Edge Function для SMTP-коннектора
 

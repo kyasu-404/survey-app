@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {zipSync} from 'fflate';
+import {zipSync,unzipSync} from 'fflate';
 import {sign,verify,encrypt,decrypt,saveUrl,documentKey} from '../src/security.mjs';
 import {blankDocx,validateDocx} from '../src/docx.mjs';
 test('JWT rejects tampering, wrong algorithm, expiry and other keys',()=>{
@@ -27,4 +27,49 @@ test('OOXML validation rejects fake and macro-enabled files',()=>{
 });
 test('document session key stable until version advances',()=>{
   const id=randomUUID();assert.equal(documentKey({id,version:1}),documentKey({id,version:1}));assert.notEqual(documentKey({id,version:1}),documentKey({id,version:2}));
+});
+test('OOXML rejects mismatched ZIP counts before unchecked members are decompressed',()=>{
+  const files=unzipSync(blankDocx());
+  files['word/vbaProject.bin']=new Uint8Array([1,2,3]);
+  const archive=Buffer.from(zipSync(files));
+  const end=archive.length-22;
+  archive.writeUInt16LE(1,end+10);
+  assert.throws(()=>validateDocx(archive,1024*1024));
+});
+test('OOXML rejects ZIP64 and multidisk directory metadata',()=>{
+  for(const mutate of [
+    b=>b.writeUInt16LE(1,b.length-18),
+    b=>b.writeUInt16LE(0xffff,b.length-14),
+    b=>b.writeUInt32LE(0x07064b50,b.length-42),
+    b=>b.writeUInt32LE(1,b.length-10),
+  ]){
+    const archive=Buffer.from(blankDocx());mutate(archive);
+    assert.throws(()=>validateDocx(archive,1024*1024));
+  }
+});
+
+test('OOXML rejects a forged small size before inflating the full oversized member',()=>{
+ const files=unzipSync(blankDocx());
+ files['word/oversized.bin']=new Uint8Array(41*1024*1024);
+ const archive=Buffer.from(zipSync(files,{level:9}));
+ let offset=archive.readUInt32LE(archive.length-22+16);
+ const entries=archive.readUInt16LE(archive.length-22+10);
+ for(let i=0;i<entries;i++){
+  const size=archive.readUInt16LE(offset+28), extra=archive.readUInt16LE(offset+30), comment=archive.readUInt16LE(offset+32);
+  if(archive.subarray(offset+46,offset+46+size).toString()==='word/oversized.bin'){
+   const local=archive.readUInt32LE(offset+42);
+   archive.writeUInt32LE(1,offset+24);archive.writeUInt32LE(1,local+22);
+  }
+  offset+=46+size+extra+comment;
+ }
+ assert.throws(()=>validateDocx(archive,1024*1024));
+ assert.ok(validateDocx(blankDocx(),1024*1024)['word/document.xml']);
+});
+
+test('OOXML streaming inflation preserves binary members spanning compressed chunks',()=>{
+ const files=unzipSync(blankDocx());
+ const binary=randomBytes(96*1024);
+ files['word/media/image.bin']=binary;
+ const archive=Buffer.from(zipSync(files,{level:6}));
+ assert.deepEqual(Buffer.from(validateDocx(archive,1024*1024)['word/media/image.bin']),binary);
 });
