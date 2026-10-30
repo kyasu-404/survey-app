@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {zipSync,unzipSync} from 'fflate';
-import {sign,verify,encrypt,decrypt,saveUrl,documentKey} from '../src/security.mjs';
+import {sign,verify,encrypt,decrypt,saveUrl,documentKey,callbackSaveTime} from '../src/security.mjs';
 import {blankDocx,validateDocx} from '../src/docx.mjs';
 test('JWT rejects tampering, wrong algorithm, expiry and other keys',()=>{
   const jwt=sign({exp:100,sub:'employee'},'secret');assert.equal(verify(jwt,'secret',99).sub,'employee');
@@ -27,6 +27,12 @@ test('OOXML validation rejects fake and macro-enabled files',()=>{
 });
 test('document session key stable until version advances',()=>{
   const id=randomUUID();assert.equal(documentKey({id,version:1}),documentKey({id,version:1}));assert.notEqual(documentKey({id,version:1}),documentKey({id,version:2}));
+});
+test('callback time accepts Document Server ISO dates and rejects invalid ordering values',()=>{
+  assert.equal(callbackSaveTime('2026-10-30T07:34:45.000Z'),1793345685000);
+  for(const value of [undefined,null,'',0])assert.equal(callbackSaveTime(value),0);
+  for(const value of [200,'200'])assert.equal(callbackSaveTime(value),200);
+  for(const value of [true,{},[],NaN,Infinity,-1,1.5,'not-a-date','2026-99-30T07:34:45Z',Number.MAX_SAFE_INTEGER+1])assert.throws(()=>callbackSaveTime(value));
 });
 test('OOXML rejects mismatched ZIP counts before unchecked members are decompressed',()=>{
   const files=unzipSync(blankDocx());

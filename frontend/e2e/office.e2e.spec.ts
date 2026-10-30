@@ -74,3 +74,46 @@ test('Office status polling runs only while the documents dialog is open', async
  expect(statusRequests).toBe(afterClose);
  expect(pageErrors).toEqual([]);
 });
+
+for(const width of [1440,390,320])test(`Office save confirmation, download and template list synchronization at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:900});
+ const {formId,pageErrors}=await openSurveyApp(page,{responseCount:1});
+ const doc={id:'40000000-0000-4000-8000-000000000001',form_id:formId,name:'Макет.docx',file_type:'docx',created_by:'10000000-0000-4000-8000-000000000001',updated_at:'2026-10-30T07:00:00Z',storage_path:'initial.docx',binding_count:0,size_bytes:1024,last_save_error:null};
+ let saves=0,downloads=0;
+ await page.route('**/api/office/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/editor-frame'))return route.fulfill({contentType:'text/html',body:`<!doctype html><html><body>Тестовый редактор<script>parent.postMessage({type:'office-frame-ready'},location.origin);addEventListener('message',event=>{if(event.data.type==='office-config')parent.postMessage({type:'office-ready'},location.origin);});</script></body></html>`});
+  if(path.endsWith('/editor-config'))return route.fulfill({json:{name:doc.name,config:{},apiJsUrl:'/unused.js'}});
+  if(path.endsWith('/status'))return route.fulfill({json:{enabled:true}});
+  if(path.endsWith('/save')){
+   saves++;
+   if(saves===1)return route.fulfill({status:504,json:{message:'Сохранение ещё не подтверждено. Подождите и попробуйте снова.'}});
+   doc.storage_path='saved.docx';doc.binding_count=4;
+   return route.fulfill({json:{saved:true}});
+  }
+  if(path.endsWith('/download')){downloads++;return route.fulfill({contentType:'application/octet-stream',body:'saved-template'});}
+  if(path.endsWith('/documents'))return route.fulfill({json:{documents:[doc],enabled:true,max_file_mb:25,response_count:1}});
+  if(path.endsWith('/results'))return route.fulfill({json:{results:[],jobs:[]}});
+  return route.fulfill({json:doc});
+ });
+ await page.goto(`/forms/${formId}/documents/${doc.id}`);
+ await expect(page.getByRole('button',{name:'Скачать макет'})).toBeEnabled();
+ await page.getByRole('button',{name:'Скачать макет'}).click();
+ await expect(page.getByRole('alert')).toContainText('Сохранение ещё не подтверждено');
+ expect(downloads).toBe(0);
+ await expect(page).toHaveURL(new RegExp(`/documents/${doc.id}$`));
+ await page.getByRole('button',{name:'Сохранить',exact:true}).click();
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(page.getByRole('status')).toBeVisible();
+ await expect(page.getByRole('status')).toHaveText('Сохранено в хранилище');
+ const download=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Скачать макет'}).click();
+ expect((await download).suggestedFilename()).toBe(doc.name);expect(downloads).toBe(1);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.screenshot({path:`../.codex/reports/onlyoffice-20261030/editor-${width}.png`});
+ await page.getByRole('button',{name:'← К результатам'}).click();
+ await expect(page).toHaveURL(new RegExp(`/forms/${formId}/responses$`));
+ await page.getByRole('button',{name:'Документы',exact:true}).click();
+ await expect(page.getByText(/Полей макета: 4/)).toBeVisible();
+ expect(pageErrors).toEqual([]);
+});

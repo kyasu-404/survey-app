@@ -88,3 +88,14 @@ export function documentName(value, format = 'docx') {
   return name;
 }
 export const documentKey = (doc) => `survey_${doc.id.replaceAll('-', '')}_v${doc.version}`;
+
+// Document Server sends lastsave as an ISO date. Retain support for numeric
+// values used by older callers, with one sortable integer stored in PostgreSQL.
+export function callbackSaveTime(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const numeric = typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value));
+  const timestamp = numeric ? Number(value)
+    : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) ? Date.parse(value) : NaN;
+  requireValue(Number.isSafeInteger(timestamp) && timestamp >= 0, 'Некорректное время сохранения');
+  return timestamp;
+}

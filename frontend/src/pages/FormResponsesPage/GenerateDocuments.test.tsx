@@ -9,10 +9,16 @@ const doc:OfficeDocument={id:'doc',form_id:'form',name:'Макет.xlsx',file_ty
 const result:OfficeJob={id:'result',form_id:'form',name:'Test',state:'queued',created_at:''};
 const onGenerated=vi.fn();
 beforeEach(()=>{vi.resetAllMocks();vi.mocked(officeRequest).mockResolvedValue({questions:[{integrationId:'q',title:'Организация',unsupported:null}]});vi.mocked(generateOfficeDocuments).mockResolvedValue(result);});
-function setup(){const user=userEvent.setup();render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><GenerateDocuments doc={doc} total={20} selectedIds={['a','b']} onClose={()=>{}} onGenerated={onGenerated}/></QueryClientProvider>);return user;}
+function setup(template=doc){const user=userEvent.setup();render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><GenerateDocuments doc={template} total={20} selectedIds={['a','b']} onClose={()=>{}} onGenerated={onGenerated}/></QueryClientProvider>);return user;}
 it('generates exactly selected response IDs and the selected filename question',async()=>{
  const user=setup();await screen.findByRole('option',{name:'Организация'});await user.selectOptions(screen.getByLabelText('Добавить ответ на вопрос в имя файла'),'q');await user.click(screen.getByRole('button',{name:'Сформировать 2 документов'}));await waitFor(()=>expect(generateOfficeDocuments).toHaveBeenCalledWith(doc,['a','b'],'q'));await waitFor(()=>expect(onGenerated).toHaveBeenCalledWith(result));
 });
 it('all responses omit a selection and failed generation remains visible',async()=>{
  vi.mocked(generateOfficeDocuments).mockRejectedValue(new Error('Вопрос удалён'));const user=setup();await user.selectOptions(screen.getByLabelText('Ответы'),'all');await user.click(screen.getByRole('button',{name:'Сформировать 20 документов'}));await waitFor(()=>expect(generateOfficeDocuments).toHaveBeenCalledWith(doc,undefined,undefined));expect(await screen.findByRole('alert')).toHaveTextContent('Вопрос удалён');
+});
+it('explains missing bindings before a generation can be queued',async()=>{
+ setup({...doc,binding_count:0});
+ expect(screen.getByRole('alert')).toHaveTextContent('Данные формы');
+ expect(screen.getByRole('button',{name:'Сформировать 2 документов'})).toBeDisabled();
+ expect(generateOfficeDocuments).not.toHaveBeenCalled();
 });

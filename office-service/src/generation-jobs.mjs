@@ -16,6 +16,7 @@ export async function enqueueGeneration(pool, documentId, userId, ids, nameQuest
     requireValue(budget.total < 20 && budget.own < 2, 'Очередь занята. Дождитесь завершения текущих заданий.', 429);
     const { rows: [doc] } = await db.query('select * from public.office_documents where id=$1 for share', [documentId]);
     requireValue(doc && !doc.last_save_error, 'Макет удалён или не сохранён. Откройте его снова.', 409);
+    requireValue(doc.template_field_count > 0, 'В макете нет связанных полей. Откройте редактор и вставьте вопросы через панель «Данные формы». Обычный текст в квадратных скобках не создаёт связь.', 409);
     // Form, answers and directory share the snapshot of this single statement.
     const { rows: [snapshot] } = await db.query(`select to_jsonb(f) as form,
       (select coalesce(jsonb_agg(r order by r.created_at,r.id),'[]') from

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { enqueueGeneration } from './generation-jobs.mjs';
 import { runOfficeTask } from './office-tasks.mjs';
 import { readFile } from 'node:fs/promises';
-import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, saveUrl, readLimited, fetchLimited, documentName, documentKey } from './security.mjs';
+import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, saveUrl, readLimited, fetchLimited, documentName, documentKey, callbackSaveTime } from './security.mjs';
 import { DOCX_MIME, blankDocx } from './docx.mjs';
 import {XLSX_MIME,mimeFor,blankXlsx,templateSources,systemFields} from './templates.mjs';
 export const PLUGIN_GUID = 'asc.{BA7A912A-0856-4677-9AB5-390CA8D4D636}';
@@ -91,8 +91,7 @@ export function createApp({pool, supabase, env = process.env}) {
     // The signed payload is authoritative. Never substitute unsigned body fields.
     const payload=signed.payload || signed;
     requireValue(typeof payload.key==='string' && [1,2,3,4,6,7].includes(payload.status),'Некорректный подписанный callback');
-    const forceTime=Number(payload.lastsave || 0);
-    requireValue(Number.isFinite(forceTime) && forceTime>=0,'Некорректное время сохранения');
+    let forceTime=0;
     const isCurrent = doc => {
       requireValue(doc,'Документ удалён',404);
       if(payload.key!==documentKey(doc)) {
@@ -121,6 +120,8 @@ export function createApp({pool, supabase, env = process.env}) {
       const savesFile=[2,6].includes(payload.status);
       if(savesFile) {
         saveAttempt=true;
+        forceTime=callbackSaveTime(payload.lastsave);
+        if(!isCurrent(snapshot)) return send(res,200,{error:0});
         // No checked-out DB connection or row lock during HTTP/worker waits.
         bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
         ({fieldCount}=await runOfficeTask({task:'inspect',bytes,format:snapshot.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024}));
@@ -288,7 +289,7 @@ export function createApp({pool, supabase, env = process.env}) {
     const match=path.match(/^\/documents\/([^/]+)(?:\/(.*))?$/);
     if(match) {
       const doc=await documentFor(match[1],auth), action=match[2] || '';
-      if(!action && req.method==='GET') {employeeOnly(auth);return send(res,200,doc);}
+      if(!action && req.method==='GET') {employeeOnly(auth);return send(res,200,{...doc,binding_count:doc.template_field_count});}
       if(!action && req.method==='PATCH') {
         employeeOnly(auth); const saved=(await query('update public.office_documents set name=$2,updated_at=now(),updated_by=$3 where id=$1 returning *',[doc.id,documentName(body.name,doc.file_type || 'docx'),auth.profile.id]))[0];return send(res,200,saved);
       }
@@ -323,19 +324,11 @@ export function createApp({pool, supabase, env = process.env}) {
         requireValue(s.enabled && s.jwt_secret_encrypted,'Редактор отключён',503);
         const result=await command(s,{c:'forcesave',key:documentKey(doc)});
         if(result.error===4) {
-          if(doc.last_save_error) {
-            // Clear only the failure observed before the command. A concurrent
-            // callback may have recorded a newer failure or changed the file.
-            const cleared=await query(`update public.office_documents set last_save_error=null,last_save_error_at=null
-              where id=$1 and version=$2 and storage_path=$3 and last_save_error=$4
-                and last_save_error_at is not distinct from $5::timestamptz returning id`,
-              [doc.id,doc.version,doc.storage_path,doc.last_save_error,doc.last_save_error_at ?? null]);
-            if(!cleared.length) {
-              const [current]=await query('select * from public.office_documents where id=$1',[doc.id]);
-              requireValue(current,'Документ не найден',404);
-              requireValue(!current.last_save_error,'Сохранение не завершено. Не закрывайте редактор.',502);
-            }
-          }
+          // No new changes in Document Server does not confirm that a previous
+          // callback reached Storage. Only a successful callback clears errors.
+          const [current]=await query('select * from public.office_documents where id=$1',[doc.id]);
+          requireValue(current,'Документ не найден',404);
+          requireValue(!current.last_save_error,'Сохранение не подтверждено. Внесите изменение и сохраните документ ещё раз.',502);
           return send(res,200,{saved:true,unchanged:true});
         }
         requireValue(result.error===0,'Не удалось запросить сохранение. Не закрывайте редактор.',502);

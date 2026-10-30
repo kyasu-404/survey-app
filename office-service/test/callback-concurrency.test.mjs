@@ -52,9 +52,13 @@ async function setup(t, { onUpload = () => {}, failUpdate = false, loseCommit = 
   const server = createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const callback = (payload = {}) => fetch(`http://127.0.0.1:${server.address().port}/api/office/callback/${doc.id}`, {
-    method: 'POST', headers: { AuthorizationJwt: 'Bearer ' + sign({ payload: { key: documentKey(doc), status: 2, url: 'https://docs.test/cache/files/test.docx', ...payload } }, secret) }, body: '{}',
-  });
+  const callback = (payload = {}, bodyToken = false) => {
+    const signed={key:documentKey(doc),status:2,url:'https://docs.test/cache/files/test.docx',...payload};
+    return fetch(`http://127.0.0.1:${server.address().port}/api/office/callback/${doc.id}`, {
+      method:'POST',headers:bodyToken ? {'Content-Type':'application/json'} : {AuthorizationJwt:'Bearer '+sign({payload:signed},secret)},
+      body:bodyToken ? JSON.stringify({...signed,token:sign(signed,secret)}) : '{}',
+    });
+  };
   return { state, callback };
 }
 
@@ -67,6 +71,31 @@ test('save callback downloads, inspects and uploads before checking out a DB con
   assert.equal(state.doc.version, 2);
   assert.equal(state.doc.storage_path, state.uploads[0]);
   assert.deepEqual(state.removed, []);
+});
+
+test('Document Server ISO lastsave is accepted for force saves and final saves', async t => {
+  const { state, callback } = await setup(t);
+  const lastsave = '2026-10-30T07:34:45.000Z';
+  const response = await callback({ status: 6, lastsave }, true);
+  assert.equal(response.status, 200, await response.text());
+  assert.equal(state.doc.last_force_save_at, Date.parse(lastsave));
+  assert.equal(state.doc.version, 1);
+  assert.equal((await callback({ status: 6, lastsave })).status, 200);
+  assert.equal(state.updates, 1, 'A retry must not replace the saved object');
+  assert.equal((await callback({ status: 2, lastsave })).status, 200);
+  assert.equal(state.doc.version, 2);
+  assert.equal(state.doc.last_force_save_at, 0);
+});
+
+test('ISO force-save timestamps fence a slower callback after its upload', async t => {
+  const { state, callback } = await setup(t, { onUpload: state => {
+    state.doc.last_force_save_at = Date.parse('2026-10-30T07:35:00.000Z');
+    state.doc.storage_path = 'newer.docx';
+  } });
+  assert.equal((await callback({ status: 6, lastsave: '2026-10-30T07:34:45.000Z' })).status, 200);
+  assert.equal(state.updates, 0);
+  assert.equal(state.doc.storage_path, 'newer.docx');
+  assert.deepEqual(state.removed, state.uploads);
 });
 
 test('a completed session that wins during upload fences a slower final callback', async t => {

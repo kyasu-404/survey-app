@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api';
-export type OfficeDocument = {id:string;form_id:string;name:string;file_type?:'docx'|'xlsx';created_by:string;author_name?:string;updated_at:string;size_bytes:number;binding_count:number;last_save_error:string|null};
+export type OfficeDocument = {id:string;form_id:string;name:string;file_type?:'docx'|'xlsx';created_by:string;author_name?:string;updated_at:string;storage_path?:string;size_bytes:number;binding_count:number;last_save_error:string|null};
 export type OfficeSettings = {enabled:boolean;public_url:string;internal_url:string;storage_url_override:string;jwt_header:string;jwt_prefix:string;max_file_mb:number;max_table_rows:number;has_secret:boolean};
 export type EditorConfiguration = {config:Record<string,unknown>;apiJsUrl:string;name:string};
 export async function officeRequest<T>(path:string, options:RequestInit = {}):Promise<T> {

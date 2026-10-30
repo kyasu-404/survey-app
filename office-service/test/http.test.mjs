@@ -7,8 +7,8 @@ import {createApp} from '../src/app.mjs';
 import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
-const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx'};
-async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead,clearSaveError}={}){
+const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx',template_field_count:1};
+async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead}={}){
  const statements=[];
  let documentReads=0;
  const query=async(sql,args=[])=>{
@@ -24,7 +24,6 @@ async function setup(t,{disabled=false,role='user',result,commandResult,document
    const current=documentAtRead ? documentAtRead(++documentReads) : doc;
    return {rows:current ? [{...current}] : []};
   }
-  if(sql.startsWith('update public.office_documents set last_save_error=null')) return {rows:clearSaveError?.(args) ?? []};
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})};
@@ -165,27 +164,37 @@ test('force save with no changes succeeds immediately without polling',async t=>
  const {request,statements}=await setup(t,{commandResult:{error:4}});
  const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
  assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true,unchanged:true});
- assert.equal(statements.filter(s=>s.sql.startsWith('select * from public.office_documents')).length,1);
+ assert.equal(statements.filter(s=>s.sql.startsWith('select * from public.office_documents')).length,2);
 });
 
-test('unchanged force save clears the old failure and allows generation again',async t=>{
+test('unchanged force save preserves an unconfirmed failure and blocks generation',async t=>{
  const current={...doc,last_save_error:'Old failure',last_save_error_at:'2026-10-28T09:00:00Z'};
- const {request}=await setup(t,{commandResult:{error:4},documentAtRead:()=>current,clearSaveError:args=>{
-  assert.deepEqual(args,[current.id,current.version,current.storage_path,current.last_save_error,current.last_save_error_at]);
-  current.last_save_error=null;current.last_save_error_at=null;
-  return [{id:current.id}];
- }});
+ const {request}=await setup(t,{commandResult:{error:4},documentAtRead:()=>current});
  const headers={Authorization:'Bearer employee'};
  assert.equal((await request(`/documents/${documentId}/generate`,{method:'POST',headers})).status,409);
  const r=await request(`/documents/${documentId}/save`,{method:'POST',headers});
- assert.equal(r.status,200);assert.deepEqual(await r.json(),{saved:true,unchanged:true});
- assert.equal(current.last_save_error,null);assert.equal(current.last_save_error_at,null);
- assert.equal((await request(`/documents/${documentId}/generate`,{method:'POST',headers})).status,202);
+ assert.equal(r.status,502);
+ assert.equal(current.last_save_error,'Old failure');
+ assert.equal((await request(`/documents/${documentId}/generate`,{method:'POST',headers})).status,409);
+});
+
+test('unchanged force save accepts recovery only after a successful callback',async t=>{
+ const previous={...doc,last_save_error:'Old failure'};
+ const {request}=await setup(t,{commandResult:{error:4},documentAtRead:n=>n===1 ? previous : {...previous,storage_path:'private/saved.docx',last_save_error:null}});
+ assert.equal((await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}})).status,200);
+});
+
+test('templates without bound fields are rejected before a job is queued',async t=>{
+ const {request,statements}=await setup(t,{documentAtRead:()=>({...doc,template_field_count:0})});
+ const r=await request(`/documents/${documentId}/generate`,{method:'POST',headers:{Authorization:'Bearer employee'}});
+ assert.equal(r.status,409);
+ assert.match((await r.json()).message,/Данные формы/);
+ assert.ok(!statements.some(s=>s.sql.startsWith('insert into public.office_generation_jobs')));
 });
 
 test('unchanged force save does not clear a concurrent callback failure',async t=>{
  const previous={...doc,last_save_error:'Same failure',last_save_error_at:'2026-10-28T09:00:00Z'};
- const {request}=await setup(t,{commandResult:{error:4},documentAtRead:n=>n===1 ? previous : {...previous,last_save_error_at:'2026-10-28T09:01:00Z'},clearSaveError:()=>[]});
+ const {request}=await setup(t,{commandResult:{error:4},documentAtRead:n=>n===1 ? previous : {...previous,last_save_error_at:'2026-10-28T09:01:00Z'}});
  assert.equal((await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}})).status,502);
 });
 
