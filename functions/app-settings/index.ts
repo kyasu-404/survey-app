@@ -38,7 +38,7 @@ function isOriginAllowed(origin: string | null) {
     || (Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS") === undefined && isDefaultLocalDevelopmentOrigin(origin));
 }
 
-const cors = { "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, traceparent, x-client-release", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" };
+const cors = { "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, traceparent, x-client-release", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" };
 Deno.serve(async req => {
   const origin = req.headers.get("Origin");
   const headers = { ...cors, ...(origin && isOriginAllowed(origin) ? { "Access-Control-Allow-Origin": origin } : {}), "Content-Type": "application/json", "Cache-Control": "no-store" };

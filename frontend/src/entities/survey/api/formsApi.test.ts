@@ -232,13 +232,7 @@ describe("fetchDashboardFormsPage", () => {
     const query = createSummaryQuery({ data: [], error: null });
     vi.mocked(apiClient.rpc).mockReturnValue(query as never);
     await fetchDashboardFormsPage({ pageSize: 20, filters: { isPublic } });
-    if (isPublic) {
-      expect(query.eq).toHaveBeenCalledWith("is_public", true);
-      expect(query.or).toHaveBeenCalledWith("deadline_at.is.null,deadline_at.gt.2026-10-28T10:00:00.000Z");
-    } else {
-      expect(query.eq).not.toHaveBeenCalledWith("is_public", false);
-      expect(query.or).toHaveBeenCalledWith("is_public.eq.false,deadline_at.lte.2026-10-28T10:00:00.000Z");
-    }
+    expect(apiClient.rpc).toHaveBeenCalledWith("list_forms_by_activity", { p_is_public: isPublic }, { get: true });
     expect(query.limit).toHaveBeenCalledWith(21);
   });
 

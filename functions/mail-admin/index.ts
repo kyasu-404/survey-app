@@ -33,7 +33,7 @@ type OrganizationRow = {
 };
 
 const baseCorsHeaders = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, traceparent, x-client-release",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, traceparent, x-client-release",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
   "Vary": "Origin",

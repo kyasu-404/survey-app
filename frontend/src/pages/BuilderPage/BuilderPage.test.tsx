@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import BuilderPage from "./BuilderPage";
 
 const { authState, cloneForm, getFormById, showToast } = vi.hoisted(() => ({
@@ -102,6 +102,23 @@ describe("BuilderPage", () => {
 
     expect(await screen.findByTestId("survey-builder")).toHaveAttribute("data-safe-response-count", "2");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("requires a new safe-editing confirmation after navigating to another answered form", async () => {
+    getFormById.mockImplementation(async (id: string) => ({ ...answeredForm, id }));
+    render(<MemoryRouter initialEntries={["/builder/form-1"]}>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Link to="/builder/form-2">Другая форма</Link>
+        <Routes><Route path="/builder/:id" element={<BuilderPage />} /></Routes>
+      </QueryClientProvider>
+    </MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Редактировать безопасно" }));
+    expect(await screen.findByTestId("survey-builder")).toHaveTextContent("form-1");
+    fireEvent.click(screen.getByRole("link", { name: "Другая форма" }));
+    expect(await screen.findByRole("alertdialog")).toBeVisible();
+    expect(screen.queryByTestId("survey-builder")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать безопасно" }));
+    expect(await screen.findByTestId("survey-builder")).toHaveTextContent("form-2");
   });
 
   it("keeps a loaded editor mounted when a background form refresh fails", async () => {

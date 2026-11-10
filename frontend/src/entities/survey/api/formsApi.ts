@@ -43,6 +43,13 @@ export type SchemaUpdateResult = {
   breakingChanges: string[];
 };
 
+export type FormSaveSettings = {
+  formType: string;
+  formReason: string;
+  deadlineAt?: string | null;
+  maxResponses?: number | null;
+};
+
 type RawForm = Omit<SurveyForm, "responses_count" | "author_email"> & {
   responses_count?: number | null;
   allow_response_editing?: boolean | null;
@@ -311,10 +318,7 @@ function applyFormsFilters<TQuery extends {
     if (filters.formType === TEMPLATE_FORM_TYPE) {
       return query.eq("is_public", filters.isPublic);
     }
-    const now = new Date().toISOString();
-    query = filters.isPublic
-      ? query.eq("is_public", true).or(`deadline_at.is.null,deadline_at.gt.${now}`)
-      : query.or(`is_public.eq.false,deadline_at.lte.${now}`);
+    // Non-template status is evaluated by the activity RPC before pagination.
   }
 
   return query;
@@ -350,8 +354,10 @@ async function getAuthenticatedUserId(): Promise<string> {
 }
 
 export async function fetchForms(filters?: FormsFilters, options: RequestSignalOptions = {}): Promise<SurveyForm[]> {
-  let query = apiClient
-    .from("forms")
+  const source = typeof filters?.isPublic === "boolean" && filters.formType !== TEMPLATE_FORM_TYPE
+    ? apiClient.rpc("list_forms_by_activity", { p_is_public: filters.isPublic }, { get: true })
+    : apiClient.from("forms");
+  let query = source
     .select("*")
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
@@ -383,8 +389,12 @@ export async function fetchDashboardFormsPage(
   }
 
   // GET lets PostgREST inline typed cursor parameters into the index condition.
+  const activityFilter = options.filters?.isPublic;
   let query = apiClient
-    .rpc("list_forms_keyset", buildFormsCursorParams(options.cursor), { get: true })
+    .rpc(typeof activityFilter === "boolean" ? "list_forms_by_activity" : "list_forms_keyset", {
+      ...buildFormsCursorParams(options.cursor),
+      ...(typeof activityFilter === "boolean" ? { p_is_public: activityFilter } : {}),
+    }, { get: true })
     .select(DASHBOARD_FORMS_SUMMARY_SELECT)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
@@ -566,31 +576,6 @@ export async function insertForm(payload: {
   return data;
 }
 
-export async function createFormFromTemplate(templateForm: SurveyForm, authorId: string) {
-  const currentUserId = await getAuthenticatedUserId();
-
-  if (authorId !== currentUserId) {
-    throw new Error("author_id должен совпадать с текущим пользователем");
-  }
-
-  const schema: SurveySchema = {
-    ...templateForm.schema,
-    title: templateForm.title,
-  };
-
-  return insertForm({
-    id: createSurveyAssetFormId(),
-    title: templateForm.title,
-    formType: "anketa",
-    formReason: "plan",
-    schema,
-    theme: templateForm.theme,
-    organizationTypes: templateForm.organization_types,
-    authorId: currentUserId,
-    isPublic: true,
-  });
-}
-
 export async function updateFormTitle(id: string, title: string) {
   const { data: form, error: fetchError } = await runRequest(
     "forms.fetchSchemaForTitleUpdate",
@@ -640,6 +625,7 @@ export async function updateFormSchema(
   organizationTypes: OrganizationType[],
   expectedRevision: number,
   confirmWarnings = false,
+  settings?: FormSaveSettings,
 ) {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
     throw new Error("Неизвестна исходная версия формы. Откройте актуальную форму перед сохранением.");
@@ -676,6 +662,7 @@ export async function updateFormSchema(
         organizationTypes: normalizeOrganizationTypes(organizationTypes),
         confirmWarnings,
         expectedRevision,
+        ...(settings ? { settings } : {}),
       },
       headers: {
         ...traceContext.headers,

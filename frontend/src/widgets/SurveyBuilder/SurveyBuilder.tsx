@@ -56,6 +56,7 @@ import {
 } from "../../entities/survey/model/surveyTheme";
 import { validateSurveySchema } from "../../entities/survey/model/validateSchema";
 import type { SurveySchema } from "../../entities/survey/types";
+import type { FormSaveSettings } from "../../entities/survey/api/surveysApi";
 import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
@@ -63,6 +64,7 @@ import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
 import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { useMobileLayout } from "../../shared/ui/useMobileLayout";
+import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { clearSurveyBuilderDraft, loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "./builderDraft";
 import { updateBuilderPreviewBridge } from "./builderPreviewBridge";
 import { MobileBuilderToolbar } from "./MobileBuilderToolbar";
@@ -117,6 +119,7 @@ export function SurveyBuilder({
       selectedOrganizationTypes,
       expectedRevision,
       confirmWarnings = false,
+      settings,
     }: {
       id: string;
       schema: SurveySchema;
@@ -126,7 +129,10 @@ export function SurveyBuilder({
       selectedOrganizationTypes: OrganizationType[];
       expectedRevision: number;
       confirmWarnings?: boolean;
-    }) => confirmWarnings
+      settings?: FormSaveSettings;
+    }) => settings
+      ? saveSurveySchema(id, schema, theme, title, allowResponseEditing, selectedOrganizationTypes, expectedRevision, confirmWarnings, settings)
+      : confirmWarnings
       ? saveSurveySchema(
           id,
           schema,
@@ -153,7 +159,7 @@ export function SurveyBuilder({
   const isSafeEditingMode = isEditMode && safeEditingResponseCount > 0;
   const safeEditingModeRef = useRef(isSafeEditingMode);
   safeEditingModeRef.current = isSafeEditingMode;
-  const isSurveyMutationBusy = isSaving || saveSurveyMutation.isPending || createSurveyMutation.isPending;
+  const isSurveyMutationBusy = isSaving || isPostSaveSettingsSaving || saveSurveyMutation.isPending || createSurveyMutation.isPending;
   const isTemplateBusy = isTemplateActionLoading !== null;
   const saveTemplateHandlerRef = useRef<() => void>(() => undefined);
   const draftHydrationStateRef = useRef<"idle" | "loaded" | "empty">("idle");
@@ -644,6 +650,23 @@ export function SurveyBuilder({
     setPostSaveSettings(null);
   };
 
+  const openFormSettings = () => {
+    if (!creator || !editableForm) return;
+    const schema = getSerializedBuilderSchema(creator);
+    setPostSaveSettings({
+      assetFormId: editableForm.id,
+      title: getSchemaTitle(schema, editableForm.title),
+      schema,
+      theme: sanitizeSurveyTheme(creator.theme),
+      formTypeValue: editableForm.form_type,
+      formReasonValue: editableForm.form_reason,
+      deadlineValue: formatDateTimeLocalValue(editableForm.deadline_at),
+      responseLimitValue: editableForm.max_responses?.toString() ?? "",
+      allowResponseEditing: responseEditingEnabled,
+      organizationTypes,
+    });
+  };
+
   const handleSavePostSaveSettings = async () => {
     if (!postSaveSettings) {
       return;
@@ -672,8 +695,8 @@ export function SurveyBuilder({
 
     if (normalizedLimit) {
       const parsedLimit = Number(normalizedLimit);
-      if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
-        showToast("Укажите положительное целое число ответов", "error");
+      if (!Number.isInteger(parsedLimit) || parsedLimit <= 0 || parsedLimit > 100_000) {
+        showToast("Укажите целое число ответов от 1 до 100000", "error");
         return;
       }
       maxResponses = parsedLimit;
@@ -683,6 +706,39 @@ export function SurveyBuilder({
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder post-save settings");
 
     try {
+      if (formId) {
+        if (editorRevisionRef.current === undefined) throw new Error("Откройте актуальную версию формы перед сохранением.");
+        if (!validateSurveySchema(postSaveSettings.schema)) throw new Error("Некорректная JSON-схема формы");
+        const request: ExistingFormSaveRequest = {
+          id: formId,
+          expectedRevision: editorRevisionRef.current,
+          schema: postSaveSettings.schema,
+          theme: postSaveSettings.theme,
+          title: postSaveSettings.title,
+          allowResponseEditing: postSaveSettings.allowResponseEditing,
+          selectedOrganizationTypes: postSaveSettings.organizationTypes,
+          settings: {
+            formType: normalizedFormType,
+            formReason: normalizedFormReason,
+            ...(postSaveSettings.deadlineChanged ? { deadlineAt } : {}),
+            ...(postSaveSettings.responseLimitChanged ? { maxResponses } : {}),
+          },
+          isTemplate: false,
+          saveNo: 0,
+          callback: () => undefined,
+        };
+        const result = await saveSurveyMutation.mutateAsync(request);
+        setPostSaveSettings(null);
+        if (result?.status === "confirmation_required" || result?.status === "blocked") {
+          setCompatibilityDialog({ request, result });
+          return;
+        }
+        clearSurveyBuilderDraft(userId, formId);
+        scheduleBuilderQueryRefresh(formId);
+        showToast("Форма обновлена", "success");
+        navigateToSavedList("forms");
+        return;
+      }
       const createdForm = await createSurveyMutation.mutateAsync({
         id: postSaveSettings.assetFormId,
         schema: postSaveSettings.schema,
@@ -872,6 +928,11 @@ export function SurveyBuilder({
     try {
       const copy = await cloneForm({
         ...editableForm,
+        ...(request.settings ? {
+          form_type: request.settings.formType,
+          form_reason: request.settings.formReason,
+          ...(request.settings.maxResponses !== undefined ? { max_responses: request.settings.maxResponses } : {}),
+        } : {}),
         title: request.title,
         schema: request.schema,
         theme: request.theme,
@@ -932,6 +993,11 @@ export function SurveyBuilder({
         onReset={() => setIsResetConfirmOpen(true)}
       />}
       <div className="builder-status-stack">
+        {editableForm && !isTemplateForm(editableForm) && (
+          <button type="button" className="app-button" onClick={openFormSettings} disabled={!creator || isSurveyMutationBusy || isTemplateBusy}>
+            Настройки формы
+          </button>
+        )}
         {isSafeEditingMode && (
           <p className="builder-safe-editing-banner" role="status">
             У формы есть {safeEditingResponseCount} ответов. Включён безопасный режим редактирования.

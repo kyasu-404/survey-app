@@ -89,6 +89,11 @@ export default function SurveyPage() {
     staleTime: 0,
   });
   const responseBrowserId = useMemo(() => getOrCreateResponseBrowserId(), []);
+  useEffect(() => {
+    void import("../../features/render-form/SurveyFormRenderer").catch(() => {
+      // React.lazy handles a failed import if the renderer is actually needed.
+    });
+  }, []);
 
   const isPrivatePreview = isPreview;
   const surveyQuery = useQuery({
@@ -128,7 +133,7 @@ export default function SurveyPage() {
       if (!id) return null;
       return personalToken ? getExistingResponse(id, responseBrowserId, signal, personalToken) : getExistingResponse(id, responseBrowserId, signal);
     },
-    enabled: renderMode === "interactive" && Boolean(id) && Boolean(form?.is_public) && (!hasPersonalLink || Boolean(personalQuery.data)),
+    enabled: renderMode === "interactive" && Boolean(id) && (!hasPersonalLink || Boolean(personalToken)),
     retry: 1,
     staleTime: 0,
     refetchOnMount: "always",
@@ -138,7 +143,7 @@ export default function SurveyPage() {
   const showInitialSkeleton = (
     (hasPersonalLink && personalQuery.isLoading)
     || (!form && (surveyQuery.isLoading || (isPrivatePreview && isAuthLoading)))
-    || Boolean(form && renderMode === "interactive" && existingResponseQuery.isLoading)
+    || Boolean(form?.is_public && renderMode === "interactive" && existingResponseQuery.isLoading)
   );
 
   const errorMessage = useMemo(() => {

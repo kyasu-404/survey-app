@@ -1535,7 +1535,7 @@ describe("DashboardPage", () => {
     expect(container.querySelector(".dashboard-delete-modal-actions .dashboard-danger-button")).toBeInTheDocument();
   });
 
-  it("asks for confirmation and clears deadline before closing a public form with deadline", async () => {
+  it("confirms closure and clears the deadline in the single status request", async () => {
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
         createForm(1, {
@@ -1557,12 +1557,9 @@ describe("DashboardPage", () => {
     );
 
     await waitFor(() => {
-      expect(setFormDeadline).toHaveBeenCalledWith("form-1", null);
-    });
-
-    await waitFor(() => {
       expect(changeFormStatus).toHaveBeenCalledWith("form-1", false);
     });
+    expect(setFormDeadline).not.toHaveBeenCalled();
   });
 
   it("does not close a public form with deadline when user rejects the warning", async () => {

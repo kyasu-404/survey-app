@@ -86,6 +86,14 @@ describe("SurveyPage", () => {
     getExistingResponse.mockResolvedValue(null);
   });
 
+  it("starts the response status request while the public form is still loading", async () => {
+    getPublicFormById.mockImplementation(() => new Promise(() => {}));
+    renderSurveyPage();
+    await waitFor(() => expect(getPublicFormById).toHaveBeenCalled());
+    await waitFor(() => expect(getExistingResponse).toHaveBeenCalled());
+    expect(screen.queryByTestId("survey-renderer")).not.toBeInTheDocument();
+  });
+
   it("renders public survey shell hooks", async () => {
     getPublicFormById.mockResolvedValue({
       id: "form-1",

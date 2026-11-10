@@ -51,11 +51,9 @@ test("logs request correlation context for form-admin actions", () => {
   assert.match(source, /console\.error\("form-admin action failed"/);
 });
 
-test("authorizes form deletion by requester ownership or admin role", () => {
+test("delegates form deletion authorization to an atomic actor-aware RPC", () => {
   assert.match(source, /authClient\.auth\.getUser\(jwt\)/);
-  assert.match(source, /\.from\("forms"\)\s*[\s\S]*?\.select\("id, author_id"\)/);
-  assert.match(source, /form\.author_id !== requester\.id/);
-  assert.match(source, /requesterProfile\.role !== "admin"/);
+  assert.match(source, /\.rpc\("delete_form_with_files", \{\s*p_form_id: payload\.formId,\s*p_actor_id: requester\.id/);
 });
 
 test("rejects disabled owners and administrators", () => {
@@ -64,7 +62,7 @@ test("rejects disabled owners and administrators", () => {
 });
 
 test("deletes database rows before best-effort storage cleanup", () => {
-  const deleteIndex = source.lastIndexOf('.from("forms")\n    .delete()');
+  const deleteIndex = source.lastIndexOf('.rpc("delete_form_with_files"');
   const removeIndex = source.lastIndexOf("removeStorageObjectPaths(adminClient, responseObjectPaths)");
   const removeAssetsIndex = source.lastIndexOf("removeSurveyAssetsForForm(");
 
@@ -72,7 +70,7 @@ test("deletes database rows before best-effort storage cleanup", () => {
   assert.ok(deleteIndex < removeIndex);
   assert.ok(deleteIndex < removeAssetsIndex);
   assert.match(source, /SURVEY_ASSETS_BUCKET/);
-  assert.match(source, /\.from\("response_file_references"\)\s*\.select\("object_path"\)\s*\.eq\("form_id", formId\)/);
+  assert.doesNotMatch(source, /listStorageObjectPathsForForm/);
   assert.match(source, /removeStorageTree\(adminClient, surveyAssetsBucket, `forms\/\$\{formId\}`\)/);
   assert.match(source, /\.storage\.from\(bucketName\)\.remove\(batch\)/);
   assert.doesNotMatch(source, /\.schema\("storage"\)/);
@@ -106,7 +104,7 @@ test("deletes selected responses only for the form owner or an admin and removes
   assert.match(source, /getUniqueResponseIds/);
   assert.match(source, /value\.length > 100/);
   assert.match(source, /form\.author_id !== requester\.id/);
-  assert.match(source, /\.from\("response_file_references"\)/);
+  assert.doesNotMatch(source, /\.from\("response_file_references"\)/);
   assert.match(source, /\.rpc\("delete_form_responses_with_files"/);
   assert.match(source, /p_actor_id: requester\.id/);
   assert.match(source, /adminClient\.storage\.from\(storageBucket\)\.remove\(batch\)/);

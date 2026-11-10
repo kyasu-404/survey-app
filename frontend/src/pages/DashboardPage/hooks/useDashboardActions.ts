@@ -113,10 +113,6 @@ export function useDashboardActions({ formsQueryKey, formsStatsQueryKey, userId 
     }
 
     await runAction(async () => {
-      if (!nextStatus && form.deadline_at) {
-        await deadlineMutation.mutateAsync({ id: form.id, deadlineAt: null });
-      }
-
       await statusMutation.mutateAsync({ id: form.id, isPublic: nextStatus });
     }, {
       actionKey: getFormActionKey(form.id),

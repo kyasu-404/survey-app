@@ -530,7 +530,7 @@ describe("TemplatesPage", () => {
     });
 
     expect(await screen.findByText("Новый шаблон")).toBeInTheDocument();
-    expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: null });
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(routes.templates, { replace: true, state: null }));
   });
 
   it("forces a background refresh when opening templates with fresh cached data", async () => {

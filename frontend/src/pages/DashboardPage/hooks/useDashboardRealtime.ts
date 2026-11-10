@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { createRealtimeRecovery } from "../../../shared/lib/realtimeRecovery";
 import type { InfiniteData, QueryKey, QueryClient } from "@tanstack/react-query";
-import type { PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
+import type { PaginatedSurveyFormSummaries, SurveyFormSummary } from "../../../entities/survey/types";
 import { supabaseClient } from "../../../shared/api";
 import { createQueryRefreshScheduler } from "../../../shared/lib/queryRefresh";
 import type { DashboardListFilters, DashboardViewMode } from "../types";
@@ -22,17 +22,17 @@ type UseDashboardRealtimeOptions = {
   viewMode: DashboardViewMode;
 };
 
-function getCachedDashboardFormIds(queryClient: QueryClient, formsQueryKey: QueryKey) {
+function getCachedDashboardForms(queryClient: QueryClient, formsQueryKey: QueryKey) {
   const cachedData = queryClient.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(formsQueryKey);
-  const ids = new Set<string>();
+  const forms = new Map<string, SurveyFormSummary>();
 
   for (const page of cachedData?.pages ?? []) {
     for (const form of page.items) {
-      ids.add(form.id);
+      forms.set(form.id, form);
     }
   }
 
-  return ids;
+  return forms;
 }
 
 export function useDashboardRealtime({
@@ -64,10 +64,10 @@ export function useDashboardRealtime({
           ...(formFilter ? { filter: formFilter } : {}),
         },
         (payload) => {
-          const cachedFormIds = getCachedDashboardFormIds(queryClient, formsQueryKey);
+          const cachedForms = getCachedDashboardForms(queryClient, formsQueryKey);
           const realtimePayload = payload as DashboardRealtimePayload;
 
-          if (!shouldInvalidateDashboardForms({ cachedFormIds, filters, payload: realtimePayload })) {
+          if (!shouldInvalidateDashboardForms({ cachedForms, filters, payload: realtimePayload })) {
             console.info("[realtime] dashboard forms change ignored", {
               eventType: payload.eventType,
               userId: userId ?? null,
@@ -78,7 +78,7 @@ export function useDashboardRealtime({
 
           const targets = [{ queryKey: formsQueryKey }];
 
-          if (shouldInvalidateDashboardFormStats({ cachedFormIds, filters, payload: realtimePayload })) {
+          if (shouldInvalidateDashboardFormStats({ cachedForms, filters, payload: realtimePayload })) {
             targets.push({ queryKey: formsStatsQueryKey });
           }
 

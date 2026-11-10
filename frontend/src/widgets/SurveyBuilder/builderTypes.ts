@@ -1,6 +1,6 @@
 import type { ITheme } from "survey-core";
 import type { OrganizationType } from "../../entities/organization/types";
-import type { SchemaUpdateResult } from "../../entities/survey/api/surveysApi";
+import type { FormSaveSettings, SchemaUpdateResult } from "../../entities/survey/api/surveysApi";
 import type { SurveySchema } from "../../entities/survey/types";
 
 export type PostSaveSettingsState = {
@@ -9,7 +9,9 @@ export type PostSaveSettingsState = {
   theme: ITheme;
   assetFormId: string;
   deadlineValue: string;
+  deadlineChanged?: boolean;
   responseLimitValue: string;
+  responseLimitChanged?: boolean;
   formTypeValue: string;
   formReasonValue: string;
   allowResponseEditing: boolean;
@@ -17,6 +19,7 @@ export type PostSaveSettingsState = {
 };
 
 export type ExistingFormSaveRequest = {
+  settings?: FormSaveSettings;
   expectedRevision: number;
   allowResponseEditing: boolean;
   callback: (saveNo: number, isSuccess: boolean) => void;

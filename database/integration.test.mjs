@@ -50,6 +50,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     }
     const schema = await source("./supabase_schema.sql");
     const migration = await source("./migrations/202610291200_final_review_fixes.sql");
+    const reviewMigration = await source("./migrations/202611101200_review_corrections.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -62,11 +63,16 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         await db.query("insert into auth.users(id,email) values($1,'upgrade@example.invalid')", [owner]);
         await db.query("insert into public.forms(id,title,author_id,form_type,form_reason,schema) values($1,'Migration fixture',$2,'anketa','plan','{\"pages\":[]}')", [form, owner]);
         if (!priorSchema) await db.query("drop trigger responses_prepare_files on public.responses; drop table public.survey_file_deletion_claims");
-        await db.query("grant insert(form_id,submission_id,data) on public.responses to anon,authenticated");
-        await db.query(migration);
+        const needsOctoberMigration = !(await db.query("select to_regclass('public.survey_file_deletion_claims') is not null present")).rows[0].present;
+        if (needsOctoberMigration) {
+          await db.query("grant insert(form_id,submission_id,data) on public.responses to anon,authenticated");
+          await db.query(migration);
+        }
+        await db.query(reviewMigration);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
+      await runPsql(database, "./tests/review_corrections.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }
@@ -102,6 +108,38 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       pending = b.query("select public.claim_survey_file_deletions(array[$1]) paths", [path]).then(result => ({result}), error => ({error}));
       await waitUntilBlocked(); await a.query("commit");
       assert.deepEqual((await pending).result.rows[0].paths, [], "A committed attachment was claimed for deletion");
+
+      // Deletion waits for an in-flight response edit, then captures its new paths.
+      const editedPath = await reserve();
+      await a.query("begin");
+      await a.query("update public.responses set data=$2 where form_id=$1", [form, { file: [{ content: editedPath }] }]);
+      const waitForRowLock = async () => {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          if ((await db.query("select wait_event_type='Lock' blocked from pg_stat_activity where pid=$1", [pid])).rows[0]?.blocked) return;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error("The competing transaction did not wait for the row lock");
+      };
+      pending = b.query("select public.delete_form_with_files($1,$2) result", [form,owner]).then(result => ({result}), error => ({error}));
+      await waitForRowLock(); await a.query("commit");
+      const deletion = await pending;
+      assert.ifError(deletion.error);
+      assert.deepEqual(deletion.result.rows[0].result.objectPaths, [editedPath]);
+
+      // Repeated and opposing status requests serialize both Auth and profile.
+      const target = randomUUID();
+      await db.query("insert into auth.users(id,email) values($1,'status@example.invalid')", [target]);
+      await db.query("update public.profiles set role='admin' where id=$1", [owner]);
+      for (const [first, second] of [[true,true], [false,false], [true,false], [false,true]]) {
+        await a.query("begin");
+        await a.query("select public.set_employee_disabled($1,$2,$3)", [target,first,owner]);
+        pending = b.query("select public.set_employee_disabled($1,$2,$3)", [target,second,owner]).then(result => ({result}), error => ({error}));
+        await waitForRowLock(); await a.query("commit");
+        assert.ifError((await pending).error);
+        const state = (await db.query("select p.is_disabled,coalesce(u.banned_until>clock_timestamp(),false) banned from public.profiles p join auth.users u on u.id=p.id where p.id=$1", [target])).rows[0];
+        assert.deepEqual(state, { is_disabled: second, banned: second });
+      }
     }
   } finally {
     for (const client of clients) { await client.query("rollback").catch(()=>{}); await client.end().catch(()=>{}); }

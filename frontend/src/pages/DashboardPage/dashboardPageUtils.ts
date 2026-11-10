@@ -1,18 +1,6 @@
 import type { SurveyFormSummary } from "../../entities/survey/types";
 
-export function formatDateTimeLocalValue(dateTime: string | null) {
-  if (!dateTime) {
-    return "";
-  }
-
-  const date = new Date(dateTime);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const offsetInMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetInMs).toISOString().slice(0, 16);
-}
+export { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 
 function getResponsesLabel(count: number) {
   const absoluteCount = Math.abs(count);

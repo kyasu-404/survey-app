@@ -13,6 +13,5 @@ export {
   updateFormResponseLimit as setFormResponseLimit,
   deleteForm as removeForm,
   duplicateForm as cloneForm,
-  createFormFromTemplate,
 } from "./formsApi";
-export type { FormsFilters, SchemaUpdateResult } from "./formsApi";
+export type { FormsFilters, FormSaveSettings, SchemaUpdateResult } from "./formsApi";

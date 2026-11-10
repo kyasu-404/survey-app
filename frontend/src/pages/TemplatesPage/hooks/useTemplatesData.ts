@@ -1,16 +1,17 @@
-import type { FormsCursor } from "../../../entities/survey/types";
+import type { FormsCursor, PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
 import { createBatchedFormsQuery, getFormsNextCursor } from "../../../entities/survey/model/batchedInfiniteQuery";
 import { useEffect, useMemo } from "react";
 import { supabaseClient } from "../../../shared/api";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { createQueryRefreshScheduler } from "../../../shared/lib/queryRefresh";
 import { createRealtimeRecovery } from "../../../shared/lib/realtimeRecovery";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { getTemplateFormsPage } from "../../../entities/survey/api/surveysApi";
 import { getTemplateFormsQueryKey } from "../../../entities/survey/model/queryKeys";
 import { TEMPLATE_FORM_TYPE, isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import { TEMPLATE_PAGE_SIZE } from "../templatesPageConstants";
 import type { TemplatesSection } from "../types";
+import { shouldInvalidateTemplates } from "./templateRealtimeFilters";
 
 type UseTemplatesDataOptions = {
   isAuthLoading: boolean;
@@ -38,8 +39,11 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
     const recovery = createRealtimeRecovery(reload, showToast);
     const channel = supabaseClient.channel(`templates:${userId}:${section}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "forms" }, payload => {
-        // DELETE carries only the primary key; visibility changes may remove a card.
-        if (payload.eventType === "DELETE" || payload.new.form_type === TEMPLATE_FORM_TYPE || ("form_type" in payload.old && payload.old.form_type === TEMPLATE_FORM_TYPE)) reload();
+        const cached = queryClient.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(templatesQueryKey);
+        const cachedIds = new Set(cached?.pages.flatMap(page => page.items.map(form => form.id)));
+        if (shouldInvalidateTemplates({ payload, cachedIds, section, userId,
+          isFetching: !cached || queryClient.isFetching({ queryKey: templatesQueryKey }) > 0,
+        })) reload();
       })
       .subscribe(recovery.status);
     return () => { recovery.dispose(); refresh.dispose(); void supabaseClient.removeChannel(channel); };

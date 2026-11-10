@@ -1,4 +1,5 @@
 import type { DashboardListFilters } from "../types";
+import type { SurveyFormSummary } from "../../../entities/survey/types";
 
 type DashboardRealtimeRecord = Partial<{
   author_id: string;
@@ -23,6 +24,7 @@ export type DashboardRealtimePayload = {
 
 type ShouldInvalidateDashboardFormsOptions = {
   cachedFormIds?: ReadonlySet<string>;
+  cachedForms?: ReadonlyMap<string, SurveyFormSummary>;
   filters: DashboardListFilters;
   payload: DashboardRealtimePayload;
 };
@@ -50,7 +52,6 @@ const DASHBOARD_STATS_RELEVANT_FORM_FIELDS = [
   "is_public",
   "title",
 ] as const;
-const STATS_IRRELEVANT_CARD_FIELDS = ["max_responses", "responses_count"] as const;
 
 function isRecord(value: unknown): value is DashboardRealtimeRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -192,39 +193,13 @@ function hasRelevantDashboardFieldChange(
   return comparedFields === 0;
 }
 
-function changedFieldNames(
-  oldRecord: DashboardRealtimeRecord | null,
-  newRecord: DashboardRealtimeRecord | null,
-) {
-  if (!oldRecord || !newRecord) {
-    return null;
-  }
-
-  const fields = new Set([...Object.keys(oldRecord), ...Object.keys(newRecord)]);
-  const changedFields = new Set<string>();
-
-  for (const field of fields) {
-    if (!Object.is(oldRecord[field], newRecord[field])) {
-      changedFields.add(field);
-    }
-  }
-
-  return changedFields;
-}
-
-function hasOnlyStatsIrrelevantCardFieldChanges(
-  oldRecord: DashboardRealtimeRecord | null,
-  newRecord: DashboardRealtimeRecord | null,
-) {
-  const changedFields = changedFieldNames(oldRecord, newRecord);
-
-  if (!changedFields || changedFields.size === 0) {
-    return false;
-  }
-
-  return [...changedFields].every((field) =>
-    STATS_IRRELEVANT_CARD_FIELDS.includes(field as (typeof STATS_IRRELEVANT_CARD_FIELDS)[number]),
-  );
+function previousRecord(payload: DashboardRealtimePayload, cachedForms?: ReadonlyMap<string, SurveyFormSummary>) {
+  const oldRecord = isRecord(payload.old) ? payload.old : null;
+  const id = getRecordId(oldRecord) ?? getRecordId(payload.new ?? null);
+  const cachedForm = id ? cachedForms?.get(id) : undefined;
+  // REPLICA IDENTITY DEFAULT normally supplies only the primary key in `old`.
+  // Prefer actual old values when supplied; fill missing fields from this list.
+  return cachedForm ? { ...cachedForm, ...oldRecord } : oldRecord;
 }
 
 function hasRelevantDashboardStatsFieldChange(
@@ -233,10 +208,6 @@ function hasRelevantDashboardStatsFieldChange(
 ) {
   if (!oldRecord || !newRecord) {
     return true;
-  }
-
-  if (hasOnlyStatsIrrelevantCardFieldChanges(oldRecord, newRecord)) {
-    return false;
   }
 
   let comparedFields = 0;
@@ -253,18 +224,28 @@ function hasRelevantDashboardStatsFieldChange(
     }
   }
 
-  return comparedFields === 0;
+  if (comparedFields === 0) return true;
+  // Counts and limits affect totals only when the effective active state changes.
+  const limitReached = (record: DashboardRealtimeRecord) => {
+    if (!("max_responses" in record) || !("responses_count" in record)) return null;
+    return typeof record.max_responses === "number"
+      && (record.responses_count ?? 0) >= record.max_responses;
+  };
+  const wasAtLimit = limitReached(oldRecord);
+  const isAtLimit = limitReached(newRecord);
+  return wasAtLimit === null || isAtLimit === null || wasAtLimit !== isAtLimit;
 }
 
 export function shouldInvalidateDashboardForms({
   cachedFormIds,
+  cachedForms,
   filters,
   payload,
 }: ShouldInvalidateDashboardFormsOptions) {
   const newRecord = isRecord(payload.new) ? payload.new : null;
-  const oldRecord = isRecord(payload.old) ? payload.old : null;
+  const oldRecord = previousRecord(payload, cachedForms);
   const eventType = payload.eventType?.toUpperCase();
-  const cachedRecordChanged = isCachedRecord(cachedFormIds, oldRecord, newRecord);
+  const cachedRecordChanged = isCachedRecord(cachedFormIds ?? new Set(cachedForms?.keys()), oldRecord, newRecord);
 
   if (eventType === "INSERT") {
     return recordMayMatchDashboardFilters(newRecord, filters);
@@ -288,13 +269,14 @@ export function shouldInvalidateDashboardForms({
 
 export function shouldInvalidateDashboardFormStats({
   cachedFormIds,
+  cachedForms,
   filters,
   payload,
 }: ShouldInvalidateDashboardFormsOptions) {
   const newRecord = isRecord(payload.new) ? payload.new : null;
-  const oldRecord = isRecord(payload.old) ? payload.old : null;
+  const oldRecord = previousRecord(payload, cachedForms);
   const eventType = payload.eventType?.toUpperCase();
-  const cachedRecordChanged = isCachedRecord(cachedFormIds, oldRecord, newRecord);
+  const cachedRecordChanged = isCachedRecord(cachedFormIds ?? new Set(cachedForms?.keys()), oldRecord, newRecord);
 
   if (eventType === "INSERT") {
     return recordMayMatchDashboardFilters(newRecord, filters);

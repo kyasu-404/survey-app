@@ -1551,6 +1551,26 @@ describe("SurveyBuilder", () => {
     expect(saveSurveySchema.mock.calls[0][6]).toBe(4);
   });
 
+  it("saves existing form settings with its schema and original revision in one request", async () => {
+    const form = { ...createTemplateForm({ id: "form-settings", title: "Настройки" }), form_type: "anketa", revision: 4 };
+    getFormById.mockResolvedValue(form);
+    saveSurveySchema.mockResolvedValue({ status: "updated", safeChanges: [], warnings: [], breakingChanges: [] });
+    renderBuilder(form.id);
+    await userEvent.click(await screen.findByRole("button", { name: "Настройки формы" }));
+    const dialog = await screen.findByRole("dialog", { name: "Настройки формы" });
+    await userEvent.selectOptions(within(dialog).getByLabelText("Тип формы"), "monitoring");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Основание формы"), "order");
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Редактирование ответов" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(saveSurveySchema).toHaveBeenCalledTimes(1));
+    expect(saveSurveySchema.mock.calls[0]).toEqual([
+      form.id, expect.any(Object), expect.any(Object), "Настройки", true,
+      expect.any(Array), 4, false,
+      { formType: "monitoring", formReason: "order" },
+    ]);
+    expect(createSurveyMutateAsync).not.toHaveBeenCalled();
+  });
+
   it("retains edits and enables safe operations when the first answer arrives with storage blocked", async () => {
     const form = { ...createTemplateForm({ id: "form-7", title: "Original" }), revision: 4 };
     getFormById.mockResolvedValue(form as never);

@@ -19,6 +19,7 @@ type FormAdminAction =
       organizationTypes: unknown;
       confirmWarnings?: boolean;
       expectedRevision: number;
+      settings?: unknown;
     };
 
 type SupabaseAdminClient = ReturnType<typeof createClient>;
@@ -183,6 +184,25 @@ function getSchemaUpdatePayload(payload: FormAdminAction) {
     return null;
   }
 
+  let settings: Record<string, unknown> | undefined;
+  if (payload.settings !== undefined) {
+    const value = payload.settings;
+    if (!isRecord(value)
+      || typeof value.formType !== "string" || !value.formType.trim() || value.formType.length > 100
+      || typeof value.formReason !== "string" || !value.formReason.trim() || value.formReason.length > 100
+      || (value.deadlineAt !== undefined && value.deadlineAt !== null && (typeof value.deadlineAt !== "string" || !Number.isFinite(Date.parse(value.deadlineAt))))
+      || (value.maxResponses !== undefined && value.maxResponses !== null && (typeof value.maxResponses !== "number" || !Number.isInteger(value.maxResponses)
+        || value.maxResponses < 1 || value.maxResponses > 100_000))) return null;
+    const expired = typeof value.deadlineAt === "string" && Date.parse(value.deadlineAt) <= Date.now();
+    settings = {
+      form_type: value.formType.trim(),
+      form_reason: value.formReason.trim(),
+      ...(value.deadlineAt !== undefined ? { deadline_at: expired ? null : value.deadlineAt } : {}),
+      ...(value.maxResponses !== undefined ? { max_responses: value.maxResponses } : {}),
+      ...(expired ? { is_public: false } : {}),
+    };
+  }
+
   try {
     if (JSON.stringify(payload.schema).length > 262_144 || JSON.stringify(payload.theme).length > 131_072) {
       return null;
@@ -200,6 +220,7 @@ function getSchemaUpdatePayload(payload: FormAdminAction) {
     organizationTypes,
     confirmWarnings: payload.confirmWarnings === true,
     expectedRevision: payload.expectedRevision,
+    settings,
   };
 }
 
@@ -221,22 +242,6 @@ function isAnonymousUploadPath(path: unknown, formId: string) {
     `^public/${escapedFormId}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:\\.[a-z0-9]{1,16})?$`,
     "i",
   ).test(path);
-}
-
-async function listStorageObjectPathsForForm(adminClient: SupabaseAdminClient, formId: string) {
-  const { data, error } = await adminClient
-    .from("response_file_references")
-    .select("object_path")
-    .eq("form_id", formId);
-
-  if (error) return { names: [] as string[], error };
-
-  const names = [...new Set(
-    (data ?? [])
-      .map((item: { object_path?: unknown }) => item.object_path)
-      .filter((path: unknown): path is string => typeof path === "string" && path.length > 0),
-  )];
-  return { names, error: null };
 }
 
 async function removeStorageObjectPaths(adminClient: SupabaseAdminClient, names: string[]) {
@@ -634,6 +639,7 @@ Deno.serve(async (req) => {
           title: updatePayload.title,
           allow_response_editing: updatePayload.allowResponseEditing,
           organization_types: updatePayload.organizationTypes,
+          ...updatePayload.settings,
         })
         .eq("id", updatePayload.formId)
         .eq("responses_count", responsesCount)
@@ -834,36 +840,18 @@ Deno.serve(async (req) => {
 
   console.info("form-admin action started", actionLogContext);
 
-  const { data: form, error: formError } = await adminClient
-    .from("forms")
-    .select("id, author_id")
-    .eq("id", payload.formId)
-    .single();
-
-  if (formError || !form) {
-    return errorResponse(req, 404, "Form not found", actionLogContext);
-  }
-
-  if (form.author_id !== requester.id && requesterProfile.role !== "admin") {
-    return errorResponse(req, 403, "Forbidden", actionLogContext);
-  }
-
-  const { names: responseObjectPaths, error: listStorageError } = await listStorageObjectPathsForForm(
-    adminClient,
-    payload.formId,
-  );
-  if (listStorageError) {
-    return errorResponse(req, 400, listStorageError.message, actionLogContext);
-  }
-
-  const { error: deleteError } = await adminClient
-    .from("forms")
-    .delete()
-    .eq("id", form.id);
-
+  const { data: deletion, error: deleteError } = await adminClient.rpc("delete_form_with_files", {
+    p_form_id: payload.formId,
+    p_actor_id: requester.id,
+  });
   if (deleteError) {
-    return errorResponse(req, 400, deleteError.message, actionLogContext);
+    const status = deleteError.code === "42501" ? 403 : deleteError.code === "P0002" ? 404 : 400;
+    return errorResponse(req, status, deleteError.message, actionLogContext);
   }
+  if (!deletion || !Array.isArray(deletion.objectPaths) || !deletion.objectPaths.every((path: unknown) => typeof path === "string")) {
+    return errorResponse(req, 503, "Invalid deletion result", actionLogContext);
+  }
+  const responseObjectPaths: string[] = deletion.objectPaths;
 
   const { removedCount, error: storageError } = await removeStorageObjectPaths(adminClient, responseObjectPaths);
   const { removedCount: removedAssetCount, error: assetStorageError } = await removeSurveyAssetsForForm(

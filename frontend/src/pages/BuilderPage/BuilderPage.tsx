@@ -20,8 +20,12 @@ export default function BuilderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isCopying, setIsCopying] = useState(false);
-  const [isSafeEditingConfirmed, setIsSafeEditingConfirmed] = useState(false);
+  const [confirmedFormId, setConfirmedFormId] = useState<string>();
   const [openedFormId, setOpenedFormId] = useState<string | undefined | null>(null);
+  useEffect(() => {
+    setConfirmedFormId(undefined);
+    setOpenedFormId(null);
+  }, [id, user?.id]);
   const canAdministerAllForms = profile?.role === "admin";
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
@@ -32,7 +36,7 @@ export default function BuilderPage() {
   });
 
   const responsesCount = formQuery.data?.responses_count ?? 0;
-  const showWarning = Boolean(id && responsesCount > 0 && !isSafeEditingConfirmed);
+  const showWarning = Boolean(id && responsesCount > 0 && confirmedFormId !== id);
   useEffect(() => {
     if (!showWarning && user && (!id || formQuery.data)) setOpenedFormId(id);
   }, [showWarning, user, id, formQuery.data]);
@@ -94,7 +98,7 @@ export default function BuilderPage() {
               <button
                 type="button"
                 className="deadline-save-button"
-                onClick={() => setIsSafeEditingConfirmed(true)}
+                onClick={() => setConfirmedFormId(id)}
                 disabled={isCopying}
               >
                 Редактировать безопасно
@@ -122,7 +126,7 @@ export default function BuilderPage() {
       )}</Presence>
       {(!showWarning || openedFormId === id) && <div className="builder-container" hidden={showWarning}>
         <SurveyBuilder
-          key={user.id}
+          key={`${user.id}:${id ?? "new"}`}
           formId={id}
           userId={user.id}
           canAdministerAllForms={canAdministerAllForms}

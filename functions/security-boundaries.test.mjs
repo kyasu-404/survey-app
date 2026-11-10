@@ -49,6 +49,17 @@ for (const [name, key] of [["form-admin", "FORM_ADMIN_ALLOWED_ORIGINS"], ["user-
       assert.equal((await request(origin)).status, 403, origin);
     }
   });
+
+  test(`${name}: preflight permits the frontend's actual correlation headers`, async () => {
+    const requested = ["authorization", "x-client-info", "apikey", "content-type", "x-request-id", "x-trace-id", "traceparent", "x-client-release"];
+    const response = await handlerFor(name, { [key]: "https://forms.test" })("https://forms.test", "OPTIONS", {}, {
+      "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": requested.join(", "),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://forms.test");
+    const allowed = response.headers.get("Access-Control-Allow-Headers").toLowerCase().split(/,\s*/);
+    for (const header of requested) assert.ok(allowed.includes(header), header);
+  });
 }
 
 const formId = "b5000000-0000-4000-8000-000000000001";
@@ -192,4 +203,84 @@ test("delete-responses delegates actor authorization and the complete reference 
     assert.deepEqual(calls, [{ name: "delete_form_responses_with_files", args: { p_form_id: formId, p_response_ids: [browserId], p_actor_id: owner } }]);
     assert.deepEqual(removed, errorCode ? [] : [path]);
   }
+});
+
+test("delete-form delegates all references to SQL and removes more than 1000 paths in batches", async () => {
+  const owner = "a5000000-0000-4000-8000-000000000001";
+  const paths = Array.from({ length: 1005 }, (_, index) => `public/${formId}/${index}.pdf`);
+  for (const code of [null, "42501", "P0002", "offline"]) {
+    const calls = [], batches = [];
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: owner } } }) },
+      from: table => {
+        assert.equal(table, "profiles");
+        return { select() { return this; }, eq() { return this; }, single: async () => ({ data: { role: "user", is_disabled: false } }) };
+      },
+      rpc: async (name, args) => {
+        calls.push({ name, args });
+        return code ? { error: { code, message: "denied" } } : { data: { objectPaths: paths } };
+      },
+      storage: { from: bucket => ({
+        list: async () => ({ data: [] }),
+        remove: async objects => { assert.equal(bucket, "survey-files"); batches.push(objects); return {}; },
+      }) },
+    };
+    const response = await handlerFor("form-admin", {}, client)(null, "POST", { action: "delete", formId }, { Authorization: "Bearer test" });
+    assert.equal(response.status, code === "42501" ? 403 : code === "P0002" ? 404 : code ? 400 : 200);
+    assert.deepEqual(calls, [{ name: "delete_form_with_files", args: { p_form_id: formId, p_actor_id: owner } }]);
+    assert.deepEqual(batches.flat(), code ? [] : paths);
+    assert.ok(batches.every(batch => batch.length <= 100));
+    if (!code) assert.equal((await response.json()).removedFiles, paths.length);
+  }
+});
+
+test("setDisabled delegates the atomic Auth/profile transition to SQL and rejects invalid input", async () => {
+  for (const code of [null, "42501", "P0002", "XX000"]) {
+    const calls = [];
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: "administrator" } } }) },
+      from: () => ({ select() { return this; }, eq() { return this; }, single: async () => ({ data: { role: "admin", is_disabled: false } }) }),
+      rpc: async (name, args) => { calls.push({ name, args }); return code ? { error: { code, message: "rejected" } } : { data: true }; },
+    };
+    const send = disabled => handlerFor("user-admin", {}, client)(null, "POST", { action: "setDisabled", userId: "target", disabled }, { Authorization: "Bearer test" });
+    assert.equal((await send(true)).status, code === "42501" ? 403 : code === "P0002" ? 404 : code ? 400 : 200);
+    assert.deepEqual(calls, [{ name: "set_employee_disabled", args: { p_user_id: "target", p_disabled: true, p_actor_id: "administrator" } }]);
+    calls.length = 0;
+    for (const disabled of ["false", null, undefined, 1]) assert.equal((await send(disabled)).status, 400);
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("schema settings retain untouched deadlines and limits and reject malformed changes before writing", async () => {
+  const owner = "a5000000-0000-4000-8000-000000000001";
+  const writes = [];
+  const client = {
+    auth: { getUser: async () => ({ data: { user: { id: owner } } }) },
+    from: table => ({
+      select() { return this; }, eq() { return this; },
+      single: async () => ({ data: table === "profiles" ? { role: "user", is_disabled: false }
+        : { id: formId, author_id: owner, revision: 1, schema: { pages: [] }, responses_count: 0 } }),
+      update(payload) { writes.push(payload); return this; },
+      maybeSingle: async () => ({ data: { id: formId } }),
+    }),
+  };
+  const request = handlerFor("form-admin", {}, client);
+  const payload = { action: "update-schema", formId, schema: { pages: [] }, theme: {}, title: "Settings",
+    expectedRevision: 1, allowResponseEditing: true, organizationTypes: ["school", "odo"] };
+  const send = settings => request(null, "POST", { ...payload, settings }, { Authorization: "Bearer test" });
+  assert.equal((await send({ formType: "monitoring", formReason: "order" })).status, 200);
+  assert.equal(writes[0].form_type, "monitoring");
+  assert.equal(writes[0].allow_response_editing, true);
+  assert.deepEqual(writes[0].organization_types, ["school", "odo"]);
+  assert.equal("deadline_at" in writes[0], false);
+  assert.equal("max_responses" in writes[0], false);
+  assert.equal("is_public" in writes[0], false);
+  assert.equal((await send({ formType: "monitoring", formReason: "order", deadlineAt: "2020-01-01T00:00:00Z", maxResponses: 10 })).status, 200);
+  assert.equal(writes[1].deadline_at, null);
+  assert.equal(writes[1].is_public, false);
+  assert.equal(writes[1].max_responses, 10);
+  for (const invalid of [{ maxResponses: 0 }, { maxResponses: 1.5 }, { maxResponses: 100001 }, { deadlineAt: false }, { deadlineAt: "invalid" }, { formType: "" }]) {
+    assert.equal((await send({ formType: "monitoring", formReason: "order", ...invalid })).status, 400);
+  }
+  assert.equal(writes.length, 2);
 });

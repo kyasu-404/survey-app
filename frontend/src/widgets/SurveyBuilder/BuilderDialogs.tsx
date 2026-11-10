@@ -200,7 +200,7 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
             value={postSaveSettings.deadlineValue}
             onChange={(event) =>
               setPostSaveSettings((current) =>
-                current ? { ...current, deadlineValue: event.target.value } : current,
+                current ? { ...current, deadlineValue: event.target.value, deadlineChanged: true } : current,
               )
             }
           />
@@ -210,12 +210,13 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
           <input
             type="number"
             min={1}
+            max={100000}
             step={1}
             inputMode="numeric"
             value={postSaveSettings.responseLimitValue}
             onChange={(event) =>
               setPostSaveSettings((current) =>
-                current ? { ...current, responseLimitValue: event.target.value } : current,
+                current ? { ...current, responseLimitValue: event.target.value, responseLimitChanged: true } : current,
               )
             }
           />

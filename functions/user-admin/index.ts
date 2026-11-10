@@ -373,30 +373,24 @@ Deno.serve(async (req) => {
     }
 
     case "setDisabled": {
-      if (!payload.userId) {
-        return errorResponse(req, 400, "userId is required", actionLogContext);
+      if (!payload.userId || typeof payload.disabled !== "boolean") {
+        return errorResponse(req, 400, "userId and boolean disabled are required", actionLogContext);
       }
 
       if (payload.userId === requester.id) {
         return errorResponse(req, 400, "You cannot disable yourself", actionLogContext);
       }
 
-      const { error: authError } = await adminClient.auth.admin.updateUserById(payload.userId, {
-        ban_duration: payload.disabled ? "876000h" : "none",
+      const { data: changed, error } = await adminClient.rpc("set_employee_disabled", {
+        p_user_id: payload.userId,
+        p_disabled: payload.disabled,
+        p_actor_id: requester.id,
       });
-
-      if (authError) {
-        return errorResponse(req, 400, authError.message, actionLogContext);
+      if (error) {
+        const status = error.code === "42501" ? 403 : error.code === "P0002" ? 404 : 400;
+        return errorResponse(req, status, error.message, actionLogContext);
       }
-
-      const { error: profileError } = await adminClient
-        .from("profiles")
-        .update({ is_disabled: payload.disabled })
-        .eq("id", payload.userId);
-
-      if (profileError) {
-        return errorResponse(req, 400, profileError.message, actionLogContext);
-      }
+      if (changed !== true) return errorResponse(req, 503, "Invalid status update result", actionLogContext);
 
       console.info("user-admin action completed", {
         ...actionLogContext,

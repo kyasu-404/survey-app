@@ -904,6 +904,55 @@ begin
 end;
 $$;
 
+create or replace function public.delete_form_with_files(p_form_id uuid, p_actor_id uuid)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare author uuid; paths text[];
+begin
+  select author_id into author from public.forms where id = p_form_id for update;
+  if not found then raise exception 'Форма не найдена' using errcode = 'P0002'; end if;
+  if not exists (select 1 from public.profiles where id = p_actor_id and not is_disabled
+    and (id = author or role = 'admin')) then
+    raise exception 'Нет прав на удаление формы' using errcode = '42501';
+  end if;
+  -- Inserts serialize on the form's response counter. Lock existing responses
+  -- before reading their references so an edit cannot change the captured set.
+  perform 1 from public.responses where form_id = p_form_id order by id for update;
+  select coalesce(array_agg(distinct object_path), '{}'::text[]) into paths
+  from public.response_file_references where form_id = p_form_id;
+  delete from public.forms where id = p_form_id;
+  -- Office objects retain their existing durable delayed-cleanup lifecycle.
+  return jsonb_build_object('objectPaths', public.claim_survey_file_deletions(paths));
+end;
+$$;
+revoke all on function public.delete_form_with_files(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.delete_form_with_files(uuid, uuid) to service_role;
+
+-- GoTrue's Ban operation only writes auth.users.banned_until. Keep that write
+-- and the profile authority for existing JWTs in one serialized transaction.
+create or replace function public.set_employee_disabled(p_user_id uuid, p_disabled boolean, p_actor_id uuid)
+returns boolean language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if p_disabled is null or p_user_id is null then
+    raise exception 'Некорректный статус пользователя' using errcode = '22023';
+  end if;
+  if p_user_id = p_actor_id then
+    raise exception 'Нельзя изменить собственную блокировку' using errcode = '42501';
+  end if;
+  perform 1 from public.profiles where id = p_actor_id and role = 'admin' and not is_disabled for share;
+  if not found then raise exception 'Требуются права администратора' using errcode = '42501'; end if;
+  perform 1 from auth.users where id = p_user_id for update;
+  if not found then raise exception 'Пользователь не найден' using errcode = 'P0002'; end if;
+  perform 1 from public.profiles where id = p_user_id for update;
+  if not found then raise exception 'Профиль пользователя не найден' using errcode = 'P0002'; end if;
+  update auth.users set banned_until = case when p_disabled then clock_timestamp() + interval '876000 hours' else null end
+    where id = p_user_id;
+  update public.profiles set is_disabled = p_disabled where id = p_user_id;
+  return true;
+end;
+$$;
+revoke all on function public.set_employee_disabled(uuid, boolean, uuid) from public, anon, authenticated;
+grant execute on function public.set_employee_disabled(uuid, boolean, uuid) to service_role;
+
 -- Bind each question to its actual answer path, including dynamic panel entries.
 create or replace function public.survey_response_bindings(
   p_schema jsonb, p_data jsonb, p_path text[] default '{}'::text[], p_depth integer default 0
@@ -1373,6 +1422,25 @@ $$;
 revoke all on function public.list_forms_keyset(timestamptz, uuid) from public, anon;
 grant execute on function public.list_forms_keyset(timestamptz, uuid) to authenticated, service_role;
 
+-- Inlineable alternative for effective status filtering before PostgREST LIMIT.
+create or replace function public.list_forms_by_activity(
+  p_is_public boolean,
+  p_before_created_at timestamptz default null,
+  p_before_id uuid default null
+)
+returns setof public.forms
+language sql stable security invoker
+as $$
+  select f.* from public.forms f
+  where (f.is_public and (f.deadline_at is null or f.deadline_at > now())
+    and (f.max_responses is null or f.responses_count < f.max_responses)) = p_is_public
+    and ((p_before_created_at is null and p_before_id is null)
+      or (p_before_created_at is not null and p_before_id is not null
+        and (f.created_at, f.id) < (p_before_created_at, p_before_id)));
+$$;
+revoke all on function public.list_forms_by_activity(boolean, timestamptz, uuid) from public, anon;
+grant execute on function public.list_forms_by_activity(boolean, timestamptz, uuid) to authenticated, service_role;
+
 -- Escape user input as a literal substring for ILIKE (the surrounding % are added by callers).
 create or replace function public.escape_forms_search(search_text text)
 returns text
@@ -1407,6 +1475,7 @@ as $$
     count(*) filter (
       where f.is_public = true
         and (f.deadline_at is null or f.deadline_at > now())
+        and (f.max_responses is null or f.responses_count < f.max_responses)
     )::bigint as active_count,
     count(*) filter (where f.deadline_at > now())::bigint as forms_with_deadline_count
   from public.forms f
@@ -1427,6 +1496,7 @@ as $$
       or (
         f.is_public = true
         and (f.deadline_at is null or f.deadline_at > now())
+        and (f.max_responses is null or f.responses_count < f.max_responses)
       ) = p_is_public
     );
 $$;
@@ -2655,7 +2725,8 @@ begin
       and ($5 is null or f.author_id = $5)
       and ($6 is null or f.form_type = $6)
       and ($7 is null or f.form_reason = $7)
-      and ($8 is null or (f.is_public and (f.deadline_at is null or f.deadline_at > now())) = $8)
+      and ($8 is null or (f.is_public and (f.deadline_at is null or f.deadline_at > now())
+        and (f.max_responses is null or f.responses_count < f.max_responses)) = $8)
       and ($9 is null or ((%1$s), f.id) %2$s (($10)::%3$s, $9))
     order by %1$s %4$s, f.id %4$s
     limit $11

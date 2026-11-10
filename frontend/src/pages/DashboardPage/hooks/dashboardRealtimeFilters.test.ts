@@ -28,6 +28,36 @@ const filters: DashboardListFilters = {
 };
 
 describe("shouldInvalidateDashboardForms", () => {
+  it("uses cached summaries for primary-key-only old rows and ignores schema/revision for statistics", () => {
+    const form = createRealtimeForm({ responses_count: 1 });
+    const cachedForms = new Map([[form.id, form]]);
+    const payload = { eventType: "UPDATE", old: { id: form.id }, new: {
+      ...form, responses_count: 2, revision: 9, schema: { pages: [] }, theme: {},
+    } };
+    expect(shouldInvalidateDashboardForms({ cachedForms, filters, payload })).toBe(true);
+    expect(shouldInvalidateDashboardFormStats({ cachedForms, filters, payload })).toBe(false);
+    expect(shouldInvalidateDashboardForms({ cachedForms, filters, payload: {
+      ...payload, new: { ...payload.new, responses_count: 1 },
+    } })).toBe(false);
+  });
+
+  it("refreshes statistics at the response limit and on classification changes with minimal old rows", () => {
+    const form = createRealtimeForm({ responses_count: 1, max_responses: 2 });
+    const cachedForms = new Map([[form.id, form]]);
+    for (const next of [{ ...form, responses_count: 2 }, { ...form, form_type: "monitoring" }]) {
+      expect(shouldInvalidateDashboardFormStats({ cachedForms, filters, payload: {
+        eventType: "UPDATE", old: { id: form.id }, new: next,
+      } })).toBe(true);
+    }
+  });
+
+  it("conservatively refreshes statistics when the previous row is unknown", () => {
+    const form = createRealtimeForm();
+    expect(shouldInvalidateDashboardFormStats({ filters, payload: {
+      eventType: "UPDATE", old: { id: form.id }, new: { ...form, responses_count: 2 },
+    } })).toBe(true);
+  });
+
   it("skips updates when both previous and next forms are outside the current filters", () => {
     const outsideForm = createRealtimeForm({
       id: "form-2",
