@@ -1,6 +1,6 @@
 import http from "node:http";
 import os from "node:os";
-import { toPublicSmtpError } from "./config.mjs";
+import { createMailPoller, parseMailJobStatus } from "./delivery.mjs";
 import { createSmtpTransportManager } from "./smtpTransport.mjs";
 import { isWorkerHealthy } from "./health.mjs";
 import {
@@ -105,7 +105,7 @@ async function claimJobs() {
 }
 
 async function finishJob(jobId, success, error = null) {
-  await supabaseRequest("/rest/v1/rpc/finish_mail_job", {
+  return supabaseRequest("/rest/v1/rpc/finish_mail_job", {
     method: "POST",
     body: JSON.stringify({
       p_job_id: jobId,
@@ -116,67 +116,12 @@ async function finishJob(jobId, success, error = null) {
   });
 }
 
-async function sendJob(transporter, settings, job) {
-  try {
-    await transporter.sendMail({
-      from: { name: settings.from_name, address: settings.from_email },
-      replyTo: settings.reply_to || undefined,
-      to: { name: job.recipient_name, address: job.recipient_email },
-      subject: job.subject,
-      text: job.body_text,
-      disableFileAccess: true,
-      disableUrlAccess: true,
-    });
-    await finishJob(job.id, true);
-    state.lastSuccessAt = new Date().toISOString();
-  } catch (error) {
-    const publicError = toPublicSmtpError(error);
-    console.error("mail delivery failed", { jobId: job.id, batchId: job.batch_id, code: error?.code ?? null });
-    await finishJob(job.id, false, publicError);
-  }
+async function loadJobStatus(jobId) {
+  const rows = await supabaseRequest(`/rest/v1/mail_queue?id=eq.${encodeURIComponent(jobId)}&select=status`, { method: "GET" });
+  return parseMailJobStatus(rows);
 }
 
-async function poll() {
-  if (state.busy) return;
-  state.busy = true;
-  state.lastPollAt = new Date().toISOString();
-  let completed = false;
-
-  try {
-    const settings = await loadSettings();
-    state.configured = Boolean(settings?.enabled);
-    if (!settings?.enabled) {
-      smtpTransports.close();
-      state.lastError = null;
-      completed = true;
-      return;
-    }
-
-    const jobs = await claimJobs();
-    if (jobs.length === 0) {
-      state.lastError = null;
-      completed = true;
-      return;
-    }
-
-    try {
-      const transporter = smtpTransports.get(settings);
-      await Promise.all(jobs.map((job) => sendJob(transporter, settings, job)));
-      state.lastError = null;
-      completed = true;
-    } catch (error) {
-      const publicError = toPublicSmtpError(error);
-      state.lastError = publicError;
-      await Promise.all(jobs.map((job) => finishJob(job.id, false, publicError)));
-    }
-  } catch (error) {
-    state.lastError = "Не удалось получить задания из Supabase";
-    console.error("mail worker poll failed", { message: error instanceof Error ? error.message : String(error) });
-  } finally {
-    if (completed) state.lastSuccessfulPollAt = new Date().toISOString();
-    state.busy = false;
-  }
-}
+const poll = createMailPoller({ state, loadSettings, claimJobs, finishJob, loadJobStatus, smtpTransports });
 
 async function cleanupStorage() {
   if (state.cleanupBusy) return;

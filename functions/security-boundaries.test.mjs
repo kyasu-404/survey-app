@@ -103,10 +103,11 @@ test("reserve-upload routes personal tokens to the atomic personal reservation R
     }, { "x-survey-client-ip": "127.0.0.1" });
     assert.equal(response.status, personalToken === "invalid" ? 400 : 200);
     if (personalToken === "invalid") { assert.deepEqual(calls, []); continue; }
-    assert.equal(calls[0].name, personalToken ? "reserve_personal_survey_upload" : "reserve_survey_upload");
-    assert.equal(calls[0].args.p_browser_id, browserId);
-    assert.equal(calls[0].args.p_token, personalToken);
-    assert.match(calls[0].args.p_client_hash, /^[a-f0-9]{64}$/);
+    assert.equal(calls[0].name, "assert_survey_upload_type");
+    assert.equal(calls[1].name, personalToken ? "reserve_personal_survey_upload" : "reserve_survey_upload");
+    assert.equal(calls[1].args.p_browser_id, browserId);
+    assert.equal(calls[1].args.p_token, personalToken);
+    assert.match(calls[1].args.p_client_hash, /^[a-f0-9]{64}$/);
   }
 });
 

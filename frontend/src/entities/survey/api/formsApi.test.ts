@@ -3,6 +3,7 @@ import {
   fetchDashboardFormsPage,
   fetchDashboardFormsStats,
   fetchForms,
+  fetchPublicFormById,
   fetchTemplateFormsPage,
   insertForm,
   deleteForm,
@@ -11,7 +12,7 @@ import {
   updateFormSchema,
   updateFormTitle,
 } from "./formsApi";
-import { apiClient, supabaseClient } from "../../../shared/api/client";
+import { apiClient, publicApiClient, supabaseClient } from "../../../shared/api/client";
 
 vi.mock("../../../shared/api/client", () => ({
   supabaseClient: {
@@ -30,8 +31,30 @@ vi.mock("../../../shared/api/client", () => ({
   },
   publicApiClient: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }));
+
+describe("public forms by known link", () => {
+  it("reads the public RPC without querying the forms table", async () => {
+    const form = { id: "public-form", title: "Public", form_type: "anketa", form_reason: "plan",
+      schema: { pages: [] }, theme: {}, is_public: true, deadline_at: null,
+      created_at: "2026-11-11T00:00:00Z", responses_count: 2 };
+    vi.mocked(publicApiClient.rpc).mockResolvedValue({ data: form, error: null } as never);
+    const result = await fetchPublicFormById("public-form");
+    expect(result?.title).toBe("Public");
+    expect(result?.responses_count).toBe(2);
+    expect(publicApiClient.rpc).toHaveBeenCalledWith("get_public_form", { p_form_id: "public-form" });
+    expect(publicApiClient.from).not.toHaveBeenCalled();
+    expect(result?.author_id).toBe("");
+    expect(result?.author_name).toBeNull();
+  });
+
+  it("returns null for a closed or unknown form", async () => {
+    vi.mocked(publicApiClient.rpc).mockResolvedValue({ data: null, error: null } as never);
+    expect(await fetchPublicFormById("missing-form")).toBeNull();
+  });
+});
 
 function createHangingQuery() {
   const query = {

@@ -16,7 +16,7 @@ const infra = [
   "grant usage on schema auth to anon,authenticated,service_role;",
   "create schema storage;",
   "create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);",
-  "create table storage.objects(id uuid default gen_random_uuid() primary key,bucket_id text references storage.buckets(id),name text,owner uuid,metadata jsonb,created_at timestamptz default now(),updated_at timestamptz default now(),version text);",
+  "create table storage.objects(id uuid default gen_random_uuid() primary key,bucket_id text references storage.buckets(id),name text,owner uuid,metadata jsonb,user_metadata jsonb,created_at timestamptz default now(),updated_at timestamptz default now(),version text);",
   "alter table storage.objects enable row level security;",
   "grant usage on schema storage to anon,authenticated,service_role;",
   "grant all on storage.buckets,storage.objects to service_role;",
@@ -51,6 +51,10 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const schema = await source("./supabase_schema.sql");
     const migration = await source("./migrations/202610291200_final_review_fixes.sql");
     const reviewMigration = await source("./migrations/202611101200_review_corrections.sql");
+    const followupMigrations = await Promise.all([
+      "202611111200_counter_update_costs.sql", "202611111230_public_form_links.sql",
+      "202611111300_upload_type_policy.sql",
+    ].map(name => source("./migrations/" + name)));
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -69,10 +73,16 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
           await db.query(migration);
         }
         await db.query(reviewMigration);
+        // Include legacy column ACLs; a table-level REVOKE alone is insufficient.
+        await db.query("grant select(id,author_name) on public.forms to anon");
+        for (const sql of followupMigrations) await db.query(sql);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
+      await runPsql(database, "./tests/public_form_access.sql");
+      await runPsql(database, "./tests/counter_update_costs.sql");
+      await runPsql(database, "./tests/upload_type_policy.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }

@@ -67,6 +67,10 @@ export async function openSurveyApp(page: Page, options: { profileName?: string;
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
       if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 220, active_count: 220, forms_with_deadline_count: 0 }] });
       if (table === "forms") return route.fulfill({ json: { ...form, responses_count: responses.length } });
+      if (table === "get_public_form") {
+        const { author_id: _authorId, author_name: _authorName, ...publicForm } = form;
+        return route.fulfill({ json: { ...publicForm, responses_count: responses.length } });
+      }
       if (table === "list_forms_keyset") {
         expect(url.searchParams.has("offset")).toBe(false);
         expect(request.method()).toBe("GET");

@@ -38,7 +38,7 @@ test("public response status and renderer start loading before form metadata fin
   page.on("request", request => {
     if (request.url().includes("features/render-form/SurveyFormRenderer")) rendererRequested = true;
   });
-  await page.route("**/rest/v1/forms?*", async route => {
+  await page.route("**/rest/v1/rpc/get_public_form", async route => {
     await metadataGate;
     await route.fulfill({ json: form });
   });

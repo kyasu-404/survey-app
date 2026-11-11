@@ -1091,7 +1091,9 @@ describe("SurveyFormRenderer", () => {
       onUploadFiles: { fire: (sender: unknown, options: unknown) => Promise<void> };
     };
 
-    await model.onUploadFiles.fire(model, { files: [file], callback });
+    await model.onUploadFiles.fire(model, { name: "attachment", files: [file], callback });
+
+    expect(uploadFileToStorage).toHaveBeenCalledWith("form-1", file, expect.objectContaining({ questionName: "attachment" }));
 
     expect(callback).toHaveBeenCalledWith([
       {

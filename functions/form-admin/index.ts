@@ -4,7 +4,7 @@ import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 type FormAdminAction =
   | { action: "delete"; formId: string }
   | { action: "delete-responses"; formId: string; responseIds: string[] }
-  | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string; personalToken?: string }
+  | { action: "reserve-upload"; formId: string; browserId: string; size: number; extension: string; questionName?: string; fileName?: string; mimeType?: string; personalToken?: string }
   | { action: "restore-upload"; formId: string; browserId: string; path: string; personalToken?: string }
   | { action: "delete-upload"; formId: string; browserId: string; path: string }
   | { action: "get-cleanup-status" }
@@ -153,6 +153,15 @@ function isUuid(value: unknown): value is string {
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   );
+}
+
+// Match frontend storage path generation; author rules still use the full name.
+function getUploadFileExtension(fileName: string) {
+  const cleanName = fileName.split(/[\\/]/).pop() ?? "";
+  const dotIndex = cleanName.lastIndexOf(".");
+  if (dotIndex === -1) return "";
+  const extension = cleanName.slice(dotIndex).replace(/[^a-zA-Z0-9.]/g, "");
+  return /^\.[a-zA-Z0-9]{1,12}$/.test(extension) ? extension : "";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -439,6 +448,10 @@ Deno.serve(async (req) => {
   if (payload.action === "reserve-upload") {
     if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !Number.isSafeInteger(payload.size)
       || payload.size < 0 || payload.size > 10485760 || typeof payload.extension !== "string"
+      || (payload.questionName !== undefined && (typeof payload.questionName !== "string" || payload.questionName.length > 512))
+      || (payload.fileName !== undefined && (typeof payload.fileName !== "string" || payload.fileName.length > 512
+        || /[\\/]/.test(payload.fileName) || getUploadFileExtension(payload.fileName).toLowerCase() !== payload.extension.toLowerCase()))
+      || (payload.mimeType !== undefined && (typeof payload.mimeType !== "string" || payload.mimeType.length > 255))
       || (payload.personalToken !== undefined && !isUuid(payload.personalToken))
       || !/^(\.[a-zA-Z0-9]{1,16})?$/.test(payload.extension)) {
       return errorResponse(req, 400, "Некорректные параметры файла", requestLogContext);
@@ -448,6 +461,12 @@ Deno.serve(async (req) => {
     if (!clientIp || clientIp.length > 64 || !/^[0-9a-fA-F:.]+$/.test(clientIp)) {
       return errorResponse(req, 503, "Не удалось определить адрес загрузки", requestLogContext);
     }
+    const { error: typeError } = await adminClient.rpc("assert_survey_upload_type", {
+      p_form_id: payload.formId, p_question_name: payload.questionName ?? null,
+      p_file_name: payload.fileName ?? payload.extension, p_mime_type: payload.mimeType ?? "",
+    });
+    if (typeError) return errorResponse(req, typeError.code === "22023" ? 400 : 503,
+      typeError.code === "22023" ? "Тип файла не разрешён автором вопроса" : "Не удалось проверить тип файла. Повторите позже.", requestLogContext);
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(supabaseServiceRoleKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(clientIp));
     const clientHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");

@@ -41,10 +41,10 @@ const { createRealtimeChannel, removeRealtimeChannel, emitRealtimeChange, emitRe
   return {
     createRealtimeChannel,
     removeRealtimeChannel,
-    emitRealtimeChange: (table?: string) => {
+    emitRealtimeChange: (table?: string, payload?: unknown) => {
       for (const handler of changeHandlers) {
         if (!table || handler.config.table === table) {
-          handler.callback();
+          handler.callback(payload);
         }
       }
     },
@@ -446,7 +446,8 @@ describe("FormResponsesPage", () => {
     expect(getFormById).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes response rows when only the form counter realtime update is delivered", async () => {
+  it.each([7, "9007199254740993"])("refreshes rows without fetching the schema for a counter event at revision %s", async (revision) => {
+    const queryClient = createQueryClient();
     const baseForm = {
       id: "form-1",
       title: "Форма обратной связи",
@@ -457,6 +458,7 @@ describe("FormResponsesPage", () => {
       form_reason: "plan",
       deadline_at: null,
       responses_count: 1,
+      revision,
       schema: {
         pages: [
           {
@@ -466,12 +468,7 @@ describe("FormResponsesPage", () => {
       },
     };
 
-    getFormById
-      .mockResolvedValueOnce(baseForm)
-      .mockResolvedValueOnce({
-        ...baseForm,
-        responses_count: 2,
-      });
+    getFormById.mockResolvedValue(baseForm);
 
     loadResponseRows
       .mockResolvedValueOnce([
@@ -499,7 +496,7 @@ describe("FormResponsesPage", () => {
 
     render(
       <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
-        <QueryClientProvider client={createQueryClient()}>
+        <QueryClientProvider client={queryClient}>
           <Routes>
             <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
           </Routes>
@@ -509,7 +506,10 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
 
-    emitRealtimeChange("forms");
+    act(() => emitRealtimeChange("forms", {
+      new: { id: "form-1", revision: String(revision), responses_count: 2 },
+      commit_timestamp: new Date(Date.now() + 1000).toISOString(),
+    }));
 
     await waitFor(() => {
       expect(loadResponseRows).toHaveBeenCalledTimes(2);
@@ -517,6 +517,70 @@ describe("FormResponsesPage", () => {
 
     expect(await screen.findByText("Борис")).toBeInTheDocument();
     expect(screen.getByText("Ответов: 2")).toBeInTheDocument();
+    expect(queryClient.getQueryData(getFormQueryKey("form-1"))).toMatchObject({ responses_count: 2, revision });
+    expect(getFormById).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["schema", { revision: "9007199254740994" }, {
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Новое имя" }] }] },
+    }],
+    ["closing status", { revision: "9007199254740994", is_public: false }, { is_public: false }],
+    ["missing revision", { responses_count: 2 }, { title: "Изменённая форма" }],
+    ["invalid counter", { revision: "9007199254740993", responses_count: -1 }, { title: "Изменённая форма" }],
+    ["missing form id", { id: undefined, revision: "9007199254740993" }, { title: "Изменённая форма" }],
+    ["unsafe numeric revision", { revision: 9007199254740992, responses_count: 2 }, { title: "Изменённая форма" }],
+    ["unknown payload", null, { title: "Изменённая форма" }],
+  ])("reloads the form after a %s event", async (_reason, change, updatedFields) => {
+    const queryClient = createQueryClient();
+    const form = {
+      id: "form-1", title: "Форма", author_id: "user-1", revision: "9007199254740993",
+      is_public: true, responses_count: 1,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    };
+    getFormById.mockResolvedValueOnce(form).mockResolvedValueOnce({ ...form, ...updatedFields });
+    loadResponseRows.mockResolvedValue([createResponse(1)]);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={queryClient}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+    expect(await screen.findByText("Ответ 1")).toBeInTheDocument();
+    act(() => emitRealtimeChange("forms", change && {
+      new: { id: "form-1", responses_count: 2, ...change },
+      commit_timestamp: new Date(Date.now() + 1000).toISOString(),
+    }));
+    await waitFor(() => expect(queryClient.getQueryData(getFormQueryKey("form-1"))).toMatchObject(updatedFields));
+    expect(getFormById).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(loadResponseRows).toHaveBeenCalledTimes(2));
+  });
+
+  it.each([
+    ["a delayed event behind the HTTP snapshot", 3, 2, 3],
+    ["a newer event behind HTTP completion time or client clock", 1, 2, 2],
+  ])("reconciles %s without trusting client timestamps", async (_reason, cachedCount, eventCount, freshCount) => {
+    const queryClient = createQueryClient();
+    const form = {
+      id: "form-1", title: "Форма", author_id: "user-1", revision: "9007199254740993", responses_count: cachedCount,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    };
+    getFormById.mockReset().mockResolvedValueOnce(form).mockResolvedValueOnce({ ...form, responses_count: freshCount });
+    loadResponseRows.mockResolvedValue([createResponse(1)]);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={queryClient}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+    expect(await screen.findByText("Ответ 1")).toBeInTheDocument();
+    const cachedAt = queryClient.getQueryState(getFormQueryKey("form-1"))!.dataUpdatedAt;
+    act(() => emitRealtimeChange("forms", {
+      new: { id: "form-1", revision: "9007199254740993", responses_count: eventCount },
+      commit_timestamp: new Date(cachedAt - 1000).toISOString(),
+    }));
+    await waitFor(() => expect(loadResponseRows).toHaveBeenCalledTimes(2));
+    expect(queryClient.getQueryData(getFormQueryKey("form-1"))).toMatchObject({ responses_count: freshCount });
+    expect(queryClient.getQueryState(getFormQueryKey("form-1"))!.dataUpdatedAt).toBeGreaterThanOrEqual(cachedAt);
+    expect(getFormById).toHaveBeenCalledTimes(2);
   });
 
   it("forces a fresh responses fetch when opening with fresh cached data", async () => {

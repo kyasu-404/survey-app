@@ -17,7 +17,7 @@ type StorageAuthOptions = {
   personalToken?: string;
 };
 
-type UploadFileToStorageOptions = StorageAuthOptions;
+type UploadFileToStorageOptions = StorageAuthOptions & { questionName?: string };
 
 type RemoveFileFromStorageOptions = {
   allowAnonymous?: boolean;
@@ -59,11 +59,13 @@ function buildUserStoragePath(userId: string, formId: string, fileName: string) 
   return `${userId}/${formId}/${generateStorageObjectId()}${getFileExtension(fileName)}`;
 }
 
-async function reservePublicStoragePath(formId: string, file: File, options: StorageAuthOptions) {
+async function reservePublicStoragePath(formId: string, file: File, options: UploadFileToStorageOptions) {
   const { data, error } = await runRequest(
     "storage.reserveUpload",
     (requestSignal) => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name), ...(options.personalToken ? { personalToken: options.personalToken } : {}) },
+      body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name),
+        ...(options.questionName ? { questionName: options.questionName, fileName: file.name, mimeType: file.type } : {}),
+        ...(options.personalToken ? { personalToken: options.personalToken } : {}) },
       signal: requestSignal,
     }),
     { signal: options.signal },
@@ -368,6 +370,7 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
     () =>
       bucket.upload(filePath, file, {
         upsert: false,
+        ...(options.questionName ? { metadata: { questionName: options.questionName, fileName: file.name, mimeType: file.type } } : {}),
       }),
     {
       timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,

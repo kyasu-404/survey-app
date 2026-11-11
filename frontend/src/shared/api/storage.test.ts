@@ -53,6 +53,31 @@ describe("storage api", () => {
     vi.useRealTimers();
   });
 
+  it("binds the public reservation and actual upload to the originating file question", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const file = new File(["document"], "report.pdf", { type: "application/pdf" });
+    await uploadFileToStorage("form-1", file, { allowAnonymous: true, questionName: "documents" });
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({
+      body: expect.objectContaining({ questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" }),
+    }));
+    expect(upload).toHaveBeenCalledWith(expect.any(String), file, {
+      upsert: false, metadata: { questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" },
+    });
+  });
+
+  it("sends the question binding on authenticated uploads that do not use reservations", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
+    vi.mocked(supabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const file = new File(["document"], "report.pdf", { type: "application/pdf" });
+    await uploadFileToStorage("form-1", file, { questionName: "documents" });
+    expect(upload).toHaveBeenCalledWith(expect.any(String), file, {
+      upsert: false, metadata: { questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" },
+    });
+    expect(publicSupabaseClient.functions.invoke).not.toHaveBeenCalled();
+  });
+
   it("honors an external browser capability throughout the public file lifecycle", async () => {
     const formId = "10000000-0000-4000-8000-000000000000";
     const browserId = "20000000-0000-4000-8000-000000000000";

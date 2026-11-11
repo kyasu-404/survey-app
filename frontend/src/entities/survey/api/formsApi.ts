@@ -504,7 +504,7 @@ export async function fetchFormById(id: string, options: RequestSignalOptions = 
 export async function fetchPublicFormById(id: string, options: RequestSignalOptions = {}): Promise<SurveyForm | null> {
   const { data, error } = await runRequest(
     "forms.fetchPublicById",
-    (signal) => applyAbortSignal(publicApiClient.from("forms").select("*").eq("id", id), signal).maybeSingle(),
+    (signal) => applyAbortSignal(publicApiClient.rpc("get_public_form", { p_form_id: id }), signal),
     { signal: options.signal, context: { formId: id } },
   );
   if (error) throw error;
@@ -513,7 +513,9 @@ export async function fetchPublicFormById(id: string, options: RequestSignalOpti
     return null;
   }
 
-  return syncFetchedFormState(mapRawForm(data as RawForm));
+  // Public DTOs deliberately contain no author identity. Keep the existing
+  // renderer model compatible without fetching staff-only metadata.
+  return syncFetchedFormState(mapRawForm({ ...data, author_id: "", author_name: null } as RawForm));
 }
 
 export async function insertForm(payload: {

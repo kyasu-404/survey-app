@@ -178,7 +178,7 @@ test("forms cache the author display name without widening profile reads", () =>
 test("api roles receive the table grants required by PostgREST and RLS", () => {
   assert.match(schema, /grant usage on schema public to anon, authenticated, service_role;/i);
   assert.match(schema, /grant select on table public\.profiles to authenticated;/i);
-  assert.match(schema, /grant select on table public\.forms to anon;/i);
+  assert.match(schema, /revoke select on table public\.forms from anon;/i);
   assert.match(schema, /grant select on table public\.forms to authenticated;/i);
   assert.match(schema, /grant insert \(id, title, schema, theme, form_type, form_reason, is_public, deadline_at, max_responses, allow_response_editing, organization_types, author_id\)\s+on table public\.forms to authenticated;/i);
   assert.doesNotMatch(schema, /grant insert \([^)]*responses_count/i);
@@ -213,16 +213,14 @@ test("form rows cannot be deleted directly by authenticated clients", () => {
   assert.match(restrictedClientFormDeletesMigration, /drop policy if exists "forms_delete" on public\.forms;/i);
 });
 
-test("enabled staff can read all forms while anonymous readers see active public forms only", () => {
+test("enabled staff read forms; anonymous clients use the known-link RPC", () => {
   const selectPolicy = getPolicyDefinition("forms_select");
-  const anonSelectPolicy = getPolicyDefinition("forms_select_anon");
 
   assert.match(selectPolicy, /for select\s+to authenticated/i);
   assert.match(selectPolicy, /select public\.request_is_enabled\(\)/i);
   assert.doesNotMatch(selectPolicy, /author_id|request_role|is_public_active_form/i);
 
-  assert.match(anonSelectPolicy, /for select\s+to anon/i);
-  assert.match(anonSelectPolicy, /public\.is_public_active_form\(id\)/i);
+  assert.doesNotMatch(schema, /create policy "forms_select_anon"/i);
 });
 
 test("api role grants migration restricts form updates to client-editable columns", () => {

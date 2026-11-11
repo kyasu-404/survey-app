@@ -450,13 +450,15 @@ export function SurveyFormRenderer({
 
     const handleUploadFiles = async (
       _sender: Model,
-      options: { files: File[]; callback: (data: unknown, errors?: unknown) => void }
+      options: { name?: string; files: File[]; callback: (data: unknown, errors?: unknown) => void }
     ) => {
       const uploaded: Awaited<ReturnType<typeof uploadFileToStorage>>[] = [];
       setFileError(null);
       try {
         for (const file of options.files) {
-          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current, personalToken }));
+          uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current, personalToken,
+            ...(options.name ? { questionName: options.name } : {}),
+          }));
         }
 
         // Register all originals before SurveyJS requests their previews. The

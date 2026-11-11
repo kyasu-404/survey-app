@@ -19,7 +19,7 @@ import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
-import type { SurveySchema } from "../../entities/survey/types";
+import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 import { Icon } from "../../shared/ui/Icon";
 import pinBlackIcon from "../../img/Pin_black.svg";
 import pinWhiteIcon from "../../img/Pin_white.svg";
@@ -42,6 +42,18 @@ type SelectedResponsePreview = {
   label: string;
   response: SurveyResponse;
 };
+
+function getRealtimeRevision(value: unknown): bigint | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+  // PostgreSQL bigint revisions may arrive as decimal strings. An unsafe
+  // JavaScript number cannot establish that two revisions are equal.
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    return BigInt(value);
+  }
+  return null;
+}
 
 function getResponsePreviewLabel(row: ResponsesTableRow, index: number, columns: ResponsesTableColumn[]) {
   const primaryValue = Object.entries(row).find(
@@ -321,6 +333,41 @@ export default function FormResponsesPage() {
       { queryKey: getFormQueryKey(id) },
       { queryKey: getFormResponsesQueryKey(id) },
     ]);
+    const handleFormUpdate = (payload: unknown) => {
+      const event = payload && typeof payload === "object"
+        ? payload as { new?: Record<string, unknown>; commit_timestamp?: unknown }
+        : null;
+      const state = queryClient.getQueryState<SurveyForm | null>(getFormQueryKey(id));
+      const cachedForm = state?.data;
+      const cachedRevision = getRealtimeRevision(cachedForm?.revision);
+      const nextRevision = getRealtimeRevision(event?.new?.revision);
+      const count = event?.new?.responses_count;
+      const committedAt = typeof event?.commit_timestamp === "string"
+        ? Date.parse(event.commit_timestamp)
+        : NaN;
+
+      if (!cachedForm || state?.fetchStatus !== "idle" || event?.new?.id !== id
+        || cachedRevision === null || nextRevision === null || cachedRevision !== nextRevision
+        || typeof count !== "number" || !Number.isSafeInteger(count) || count < 0
+        || !Number.isFinite(committedAt)) {
+        refreshForm();
+        return;
+      }
+
+      // HTTP completion uses the client clock, not the database snapshot time.
+      // A differing count behind that timestamp needs an authoritative reread.
+      if (committedAt < state.dataUpdatedAt && count !== cachedForm.responses_count) {
+        refreshForm();
+        return;
+      }
+      if (committedAt >= state.dataUpdatedAt) {
+        queryClient.setQueryData<SurveyForm>(getFormQueryKey(id), {
+          ...cachedForm,
+          responses_count: count,
+        }, { updatedAt: committedAt });
+      }
+      refreshResponses();
+    };
     const recovery = createRealtimeRecovery(refreshForm, showToast);
 
     const channel = supabaseClient
@@ -343,7 +390,7 @@ export default function FormResponsesPage() {
           table: "forms",
           filter: `id=eq.${id}`,
         },
-        refreshForm,
+        handleFormUpdate,
       )
       .subscribe((status) => {
         recovery.status(status);
