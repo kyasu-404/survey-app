@@ -23,8 +23,16 @@ test("page titles entered before the first question survive the first save and r
   await titleEditors.nth(4).press("Tab");
   await page.locator(".svc-toolbox").getByText("Текст", { exact: true }).click();
   await expect(designer.getByRole("textbox", { name: /^вопрос\d+$/, exact: false })).toHaveCount(5);
-  await titleEditors.nth(4).fill("");
-  await titleEditors.nth(4).press("Tab");
+  const untitledEditor = titleEditors.nth(4);
+  // SurveyJS updates selection on focus; select the text after that update.
+  await untitledEditor.click();
+  await expect(untitledEditor).toBeFocused();
+  await untitledEditor.press("ControlOrMeta+A");
+  await untitledEditor.press("Backspace");
+  await expect(untitledEditor).toBeEmpty();
+  await untitledEditor.press("Tab");
+  await expect(untitledEditor).not.toBeFocused();
+  await expect(untitledEditor).toBeEmpty();
   await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
   await expect(page).toHaveURL(/dashboard/);
   expect(form.schema.pages.map(p => p.title ?? "")).toEqual([...titles, ""]);

@@ -27,6 +27,7 @@ test("gallery and uploaded backgrounds survive saving and public rendering", asy
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64");
   let uploadedPath = "";
   let saves = 0;
+  let publicFormRequests = 0;
   await page.routeWebSocket("**/*", (socket) => socket.close());
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -65,6 +66,14 @@ test("gallery and uploaded backgrounds survive saving and public rendering", asy
       if (table === "app_branding") return route.fulfill({ json: { id: 1, sidebar_logo_path: null } });
       if (table === "list_forms_keyset") return route.fulfill({ json: [form] });
       if (table === "forms") return route.fulfill({ json: url.searchParams.has("id") ? form : [form] });
+      if (table === "get_public_form") {
+        expect(url.pathname).toBe("/rest/v1/rpc/get_public_form");
+        expect(request.method()).toBe("POST");
+        expect(request.postDataJSON()).toEqual({ p_form_id: formId });
+        publicFormRequests += 1;
+        const { author_id: _authorId, author_name: _authorName, ...publicForm } = form;
+        return route.fulfill({ json: publicForm });
+      }
       if (table === "get_dashboard_forms_stats") return route.fulfill({ json: [{ total_count: 1, active_count: 1, forms_with_deadline_count: 0 }] });
       return route.fulfill({ json: [] });
     }
@@ -116,6 +125,7 @@ test("gallery and uploaded backgrounds survive saving and public rendering", asy
   await expect(page).toHaveURL(/dashboard/);
   await page.goto(`/form/${formId}`);
   await expectBackground(uploadedPath);
+  expect(publicFormRequests).toBe(1);
   await expect(page.getByRole("textbox").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
