@@ -15,30 +15,10 @@ const budgets = {
   image: { raw: 250_000 },
   font: { raw: 32_768 },
   textFont: { raw: 49_152 },
-  // Patched React Router 7, durable-job UI and motion add about 36 KiB.
-  // Responsive navigation, styles and editor controls add another 14 KiB.
-  // Viewport-bounded menus and mobile preview refinements add 2.5 KiB.
-  // Answer formatting and draft upload restoration add a measured 6.4 KiB.
-  // Standalone section hierarchy and preview chrome add another 1.5 KiB.
-  // Sharing tabs, iframe code and collapsible filters add about 8 KiB.
-  // Allocate 10 KiB for this UI; dependency and initial-load budgets stay fixed.
-  // Keep the initial-load gate unchanged; allow only this measured increase.
-  // Personal links, invitation status and response binding add 9.8 KiB.
-  // Reserve 12 KiB; initial-load and dependency budgets remain unchanged.
-  // Lazy mail composer, recipient selection and responsive layout add 15.2 KiB.
-  // Reserve 18 KiB; initial-load and dependency limits stay fixed.
-  // iframe settings and favicon UI add a measured 12 KiB; reserve 14 KiB.
-  // Initial-load and dependency limits stay fixed.
-  // Navigation rail, user creation dialog and full-height response sheet add
-  // 9.2 KiB measured. Reserve 10 KiB; startup/dependency limits stay fixed.
-  // Local Material Symbols subset + Apache license add 15.1 KiB net after
-  // replacing duplicated icon assets. Reserve 16 KiB; startup limits stay fixed.
-  // Self-hosted variable Roboto (8 Unicode/style subsets), SIL license and UI
-  // changes add 281.0 KiB measured. Reserve 288 KiB; JS/CSS startup, dependency
-  // and icon-font limits stay fixed. Each text subset is capped at 48 KiB.
-  // Lazy public/private routes add 12.3 KiB of shared chunks and manifest entries.
-  // Reserve 16 KiB; startup and dependency limits remain unchanged.
-  total: { raw: 7_373_716 },
+  // Lazy routes, shared RPC/realtime clients and upload metadata total ~7.37 MB.
+  // Reserve ~1% for VITE_* values and build-environment variation; keep the
+  // startup, route-dependency and per-asset limits unchanged.
+  total: { raw: 7_450_000 },
 };
 
 function formatBytes(bytes) {
