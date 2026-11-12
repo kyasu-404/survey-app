@@ -17,6 +17,7 @@ export function createSmtpTransportManager({ encryptionKey, concurrency, createT
       if (!settings?.enabled) { close(); return null; }
       const nextKey = JSON.stringify([
         settings.host, settings.port, settings.ssl_mode, settings.username, settings.password_encrypted,
+        settings.allow_invalid_certificate === true,
       ]);
       if (nextKey !== connectionKey) {
         close();

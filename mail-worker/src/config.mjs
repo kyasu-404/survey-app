@@ -32,7 +32,7 @@ export function createTransportOptions(settings, password) {
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,
     socketTimeout: 30_000,
-    tls: { rejectUnauthorized: true, minVersion: "TLSv1.2" },
+    tls: { rejectUnauthorized: settings.allow_invalid_certificate !== true, minVersion: "TLSv1.2" },
     disableFileAccess: true,
     disableUrlAccess: true,
   };
@@ -46,11 +46,15 @@ export function toPublicSmtpError(error) {
   if (code === "EAUTH" || responseCode === 535) return "SMTP-сервер отклонил имя пользователя или пароль";
   if (code === "EDNS") return "Не удалось найти SMTP-сервер по указанному адресу";
   if (code === "ETIMEDOUT" || message.includes("timeout")) return "SMTP-сервер не ответил вовремя";
-  if (["ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "ESOCKET"].includes(code)) {
-    return "Не удалось установить соединение с SMTP-сервером";
+  if (code.includes("CERT") || code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+    || message.includes("certificate") || message.includes("self-signed")) {
+    return "Не удалось проверить сертификат SMTP-сервера. Проверьте сертификат или включите «Не проверять сертификат сервера» в настройках SMTP.";
   }
   if (message.includes("certificate") || message.includes("tls") || message.includes("ssl")) {
     return "Не удалось установить защищённое SMTP-соединение; проверьте порт и режим шифрования";
+  }
+  if (["ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "ESOCKET"].includes(code)) {
+    return "Не удалось установить соединение с SMTP-сервером";
   }
   if (responseCode >= 500 && responseCode < 600) return `SMTP-сервер отклонил письмо (код ${responseCode})`;
   if (responseCode >= 400 && responseCode < 500) return `SMTP-сервер временно не принял письмо (код ${responseCode})`;

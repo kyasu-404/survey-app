@@ -90,7 +90,7 @@ async function removeStorageObjects(bucket, names) {
 
 async function loadSettings() {
   const rows = await supabaseRequest(
-    "/rest/v1/mail_settings?id=eq.1&select=enabled,host,port,ssl_mode,username,password_encrypted,from_email,from_name,reply_to",
+    "/rest/v1/mail_settings?id=eq.1&select=enabled,host,port,ssl_mode,allow_invalid_certificate,username,password_encrypted,from_email,from_name,reply_to",
     { method: "GET" },
   );
   return Array.isArray(rows) ? rows[0] ?? null : null;

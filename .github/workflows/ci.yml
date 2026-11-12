@@ -105,7 +105,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Test Edge Function authorization and origin behavior
-        run: node --test functions/security-boundaries.test.mjs functions/form-admin/upload-policy.test.mjs functions/app-settings/index.test.mjs functions/app-settings/favicon.test.mjs
+        run: node --test functions/security-boundaries.test.mjs functions/form-admin/upload-policy.test.mjs functions/app-settings/index.test.mjs functions/app-settings/favicon.test.mjs functions/mail-admin/composer.test.mjs functions/mail-admin/settings.test.mjs
 
       - name: Build frontend
         working-directory: frontend

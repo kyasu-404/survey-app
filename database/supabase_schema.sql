@@ -125,6 +125,7 @@ create table public.mail_settings (
   host text not null,
   port integer not null check (port between 1 and 65535),
   ssl_mode text not null default 'tls' check (ssl_mode in ('tls', 'starttls', 'none')),
+  allow_invalid_certificate boolean not null default false,
   username text not null,
   password_encrypted text not null,
   from_email text not null,

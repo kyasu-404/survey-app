@@ -85,3 +85,53 @@ for (const width of [1440, 390]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+for (const width of [1440, 390]) {
+  test(`SMTP certificate exception persists after saving and reloading at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const app = await openSurveyApp(page);
+    let settings = {
+      enabled: true, host: "smtp.example.test", port: 465, sslMode: "tls", allowInvalidCertificate: false,
+      username: "mail@example.test", fromEmail: "mail@example.test", fromName: "Формы", replyTo: "", hasPassword: true,
+    };
+    const saves: Array<Record<string, unknown>> = [];
+    await page.route("**/api/office/settings", route => route.fulfill({ json: {
+      enabled: false, public_url: "", internal_url: "", storage_url_override: "",
+      jwt_header: "Authorization", jwt_prefix: "Bearer ", max_file_mb: 25, max_table_rows: 1000, has_secret: false,
+    } }));
+    await page.route("**/functions/v1/mail-admin", route => {
+      const payload = route.request().postDataJSON();
+      if (payload.action === "save-settings") {
+        saves.push(payload);
+        settings = { ...settings, allowInvalidCertificate: payload.allowInvalidCertificate };
+      } else expect(payload.action).toBe("get-settings");
+      return route.fulfill({ json: { settings } });
+    });
+    await page.route("**/functions/v1/form-admin", route => route.request().postDataJSON().action === "get-cleanup-status"
+      ? route.fulfill({ json: { retentionHours: 168, lastRun: null } }) : route.fallback());
+    await page.goto("/settings");
+    await page.getByRole("tab", { name: "SMTP", exact: true }).click();
+    const exception = page.getByRole("checkbox", { name: "Не проверять сертификат сервера", exact: true });
+    await expect(exception).not.toBeChecked();
+    await exception.check();
+    await expect(page.getByRole("alert")).toContainText("подлинность сервера не проверяется");
+    for (const theme of ["sand", "graphite"]) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      await page.locator(".smtp-certificate-policy").screenshot({ path: `../output/smtp-certificate-${width}-${theme}.png` });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await page.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeDisabled();
+    expect(saves).toHaveLength(1);
+    expect(saves[0]).toMatchObject({ allowInvalidCertificate: true, password: "", sslMode: "tls", port: 465 });
+    await page.reload();
+    await page.getByRole("tab", { name: "SMTP", exact: true }).click();
+    await expect(exception).toBeChecked();
+    await exception.uncheck();
+    await page.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeDisabled();
+    expect(saves).toHaveLength(2);
+    expect(saves[1]).toMatchObject({ allowInvalidCertificate: false, password: "" });
+    expect(app.pageErrors).toEqual([]);
+  });
+}

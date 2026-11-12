@@ -177,6 +177,38 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: "Проверить снова" })).toBeInTheDocument();
   });
 
+  it("defaults to certificate verification and saves an explicit exception without changing the password", async () => {
+    saveSmtpSettings.mockImplementation(async draft => {
+      const saved = { ...storedSettings, ...draft, hasPassword: true };
+      getSmtpSettings.mockResolvedValue(saved);
+      return saved;
+    });
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
+    const exception = await screen.findByRole("checkbox", { name: "Не проверять сертификат сервера" });
+    expect(exception).not.toBeChecked();
+    await userEvent.click(exception);
+    expect(screen.getByRole("alert")).toHaveTextContent(/подлинность сервера не проверяется/);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    await waitFor(() => expect(saveSmtpSettings).toHaveBeenCalledWith(expect.objectContaining({ allowInvalidCertificate: true, password: "" })));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить настройки" })).toBeDisabled());
+    expect(exception).toBeChecked();
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Шифрование" }), "none");
+    expect(exception).toBeDisabled();
+  });
+
+  it("loads an existing certificate exception and lets the administrator restore verification", async () => {
+    getSmtpSettings.mockResolvedValue({ ...storedSettings, allowInvalidCertificate: true });
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
+    const exception = await screen.findByRole("checkbox", { name: "Не проверять сертификат сервера" });
+    expect(exception).toBeChecked();
+    await userEvent.click(exception);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    await waitFor(() => expect(saveSmtpSettings).toHaveBeenCalledWith(expect.objectContaining({ allowInvalidCertificate: false })));
+  });
+
   it("visually separates SMTP settings from storage cleanup and runs manual cleanup after confirmation", async () => {
     renderPage();
 

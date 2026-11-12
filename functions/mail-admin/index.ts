@@ -15,6 +15,7 @@ type MailSettingsRow = {
   host: string;
   port: number;
   ssl_mode: "tls" | "starttls" | "none";
+  allow_invalid_certificate: boolean;
   username: string;
   password_encrypted: string;
   from_email: string;
@@ -110,6 +111,7 @@ function publicSettings(row: MailSettingsRow | null) {
     host: row.host,
     port: row.port,
     sslMode: row.ssl_mode,
+    allowInvalidCertificate: row.allow_invalid_certificate === true,
     username: row.username,
     fromEmail: row.from_email,
     fromName: row.from_name,
@@ -119,11 +121,13 @@ function publicSettings(row: MailSettingsRow | null) {
   };
 }
 
-function validateSettings(payload: Record<string, unknown>, hasStoredPassword: boolean) {
+function validateSettings(payload: Record<string, unknown>, hasStoredPassword: boolean, storedAllowInvalidCertificate = false) {
   const enabled = payload.enabled !== false;
   const host = asTrimmedString(payload.host);
   const port = Number(payload.port);
   const sslMode = asTrimmedString(payload.sslMode);
+  const allowInvalidCertificate = payload.allowInvalidCertificate === undefined
+    ? storedAllowInvalidCertificate : payload.allowInvalidCertificate;
   const username = asTrimmedString(payload.username);
   const password = typeof payload.password === "string" ? payload.password : "";
   const fromEmail = asTrimmedString(payload.fromEmail).toLowerCase();
@@ -133,6 +137,7 @@ function validateSettings(payload: Record<string, unknown>, hasStoredPassword: b
   if (!host || host.length > 253 || /[\s/:]/.test(host)) return { error: "Укажите SMTP-сервер без протокола и пробелов" };
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: "Порт SMTP должен быть числом от 1 до 65535" };
   if (!new Set(["tls", "starttls", "none"]).has(sslMode)) return { error: "Выберите корректный режим шифрования" };
+  if (typeof allowInvalidCertificate !== "boolean") return { error: "Укажите корректное значение проверки сертификата" };
   if (!username || username.length > 320 || /[\r\n]/.test(username)) return { error: "Укажите имя пользователя SMTP" };
   if (!password && !hasStoredPassword) return { error: "Укажите пароль SMTP" };
   if (password.length > 4096) return { error: "Пароль SMTP слишком длинный" };
@@ -141,7 +146,7 @@ function validateSettings(payload: Record<string, unknown>, hasStoredPassword: b
   if (replyTo && (!emailPattern.test(replyTo) || replyTo.length > 320)) return { error: "Укажите корректный Reply-To" };
 
   return {
-    value: { enabled, host, port, sslMode, username, password, fromEmail, fromName, replyTo: replyTo || null },
+    value: { enabled, host, port, sslMode, allowInvalidCertificate, username, password, fromEmail, fromName, replyTo: replyTo || null },
   };
 }
 
@@ -249,7 +254,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (existingError) throw existingError;
       const existing = existingData as MailSettingsRow | null;
-      const validation = validateSettings(payload, Boolean(existing?.password_encrypted));
+      const validation = validateSettings(payload, Boolean(existing?.password_encrypted), existing?.allow_invalid_certificate === true);
       if (validation.error || !validation.value) return json(req, 400, { error: validation.error ?? "Проверьте настройки" }, requestId);
       const settings = validation.value;
       const passwordEncrypted = settings.password
@@ -261,6 +266,7 @@ Deno.serve(async (req) => {
         host: settings.host,
         port: settings.port,
         ssl_mode: settings.sslMode,
+        allow_invalid_certificate: settings.allowInvalidCertificate,
         username: settings.username,
         password_encrypted: passwordEncrypted,
         from_email: settings.fromEmail,

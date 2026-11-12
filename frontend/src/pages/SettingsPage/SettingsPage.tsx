@@ -23,6 +23,7 @@ function settingsToDraft(settings: SmtpSettings | null): SmtpSettingsDraft {
     host: settings.host,
     port: settings.port,
     sslMode: settings.sslMode,
+    allowInvalidCertificate: settings.allowInvalidCertificate === true,
     username: settings.username,
     password: "",
     fromEmail: settings.fromEmail,
@@ -286,6 +287,28 @@ export default function SettingsPage() {
                   <input type="password" value={draft.password} onChange={(event) => updateDraft("password", event.target.value)} placeholder={hasStoredPassword ? "••••••••••••" : "Введите пароль"} autoComplete="new-password" />
                   <small>{passwordHint}</small>
                 </label>
+              </div>
+              <div className="smtp-certificate-policy">
+                <label className="smtp-certificate-control">
+                  <input
+                    type="checkbox"
+                    checked={draft.allowInvalidCertificate}
+                    disabled={draft.sslMode === "none"}
+                    onChange={(event) => updateDraft("allowInvalidCertificate", event.target.checked)}
+                    aria-describedby="smtp-certificate-hint"
+                  />
+                  <span>Не проверять сертификат сервера</span>
+                </label>
+                <p id="smtp-certificate-hint">
+                  {draft.sslMode === "none"
+                    ? "Проверка сертификата применяется только к TLS и STARTTLS."
+                    : "Для серверов с самоподписанным или недоверенным сертификатом. По умолчанию проверка включена."}
+                </p>
+                {draft.allowInvalidCertificate && draft.sslMode !== "none" && (
+                  <p className="smtp-certificate-warning" role="alert">
+                    Шифрование сохраняется, но подлинность сервера не проверяется. Это повышает риск перехвата пароля и писем. Включайте только для доверенного SMTP-сервера.
+                  </p>
+                )}
               </div>
             </section>
 

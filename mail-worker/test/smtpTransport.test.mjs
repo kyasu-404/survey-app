@@ -75,3 +75,20 @@ test('successive mail batches reuse a single authenticated TCP connection', asyn
   assert.equal(connections, 1);
   assert.equal(authentications, 1);
 });
+
+test('changing certificate policy closes the existing SMTP pool in both directions', () => {
+  const manager = createSmtpTransportManager({ encryptionKey: key.toString('base64'), concurrency: 1,
+    createTransport: options => ({ options, closed: false, close() { this.closed = true; } }),
+  });
+  const verified = manager.get(settings);
+  assert.equal(manager.get({ ...settings, allow_invalid_certificate: false }), verified);
+  const unverified = manager.get({ ...settings, allow_invalid_certificate: true });
+  assert.notEqual(unverified, verified);
+  assert.equal(verified.closed, true);
+  assert.equal(unverified.options.tls.rejectUnauthorized, false);
+  const restored = manager.get({ ...settings, allow_invalid_certificate: false });
+  assert.notEqual(restored, unverified);
+  assert.equal(unverified.closed, true);
+  assert.equal(restored.options.tls.rejectUnauthorized, true);
+  manager.close();
+});

@@ -5,6 +5,7 @@ export type SmtpSettings = {
   host: string;
   port: number;
   sslMode: SmtpSslMode;
+  allowInvalidCertificate: boolean;
   username: string;
   fromEmail: string;
   fromName: string;

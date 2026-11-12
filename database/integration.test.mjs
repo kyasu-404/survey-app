@@ -54,6 +54,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const followupMigrations = await Promise.all([
       "202611111200_counter_update_costs.sql", "202611111230_public_form_links.sql",
       "202611111300_upload_type_policy.sql",
+      "202611131200_smtp_certificate_policy.sql",
     ].map(name => source("./migrations/" + name)));
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
@@ -73,9 +74,16 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
           await db.query(migration);
         }
         await db.query(reviewMigration);
+        // Rehearse the SMTP migration over a populated pre-option settings row.
+        if (!priorSchema) await db.query("alter table public.mail_settings drop column allow_invalid_certificate");
+        await db.query("insert into public.mail_settings(host,port,username,password_encrypted,from_email,from_name) values('smtp.example.test',465,'test','migration-encrypted-password','test@example.test','Migration fixture')");
         // Include legacy column ACLs; a table-level REVOKE alone is insufficient.
         await db.query("grant select(id,author_name) on public.forms to anon");
         for (const sql of followupMigrations) await db.query(sql);
+        const smtp = (await db.query("select allow_invalid_certificate,password_encrypted from public.mail_settings where id=1")).rows[0];
+        assert.equal(smtp.allow_invalid_certificate, false);
+        assert.equal(smtp.password_encrypted, "migration-encrypted-password");
+        await db.query("delete from public.mail_settings where id=1");
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
@@ -83,6 +91,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/public_form_access.sql");
       await runPsql(database, "./tests/counter_update_costs.sql");
       await runPsql(database, "./tests/upload_type_policy.sql");
+      await runPsql(database, "./tests/smtp_certificate_policy.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }

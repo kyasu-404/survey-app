@@ -7,6 +7,7 @@ export const EMPTY_SMTP_SETTINGS: SmtpSettingsDraft = {
   host: "",
   port: 465,
   sslMode: "tls",
+  allowInvalidCertificate: false,
   username: "",
   password: "",
   fromEmail: "",
