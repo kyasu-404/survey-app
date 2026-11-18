@@ -26,7 +26,7 @@ import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
-import { getArchiveQuestions } from "../../entities/response/lib/responseFiles";
+import { hasArchiveFileQuestions } from "../../entities/response/lib/responseFiles";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow, ResponsesTableColumn } from "../../entities/response/lib/responsesExport";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
@@ -214,7 +214,7 @@ export default function FormResponsesPage() {
     retry: false,
   });
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
-  const [zipProgress, setZipProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [isPreparingZip, setIsPreparingZip] = useState(false);
   const zipControllerRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
@@ -227,7 +227,7 @@ export default function FormResponsesPage() {
     setSelectedResponseIds(new Set());
     setResponseReport(null);
     setIsHeaderPinned(false);
-    setZipProgress(null);
+    setIsPreparingZip(false);
     return () => {
       zipControllerRef.current?.abort();
       zipControllerRef.current = null;
@@ -271,17 +271,15 @@ export default function FormResponsesPage() {
   const usesOrganizationDirectory = Boolean(
     formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
   );
-  const archiveQuestions = useMemo(
-    () => formQuery.data && getArchiveQuestions(formQuery.data.schema),
+  const hasFileQuestions = useMemo(
+    () => Boolean(formQuery.data && hasArchiveFileQuestions(formQuery.data.schema)),
     [formQuery.data],
   );
-  const hasFileQuestions = Boolean(archiveQuestions?.fileQuestions.length);
-  const zipUsesOrganizationDirectory = hasFileQuestions && Boolean(archiveQuestions?.organizationPaths.length);
   const formOrganizationTypes = normalizeOrganizationTypes(formQuery.data?.organization_types);
   const organizationsQuery = useQuery({
-    queryKey: ["education-organizations", usesOrganizationDirectory ? "history" : "zip", id],
+    queryKey: ["education-organizations", "history", id],
     queryFn: ({ signal }) => getOrganizations(undefined, signal, true),
-    enabled: Boolean(id && (usesOrganizationDirectory || zipUsesOrganizationDirectory)),
+    enabled: Boolean(id && usesOrganizationDirectory),
     staleTime: 30_000,
   });
 
@@ -440,35 +438,31 @@ export default function FormResponsesPage() {
   };
 
   const handleExportFiles = async () => {
-    if (!formQuery.data || !responsesQuery.data || zipControllerRef.current) return;
+    if (!id || !formQuery.data || !responsesQuery.data || zipControllerRef.current) return;
+    const responsePage = responsesQuery.data;
+    const pageOffset = ((responsePage.page ?? page) - 1) * (responsePage.pageSize ?? pageSize);
+    const selected = selectedResponseIds.size ? responses.flatMap((response, index) =>
+      selectedResponseIds.has(response.id) ? [{ id: response.id, number: pageOffset + index + 1 }] : [],
+    ) : undefined;
+    if (selected && selected.length !== selectedResponseIds.size) {
+      showToast("Список ответов обновился. Выберите ответы для выгрузки ещё раз.", "warning");
+      return;
+    }
     const controller = new AbortController();
     zipControllerRef.current = controller;
-    setZipProgress({ completed: 0, total: 0 });
+    setIsPreparingZip(true);
     try {
-      const responsePage = responsesQuery.data;
-      const pageOffset = ((responsePage.page ?? page) - 1) * (responsePage.pageSize ?? pageSize);
-      const responseNumbers = selectedResponseIds.size
-        ? new Map(responses.map((response, index) => [response.id, pageOffset + index + 1]))
-        : undefined;
       const { exportResponseFilesZip } = await import("../../entities/response/lib/responseFilesZip");
-      const result = await exportResponseFilesZip(await loadExportResponses(controller.signal), formQuery.data.schema, formQuery.data.title, {
-        organizationLabels: directoryLabels,
-        responseNumbers,
-        signal: controller.signal,
-        onProgress: (completed, total) => {
-          if (!controller.signal.aborted) setZipProgress({ completed, total });
-        },
-      });
+      const started = await exportResponseFilesZip(id, selected, controller.signal);
       if (controller.signal.aborted) return;
-      if (!result) showToast("В ответах пока нет прикреплённых файлов", "warning");
-      else if (result.failed) showToast(`В ZIP добавлено файлов: ${result.downloaded}. Не удалось скачать: ${result.failed}. Список включён в архив.`, "warning");
-      else showToast(`Файлы выгружены в ZIP: ${result.downloaded}`, "success");
+      if (started) showToast("Скачивание ZIP началось", "success");
+      else showToast("В ответах пока нет прикреплённых файлов", "warning");
     } catch (error) {
       if (!controller.signal.aborted) showToast(getErrorMessage(error, "Не удалось выгрузить файлы"), "error");
     } finally {
       if (zipControllerRef.current === controller) {
         zipControllerRef.current = null;
-        setZipProgress(null);
+        setIsPreparingZip(false);
       }
     }
   };
@@ -596,11 +590,11 @@ export default function FormResponsesPage() {
                 type="button"
                 className="responses-export-button"
                 aria-label="Файлы в ZIP"
-                aria-busy={Boolean(zipProgress)}
+                aria-busy={isPreparingZip}
                 onClick={() => void handleExportFiles()}
-                disabled={isLoading || (zipUsesOrganizationDirectory && organizationsQuery.isPending) || Boolean(zipProgress)}
+                disabled={isLoading || isPreparingZip}
               >
-                <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : selectedResponseIds.size ? "Выбранные файлы в ZIP" : "Файлы в ZIP"}</span>
+                <span>{isPreparingZip ? "Подготовка ZIP…" : selectedResponseIds.size ? "Выбранные файлы в ZIP" : "Файлы в ZIP"}</span>
                 <Icon name="download" className="toolbar-icon" size={18} />
               </button>
             )}

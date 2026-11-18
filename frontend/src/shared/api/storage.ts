@@ -315,21 +315,6 @@ async function fetchStorageFileBlob(path: string, options: StorageAuthOptions) {
   );
 }
 
-// Download bytes for exports without expanding every attachment into Base64.
-export async function downloadSurveyFile(value: unknown, options: StorageAuthOptions = {}) {
-  options.signal?.throwIfAborted();
-  const path = getStoragePathFromSurveyFileValue(value);
-  if (path) return fetchStorageFileBlob(path, options);
-
-  const content = typeof value === "string" ? value : (value as { content?: unknown } | null)?.content;
-  if (typeof content === "string" && /^data:[^,]*;base64,/i.test(content)) {
-    const comma = content.indexOf(",");
-    const bytes = Uint8Array.from(atob(content.slice(comma + 1)), character => character.charCodeAt(0));
-    return new Blob([bytes], { type: content.slice(5, comma).split(";")[0] || "application/octet-stream" });
-  }
-  throw new Error("Не удалось определить содержимое файла");
-}
-
 export async function resolveSurveyFileValueContent(value: unknown, options: StorageAuthOptions = {}) {
   const storagePath = getStoragePathFromSurveyFileValue(value);
 

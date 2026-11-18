@@ -185,11 +185,8 @@ describe("FormResponsesPage", () => {
     getFormById.mockResolvedValue({ id: "form-1", title: "Вложения", author_id: authorId, schema });
     const responses = [createResponse(1), createResponse(2)];
     loadResponseRows.mockResolvedValue(responses);
-    const deferred = createDeferred<{ downloaded: number; failed: number }>();
-    exportResponseFilesZip.mockImplementation((_responses, _schema, _title, options) => {
-      options.onProgress(1, 2);
-      return deferred.promise;
-    });
+    const deferred = createDeferred<boolean>();
+    exportResponseFilesZip.mockReturnValue(deferred.promise);
     render(<MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
       <QueryClientProvider client={createQueryClient()}><Routes>
         <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
@@ -207,12 +204,12 @@ describe("FormResponsesPage", () => {
     await waitFor(() => expect(exportToExcel).toHaveBeenCalledWith(expect.any(Array), "ответы-Вложения", "Ответы", expect.any(Array)));
     expect(exportToExcel.mock.calls[0][0]).toHaveLength(1);
     await userEvent.click(button);
-    await waitFor(() => expect(button).toHaveTextContent("1/2"));
+    await waitFor(() => expect(button).toHaveTextContent("Подготовка ZIP"));
     expect(button).toBeDisabled();
-    expect(exportResponseFilesZip).toHaveBeenCalledExactlyOnceWith([responses[0]], schema, "Вложения", expect.objectContaining({ signal: expect.any(AbortSignal) }));
-    await act(async () => deferred.resolve({ downloaded: 1, failed: 1 }));
+    expect(exportResponseFilesZip).toHaveBeenCalledExactlyOnceWith("form-1", [{ id: responses[0].id, number: 1 }], expect.any(AbortSignal));
+    await act(async () => deferred.resolve(true));
     expect(button).toBeEnabled();
-    expect(showToast).toHaveBeenCalledWith(expect.stringContaining("Не удалось скачать: 1"), "warning");
+    expect(showToast).toHaveBeenCalledWith("Скачивание ZIP началось", "success");
   });
 
   it("keeps response tables square and vertically scrollable inside the table content", () => {

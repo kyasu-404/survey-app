@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { enqueueGeneration } from './generation-jobs.mjs';
 import { runOfficeTask } from './office-tasks.mjs';
 import { readFile } from 'node:fs/promises';
+import { createResponseArchiveRoutes } from './response-archive.mjs';
 import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, saveUrl, readLimited, fetchLimited, documentName, documentKey, callbackSaveTime } from './security.mjs';
 import { DOCX_MIME, blankDocx } from './docx.mjs';
 import {XLSX_MIME,mimeFor,blankXlsx,templateSources,systemFields} from './templates.mjs';
 export const PLUGIN_GUID = 'asc.{BA7A912A-0856-4677-9AB5-390CA8D4D636}';
 const BUCKET = 'survey-documents';
 const now = () => Math.floor(Date.now()/1000);
+const bearer = req => (req.headers.authorization || '').replace(/^Bearer /, '');
 
 export function createApp({pool, supabase, env = process.env}) {
   const key = encryptionKey(env.ONLYOFFICE_SETTINGS_ENCRYPTION_KEY);
@@ -23,8 +25,7 @@ export function createApp({pool, supabase, env = process.env}) {
     requireValue(claims.purpose===purpose && Number.isFinite(claims.exp),'Недостаточно прав токена',401);
     return claims;
   }
-  async function authenticate(req) {
-    const token = (req.headers.authorization || '').replace(/^Bearer /,'');
+  async function authenticate(token) {
     requireValue(token,'Требуется вход в систему',401);
     let claims=null, id;
     try { claims=capability(token,'plugin'); id=claims.sub; }
@@ -38,6 +39,10 @@ export function createApp({pool, supabase, env = process.env}) {
     return {profile,claims};
   }
   const employeeOnly = auth => requireValue(!auth.claims,'Токен плагина не разрешает эту операцию',403);
+  const archives = createResponseArchiveRoutes({
+    env, send, secureCookies: new URL(appUrl).protocol === 'https:',
+    authenticateEmployee: async token => employeeOnly(await authenticate(token)),
+  });
   function adminOnly(auth) { employeeOnly(auth); requireValue(auth.profile.role==='admin','Требуются права администратора',403); }
   async function formFor(id,auth) {
     requireValue(uuid(id),'Неверный ID формы');
@@ -187,6 +192,10 @@ export function createApp({pool, supabase, env = process.env}) {
     requireValue(!origin || origin===new URL(appUrl).origin || (path.startsWith('/plugin/') && req.method==='GET'),'Недопустимый origin',403);
     if(req.method==='OPTIONS') return send(res,204,'');
     if(path==='/health') {await query('select 1'); return send(res,200,{ok:true});}
+    const prepareArchive = path.match(/^\/forms\/([^/]+)\/response-archive$/);
+    if (prepareArchive && req.method === 'POST') return archives.prepare(req, res, prepareArchive[1].toLowerCase(), bearer(req));
+    const downloadArchive = path.match(/^\/response-archives\/([^/]+)$/);
+    if (downloadArchive && req.method === 'GET') return archives.download(req, res, downloadArchive[1]);
     const s=await settings();
     requireValue(s,'Office API не настроен',503);
     const dsOrigin=s.public_url ? new URL(s.public_url).origin : "'none'";
@@ -217,7 +226,7 @@ export function createApp({pool, supabase, env = process.env}) {
       const body=JSON.parse(await readLimited(req,1024*1024));
       return callback(req,res,path.slice(10),s,body);
     }
-    const auth=await authenticate(req);
+    const auth=await authenticate(bearer(req));
     if(path==='/status' && req.method==='GET') {employeeOnly(auth);return send(res,200,{enabled:Boolean(s.enabled)});}
     let body={};
     const contentType=req.headers['content-type']?.split(';')[0];
@@ -374,6 +383,7 @@ export function createApp({pool, supabase, env = process.env}) {
       const id=randomUUID();
       // Do not log request bodies, URLs, tokens or Document Server download URLs.
       console.error(JSON.stringify({event:'office-request-error',requestId:id,status:error.status || 500,code:error.code || error.name}));
+      if (res.destroyed) return;
       if(!res.headersSent) send(res,error.status || 500,{error:1,message:error instanceof HttpError ? error.message : `Не удалось выполнить операцию (${id.slice(0,8)})`});
       else res.end();
     }

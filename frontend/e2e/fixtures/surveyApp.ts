@@ -3,7 +3,7 @@ import type { SurveyPageSchema, SurveyQuestion, SurveySchema } from "../../src/e
 import { mockRealtime } from "./realtime";
 
 // Each call creates isolated state. All API traffic is intercepted, including mutations.
-export async function openSurveyApp(page: Page, options: { profileName?: string; responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
+export async function openSurveyApp(page: Page, options: { baseURL?: string; profileName?: string; responseCount?: number; responseData?: Array<Record<string, unknown>>; elements?: SurveyQuestion[]; pages?: SurveyPageSchema[] } = {}) {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   const userId = "10000000-0000-4000-8000-000000000001";
@@ -101,7 +101,7 @@ export async function openSurveyApp(page: Page, options: { profileName?: string;
     if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") return route.abort();
     return route.continue();
   });
-  await page.goto("/login");
+  await page.goto(options.baseURL ? new URL("/login", options.baseURL).href : "/login");
   await expect(page.getByRole("button", { name: "Войти", exact: true })).toBeVisible();
   const startupFiles = await page.evaluate(() => performance.getEntriesByType("resource").map((resource) => new URL(resource.name).pathname));
   expect(startupFiles.filter((path) => /survey-(core|creator|react)|exceljs|sentry/.test(path))).toEqual([]);
@@ -114,5 +114,5 @@ export async function openSurveyApp(page: Page, options: { profileName?: string;
   await expect.poll(() => realtime.connected("dashboard-forms:")).toBe(true);
   await expect.poll(() => listRequests.length).toBeGreaterThanOrEqual(2);
   await expect(page.locator(".dashboard-form-card")).toHaveCount(20);
-  return { formId, form, questions, commentTitle, listRequests, deletedBatchSizes, pageErrors, realtime };
+  return { formId, form, responses, token, questions, commentTitle, listRequests, deletedBatchSizes, pageErrors, realtime };
 }

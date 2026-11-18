@@ -74,7 +74,8 @@ AES-256-GCM. Сохраняются приватный Storage, атомарна
 Поместить сервис в `/opt/survey-app/office-service`, скопировать
 `docker-compose.office.yml` в каталог compose Supabase. В backend `.env`:
 
-- существующие `POSTGRES_PASSWORD`, `SERVICE_ROLE_KEY`, `PUBLIC_APP_URL`;
+- существующие `POSTGRES_PASSWORD`, `SERVICE_ROLE_KEY`, `ANON_KEY`, `PUBLIC_APP_URL`;
+- `SUPABASE_PUBLIC_URL` с адресом API из frontend (`VITE_SUPABASE_URL`) для уже сохранённых ссылок на вложения;
 - постоянный `ONLYOFFICE_SETTINGS_ENCRYPTION_KEY` (`openssl rand -base64 32`);
 - для Envoy `OFFICE_SUPABASE_URL=http://api-gw:8000`;
 - `OFFICE_BIND_ADDRESS` — внутренний адрес сервера, если прокси на другой машине.
@@ -92,6 +93,11 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml -f docker
 не требуются. При отключении коннектора кнопка «Документы» скрывается; ранее
 сохранённые макеты и результаты остаются в хранилище. Настройки разделены на
 вкладки «Оформление», «ONLYOFFICE», «SMTP», «Очистка файлов».
+
+Кнопка «Файлы в ZIP» на странице ответов использует тот же сервер и работает
+при отключённом редакторе. Сервер читает существующие ответы и Storage с правами
+сотрудника и передаёт архив по мере сборки. Для обновления нужны новая сборка
+frontend и пересборка `office` с актуальным `docker-compose.office.yml`.
 
 Объекты удаляются через очередь спустя два часа после удаления/замены документа,
 чтобы не обрывать временные ссылки. Для результатов действует та же очередь.

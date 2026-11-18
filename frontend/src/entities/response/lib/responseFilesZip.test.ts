@@ -1,63 +1,36 @@
-import JSZip from "jszip";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { downloadSurveyFile } from "../../../shared/api/storage";
-import { createResponseFilesZip } from "./responseFilesZip";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { officeRequest } from "../../office/api";
+import { exportResponseFilesZip } from "./responseFilesZip";
 
-vi.mock("../../../shared/api/storage", () => ({ downloadSurveyFile: vi.fn() }));
-const schema = { pages: [{ elements: [{ type: "file", name: "files", title: "Документы" }] }] };
-const responses = [{ id: "r1", form_id: "form", created_at: "2026-09-13", data: { files: [
-  { name: "report.pdf", content: "first" }, { name: "report.pdf", content: "second" },
-] } }];
-const bytes = (content: string) => ({ arrayBuffer: async () => new TextEncoder().encode(content).buffer }) as Blob;
-const readBlob = (blob: Blob) => new Promise<ArrayBuffer>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(reader.result as ArrayBuffer);
-  reader.onerror = () => reject(reader.error);
-  reader.readAsArrayBuffer(blob);
-});
+vi.mock("../../office/api", () => ({ officeRequest: vi.fn() }));
 
-describe("files ZIP export", () => {
-  beforeEach(() => vi.resetAllMocks());
+describe("native ZIP download", () => {
+  afterEach(() => vi.restoreAllMocks());
 
-  it("writes the original bytes of every file with unique paths and progress", async () => {
-    vi.mocked(downloadSurveyFile).mockResolvedValueOnce(bytes("PDF 1")).mockResolvedValueOnce(bytes("PDF 2"));
-    const onProgress = vi.fn();
-    const result = await createResponseFilesZip(responses, schema, { onProgress });
-    expect(result).toMatchObject({ downloaded: 2, failed: 0 });
-    const zip = await JSZip.loadAsync(await readBlob(result!.blob));
-    expect(await Promise.all(Object.values(zip.files).map(file => file.async("string")))).toEqual(["PDF 1", "PDF 2"]);
-    expect(onProgress).toHaveBeenLastCalledWith(2, 2);
+  it("starts a same-origin download using the issued ticket", async () => {
+    const selected = [{ id: "answer", number: 101 }];
+    vi.mocked(officeRequest).mockResolvedValueOnce({ ticket: "ticket" });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.pathname).toBe("/api/office/response-archives/ticket");
+      expect(this.hasAttribute("download")).toBe(true);
+    });
+    expect(await exportResponseFilesZip("form", selected, new AbortController().signal)).toBe(true);
+    expect(officeRequest).toHaveBeenLastCalledWith("/forms/form/response-archive", {
+      method: "POST", body: JSON.stringify({ selected }), signal: expect.any(AbortSignal),
+    });
+    expect(click).toHaveBeenCalledOnce();
   });
 
-  it("includes a missing-file list and succeeds with the remaining files", async () => {
-    vi.mocked(downloadSurveyFile).mockRejectedValueOnce(new Error("404")).mockResolvedValueOnce(bytes("PDF 2"));
-    const result = await createResponseFilesZip(responses, schema);
-    expect(result).toMatchObject({ downloaded: 1, failed: 1 });
-    const zip = await JSZip.loadAsync(await readBlob(result!.blob));
-    expect(await zip.file("Не удалось скачать.txt")!.async("string")).toContain("1_report.pdf");
-    expect(Object.values(zip.files).filter(file => file.name.endsWith(".pdf"))).toHaveLength(1);
-  });
-
-  it("includes all attachments when the archive exceeds 64 MiB", async () => {
-    const content = new ArrayBuffer(33 * 1024 * 1024);
-    vi.mocked(downloadSurveyFile).mockResolvedValue({
-      size: content.byteLength,
-      arrayBuffer: async () => content,
-    } as Blob);
-    const result = await createResponseFilesZip(responses, schema);
-    expect(result).toMatchObject({ downloaded: 2, failed: 0 });
-    expect(result!.blob.size).toBeGreaterThan(66 * 1024 * 1024);
-  });
-
-  it("does not create empty archives or disguise total failures as success", async () => {
-    expect(await createResponseFilesZip([], schema)).toBeNull();
-    vi.mocked(downloadSurveyFile).mockRejectedValue(new Error("403"));
-    await expect(createResponseFilesZip(responses, schema)).rejects.toThrow("Не удалось скачать вложения");
-  });
-
-  it("cancels instead of downloading a partial archive after navigation", async () => {
+  it("does not open a download for no files or after leaving the page during preparation", async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     const controller = new AbortController();
-    vi.mocked(downloadSurveyFile).mockImplementation(async () => { controller.abort(); return bytes("file"); });
-    await expect(createResponseFilesZip(responses, schema, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+    vi.mocked(officeRequest).mockResolvedValueOnce({ ticket: null });
+    expect(await exportResponseFilesZip("form", undefined, controller.signal)).toBe(false);
+    vi.mocked(officeRequest).mockImplementationOnce(async () => {
+      controller.abort();
+      return { ticket: "ticket" };
+    });
+    await expect(exportResponseFilesZip("form", undefined, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(click).not.toHaveBeenCalled();
   });
 });

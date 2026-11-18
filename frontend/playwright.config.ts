@@ -4,6 +4,8 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:5173";
 
 export default defineConfig({
   testDir: "./e2e",
+  // The ZIP scenarios load the server's native ES modules.
+  build: { external: ["**/office-service/**/*.mjs"] },
   // Creator loads large lazy bundles; keep condition-based waits usable on CI.
   timeout: 60_000,
   expect: { timeout: 15_000 },
