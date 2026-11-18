@@ -66,6 +66,25 @@ describe("storage api", () => {
     });
   });
 
+  it("uploads a file of exactly 100 MiB and rejects one byte more before reserving it", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const file = new File([], "report.pdf", { type: "application/pdf" });
+    const size = vi.spyOn(file, "size", "get").mockReturnValue(104857600);
+    const options = { allowAnonymous: true, questionName: "documents" };
+
+    await expect(uploadFileToStorage("form-1", file, options)).resolves.toMatchObject({ file });
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledExactlyOnceWith("form-admin", expect.objectContaining({
+      body: expect.objectContaining({ size: 104857600 }),
+    }));
+    expect(upload).toHaveBeenCalledOnce();
+
+    size.mockReturnValue(104857601);
+    await expect(uploadFileToStorage("form-1", file, options)).rejects.toThrow("100 МБ");
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledOnce();
+    expect(upload).toHaveBeenCalledOnce();
+  });
+
   it("sends the question binding on authenticated uploads that do not use reservations", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
@@ -359,7 +378,7 @@ describe("storage api", () => {
     vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn(() => new Promise(() => {})) } as never);
     const pending = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), { allowAnonymous: true });
     const result = expect(pending).rejects.toThrow("таймаут");
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(600_000);
     await result;
   });
 
@@ -371,7 +390,7 @@ describe("storage api", () => {
     vi.stubGlobal("fetch", fetchMock);
     const pending = resolveSurveyFileValueContent({ content: "public/10000000-0000-4000-8000-000000000000/file.txt" }, { allowAnonymous: true });
     const result = expect(pending).rejects.toThrow("таймаут");
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(600_000);
     await result;
     expect(supabaseClient.storage.from).not.toHaveBeenCalled();
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);

@@ -447,7 +447,7 @@ Deno.serve(async (req) => {
 
   if (payload.action === "reserve-upload") {
     if (!isUuid(payload.formId) || !isUuid(payload.browserId) || !Number.isSafeInteger(payload.size)
-      || payload.size < 0 || payload.size > 10485760 || typeof payload.extension !== "string"
+      || payload.size < 0 || payload.size > 100 * 1024 * 1024 || typeof payload.extension !== "string"
       || (payload.questionName !== undefined && (typeof payload.questionName !== "string" || payload.questionName.length > 512))
       || (payload.fileName !== undefined && (typeof payload.fileName !== "string" || payload.fileName.length > 512
         || /[\\/]/.test(payload.fileName) || getUploadFileExtension(payload.fileName).toLowerCase() !== payload.extension.toLowerCase()))

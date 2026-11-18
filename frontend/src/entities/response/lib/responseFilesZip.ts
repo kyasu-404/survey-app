@@ -4,11 +4,7 @@ import type { SurveySchema } from "../../survey/types";
 import type { SurveyResponse } from "../types";
 import { collectResponseAttachments, safeArchiveName, type ResponseArchiveOptions } from "./responseFiles";
 
-export const MAX_CLIENT_ZIP_BYTES = 64 * 1024 * 1024;
-class ZipSizeError extends Error {}
-
 type ExportOptions = ResponseArchiveOptions & {
-  maxBytes?: number;
   signal?: AbortSignal;
   onProgress?: (completed: number, total: number) => void;
 };
@@ -19,39 +15,26 @@ export async function createResponseFilesZip(responses: SurveyResponse[], schema
   if (!attachments.length) return null;
   const zip = new JSZip();
   const failed: string[] = [];
-  let totalBytes = 0;
-  let fatal: Error | null = null;
-  const maxBytes = Math.min(options.maxBytes ?? MAX_CLIENT_ZIP_BYTES, MAX_CLIENT_ZIP_BYTES);
   let completed = 0;
   let cursor = 0;
   options.onProgress?.(0, attachments.length);
   // Bound concurrent downloads instead of issuing one request per file at once.
   await Promise.all(Array.from({ length: Math.min(3, attachments.length) }, async () => {
-    while (cursor < attachments.length && !fatal) {
+    while (cursor < attachments.length) {
       options.signal?.throwIfAborted();
       const attachment = attachments[cursor++];
       try {
         const blob = await downloadSurveyFile(attachment.value, { signal: options.signal });
-        if (fatal) return;
-        if (blob.size > maxBytes - totalBytes) {
-          throw new ZipSizeError("Файлы превышают 64 МБ. Выберите меньше ответов и повторите выгрузку.");
-        }
         const bytes = new Uint8Array(await blob.arrayBuffer());
-        if (bytes.byteLength > maxBytes - totalBytes) {
-          throw new ZipSizeError("Файлы превышают 64 МБ. Выберите меньше ответов и повторите выгрузку.");
-        }
-        totalBytes += bytes.byteLength;
         options.signal?.throwIfAborted();
         zip.file(attachment.archivePath, bytes, { createFolders: false });
-      } catch (error) {
-        if (error instanceof ZipSizeError) { fatal = error; return; }
+      } catch {
         options.signal?.throwIfAborted();
         failed.push(attachment.archivePath);
       }
       options.onProgress?.(++completed, attachments.length);
     }
   }));
-  if (fatal) throw fatal;
   if (failed.length === attachments.length) throw new Error("Не удалось скачать вложения. Проверьте доступ к файлам и попробуйте снова.");
   if (failed.length) {
     zip.file("Не удалось скачать.txt", `Не удалось получить ${failed.length} из ${attachments.length} файлов. Повторите выгрузку или проверьте доступ к вложениям.\r\n\r\n${failed.sort().join("\r\n")}`);

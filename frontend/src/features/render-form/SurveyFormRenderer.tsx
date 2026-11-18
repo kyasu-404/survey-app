@@ -38,6 +38,7 @@ import { getErrorMessage, getSubmitResponseErrorMessage } from "../../shared/lib
 import {
   getStoragePathFromSurveyFileValue,
   MAX_STORAGE_FILE_SIZE_BYTES,
+  MAX_STORAGE_FILE_SIZE_MB,
   getStoragePathsFromResponseData,
   preparePersonalResponseUploads,
   removeFileFromStorage,
@@ -331,7 +332,7 @@ export function SurveyFormRenderer({
     if (resolvedRenderMode !== "preview-interactive") return;
     const upload: Parameters<typeof model.onUploadFiles.add>[0] = (_sender, options) => {
       if (options.files.some(file => file.size > MAX_STORAGE_FILE_SIZE_BYTES)) {
-        options.callback([], ["Размер файла не должен превышать 10 МБ."]);
+        options.callback([], [`Размер файла не должен превышать ${MAX_STORAGE_FILE_SIZE_MB} МБ.`]);
         return;
       }
       const files = options.files.map(file => {

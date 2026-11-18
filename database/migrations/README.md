@@ -2,6 +2,19 @@
 
 Production-изменения БД хранятся здесь как SQL-файлы с датой в имени.
 
+`202611182030_response_upload_size.sql` повышает максимальный размер одного файла
+ответа до 100 МиБ (104857600 байт). Миграция обновляет bucket `survey-files`,
+резервации и политики Storage. Она сохраняет суммарные квоты и существующие вложения.
+
+Перед публикацией frontend примените миграцию ролью с правами владельцев
+функций и политик, обновите Edge Function `form-admin` и задайте для контейнера
+Storage `FILE_SIZE_LIMIT` не ниже 104857600. Для маршрутов загрузки с префиксом
+`/api/storage/v1/object/survey-files/` и на отдельном API-хосте
+`/storage/v1/object/survey-files/` используйте `client_max_body_size 110m`,
+чтобы запрос в формате multipart вмещал файл в 100 МиБ. Для версий
+self-hosted Compose, где значение задано прямо в `services.storage.environment`,
+обновите его там и пересоздайте только контейнер Storage.
+
 `202611131200_smtp_certificate_policy.sql` добавляет в `mail_settings` флаг
 `allow_invalid_certificate` (`boolean not null default false`). Применяется перед
 обновлением `mail-admin` и `mail-worker`; существующие SMTP-настройки и пароль

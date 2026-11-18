@@ -1827,7 +1827,7 @@ create table public.survey_upload_reservations (
   browser_hash uuid not null,
   response_browser_hash uuid,
   client_hash text not null check (client_hash ~ '^[a-f0-9]{64}$'),
-  size_bytes bigint not null check (size_bytes between 0 and 10485760),
+  size_bytes bigint not null check (size_bytes between 0 and 104857600),
   attached boolean not null default false,
   cleanup_claimed boolean not null default false,
   cleanup_claimed_at timestamptz,
@@ -1857,7 +1857,7 @@ declare
   total_bytes bigint;
 begin
   if p_browser_id is null or p_client_hash is null or p_client_hash !~ '^[a-f0-9]{64}$'
-    or p_size is null or p_size not between 0 and 10485760
+    or p_size is null or p_size not between 0 and 104857600
     or p_extension is null or p_extension !~ '^([.][a-zA-Z0-9]{1,16})?$'
   then raise exception 'Некорректные параметры файла' using errcode = '22023'; end if;
   if not public.is_public_active_form(p_form_id) then
@@ -1880,8 +1880,11 @@ begin
   if pending_count >= 20 or pending_bytes + p_size > 104857600 then
     raise exception 'Сначала отправьте ответ или удалите ненужные файлы.' using errcode = '54000';
   end if;
-  select count(*), coalesce(sum(coalesce((o.metadata->>'size')::bigint, 10485760)), 0)
+  -- A Storage placeholder may have only a reservation; keep the legacy estimate
+  -- for objects with neither an actual nor a reserved size.
+  select count(*), coalesce(sum(coalesce((o.metadata->>'size')::bigint, r.size_bytes, 10485760)), 0)
     into total_count, total_bytes from storage.objects o
+    left join public.survey_upload_reservations r on r.object_path = o.name
     where o.bucket_id = 'survey-files' and split_part(o.name, '/', 2) = p_form_id::text;
   select count(*), coalesce(sum(r.size_bytes), 0) into pending_count, pending_bytes
     from public.survey_upload_reservations r
@@ -1920,7 +1923,7 @@ begin
   if array_length(path_parts, 1) <> 3
     or length(path_parts[3]) > 512
     or object_size < 0
-    or object_size > 10485760
+    or object_size > 104857600
   then
     return false;
   end if;
@@ -1953,12 +1956,13 @@ begin
   select count(*), coalesce(sum(
     case
       when coalesce(o.metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-        then least((o.metadata ->> 'size')::numeric, 10485760)::bigint
-      else 10485760
+        then least((o.metadata ->> 'size')::numeric, 104857600)::bigint
+      else coalesce(r.size_bytes, 10485760)
     end
   ), 0)
   into existing_count, existing_bytes
   from storage.objects o
+  left join public.survey_upload_reservations r on r.object_path = o.name
   where o.bucket_id = 'survey-files'
     and split_part(o.name, '/', 2) = target_form_id::text;
 
@@ -2292,10 +2296,11 @@ grant execute on function public.begin_storage_cleanup_run(text, text, integer, 
 grant execute on function public.finish_storage_cleanup_run(uuid, text, boolean, integer, integer, text, integer) to service_role;
 
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('survey-files', 'survey-files', false, 10485760)
+values ('survey-files', 'survey-files', false, 104857600)
 on conflict (id) do update
 set public = excluded.public, file_size_limit = excluded.file_size_limit;
 
+-- Saturate at one byte above the cap so can_upload_survey_file rejects it.
 create policy "survey_files_authenticated_upload" on storage.objects
 for insert to authenticated
 with check (
@@ -2304,7 +2309,7 @@ with check (
     name,
     false,
     case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-      then least((metadata ->> 'size')::numeric, 10485760)::bigint
+      then least((metadata ->> 'size')::numeric, 104857601)::bigint
       else 0
     end
   )
@@ -2318,7 +2323,7 @@ with check (
     name,
     true,
     case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-      then least((metadata ->> 'size')::numeric, 10485760)::bigint
+      then least((metadata ->> 'size')::numeric, 104857601)::bigint
       else 0
     end
   )

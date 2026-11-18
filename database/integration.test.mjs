@@ -55,6 +55,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       "202611111200_counter_update_costs.sql", "202611111230_public_form_links.sql",
       "202611111300_upload_type_policy.sql",
       "202611131200_smtp_certificate_policy.sql",
+      "202611182030_response_upload_size.sql",
     ].map(name => source("./migrations/" + name)));
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
@@ -91,6 +92,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/public_form_access.sql");
       await runPsql(database, "./tests/counter_update_costs.sql");
       await runPsql(database, "./tests/upload_type_policy.sql");
+      await runPsql(database, "./tests/upload_size_limit.sql");
       await runPsql(database, "./tests/smtp_certificate_policy.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);

@@ -211,7 +211,8 @@ vi.mock("../../app/providers/ToastProvider", () => ({
 }));
 
 vi.mock("../../shared/api/storage", () => ({
-  MAX_STORAGE_FILE_SIZE_BYTES: 10 * 1024 * 1024,
+  MAX_STORAGE_FILE_SIZE_BYTES: 100 * 1024 * 1024,
+  MAX_STORAGE_FILE_SIZE_MB: 100,
   getStoragePathFromSurveyFileValue,
   getStoragePathsFromResponseData,
   preparePersonalResponseUploads,
