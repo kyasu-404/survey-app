@@ -3,15 +3,15 @@
 Production-изменения БД хранятся здесь как SQL-файлы с датой в имени.
 
 `202611182030_response_upload_size.sql` повышает максимальный размер одного файла
-ответа до 100 МиБ (104857600 байт). Миграция обновляет bucket `survey-files`,
+ответа до 50 МиБ (52428800 байт). Миграция обновляет bucket `survey-files`,
 резервации и политики Storage. Она сохраняет суммарные квоты и существующие вложения.
 
 Перед публикацией frontend примените миграцию ролью с правами владельцев
 функций и политик, обновите Edge Function `form-admin` и задайте для контейнера
-Storage `FILE_SIZE_LIMIT` не ниже 104857600. Для маршрутов загрузки с префиксом
+Storage `FILE_SIZE_LIMIT` не ниже 52428800. Для маршрутов загрузки с префиксом
 `/api/storage/v1/object/survey-files/` и на отдельном API-хосте
-`/storage/v1/object/survey-files/` используйте `client_max_body_size 110m`,
-чтобы запрос в формате multipart вмещал файл в 100 МиБ. Для версий
+`/storage/v1/object/survey-files/` нужен `client_max_body_size` не ниже `55m`,
+чтобы запрос в формате multipart вмещал файл в 50 МиБ. Для версий
 self-hosted Compose, где значение задано прямо в `services.storage.environment`,
 обновите его там и пересоздайте только контейнер Storage.
 

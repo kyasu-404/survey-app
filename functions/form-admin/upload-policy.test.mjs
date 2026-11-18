@@ -21,7 +21,7 @@ function handlerFor(client) {
 const payload = { action: "reserve-upload", formId: "b5100000-0000-4000-8000-000000000001",
   browserId: "d5100000-0000-4000-8000-000000000001", size: 1, extension: ".exe", questionName: "documents", mimeType: "application/pdf" };
 
-test("reserve-upload accepts 100 MiB and rejects one byte more before calling the database", async () => {
+test("reserve-upload accepts 50 MiB and rejects one byte more before calling the database", async () => {
   const calls = [];
   const path = `public/${payload.formId}/file.pdf`;
   const request = handlerFor({ rpc: async (name, args) => {
@@ -29,11 +29,11 @@ test("reserve-upload accepts 100 MiB and rejects one byte more before calling th
     return { data: name === "assert_survey_upload_type" ? true : path };
   } });
   const file = { ...payload, extension: ".pdf", fileName: "report.pdf" };
-  const accepted = await request({ ...file, size: 104857600 });
+  const accepted = await request({ ...file, size: 52428800 });
   assert.equal(accepted.status, 200);
   assert.deepEqual(await accepted.json(), { path });
-  assert.equal(calls[1].args.p_size, 104857600);
-  const rejected = await request({ ...file, size: 104857601 });
+  assert.equal(calls[1].args.p_size, 52428800);
+  const rejected = await request({ ...file, size: 52428801 });
   assert.equal(rejected.status, 400);
   assert.deepEqual(calls.map(call => call.name), ["assert_survey_upload_type", "reserve_survey_upload"]);
 });

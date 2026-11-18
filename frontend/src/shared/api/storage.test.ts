@@ -66,21 +66,21 @@ describe("storage api", () => {
     });
   });
 
-  it("uploads a file of exactly 100 MiB and rejects one byte more before reserving it", async () => {
+  it("uploads a file of exactly 50 MiB and rejects one byte more before reserving it", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
     vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
     const file = new File([], "report.pdf", { type: "application/pdf" });
-    const size = vi.spyOn(file, "size", "get").mockReturnValue(104857600);
+    const size = vi.spyOn(file, "size", "get").mockReturnValue(52428800);
     const options = { allowAnonymous: true, questionName: "documents" };
 
     await expect(uploadFileToStorage("form-1", file, options)).resolves.toMatchObject({ file });
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledExactlyOnceWith("form-admin", expect.objectContaining({
-      body: expect.objectContaining({ size: 104857600 }),
+      body: expect.objectContaining({ size: 52428800 }),
     }));
     expect(upload).toHaveBeenCalledOnce();
 
-    size.mockReturnValue(104857601);
-    await expect(uploadFileToStorage("form-1", file, options)).rejects.toThrow("100 МБ");
+    size.mockReturnValue(52428801);
+    await expect(uploadFileToStorage("form-1", file, options)).rejects.toThrow("50 МБ");
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledOnce();
     expect(upload).toHaveBeenCalledOnce();
   });

@@ -1,11 +1,11 @@
 begin;
 
-update storage.buckets set file_size_limit = 104857600 where id = 'survey-files';
+update storage.buckets set file_size_limit = 52428800 where id = 'survey-files';
 
 alter table public.survey_upload_reservations
   drop constraint survey_upload_reservations_size_bytes_check,
   add constraint survey_upload_reservations_size_bytes_check
-    check (size_bytes between 0 and 104857600);
+    check (size_bytes between 0 and 52428800);
 
 create or replace function public.reserve_survey_upload(p_form_id uuid, p_browser_id uuid, p_client_hash text, p_size bigint, p_extension text)
 returns text
@@ -22,7 +22,7 @@ declare
   total_bytes bigint;
 begin
   if p_browser_id is null or p_client_hash is null or p_client_hash !~ '^[a-f0-9]{64}$'
-    or p_size is null or p_size not between 0 and 104857600
+    or p_size is null or p_size not between 0 and 52428800
     or p_extension is null or p_extension !~ '^([.][a-zA-Z0-9]{1,16})?$'
   then raise exception 'Некорректные параметры файла' using errcode = '22023'; end if;
   if not public.is_public_active_form(p_form_id) then
@@ -87,7 +87,7 @@ begin
   if array_length(path_parts, 1) <> 3
     or length(path_parts[3]) > 512
     or object_size < 0
-    or object_size > 104857600
+    or object_size > 52428800
   then
     return false;
   end if;
@@ -120,7 +120,7 @@ begin
   select count(*), coalesce(sum(
     case
       when coalesce(o.metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-        then least((o.metadata ->> 'size')::numeric, 104857600)::bigint
+        then least((o.metadata ->> 'size')::numeric, 52428800)::bigint
       else coalesce(r.size_bytes, 10485760)
     end
   ), 0)
@@ -154,7 +154,7 @@ with check (
     name,
     false,
     case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-      then least((metadata ->> 'size')::numeric, 104857601)::bigint
+      then least((metadata ->> 'size')::numeric, 52428801)::bigint
       else 0
     end
   )
@@ -167,7 +167,7 @@ with check (
     name,
     true,
     case when coalesce(metadata ->> 'size', '') ~ '^[0-9]{1,20}$'
-      then least((metadata ->> 'size')::numeric, 104857601)::bigint
+      then least((metadata ->> 'size')::numeric, 52428801)::bigint
       else 0
     end
   )

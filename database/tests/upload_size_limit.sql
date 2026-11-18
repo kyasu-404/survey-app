@@ -15,7 +15,7 @@ insert into public.forms(id,title,author_id,is_public,form_type,form_reason,sche
 insert into storage.objects(bucket_id,name,metadata,user_metadata)
 select 'survey-files','a9800000-0000-4000-8000-000000000001/b9800000-0000-4000-8000-000000000001/legacy-' || n || '.pdf',
   null,'{"questionName":"attachment","mimeType":"application/pdf"}'
-from generate_series(1,21) as n;
+from generate_series(1,41) as n;
 
 do $$
 declare
@@ -23,35 +23,36 @@ declare
   browser_id uuid := gen_random_uuid();
   upload_path text;
 begin
-  assert (select file_size_limit = 104857600 from storage.buckets where id = 'survey-files'),
-    'Storage bucket must allow 100 MiB';
+  assert (select file_size_limit = 52428800 from storage.buckets where id = 'survey-files'),
+    'Storage bucket must allow 50 MiB';
   begin
-    perform public.reserve_survey_upload(form_id,browser_id,repeat('a',64),104857601,'.pdf');
-    raise exception 'Reservation accepted a file above 100 MiB';
+    perform public.reserve_survey_upload(form_id,browser_id,repeat('a',64),52428801,'.pdf');
+    raise exception 'Reservation accepted a file above 50 MiB';
   exception when invalid_parameter_value then null;
   end;
-  upload_path := public.reserve_survey_upload(form_id,browser_id,repeat('a',64),104857600,'.pdf');
-  assert (select size_bytes = 104857600 from public.survey_upload_reservations where object_path = upload_path);
+  upload_path := public.reserve_survey_upload(form_id,browser_id,repeat('a',64),52428800,'.pdf');
+  assert (select size_bytes = 52428800 from public.survey_upload_reservations where object_path = upload_path);
   perform set_config('test.full_upload',upload_path,true);
   perform set_config('test.upload_browser',browser_id::text,true);
+  perform public.reserve_survey_upload(form_id,browser_id,repeat('a',64),52428800,'.pdf');
   begin
     perform public.reserve_survey_upload(form_id,browser_id,repeat('a',64),1,'.pdf');
     raise exception 'Reservation exceeded the existing client byte budget';
   exception when sqlstate '54000' then null;
   end;
-  upload_path := public.reserve_survey_upload(form_id,gen_random_uuid(),repeat('b',64),52428800,'.pdf');
+  upload_path := public.reserve_survey_upload(form_id,gen_random_uuid(),repeat('b',64),26214400,'.pdf');
   perform set_config('test.partial_upload',upload_path,true);
 end $$;
 
 set local role anon;
 insert into storage.objects(bucket_id,name,metadata,user_metadata) values
- ('survey-files',current_setting('test.full_upload'),'{"size":104857600,"mimetype":"application/pdf"}','{"questionName":"attachment"}'),
+ ('survey-files',current_setting('test.full_upload'),'{"size":52428800,"mimetype":"application/pdf"}','{"questionName":"attachment"}'),
  ('survey-files',current_setting('test.partial_upload'),null,'{"questionName":"attachment","mimeType":"application/pdf"}');
 reset role;
 
 do $$ begin
   begin
-    update storage.objects set metadata = '{"size":52428801,"mimetype":"application/pdf"}'
+    update storage.objects set metadata = '{"size":26214401,"mimetype":"application/pdf"}'
       where bucket_id = 'survey-files' and name = current_setting('test.partial_upload');
     raise exception 'Storage accepted a file that exceeded its reservation';
   exception when invalid_parameter_value then null;
@@ -59,20 +60,20 @@ do $$ begin
   assert (select status = 'submitted' from public.submit_form_response(
     'b9800000-0000-4000-8000-000000000001',current_setting('test.upload_browser')::uuid,gen_random_uuid(),
     jsonb_build_object('attachment',jsonb_build_array(jsonb_build_object('content',current_setting('test.full_upload'))))
-  )), 'A 100 MiB attachment must remain usable in a submitted answer';
+  )), 'A 50 MiB attachment must remain usable in a submitted answer';
 end $$;
 
 select set_config('request.jwt.claim.sub','a9800000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 insert into storage.objects(bucket_id,name,metadata,user_metadata) values
  ('survey-files','a9800000-0000-4000-8000-000000000001/b9800000-0000-4000-8000-000000000001/full.pdf',
-  '{"size":104857600,"mimetype":"application/pdf"}','{"questionName":"attachment"}');
+  '{"size":52428800,"mimetype":"application/pdf"}','{"questionName":"attachment"}');
 do $$ begin
   begin
     insert into storage.objects(bucket_id,name,metadata,user_metadata) values
      ('survey-files','a9800000-0000-4000-8000-000000000001/b9800000-0000-4000-8000-000000000001/over.pdf',
-      '{"size":104857601,"mimetype":"application/pdf"}','{"questionName":"attachment"}');
-    raise exception 'Storage accepted an authenticated upload above 100 MiB';
+      '{"size":52428801,"mimetype":"application/pdf"}','{"questionName":"attachment"}');
+    raise exception 'Storage accepted an authenticated upload above 50 MiB';
   exception when insufficient_privilege then null;
   end;
 end $$;

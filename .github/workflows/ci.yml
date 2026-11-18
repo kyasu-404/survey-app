@@ -29,7 +29,8 @@ jobs:
           ignore-unfixed: true
 
   test:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 provides Chromium dependencies for Ubuntu 24.04.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17
