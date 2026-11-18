@@ -2,16 +2,20 @@ import JSZip from "jszip";
 import { downloadSurveyFile } from "../../../shared/api/storage";
 import type { SurveySchema } from "../../survey/types";
 import type { SurveyResponse } from "../types";
-import { collectResponseAttachments, safeArchiveName } from "./responseFiles";
+import { collectResponseAttachments, safeArchiveName, type ResponseArchiveOptions } from "./responseFiles";
 
 export const MAX_CLIENT_ZIP_BYTES = 64 * 1024 * 1024;
 class ZipSizeError extends Error {}
 
-type ExportOptions = { maxBytes?: number; signal?: AbortSignal; onProgress?: (completed: number, total: number) => void };
+type ExportOptions = ResponseArchiveOptions & {
+  maxBytes?: number;
+  signal?: AbortSignal;
+  onProgress?: (completed: number, total: number) => void;
+};
 
 export async function createResponseFilesZip(responses: SurveyResponse[], schema: SurveySchema, options: ExportOptions = {}) {
   options.signal?.throwIfAborted();
-  const attachments = collectResponseAttachments(responses, schema);
+  const attachments = collectResponseAttachments(responses, schema, options);
   if (!attachments.length) return null;
   const zip = new JSZip();
   const failed: string[] = [];

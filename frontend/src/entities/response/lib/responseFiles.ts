@@ -1,3 +1,4 @@
+import { ORGANIZATION_QUESTION_TYPE } from "../../organization/model";
 import type { SurveySchema } from "../../survey/types";
 import type { SurveyResponse } from "../types";
 
@@ -5,6 +6,10 @@ import type { SurveyResponse } from "../types";
 type AnswerPath = Array<string | null>;
 type FileQuestion = { title: string; path: AnswerPath };
 export type ResponseAttachment = { archivePath: string; value: unknown };
+export type ResponseArchiveOptions = {
+  organizationLabels?: ReadonlyMap<string, string>;
+  responseNumbers?: ReadonlyMap<string, number>;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -16,17 +21,24 @@ function getTitle(value: unknown, fallback: string): string {
   return fallback;
 }
 
-export function getFileQuestions(schema: SurveySchema): FileQuestion[] {
-  const result: FileQuestion[] = [];
+export function getArchiveQuestions(schema: SurveySchema) {
+  const fileQuestions: FileQuestion[] = [];
+  const organizationPaths: AnswerPath[] = [];
   let visited = 0;
   const visit = (value: unknown, path: AnswerPath, depth: number) => {
     if (!isRecord(value)) return;
     if (++visited > 10_000 || depth > 32) throw new Error("Слишком сложная структура формы для выгрузки файлов");
-    const name = typeof value.valueName === "string" ? value.valueName : value.name;
+    const name = typeof value.valueName === "string" && value.valueName ? value.valueName : value.name;
     const answerPath = typeof name === "string" ? [...path, name] : path;
-    if (value.type === "file" && typeof name === "string") {
-      result.push({ title: getTitle(value.title, name), path: answerPath });
-      return;
+    if (typeof name === "string") {
+      if (value.type === "file") {
+        fileQuestions.push({ title: getTitle(value.title, name), path: answerPath });
+        return;
+      }
+      if (value.type === ORGANIZATION_QUESTION_TYPE) {
+        organizationPaths.push(answerPath);
+        return;
+      }
     }
     const nestedPath = value.type === "paneldynamic" ? [...answerPath, null] : path;
     for (const key of ["pages", "elements", "templateElements"]) {
@@ -43,7 +55,7 @@ export function getFileQuestions(schema: SurveySchema): FileQuestion[] {
     }
   };
   visit(schema, [], 0);
-  return result;
+  return { fileQuestions, organizationPaths };
 }
 
 function valuesAtPath(data: Record<string, unknown>, path: AnswerPath) {
@@ -67,13 +79,36 @@ export function safeArchiveName(value: string, fallback: string, maxLength = 100
   return /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(short) ? `_${short}` : short;
 }
 
-export function collectResponseAttachments(responses: SurveyResponse[], schema: SurveySchema): ResponseAttachment[] {
-  const questions = getFileQuestions(schema);
-  return responses.flatMap((response, responseIndex) => questions.flatMap((question, questionIndex) => {
-    const folder = `Ответ_${responseIndex + 1}_${safeArchiveName(response.id, "ответ", 36)}/${questionIndex + 1}_${safeArchiveName(question.title, "Файлы", 60)}`;
-    return valuesAtPath(response.data, question.path).map((value, fileIndex) => {
-      const name = isRecord(value) && typeof value.name === "string" ? value.name : "файл";
-      return { archivePath: `${folder}/${fileIndex + 1}_${safeArchiveName(name, "файл")}`, value };
+function getOrganizationLabel(data: SurveyResponse["data"], paths: AnswerPath[], labels?: ReadonlyMap<string, string>) {
+  if (!labels?.size) return undefined;
+  for (const path of paths) {
+    for (const value of valuesAtPath(data, path)) {
+      const label = typeof value === "string" ? labels.get(value) : undefined;
+      if (label?.trim()) return label;
+    }
+  }
+}
+
+export function collectResponseAttachments(
+  responses: SurveyResponse[],
+  schema: SurveySchema,
+  { organizationLabels, responseNumbers }: ResponseArchiveOptions = {},
+): ResponseAttachment[] {
+  const { fileQuestions, organizationPaths } = getArchiveQuestions(schema);
+  // Mixing saved page positions with export positions can reuse a number.
+  const numbers = responseNumbers && responses.every(response => responseNumbers.has(response.id)) ? responseNumbers : undefined;
+  return responses.flatMap((response, responseIndex) => {
+    const label = getOrganizationLabel(response.data, organizationPaths, organizationLabels);
+    const number = String(numbers?.get(response.id) ?? responseIndex + 1).padStart(3, "0");
+    const responseFolder = `${safeArchiveName(label ?? "", "Ответ", 48)} — ${number}`;
+    return fileQuestions.flatMap((question, questionIndex) => {
+      const folder = fileQuestions.length === 1
+        ? responseFolder
+        : `${responseFolder}/${questionIndex + 1}_${safeArchiveName(question.title, "Файлы", 60)}`;
+      return valuesAtPath(response.data, question.path).map((value, fileIndex) => {
+        const name = isRecord(value) && typeof value.name === "string" ? value.name : "файл";
+        return { archivePath: `${folder}/${fileIndex + 1}_${safeArchiveName(name, "файл")}`, value };
+      });
     });
-  }));
+  });
 }

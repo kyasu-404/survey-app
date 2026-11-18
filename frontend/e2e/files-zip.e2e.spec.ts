@@ -64,7 +64,12 @@ test("ZIP matches XLSX styling and contains every attachment, including answers 
   const entries = Object.values(zip.files);
   expect(entries).toHaveLength(4);
   expect(entries.every(entry => entry.name.endsWith("Документ.pdf"))).toBe(true);
-  expect(entries.filter(entry => entry.name.startsWith("Ответ_101_"))).toHaveLength(2);
+  expect(Object.keys(zip.files).sort()).toEqual([
+    "Ответ — 001/1_Документы/1_Документ.pdf",
+    "Ответ — 001/1_Документы/2_Документ.pdf",
+    "Ответ — 101/2_Документы/1_Документ.pdf",
+    "Ответ — 101/3_Документы/1_Документ.pdf",
+  ]);
   const contents = await Promise.all(entries.map(entry => entry.async("nodebuffer")));
   expect(contents.map(content => content.toString("base64")).sort()).toEqual([
     ...["one", "two", "three"].map(id => Buffer.from(`Original bytes: ${id}.pdf`).toString("base64")),
@@ -73,15 +78,40 @@ test("ZIP matches XLSX styling and contains every attachment, including answers 
   expect(signedPaths).toHaveLength(3);
   await expect(page.getByText("Файлы выгружены в ZIP: 4", { exact: true })).toBeVisible();
   await expect(zipButton).toBeEnabled();
+
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await expect(page.getByText("Страница 3 из 3", { exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Выбрать ответы на странице" }).check();
+  const selectedDownload = page.waitForEvent("download");
+  await zipButton.click();
+  const selectedZip = await readZip(await selectedDownload);
+  expect(Object.keys(selectedZip.files).sort()).toEqual([
+    "Ответ — 101/2_Документы/1_Документ.pdf",
+    "Ответ — 101/3_Документы/1_Документ.pdf",
+  ]);
   expect(pageErrors).toEqual([]);
 });
 
-test("ZIP reports a missing attachment and permits a complete retry", async ({ page }) => {
+test("ZIP uses a nested organization, reports a missing attachment and permits a complete retry", async ({ page }) => {
   const formId = "20000000-0000-4000-8000-000000000001";
-  const { pageErrors } = await openSurveyApp(page, { responseCount: 1, responseData: [{ files: [
+  const organizationId = "40000000-0000-4000-8000-000000000001";
+  const schoolsQuestion = {
+    type: "matrixdynamic",
+    name: "schools",
+    detailElements: [{ type: "organization", name: "school", title: "Организация" }],
+  };
+  const { pageErrors } = await openSurveyApp(page, { responseCount: 1, responseData: [{ schools: [{ school: organizationId }], files: [
     { name: "available.txt", content: `public/${formId}/available.txt` },
     { name: "missing.txt", content: `public/${formId}/missing.txt` },
-  ] }], elements: [{ type: "file", name: "files", title: "Файлы" }] });
+  ] }], elements: [
+    schoolsQuestion,
+    { type: "file", name: "files", title: "Файлы" },
+  ] });
+  await page.route("**/rest/v1/education_organizations?*", route => route.fulfill({ json: [{
+    id: organizationId, organization_type: "school", number: "373", alias: "ГБОУ", email: "school@example.test",
+    is_archived: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+  }] }));
   let missing = true;
   await page.route("**/storage/v1/object/sign/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -98,14 +128,17 @@ test("ZIP reports a missing attachment and permits a complete retry", async ({ p
   await button.click();
   const partial = await readZip(await pending);
   expect(Object.keys(partial.files)).toHaveLength(2);
-  expect(await partial.file("Не удалось скачать.txt")!.async("string")).toContain("missing.txt");
+  expect(await partial.file("Не удалось скачать.txt")!.async("string")).toContain("ГБОУ 373 — 001/2_missing.txt");
   await expect(page.getByText("В ZIP добавлено файлов: 1. Не удалось скачать: 1. Список включён в архив.", { exact: true })).toBeVisible();
   await expect(button).toBeEnabled();
   missing = false;
   pending = page.waitForEvent("download");
   await button.click();
   const complete = await readZip(await pending);
-  expect(Object.keys(complete.files)).toHaveLength(2);
+  expect(Object.keys(complete.files).sort()).toEqual([
+    "ГБОУ 373 — 001/1_available.txt",
+    "ГБОУ 373 — 001/2_missing.txt",
+  ]);
   expect(complete.file("Не удалось скачать.txt")).toBeNull();
   expect(await Promise.all(Object.values(complete.files).map(file => file.async("string")))).toEqual(["File content", "File content"]);
   await expect(page.getByText("Файлы выгружены в ZIP: 2", { exact: true })).toBeVisible();

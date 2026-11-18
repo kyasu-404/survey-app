@@ -26,7 +26,7 @@ import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
-import { getFileQuestions } from "../../entities/response/lib/responseFiles";
+import { getArchiveQuestions } from "../../entities/response/lib/responseFiles";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
 import type { ResponsesTableRow, ResponsesTableColumn } from "../../entities/response/lib/responsesExport";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
@@ -255,7 +255,7 @@ export default function FormResponsesPage() {
     queryKey: responsesQueryKey,
     queryFn: async ({ signal }) => {
       if (!id) {
-        return { data: [], count: 0, totalPages: 1 };
+        return { data: [], count: 0, page, pageSize, totalPages: 1 };
       }
 
       return getResponsesByForm(id, { signal, page, pageSize });
@@ -271,21 +271,23 @@ export default function FormResponsesPage() {
   const usesOrganizationDirectory = Boolean(
     formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
   );
+  const archiveQuestions = useMemo(
+    () => formQuery.data && getArchiveQuestions(formQuery.data.schema),
+    [formQuery.data],
+  );
+  const hasFileQuestions = Boolean(archiveQuestions?.fileQuestions.length);
+  const zipUsesOrganizationDirectory = hasFileQuestions && Boolean(archiveQuestions?.organizationPaths.length);
   const formOrganizationTypes = normalizeOrganizationTypes(formQuery.data?.organization_types);
   const organizationsQuery = useQuery({
-    queryKey: ["education-organizations", "history", id],
+    queryKey: ["education-organizations", usesOrganizationDirectory ? "history" : "zip", id],
     queryFn: ({ signal }) => getOrganizations(undefined, signal, true),
-    enabled: Boolean(id && usesOrganizationDirectory),
+    enabled: Boolean(id && (usesOrganizationDirectory || zipUsesOrganizationDirectory)),
     staleTime: 30_000,
   });
 
   const responses = responsesQuery.data?.data ?? [];
   const highlightedResponses = useNewResponseHighlights(id, page, responsesQuery.data?.data, responsesQuery.data?.count ?? 0);
-  const hasFileQuestions = useMemo(
-    () => Boolean(formQuery.data && getFileQuestions(formQuery.data.schema).length),
-    [formQuery.data],
-  );
-  const organizationLabels = useMemo(
+  const directoryLabels = useMemo(
     () => new Map(
       (organizationsQuery.data ?? []).map((organization) => [
         organization.id,
@@ -294,6 +296,7 @@ export default function FormResponsesPage() {
     ),
     [organizationsQuery.data],
   );
+  const organizationLabels = usesOrganizationDirectory ? directoryLabels : undefined;
   const { rows, columns } = useMemo(
     () => (formQuery.data
       ? formatResponsesForTable(responses, formQuery.data.schema, organizationLabels)
@@ -303,8 +306,8 @@ export default function FormResponsesPage() {
 
   const isLoading =
     (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
-  const isRefreshing = formQuery.isFetching || responsesQuery.isFetching || organizationsQuery.isFetching;
-  const combinedError = [formQuery.error, responsesQuery.error, organizationsQuery.error]
+  const isRefreshing = formQuery.isFetching || responsesQuery.isFetching || (usesOrganizationDirectory && organizationsQuery.isFetching);
+  const combinedError = [formQuery.error, responsesQuery.error, usesOrganizationDirectory ? organizationsQuery.error : null]
     .find((error) => error && !isAbortError(error)) ?? null;
   const totalResponses = responsesQuery.data?.count ?? 0;
   const totalPages = responsesQuery.data?.totalPages ?? 1;
@@ -442,8 +445,15 @@ export default function FormResponsesPage() {
     zipControllerRef.current = controller;
     setZipProgress({ completed: 0, total: 0 });
     try {
+      const responsePage = responsesQuery.data;
+      const pageOffset = ((responsePage.page ?? page) - 1) * (responsePage.pageSize ?? pageSize);
+      const responseNumbers = selectedResponseIds.size
+        ? new Map(responses.map((response, index) => [response.id, pageOffset + index + 1]))
+        : undefined;
       const { exportResponseFilesZip } = await import("../../entities/response/lib/responseFilesZip");
       const result = await exportResponseFilesZip(await loadExportResponses(controller.signal), formQuery.data.schema, formQuery.data.title, {
+        organizationLabels: directoryLabels,
+        responseNumbers,
         signal: controller.signal,
         onProgress: (completed, total) => {
           if (!controller.signal.aborted) setZipProgress({ completed, total });
@@ -588,7 +598,7 @@ export default function FormResponsesPage() {
                 aria-label="Файлы в ZIP"
                 aria-busy={Boolean(zipProgress)}
                 onClick={() => void handleExportFiles()}
-                disabled={isLoading || Boolean(zipProgress)}
+                disabled={isLoading || (zipUsesOrganizationDirectory && organizationsQuery.isPending) || Boolean(zipProgress)}
               >
                 <span>{zipProgress ? `Файлы в ZIP (${zipProgress.completed}/${zipProgress.total})` : selectedResponseIds.size ? "Выбранные файлы в ZIP" : "Файлы в ZIP"}</span>
                 <Icon name="download" className="toolbar-icon" size={18} />
