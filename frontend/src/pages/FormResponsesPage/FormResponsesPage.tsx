@@ -4,7 +4,7 @@ import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -195,6 +195,7 @@ function renderResponseCell(column: ResponsesTableColumn, value: string) {
 export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const fromFormsList = useLocation().state?.fromFormsList;
   const { showToast } = useToast();
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
@@ -569,7 +570,18 @@ export default function FormResponsesPage() {
     <div className="dashboard-page">
       <Presence kind="modal">{documentsOpen && <DocumentsModal formId={id} selectedResponseIds={[...selectedResponseIds]} onClose={() => setDocumentsOpen(false)} />}</Presence>
       <div className="card responses-page-card">
-        <Link className="responses-back-link" to={routes.dashboardAll}>← Назад к формам</Link>
+        <Link
+          className="responses-back-link"
+          to={fromFormsList === "mine" ? routes.dashboardMy : routes.dashboardAll}
+          onClick={(event) => {
+            if (fromFormsList !== "mine" && fromFormsList !== "all") return;
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate(-1);
+          }}
+        >
+          ← Назад к формам
+        </Link>
         <div className="responses-page-header">
           <div className="responses-page-header-copy">
             <h1 className="responses-page-title">{formQuery.data?.title ?? "Ответы формы"}</h1>

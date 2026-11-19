@@ -146,40 +146,49 @@ test("delete-upload preserves reference/form guards and removes only the authori
   }
 });
 
-test("update-schema rejects a stale editor and stale confirmation without performing a write", async () => {
+test("update-schema rechecks the first response, blocks incompatible confirmed edits and rejects stale confirmations", async () => {
   // The handler's import is replaced with the real compatibility implementation.
   const { analyzeSchemaCompatibility } = await import("./form-admin/schemaCompatibility.mjs");
   globalThis.analyzeSchemaCompatibility = analyzeSchemaCompatibility;
   try {
     const owner = "a5000000-0000-4000-8000-000000000001";
-    let revision = 4, writes = 0;
+    let revision = 4, writes = 0, responseCount = 0;
     const client = {
       auth: { getUser: async () => ({ data: { user: { id: owner } } }) },
       from: table => ({
         updating: false, predicates: {},
         select() { return this; }, eq(key, value) { this.predicates[key] = value; return this; },
         single: async () => ({ data: table === "profiles" ? { role: "user", is_disabled: false }
-          : { id: formId, author_id: owner, revision, schema: { pages: [{ elements: [{ type: "text", name: "q" }] }] }, responses_count: 1, organization_types: ["school"] } }),
+          : { id: formId, author_id: owner, revision, schema: { pages: [{ elements: [{ type: "text", name: "q" }] }] }, responses_count: responseCount, organization_types: ["school"] } }),
         update() { this.updating = true; return this; },
         async maybeSingle() {
           assert.equal(this.predicates.revision, revision);
+          if (responseCount === 0) responseCount++; // First submission arrives after the handler read the form.
+          if (this.predicates.responses_count !== responseCount) return { data: null };
           writes++; revision++; return { data: { id: formId } };
         },
       }),
     };
     const request = handlerFor("form-admin", {}, client);
-    const payload = { action: "update-schema", formId, schema: { pages: [{ elements: [{ type: "text", name: "q" }, { type: "text", name: "new" }] }] },
+    const payload = { action: "update-schema", formId,
       theme: {}, title: "Changed", allowResponseEditing: false, organizationTypes: ["school"], expectedRevision: 4 };
     const send = body => request(null, "POST", body, { Authorization: "Bearer test" });
-    assert.equal((await (await send(payload)).json()).status, "confirmation_required");
+    const changedStorage = { ...payload, confirmWarnings: true,
+      schema: { pages: [{ elements: [{ type: "text", name: "q", maskType: "numeric" }] }] } };
+    assert.equal((await (await send(changedStorage)).json()).status, "blocked");
+    const risk = { ...payload, schema: { pages: [{ elements: [{ type: "text", name: "q", clearIfInvisible: "onHidden" }] }] } };
+    assert.equal((await (await send(risk)).json()).status, "confirmation_required");
     assert.equal(writes, 0);
     revision = 5; // Another editor saves before the warning is confirmed.
-    assert.equal((await send({ ...payload, confirmWarnings: true })).status, 409);
+    assert.equal((await send({ ...risk, confirmWarnings: true })).status, 409);
     assert.equal(writes, 0);
-    assert.equal((await send({ ...payload, expectedRevision: 5, confirmWarnings: true })).status, 200);
+    assert.equal((await (await send({ ...risk, expectedRevision: 5, confirmWarnings: true })).json()).status, "updated");
     assert.equal(writes, 1);
-    assert.equal((await send({ ...payload, expectedRevision: 5, confirmWarnings: true })).status, 409);
+    assert.equal((await send({ ...risk, expectedRevision: 5, confirmWarnings: true })).status, 409);
     assert.equal(writes, 1);
+    const safe = { ...payload, expectedRevision: 6, schema: { pages: [{ elements: [{ type: "text", name: "q", title: "Новое название" }] }] } };
+    assert.equal((await (await send(safe)).json()).status, "updated");
+    assert.equal(writes, 2);
   } finally { delete globalThis.analyzeSchemaCompatibility; }
 });
 

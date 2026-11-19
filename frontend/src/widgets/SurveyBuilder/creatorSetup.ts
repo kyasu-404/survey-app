@@ -280,7 +280,11 @@ export function createCreatorInstance(
   });
 
   creator.onPropertyShowing.add((_sender, options) => {
-    if (options.element?.getType?.() === "sectiontitle" && ["isRequired", "valueName", "defaultValue", "correctAnswer", "requiredIf", "validators"].includes(options.property.name)) {
+    const property = options.property.name;
+    if (
+      (options.element?.isDescendantOf("question") && (property === "name" || property === "valueName"))
+      || (options.element?.getType() === "sectiontitle" && ["isRequired", "defaultValue", "correctAnswer", "requiredIf", "validators"].includes(property))
+    ) {
       options.show = false;
     }
   });

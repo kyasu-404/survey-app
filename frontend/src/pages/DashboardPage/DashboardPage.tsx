@@ -41,7 +41,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
   const location = useLocation();
   const initialView = useRef((location.state as { dashboardView?: DashboardViewSnapshot } | null)?.dashboardView);
   const restorePending = useRef(Boolean(initialView.current));
-  const openingPreview = useRef(false);
+  const openingForm = useRef(false);
   const [layout, setLayout] = useState<DashboardLayout>(() => {
     if (initialView.current) return initialView.current.layout;
     try { return localStorage.getItem("survey-app:forms-layout") === "table" ? "table" : "cards"; }
@@ -140,23 +140,28 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
     return () => cancelAnimationFrame(frame);
   }, [forms, isAuthLoading]);
 
-  const handleCardOpen = async (form: SurveyFormSummary) => {
-    if (isTemplateForm(form) || openingPreview.current) {
-      return;
-    }
-    openingPreview.current = true;
+  const listUrl = location.pathname + location.search + location.hash;
+  const openFromList = async (path: string, state: Record<string, string>) => {
+    if (openingForm.current) return;
+    openingForm.current = true;
     const dashboardView: DashboardViewSnapshot = {
       filters: { search: filters.search, dateFrom: filters.dateFrom, dateTo: filters.dateTo, formType: filters.formType, formReason: filters.formReason },
       layout, sort, loadedCount: forms.loadedForms.length,
       scroll: { left: window.scrollX, top: window.scrollY },
     };
     try {
-      // Update this history entry before pushing preview: Back restores its view.
-      await navigate(location.pathname + location.search + location.hash, {
+      // Keep the snapshot on the list history entry so either Back action restores it.
+      await navigate(listUrl, {
         replace: true, preventScrollReset: true, state: { ...location.state, dashboardView },
       });
-      await navigate(routes.survey(form.id), { state: { renderMode: "preview-interactive", previewReturnTo: location.pathname + location.search + location.hash } });
-    } finally { openingPreview.current = false; }
+      await navigate(path, { state });
+    } finally { openingForm.current = false; }
+  };
+
+  const handleCardOpen = (form: SurveyFormSummary) => {
+    if (!isTemplateForm(form)) {
+      void openFromList(routes.survey(form.id), { renderMode: "preview-interactive", previewReturnTo: listUrl });
+    }
   };
 
   return (
@@ -213,7 +218,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           onOpenForm={handleCardOpen}
           onShare={setSharedForm}
           onOpenResponseLimitEditor={actions.openResponseLimitEditor}
-          onOpenResponses={(formId) => navigate(routes.formResponses(formId))}
+          onOpenResponses={(formId) => void openFromList(routes.formResponses(formId), { fromFormsList: viewMode })}
           onRename={(form) => void actions.handleRename(form)}
           onToggleStatus={(form) => void actions.handleToggleFormStatus(form)}
           openedMenu={openedMenu}

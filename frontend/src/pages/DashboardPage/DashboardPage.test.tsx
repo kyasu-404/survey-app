@@ -327,7 +327,7 @@ describe("DashboardPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Название" }));
     await waitFor(() => expect(getDashboardFormsPage).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: null, sort: { field: "title", direction: "desc" } })));
     await userEvent.click(screen.getByRole("button", { name: "Ответы формы Форма 99: 99 ответов" }));
-    expect(navigate).toHaveBeenCalledWith(routes.formResponses("form-99"));
+    expect(navigate).toHaveBeenCalledWith(routes.formResponses("form-99"), { state: { fromFormsList: "all" } });
     await userEvent.click(screen.getByRole("button", { name: "Действия формы Форма 99" }));
     expect(screen.getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
@@ -500,7 +500,9 @@ describe("DashboardPage", () => {
     });
 
     expect(await screen.findByText("Новая форма")).toBeInTheDocument();
-    expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: null });
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: null });
+    });
   });
 
   it("forces a background refresh when opening my forms with fresh cached data", async () => {
@@ -1088,7 +1090,7 @@ describe("DashboardPage", () => {
     const responsesButton = screen.getByRole("button", { name: "3 ответа" });
 
     await userEvent.click(responsesButton);
-    expect(navigate).toHaveBeenCalledWith(routes.formResponses("form-1"));
+    expect(navigate).toHaveBeenCalledWith(routes.formResponses("form-1"), { state: { fromFormsList: "all" } });
 
     navigate.mockClear();
 

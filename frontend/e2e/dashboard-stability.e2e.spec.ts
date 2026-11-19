@@ -99,3 +99,42 @@ test("sidebar slides a long list without resizing it on every animation frame", 
   expect(listRequests.length).toBe(requestCount);
   expect(pageErrors).toEqual([]);
 });
+
+for (const route of ["my", "all"] as const) {
+  test(`returning from responses restores the loaded ${route} list and its scroll position`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openSurveyApp(page, { responseCount: 1 });
+    await navigateFromSidebar(page, route === "my" ? "Мои формы" : "Все формы");
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${route}$`));
+    const search = page.getByPlaceholder(/^Поиск по названию/);
+    const filtered = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith("/list_forms_keyset") && Boolean(url.searchParams.get("or")?.includes("Карточка"));
+    });
+    await search.fill("Карточка");
+    await filtered;
+    if (route === "all") await page.getByRole("button", { name: "Показать таблицу" }).click();
+    const entries = page.locator(route === "all" ? ".dashboard-form-table-row" : ".dashboard-form-card");
+    await expect(entries).toHaveCount(20);
+    await page.getByRole("button", { name: "Показать ещё" }).click();
+    await expect(entries).toHaveCount(40);
+    const counter = entries.nth(32).locator(".dashboard-responses-link");
+    await counter.scrollIntoViewIfNeeded();
+    const scroll = await page.evaluate(() => scrollY);
+    expect(scroll).toBeGreaterThan(0);
+    await counter.click();
+    const back = page.getByRole("link", { name: "← Назад к формам" });
+    await expect(back).toBeVisible();
+    if (route === "my") {
+      await back.click();
+    } else {
+      await page.reload(); // The list must also recover from an empty query cache.
+      await expect(back).toBeVisible();
+      await page.goBack();
+    }
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${route}$`));
+    await expect(search).toHaveValue("Карточка");
+    await expect(entries).toHaveCount(40);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(scroll);
+  });
+}

@@ -200,3 +200,28 @@ for (const theme of ["sand", "graphite"]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+for (const [type, responseCount] of [["text", 0], ["phone", 1]] as const) {
+  test(`question identifiers stay hidden and survive saving a ${type} question`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const question = { type, name: "contact", valueName: "legacy_contact", title: "Контакт" };
+    const app = await openSurveyApp(page, { responseCount, elements: [question] });
+    await page.goto(`/builder/${app.formId}`);
+    if (responseCount) await page.getByRole("button", { name: "Редактировать безопасно" }).click();
+    await page.locator(".svc-question__content").first().click();
+    const grid = page.locator(".svc-side-bar__container");
+    await expand(grid, "Общие");
+    const title = grid.getByRole("textbox", { name: "Заголовок вопроса", exact: true });
+    await expect(title).toHaveValue(question.title);
+    await expect(grid.locator('[data-name="name"]')).toHaveCount(0);
+    await expand(grid, "Данные");
+    await expect(grid.locator('[data-name="valueName"]')).toHaveCount(0);
+    await expand(grid, "Логика");
+    await expect(grid.locator('[data-name="visibleIf"]')).toBeVisible();
+    await expand(grid, "Общие");
+    await title.fill("Для связи");
+    await title.press("Tab");
+    await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
+    await expect.poll(() => app.form.schema.pages[0].elements[0]).toMatchObject({ ...question, title: "Для связи" });
+  });
+}
