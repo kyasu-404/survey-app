@@ -18,6 +18,9 @@ async function expand(grid: Locator, name: string) {
   const section = grid.getByRole("button", { name, exact: true });
   if (await section.getAttribute("aria-expanded") !== "true") await section.click();
   await expect(section).toHaveAttribute("aria-expanded", "true");
+  await expect(grid.getByRole("group", { name, exact: true })).toBeVisible();
+  // SurveyJS closes the other categories when the opening animation finishes.
+  await expect(grid.locator(".spg-panel__content--enter, .spg-panel__content--leave")).toHaveCount(0);
 }
 
 for (const theme of ["sand", "graphite"]) {
