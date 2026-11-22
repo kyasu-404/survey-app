@@ -1,7 +1,9 @@
 {
   "add": "e145",
+  "admin_panel_settings": "ef3d",
   "arrow_back": "e5c4",
   "arrow_forward": "e5c8",
+  "bolt": "ea0b",
   "bookmark": "e8e7",
   "check_circle": "f0be",
   "chevron_left": "e5cb",
@@ -25,6 +27,7 @@
   "logout": "e9ba",
   "menu": "e5d2",
   "more_horiz": "e5d3",
+  "notifications": "e7f5",
   "refresh": "e5d5",
   "schedule": "efd6",
   "school": "e80c",

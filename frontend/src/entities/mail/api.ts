@@ -88,7 +88,7 @@ const JOB_SELECT = "id, batch_id, form_id, organization_id, recipient_email, rec
 export async function getFormMailActivity(formId: string, signal?: AbortSignal): Promise<MailActivity> {
   const { data: batchesData, error: batchesError } = await runRequest(
     "mail.activity.batches",
-    (signal) => apiClient.from("mail_batches").select(BATCH_SELECT).eq("form_id", formId).order("created_at", { ascending: false }).limit(20).abortSignal(signal),
+    (signal) => apiClient.from("mail_batches").select(BATCH_SELECT).eq("form_id", formId).in("kind", ["invitation", "reminder"]).order("created_at", { ascending: false }).limit(20).abortSignal(signal),
     { context: { formId }, signal },
   );
   if (batchesError) throw batchesError;

@@ -12,6 +12,14 @@ import {
 const supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
 const encryptionKey = String(process.env.MAIL_SETTINGS_ENCRYPTION_KEY ?? "");
+const appOrigin = (() => {
+  try {
+    const url = new URL(process.env.PUBLIC_APP_URL ?? "");
+    return ["https:", "http:"].includes(url.protocol) ? url.origin : null;
+  } catch {
+    return null;
+  }
+})();
 const workerId = `${os.hostname()}:${process.pid}`;
 const pollIntervalMs = Math.max(1000, Number(process.env.MAIL_WORKER_POLL_INTERVAL_MS) || 3000);
 const concurrency = Math.min(20, Math.max(1, Number(process.env.MAIL_WORKER_CONCURRENCY) || 5));
@@ -49,6 +57,8 @@ const state = {
   lastCleanupSuccessAt: null,
   lastCleanupResult: null,
   lastCleanupError: null,
+  lastAutomationPollAt: null,
+  lastAutomationError: null,
 };
 
 function apiHeaders(prefer = "return=representation") {
@@ -186,6 +196,24 @@ function scheduleCleanup() {
   activeCleanup = cleanupStorage();
 }
 
+let activeAutomations = Promise.resolve();
+let pollingAutomations = false;
+function scheduleAutomations() {
+  if (pollingAutomations) return;
+  pollingAutomations = true;
+  activeAutomations = callRpc("process_automations", { p_app_origin: appOrigin, p_limit: 50 })
+    .then(() => {
+      state.lastAutomationPollAt = new Date().toISOString();
+      state.lastAutomationError = null;
+    })
+    .catch((error) => {
+      state.lastAutomationError = "Не удалось обработать события автоматизации";
+      console.error("automation worker poll failed", { message: error.message });
+    })
+    .finally(() => { pollingAutomations = false; });
+}
+
+scheduleAutomations();
 schedulePoll();
 scheduleCleanup();
 let expiringUploads = false;
@@ -207,6 +235,7 @@ async function cleanupExpiredUploads() {
 const expiredUploadsTimer = setInterval(() => void cleanupExpiredUploads(), 300000);
 void cleanupExpiredUploads();
 const timer = setInterval(schedulePoll, pollIntervalMs);
+const automationsTimer = setInterval(scheduleAutomations, Math.max(3000, pollIntervalMs));
 const cleanupTimer = setInterval(scheduleCleanup, cleanupCheckIntervalMs);
 let shuttingDown = false;
 
@@ -215,9 +244,10 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     if (shuttingDown) return;
     shuttingDown = true;
     clearInterval(timer);
+    clearInterval(automationsTimer);
     clearInterval(cleanupTimer);
     clearInterval(expiredUploadsTimer);
-    await Promise.all([activePoll, activeCleanup]);
+    await Promise.all([activePoll, activeCleanup, activeAutomations]);
     smtpTransports.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();

@@ -2,6 +2,10 @@ import { toPublicSmtpError } from "./config.mjs";
 
 const ACK_ERROR = "Не удалось подтвердить обработку писем в Supabase";
 
+const automationSendTime = new Intl.DateTimeFormat("ru-RU", {
+  dateStyle: "short", timeStyle: "short", timeZone: "Europe/Moscow",
+});
+
 export function parseMailJobStatus(rows) {
   if (!Array.isArray(rows) || rows.length > 1) throw new Error("Malformed mail queue status response");
   if (rows.length === 0) return null;
@@ -63,12 +67,20 @@ export function createMailPoller({
     let success = true;
     let publicError = null;
     try {
+      let subject = job.subject;
+      let body = job.body_text;
+      if (job.automation_run_id) {
+        const marker = "{{sent_at:" + job.automation_run_id + "}}";
+        const sentAt = automationSendTime.format(now()) + " МСК";
+        subject = subject.replaceAll(marker, sentAt);
+        body = body.replaceAll(marker, sentAt);
+      }
       await transporter.sendMail({
         from: { name: settings.from_name, address: settings.from_email },
         replyTo: settings.reply_to || undefined,
         to: { name: job.recipient_name, address: job.recipient_email },
-        subject: job.subject,
-        text: job.body_text,
+        subject,
+        text: body,
         disableFileAccess: true,
         disableUrlAccess: true,
       });

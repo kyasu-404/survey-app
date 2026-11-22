@@ -1,9 +1,9 @@
 export function isWorkerHealthy(state, nowMs, pollIntervalMs) {
-  const successfulPollMs = Date.parse(String(state.lastSuccessfulPollAt ?? ""));
   const freshnessWindowMs = Math.max(60_000, Math.max(1_000, pollIntervalMs) * 3);
 
-  return Number.isFinite(successfulPollMs)
-    && nowMs - successfulPollMs <= freshnessWindowMs
-    && nowMs >= successfulPollMs
-    && !state.lastError;
+  return !state.lastError && !state.lastAutomationError
+    && [state.lastSuccessfulPollAt, state.lastAutomationPollAt].every((lastPoll) => {
+      const ageMs = nowMs - Date.parse(lastPoll ?? "");
+      return ageMs >= 0 && ageMs <= freshnessWindowMs;
+    });
 }

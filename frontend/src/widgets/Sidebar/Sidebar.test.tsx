@@ -22,6 +22,11 @@ vi.mock("../../app/providers/AuthProvider", () => ({
   }),
 }));
 
+vi.mock("../../entities/notification/useNotifications", () => ({
+  useLiveNotifications: () => undefined,
+  useUnreadCount: () => ({ data: 0 }),
+}));
+
 vi.mock("../../features/auth/api", () => ({
   logout: vi.fn(),
 }));
@@ -59,7 +64,7 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Справочник ОУ" })).toHaveAttribute("href", routes.organizations);
   });
 
-  it("shows Settings only to administrators", () => {
+  it("shows management to both roles and administration only to administrators", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
@@ -68,7 +73,11 @@ describe("Sidebar", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.queryByRole("link", { name: "Настройки" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Автоматизации" })).toHaveAttribute("href", routes.automations);
+    expect(screen.getByRole("link", { name: "Настройки" })).toHaveAttribute("href", routes.settings);
+    expect(screen.getByRole("link", { name: /^Уведомления/ })).toHaveAttribute("href", routes.notifications);
+    expect(screen.queryByRole("link", { name: "Администрирование" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Пользователи" })).not.toBeInTheDocument();
 
     authState.role = "admin";
     rerender(
@@ -79,6 +88,25 @@ describe("Sidebar", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByRole("link", { name: "Настройки" })).toHaveAttribute("href", routes.settings);
+    expect(screen.getByRole("link", { name: "Администрирование" })).toHaveAttribute("href", routes.administration);
+    expect(screen.getByRole("link", { name: "Пользователи" })).toHaveAttribute("href", routes.users);
+  });
+
+  it("uses bundled Material Symbols for the new navigation links", () => {
+    authState.role = "admin";
+    renderSidebar();
+
+    const icons = {
+      "Автоматизации": "bolt",
+      "Настройки": "settings",
+      "Уведомления": "notifications",
+      "Администрирование": "admin_panel_settings",
+    };
+
+    for (const [label, icon] of Object.entries(icons)) {
+      expect(screen.getByRole("link", { name: label }).querySelector('[data-icon="' + icon + '"]'))
+        .toHaveAttribute("aria-hidden", "true");
+    }
   });
 
   it("opens account actions by name, changes theme and logs out", async () => {

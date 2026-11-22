@@ -1,0 +1,51 @@
+.notification-center .notification-row-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 550;
+}
+.notification-center .activity-row-unread .notification-row-title { font-weight: 730; }
+.notification-center .activity-row-unread { box-shadow: inset 3px 0 var(--theme-accent); }
+.notification-ack { justify-self: start; margin-top: 6px; }
+.notification-acknowledged {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  color: var(--theme-text-muted);
+  font-size: .88rem;
+}
+.notification-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: clamp(25px, 5vw, 48px) 16px;
+  text-align: center;
+}
+.notification-empty h2 { margin: 0; font-size: 1.12rem; color: var(--theme-text); }
+.notification-empty p { max-width: 43ch; }
+.notification-empty-icon {
+  display: grid;
+  place-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 3px;
+  border-radius: 50%;
+  color: var(--theme-text-muted);
+  background: var(--theme-page-surface);
+  border: 1px solid var(--theme-border);
+}
+
+.notification-preferences-dialog {
+  inset: 0;
+  width: min(500px, calc(100% - 24px));
+  max-height: calc(100dvh - 28px);
+  margin: auto;
+  overflow-y: auto;
+  padding: clamp(16px, 3vw, 24px);
+  color: var(--theme-text);
+}
+.notification-preferences-dialog[open] { display: grid; gap: 18px; }
+.notification-preferences-dialog::backdrop { background: rgb(20 23 28 / 58%); }
+.notification-preferences-dialog .activity-heading { align-items: center; }
+.notification-preferences-dialog .activity-preferences { justify-items: stretch; }
+.notification-preferences-dialog .activity-preferences button { justify-self: end; }

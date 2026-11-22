@@ -57,12 +57,17 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       "202611131200_smtp_certificate_policy.sql",
       "202611182030_response_upload_size.sql",
     ].map(name => source("./migrations/" + name)));
+    const automationMigration = await source("./migrations/202611221200_automations_notifications.sql");
+    const announcementMigration = await source("./migrations/202611221300_announcements.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
       const db = await connect(database);
       const priorSchema = upgrade && process.env.SURVEY_TEST_PREVIOUS_SCHEMA ? await readFile(process.env.SURVEY_TEST_PREVIOUS_SCHEMA, "utf8") : null;
-      await db.query(infra + (priorSchema ?? schema));
+      const bootstrap = upgrade
+        ? priorSchema ?? schema.split("-- Automations and personal notifications\n")[0] + "commit;\n"
+        : schema;
+      await db.query(infra + bootstrap);
       if (upgrade) {
         // Exercise replacement over existing data and legacy column ACLs.
         const owner = randomUUID(), form = randomUUID();
@@ -85,6 +90,12 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         assert.equal(smtp.allow_invalid_certificate, false);
         assert.equal(smtp.password_encrypted, "migration-encrypted-password");
         await db.query("delete from public.mail_settings where id=1");
+        if (!(await db.query("select to_regclass('public.automation_rules') is not null present")).rows[0].present) {
+          await db.query(automationMigration);
+        }
+        if (!(await db.query("select to_regnamespace('survey_announcements') is not null present")).rows[0].present) {
+          await db.query(announcementMigration);
+        }
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
@@ -94,6 +105,9 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/upload_type_policy.sql");
       await runPsql(database, "./tests/upload_size_limit.sql");
       await runPsql(database, "./tests/smtp_certificate_policy.sql");
+      await runPsql(database, "./tests/automations.sql");
+      await runPsql(database, "./tests/automation_regressions.sql");
+      await runPsql(database, "./tests/announcements.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }
@@ -147,6 +161,34 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       const deletion = await pending;
       assert.ifError(deletion.error);
       assert.deepEqual(deletion.result.rows[0].result.objectPaths, [editedPath]);
+
+      // An edit during catch-up must update the subtotal of the page the worker just committed.
+      const countedForm = randomUUID();
+      const countedResponse = randomUUID();
+      await db.query("insert into public.forms(id,title,author_id,form_type,form_reason,schema) values($1,'Concurrent threshold',$2,'anketa','plan',$3)",
+        [countedForm, owner, { pages: [{ elements: [{ type: "text", name: "amount" }] }] }]);
+      await db.query("insert into public.responses(id,form_id,data,created_at) values($1,$2,'{\"amount\":\"9\"}',now()-interval '2 days')",
+        [countedResponse, countedForm]);
+      await db.query("insert into public.responses(form_id,data,created_at) select $1,'{\"amount\":\"0\"}', now()-interval '1 day' from generate_series(1,1000)", [countedForm]);
+      await db.query("begin");
+      await db.query("select set_config('request.jwt.claim.sub',$1,true)", [owner]);
+      const conditions = JSON.stringify([{ path: ["amount"], op: "gt", value: 5 }]);
+      const action = { recipients: ["owner@example.invalid"], subject: "Count", body: "Count", mode: "summary" };
+      const { rows: [{ rule }] } = await db.query("select public.save_automation_rule(null,$1,'Count','',true,'matching_count',2,null,null,'all',$2,$3) rule",
+        [countedForm, conditions, action]);
+      await db.query("commit");
+      const submitMatch = () => db.query("select public.submit_form_response($1,$2,$3,$4)", [countedForm, randomUUID(), randomUUID(), { amount: "9" }]);
+      await submitMatch();
+      await a.query("begin");
+      await a.query("select public.process_automations('https://example.invalid',50)");
+      pending = b.query("update public.responses set data='{\"amount\":\"0\"}' where id=$1", [countedResponse]).then(result => ({result}), error => ({error}));
+      await waitForRowLock(); await a.query("commit");
+      assert.ifError((await pending).error);
+      await db.query("select public.process_automations('https://example.invalid',50)");
+      const runs = async () => (await db.query("select count(*)::int as n from public.automation_runs where rule_id=$1", [rule])).rows[0].n;
+      assert.equal(await runs(), 0, "An edited historical response was still counted");
+      await submitMatch();
+      assert.equal(await runs(), 1, "The ready count missed a subsequent qualifying answer");
 
       // Repeated and opposing status requests serialize both Auth and profile.
       const target = randomUUID();

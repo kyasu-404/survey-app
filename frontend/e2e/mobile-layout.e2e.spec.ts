@@ -95,7 +95,7 @@ for (const width of [320, 390]) {
     await expectPageFits(page);
     await page.getByRole("button", { name: "Отмена", exact: true }).click();
 
-    await navigateFromMenu(page, "Настройки");
+    await navigateFromMenu(page, "Администрирование");
     await expect(page.getByRole("heading", { name: "Основной логотип", exact: true })).toBeVisible();
     await expectPageFits(page);
     await page.screenshot({ path: testInfo.outputPath("settings.png") });

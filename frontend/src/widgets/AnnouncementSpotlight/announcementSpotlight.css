@@ -1,0 +1,40 @@
+.announcement-banner,
+.announcement-dialog[open] {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: clamp(14px, 2vw, 22px);
+  overflow-wrap: anywhere;
+  color: var(--theme-text);
+}
+
+.announcement-banner {
+  margin-bottom: 14px;
+  border-inline-start: 3px solid var(--theme-accent);
+  background: var(--theme-accent-soft);
+}
+.announcement-banner .announcement-content {
+  max-height: min(32dvh, 16rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.announcement-dialog {
+  inset: 0;
+  width: min(540px, calc(100% - 24px));
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  margin: auto;
+}
+.announcement-dialog::backdrop { background: rgb(20 23 28 / 58%); }
+.announcement-prompt-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.announcement-prompt-heading h2 { margin: 5px 0 0; font-size: 1.18rem; }
+.announcement-dialog .announcement-prompt-heading h2 { font-size: 1.35rem; }
+.announcement-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--theme-text-muted);
+  font-size: .86rem;
+}
+.announcement-ack { justify-self: start; }

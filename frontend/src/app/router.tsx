@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { Navigate, Outlet, createBrowserRouter, useLocation, useParams } from "react-router-dom";
 import { routes } from "./routes";
 import { ProtectedRoute } from "./router/ProtectedRoute";
@@ -123,21 +124,30 @@ async function loadOrganizationsRoute() {
   };
 }
 
-async function loadSettingsRoute() {
-  const { default: SettingsPage } = await import("../pages/SettingsPage/SettingsPage");
+async function loadAdministrationRoute() {
+  const { AdministrationLayout } = await import("./layout/AdministrationLayout");
 
   return {
-    Component: function SettingsRoute() {
+    Component: function AdministrationRoute() {
       return (
         <ProtectedRoute>
           <AdminRoute>
-            <SettingsPage />
+            <AdministrationLayout />
           </AdminRoute>
         </ProtectedRoute>
       );
     },
   };
 }
+
+function loadPersonalRoute(load: () => Promise<{ default: ComponentType }>) {
+  return async () => {
+    const { default: Page } = await load();
+    return { Component: function PersonalRoute() { return <ProtectedRoute><Page /></ProtectedRoute>; } };
+  };
+}
+
+const loadAutomations = loadPersonalRoute(() => import("../pages/AutomationsPage/AutomationsPage"));
 
 export const router = createBrowserRouter([
   {
@@ -193,9 +203,21 @@ export const router = createBrowserRouter([
         lazy: loadUsersRoute,
       },
       {
-        path: routes.settings,
-        lazy: loadSettingsRoute,
+        path: routes.administration,
+        lazy: loadAdministrationRoute,
+        children: [
+          { index: true, lazy: async () => ({ Component: (await import("../pages/SettingsPage/SettingsPage")).default }) },
+          {
+            path: routes.announcements,
+            lazy: async () => ({ Component: (await import("../pages/AnnouncementsPage/AnnouncementsPage")).default }),
+          },
+        ],
       },
+      { path: routes.settings, lazy: loadPersonalRoute(() => import("../pages/PreferencesPage/PreferencesPage")) },
+      { path: routes.notifications, lazy: loadPersonalRoute(() => import("../pages/NotificationsPage/NotificationsPage")) },
+      { path: routes.formAutomationsById, lazy: loadAutomations },
+      { path: routes.automations, lazy: loadAutomations },
+      { path: routes.automationById, lazy: loadAutomations },
       { path: "*", element: <Navigate to={routes.dashboardMy} replace /> },
     ],
   },

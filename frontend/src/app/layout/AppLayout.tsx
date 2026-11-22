@@ -6,6 +6,8 @@ import { useToast } from "../providers/ToastProvider";
 import { useSidebarMotion } from "./useSidebarMotion";
 import { useMobileLayout } from "../../shared/ui/useMobileLayout";
 import { Icon } from "../../shared/ui/Icon";
+import { MobileNotificationsLink } from "../../widgets/NotificationsLink/NotificationsLink";
+import { AnnouncementSpotlight } from "../../widgets/AnnouncementSpotlight/AnnouncementSpotlight";
 
 const mobileHeaderTitles = [
   { path: routes.dashboardMy, title: "Мои формы" },
@@ -16,6 +18,11 @@ const mobileHeaderTitles = [
   { path: routes.formResponsesById, title: "Ответы на форму" },
   { path: routes.users, title: "Пользователи" },
   { path: routes.settings, title: "Настройки" },
+  { path: routes.announcements, title: "Объявления" },
+  { path: routes.administration, title: "Администрирование" },
+  { path: routes.formAutomationsById, title: "Автоматизации" },
+  { path: routes.automations, title: "Автоматизации" },
+  { path: routes.notifications, title: "Уведомления" },
 ];
 
 export function AppLayout() {
@@ -94,8 +101,8 @@ export function AppLayout() {
     if (!toast) return;
 
     showToast(toast, "success");
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate, showToast]);
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+  }, [location.pathname, location.search, location.hash, location.state, navigate, showToast]);
 
   return (
     <div
@@ -119,6 +126,7 @@ export function AppLayout() {
             <Icon name="menu" size={24} />
           </button>
           <span>{mobileHeaderTitle}</span>
+          <MobileNotificationsLink />
         </header>
       )}
       {isMobileMenuOpen && <div className="mobile-sidebar-backdrop" aria-hidden="true" onClick={() => setMobileMenuLocation(null)} />}
@@ -144,6 +152,7 @@ export function AppLayout() {
         </div>
       )}
       <main ref={mainRegion} onClickCapture={sidebarMotion.finish} onKeyDownCapture={sidebarMotion.finish} className={isOfficePage ? "app-main app-main-office" : shouldHideSidebar ? "app-main app-main-login app-main-public" : "app-main"}>
+        {!shouldHideSidebar && <AnnouncementSpotlight />}
         <Outlet />
       </main>
     </div>

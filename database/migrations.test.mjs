@@ -46,7 +46,7 @@ test("database migrations avoid destructive table and data operations", () => {
     const sql = readFileSync(new URL(fileName, migrationsDir), "utf8");
     // Function bodies run on RPC/trigger invocation, not while applying this migration.
     const topLevelStatements = sql.replace(
-      /create or replace function public\.[\s\S]*?\bas\s+\$\$[\s\S]*?\n\$\$;/gi,
+      /^[ \t]*create (?:or replace )?function (?:\w+\.)?\w+\([\s\S]*?\bas\s+\$\$[\s\S]*?^\$\$;/gim,
       "",
     );
     assert.doesNotMatch(topLevelStatements, destructiveStatement, `${fileName} contains a destructive operation`);

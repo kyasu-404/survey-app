@@ -1,0 +1,17 @@
+.announcement-content {
+  display: grid;
+  min-width: 0;
+  gap: .55rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.announcement-content p,
+.announcement-content ul { margin: 0; white-space: pre-line; }
+.announcement-content ul { padding-inline-start: 1.35rem; }
+.announcement-content .announcement-action {
+  width: fit-content;
+  color: var(--theme-accent-strong);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}

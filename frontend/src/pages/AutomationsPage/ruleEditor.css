@@ -1,0 +1,59 @@
+.activity-rule-dialog .activity-rule-editor {
+  box-sizing: border-box;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.rule-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--theme-border);
+  list-style: none;
+  color: var(--theme-text-muted);
+  font-size: .84rem;
+}
+
+.rule-steps li { display: inline-flex; align-items: center; gap: 5px; }
+.rule-steps span {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background: var(--theme-surface-muted);
+}
+.rule-steps [aria-current] { color: var(--theme-accent-strong); font-weight: 700; }
+.rule-steps [aria-current] span { background: var(--theme-accent-soft); }
+.rule-step-heading { margin: 0; font-size: 1.1rem; }
+.rule-step-heading:focus { outline: none; }
+.rule-step-fields { display: grid; gap: 12px; min-width: 0; }
+.rule-step-fields .activity-field > small { font-size: .85rem; }
+.rule-scope, .rule-preview {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.rule-scope { background: var(--theme-surface-muted); }
+.rule-scope p { margin: 4px 0; }
+.rule-scope small, .rule-preview dt { color: var(--theme-text-muted); }
+.rule-conditions[open] > div, .rule-variables[open] > label, .rule-variable-group { margin-top: 12px; }
+.rule-variable-group strong { display: block; margin-bottom: 5px; font-size: .88rem; }
+.rule-action { margin: 0; }
+.rule-action strong { margin-inline-end: 6px; }
+.rule-preview h3 { margin: 0 0 5px; font-size: 1rem; }
+.rule-preview dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; }
+.rule-preview dd { margin: 0; }
+.rule-preview-body {
+  padding-top: 12px;
+  border-top: 1px solid var(--theme-border);
+  white-space: pre-wrap;
+}
+.activity-rule-editor .activity-dialog-actions > :first-child { margin-inline-end: auto; }
+
+@media (max-width: 520px) {
+  .rule-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

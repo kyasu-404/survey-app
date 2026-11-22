@@ -210,9 +210,9 @@ describe("route guards", () => {
     const auth = { user: { id: "user-1" }, loading: false, profileLoading: false };
     useAuth.mockReturnValue({ ...auth, profile: { id: "user-1", role: "admin" } });
     const content = () => (
-      <MemoryRouter initialEntries={[routes.settings]}>
+      <MemoryRouter initialEntries={[routes.administration]}>
         <Routes>
-          <Route path={routes.settings} element={<AdminRoute><div>admin content</div></AdminRoute>} />
+          <Route path={routes.administration} element={<AdminRoute><div>admin content</div></AdminRoute>} />
           <Route path={routes.dashboardMy} element={<div>dashboard content</div>} />
         </Routes>
       </MemoryRouter>

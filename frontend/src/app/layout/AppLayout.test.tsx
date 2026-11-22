@@ -14,6 +14,10 @@ vi.mock("../../widgets/Sidebar/Sidebar", () => ({
   Sidebar: () => <aside data-testid="app-sidebar">Все формы</aside>,
 }));
 
+vi.mock("../../widgets/AnnouncementSpotlight/AnnouncementSpotlight", () => ({
+  AnnouncementSpotlight: () => null,
+}));
+
 function renderLayout(pathname: string) {
   return render(
     <MemoryRouter initialEntries={[pathname]}>

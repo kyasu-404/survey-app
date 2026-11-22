@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, type Path } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { routes } from "../../app/routes";
 import { login } from "../../features/auth/api";
@@ -31,8 +31,11 @@ export default function LoginPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-  const targetPath = getSafeLoginTarget(from);
+  const from = (location.state as { from?: Partial<Path> } | null)?.from;
+  const pathname = getSafeLoginTarget(from?.pathname);
+  const targetPath = pathname === from?.pathname
+    ? { pathname, search: from.search, hash: from.hash }
+    : pathname;
 
   if (!loading && user) {
     return <Navigate to={targetPath} replace />;

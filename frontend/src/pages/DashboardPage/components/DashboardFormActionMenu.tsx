@@ -1,5 +1,11 @@
 import { MoreHorizontalIcon } from "../../../shared/ui/MoreHorizontalIcon";
 import { useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { routes } from "../../../app/routes";
+import { countActiveFormRules } from "../../../entities/automation/api";
+import { automationKey } from "../../../entities/automation/model";
+import "./dashboardFormActionMenu.css";
 import { DashboardMenuPortal } from "./DashboardMenuPortal";
 import type {
   Dispatch,
@@ -28,6 +34,21 @@ type DashboardFormActionMenuProps = {
 
 function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
   event.stopPropagation();
+}
+
+function FormAutomationsItem({ formId, userId, onClose }: { formId: string; userId: string; onClose: () => void }) {
+  const count = useQuery({
+    queryKey: [...automationKey(userId), "active-count", formId],
+    queryFn: ({ signal }) => countActiveFormRules(userId, formId, signal),
+    refetchOnMount: true,
+  });
+  return <Link role="menuitem" className="form-menu-item" to={routes.formAutomations(formId)}
+    onClick={(event) => { stopCardEvent(event); onClose(); }}>
+    <Icon name="bolt" className="form-menu-item-icon" size={18} />
+    <span className="form-menu-item-label">Автоматизации</span>
+    {count.data !== undefined && <small className="form-rule-count" aria-label={`Активных правил: ${count.data}`}
+      title={`Активных правил: ${count.data}`}>{count.data}</small>}
+  </Link>;
 }
 
 export function DashboardFormActionMenu({
@@ -131,6 +152,8 @@ export function DashboardFormActionMenu({
               <span className="form-menu-item-label">Редактировать</span>
             </button>
           )}
+
+          {isOwnForm && currentUserId && !isTemplate && <FormAutomationsItem formId={form.id} userId={currentUserId} onClose={() => setOpenedMenu(null)} />}
 
           {!isTemplate && (
             <button

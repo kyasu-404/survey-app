@@ -10,6 +10,8 @@ import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { Icon } from "../../shared/ui/Icon";
+import { useLiveNotifications } from "../../entities/notification/useNotifications";
+import { NotificationsLink } from "../NotificationsLink/NotificationsLink";
 
 type SidebarProps = {
   collapsed?: boolean;
@@ -20,6 +22,7 @@ type SidebarProps = {
 
 export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = false }: SidebarProps) {
   const { user, profile, loading } = useAuth();
+  useLiveNotifications(loading ? undefined : user?.id);
   const { themeId } = useTheme();
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -82,6 +85,7 @@ export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = fa
               <Icon name="folder" className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Мои формы</span>
             </NavLink>
+            <NotificationsLink userId={user.id} />
             <span className="sidebar-nav-section">Рабочая область</span>
             <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.templates} title="Шаблоны">
               <Icon name="dashboard_customize" className="sidebar-nav-icon" />
@@ -95,16 +99,24 @@ export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = fa
               <Icon name="edit_document" className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Конструктор</span>
             </NavLink>
+            <span className="sidebar-nav-section">Управление</span>
+            <NavLink className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"} to={routes.automations} title="Автоматизации">
+              <Icon name="bolt" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Автоматизации</span>
+            </NavLink>
+            <NavLink className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"} to={routes.settings} title="Настройки">
+              <Icon name="settings" className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Настройки</span>
+            </NavLink>
             {profile?.role === "admin" && (
               <>
-                <span className="sidebar-nav-section">Управление</span>
-                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.users} title="Пользователи">
+                <NavLink className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"} to={routes.users} title="Пользователи">
                   <Icon name="group" className="sidebar-nav-icon" />
                   <span className="sidebar-nav-label">Пользователи</span>
                 </NavLink>
-                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`.trim()} to={routes.settings} title="Настройки">
-                  <Icon name="settings" className="sidebar-nav-icon" />
-                  <span className="sidebar-nav-label">Настройки</span>
+                <NavLink className={({ isActive }) => isActive ? "nav-link nav-link-active" : "nav-link"} to={routes.administration} title="Администрирование">
+                  <Icon name="admin_panel_settings" className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-label">Администрирование</span>
                 </NavLink>
               </>
             )}

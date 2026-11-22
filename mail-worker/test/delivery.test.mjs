@@ -9,12 +9,15 @@ function deferred() {
   return { promise, resolve };
 }
 
-function createFixture({ ids = ["first"], failAck = () => null, send = async () => {} } = {}) {
-  let nowMs = Date.now();
+function createFixture({ ids = ["first"], failAck = () => null, send = async () => {}, nowAt = Date.now() } = {}) {
+  let nowMs = nowAt;
   let claims = 0;
   let settingsLoads = 0;
   let settings = { enabled: true, from_name: "Forms", from_email: "forms@example.test", reply_to: "" };
-  const state = { busy: false, lastError: null, lastSuccessfulPollAt: null, lastSuccessAt: null };
+  const state = {
+    busy: false, lastError: null, lastSuccessfulPollAt: null, lastSuccessAt: null,
+    lastAutomationPollAt: new Date(nowAt).toISOString(),
+  };
   const queue = new Map(ids.map((id) => [id, {
     id,
     batch_id: "batch",
@@ -263,4 +266,17 @@ test("requeues only unsent jobs when creating the SMTP transport fails", async (
   assert.deepEqual([...fixture.queue.values()].map(({ status }) => status), ["queued", "queued"]);
   assert.deepEqual(fixture.acknowledgements.map(({ success }) => success), [false, false]);
   assert.ok(fixture.state.lastError);
+});
+
+test("inserts the SMTP send time after an automation job has waited in the queue", async () => {
+  const sent = [];
+  const fixture = createFixture({ nowAt: Date.parse("2026-11-22T09:00:00Z"), send: async message => { sent.push(message); } });
+  const job = fixture.queue.get("first");
+  job.automation_run_id = "run";
+  job.subject = "Событие в {{sent_at:run}}";
+  job.body_text = "Отправлено {{sent_at:run}}";
+  fixture.advance(60_000);
+  await fixture.poll();
+  assert.match(sent[0].subject, /12:01 МСК$/);
+  assert.match(sent[0].text, /12:01 МСК$/);
 });

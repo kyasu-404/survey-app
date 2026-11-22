@@ -96,6 +96,10 @@ describe("router", () => {
         routes.builderById,
         routes.users,
         routes.settings,
+        routes.administration,
+        routes.automations,
+        routes.automationById,
+        routes.notifications,
         routes.login,
         "*",
       ]),
@@ -110,6 +114,11 @@ describe("router", () => {
     expect(routeByPath.get(routes.organizations)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.users)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.settings)?.lazy).toBeTypeOf("function");
+    expect(routeByPath.get(routes.formAutomationsById)?.lazy).toBeTypeOf("function");
+    const administration = routeByPath.get(routes.administration);
+    expect(administration?.lazy).toBeTypeOf("function");
+    expect(administration?.children?.find((route) => route.index)?.lazy).toBeTypeOf("function");
+    expect(administration?.children?.find((route) => route.path === routes.announcements)?.lazy).toBeTypeOf("function");
 
     expect(routeByPath.get(routes.dashboardMy)?.lazy).toBeTypeOf("function");
     expect(routeByPath.get(routes.dashboardAll)?.lazy).toBeTypeOf("function");

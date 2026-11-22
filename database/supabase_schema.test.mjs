@@ -101,7 +101,7 @@ test("new profiles always start with user role and do not copy metadata roles", 
 
 test("schema baseline avoids destructive reset statements", () => {
   const topLevelStatements = schema.replace(
-    /create or replace function public\.[\s\S]*?\bas\s+\$\$[\s\S]*?\n\$\$;/gi,
+    /^[ \t]*create (?:or replace )?function (?:\w+\.)?\w+\([\s\S]*?\bas\s+\$\$[\s\S]*?^\$\$;/gim,
     "",
   );
 

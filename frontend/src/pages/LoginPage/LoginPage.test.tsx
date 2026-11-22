@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { login } from "../../features/auth/api";
 import { readAppCss } from "../../test/readAppCss";
 import LoginPage, { getSafeLoginTarget, getWelcomeMessage } from "./LoginPage";
 
@@ -26,6 +28,32 @@ describe("LoginPage", () => {
   it("builds the welcome message from the profile name instead of email", () => {
     expect(getWelcomeMessage(" Анна Иванова ")).toBe("Добро пожаловать, Анна Иванова");
     expect(getWelcomeMessage("")).toBe("Добро пожаловать!");
+  });
+
+  it("opens the linked response after signing in", async () => {
+    vi.mocked(login).mockResolvedValueOnce("Анна Иванова");
+    const from = {
+      pathname: "/dashboard/forms/form-id/responses",
+      search: "?response=answer-id",
+      hash: "#details",
+    };
+    function Destination() {
+      const { search, hash } = useLocation();
+      return <p>{search + hash}</p>;
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/login", state: { from } }]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path={from.pathname} element={<Destination />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByLabelText("Электронная почта"), "owner@example.invalid");
+    await user.type(screen.getByLabelText("Пароль", { exact: true }), "password");
+    await user.click(screen.getByRole("button", { name: "Войти" }));
+    expect(await screen.findByText("?response=answer-id#details")).toBeInTheDocument();
   });
 
   it("renders premium auth styling hooks", () => {

@@ -1,0 +1,8 @@
+a.form-menu-item { color: inherit; text-decoration: none; }
+.form-rule-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-muted);
+  font-variant-numeric: tabular-nums;
+}

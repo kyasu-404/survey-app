@@ -4,7 +4,7 @@ import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useToast } from "../../app/providers/ToastProvider";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -221,6 +221,27 @@ export default function FormResponsesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const pageSize = 50;
   const responsesQueryKey = getFormResponsesQueryKey(id, "page", page, pageSize);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedResponseId = searchParams.get("response");
+  const linkedResponseQuery = useQuery({
+    queryKey: getFormResponsesQueryKey(id, "linked", linkedResponseId),
+    queryFn: async ({ signal }) => (await getAllResponsesByForm(id!, { responseIds: [linkedResponseId!], signal }))[0] ?? null,
+    enabled: Boolean(id && linkedResponseId),
+    retry: false,
+  });
+  const preview = linkedResponseQuery.data && linkedResponseId
+    ? { label: "Ответ на форму", response: linkedResponseQuery.data }
+    : selectedResponsePreview;
+
+  function closeResponsePreview() {
+    setSelectedResponsePreview(null);
+    if (linkedResponseId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("response");
+      setSearchParams(next, { replace: true });
+    }
+  }
+
 
   useEffect(() => {
     setPage(1);
@@ -777,11 +798,13 @@ export default function FormResponsesPage() {
         )}
       </div>
 
-      <Presence kind="drawer">{selectedResponsePreview && formQuery.data && (
-        <ResponsePreviewSheet form={formQuery.data} response={selectedResponsePreview.response}
-          label={selectedResponsePreview.label}
-          initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, selectedResponsePreview.response.data)}
-          onClose={() => setSelectedResponsePreview(null)} />
+      {linkedResponseId && (linkedResponseQuery.isError || linkedResponseQuery.data === null) &&
+        <p className="activity-error" role="alert">Ответ по ссылке недоступен.</p>}
+      <Presence kind="drawer">{preview && formQuery.data && (
+        <ResponsePreviewSheet form={formQuery.data} response={preview.response}
+          label={preview.label}
+          initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, preview.response.data)}
+          onClose={closeResponsePreview} />
       )}</Presence>
       <Presence kind="modal">{responseReport && (
         <ResponseReportModal

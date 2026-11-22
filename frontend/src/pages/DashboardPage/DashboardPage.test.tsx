@@ -13,6 +13,7 @@ import DashboardPage from "./DashboardPage";
 
 const {
   showToast,
+  countActiveFormRules,
   navigate,
   getDashboardFormsPage,
   getDashboardFormsStats,
@@ -63,6 +64,7 @@ const {
 
   return {
     showToast: vi.fn(),
+    countActiveFormRules: vi.fn().mockResolvedValue(2),
     navigate: vi.fn(),
     getDashboardFormsPage: vi.fn(),
     getDashboardFormsStats: vi.fn(),
@@ -90,6 +92,8 @@ const {
     },
   };
 });
+
+vi.mock("../../entities/automation/api", () => ({ countActiveFormRules }));
 
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
@@ -1181,6 +1185,7 @@ describe("DashboardPage", () => {
       ]),
     );
 
+    countActiveFormRules.mockClear();
     const { container } = renderPage();
 
     const searchInput = await screen.findByPlaceholderText("Поиск по названию и автору");
@@ -1188,11 +1193,15 @@ describe("DashboardPage", () => {
     expect(searchGroup).not.toBeNull();
     expect(searchGroup?.querySelector(".dashboard-search-icon")).toBeInTheDocument();
 
+    expect(countActiveFormRules).not.toHaveBeenCalled();
     await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
 
     const menu = await screen.findByRole("menu", { name: "Меню действий формы Моя форма" });
     const renameButton = within(menu).getByRole("menuitem", { name: "Переименовать" });
     const editButton = within(menu).getByRole("menuitem", { name: "Редактировать" });
+    const automationsLink = await within(menu).findByRole("menuitem", { name: /Автоматизации.*2/ });
+    expect(editButton.nextElementSibling).toBe(automationsLink);
+    expect(automationsLink).toHaveAttribute("href", "/dashboard/forms/form-1/automations");
     const duplicateButton = within(menu).getByRole("menuitem", { name: "Дублировать" });
     const deleteButton = within(menu).getByRole("menuitem", { name: "Удалить" });
 

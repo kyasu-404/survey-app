@@ -199,8 +199,7 @@ export default function SettingsPage() {
       <div className="card settings-page-card">
         <div className="settings-page-header">
           <div>
-            <p>Администрирование</p>
-            <h1>Настройки</h1>
+            <h1>Параметры приложения</h1>
             <span>Системные параметры приложения и обслуживание хранилища.</span>
           </div>
         </div>
@@ -216,7 +215,7 @@ export default function SettingsPage() {
             <div>
               <p>Почтовый модуль</p>
               <h2 id="smtp-settings-heading">SMTP-коннектор</h2>
-              <span>Системные письма, тестовая отправка и напоминания организациям.</span>
+              <span>Системные письма, автоматизации и напоминания организациям.</span>
             </div>
             <label className={`smtp-enable-control ${draft.enabled ? "active" : ""}`}>
               <input
