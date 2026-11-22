@@ -1,5 +1,16 @@
 import { createDecipheriv } from "node:crypto";
 
+export function parsePublicAppOrigin(value) {
+  // Keep the origin passed to process_automations within the database contract.
+  if (!value || !/^https?:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?\/?$/.test(value)) return null;
+  try {
+    const { origin } = new URL(value);
+    return origin.length <= 300 ? origin : null;
+  } catch {
+    return null;
+  }
+}
+
 export function decryptPassword(serialized, base64Key) {
   const parts = String(serialized ?? "").split(":");
   if (parts.length !== 3 || parts[0] !== "v1") {

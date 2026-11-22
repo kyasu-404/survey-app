@@ -21,7 +21,7 @@ export function AnnouncementPromptContents({ prompt, titleId, onClose, onAcknowl
       </div>
       <button className="app-button icon-button" type="button" aria-label="Закрыть объявление" disabled={preview} onClick={onClose}><Icon name="close" /></button>
     </header>
-    <AnnouncementContent message={prompt.message} actionLabel={prompt.action_label} actionUrl={prompt.action_url} onAction={onClose} preview={preview} />
+    <AnnouncementContent message={prompt.message} actionLabel={prompt.action_label} actionUrl={prompt.action_url} onAction={prompt.require_acknowledgement && !prompt.acknowledged_at && !prompt.action_url?.startsWith("/") ? undefined : onClose} preview={preview} />
     {prompt.require_acknowledgement && !prompt.acknowledged_at &&
       <button className="button-primary announcement-ack" type="button" disabled={preview || pending} onClick={onAcknowledge}>Ознакомился</button>}
   </>;

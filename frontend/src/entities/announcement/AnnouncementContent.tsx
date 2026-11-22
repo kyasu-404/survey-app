@@ -2,23 +2,30 @@ import type { ReactNode } from "react";
 import { Link, useInRouterContext } from "react-router-dom";
 import "./announcementContent.css";
 
+const dnsLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+
 export function safeAnnouncementUrl(value?: string | null) {
-  if (!value || /[\s\\]/u.test(value) || Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return null;
+  if (!value || value.length > 2048 || /[\s\\]/u.test(value) || Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return null;
   try {
     if (value.startsWith("/") && !value.startsWith("//")) {
       const path = new URL(value, "https://app.invalid");
-      return path.pathname.startsWith("//") ? null : value;
+      const normalized = path.pathname + path.search + path.hash;
+      return normalized.startsWith("//") || normalized.length > 2048 ? null : normalized;
     }
     if (!/^https?:\/\/[^/]/i.test(value)) return null;
     const url = new URL(value);
-    return url.hostname && !url.username && !url.password ? url.href : null;
+    const host = url.hostname;
+    const validHost = host.startsWith("[") || host.replace(/\.$/, "").split(".").every(label => dnsLabel.test(label));
+    return validHost && !url.username && !url.password && url.href.length <= 2048 ? url.href : null;
   } catch {
     return null;
   }
 }
 
 function inlineText(text: string) {
-  return text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((part, index) => {
+  return text.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (index % 2 === 0) return part;
+    if (part.startsWith("***")) return <strong key={index}><em>{part.slice(3, -3)}</em></strong>;
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) return <strong key={index}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("*") && part.endsWith("*") && part.length > 2) return <em key={index}>{part.slice(1, -1)}</em>;
     return part;

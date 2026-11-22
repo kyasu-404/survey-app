@@ -90,6 +90,55 @@ describe("announcement spotlight", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("defers an entry announcement until an existing alert dialog closes", async () => {
+    const modal = prompt("entry", "modal");
+    vi.mocked(listAnnouncementPrompts).mockResolvedValue([modal]);
+    const blocker = document.createElement("div");
+    blocker.setAttribute("role", "alertdialog");
+    blocker.setAttribute("aria-modal", "true");
+    document.body.append(blocker);
+    try {
+      display();
+      await act(async () => {});
+      expect(claimAnnouncementPrompt).not.toHaveBeenCalled();
+      blocker.remove();
+      expect(await screen.findByRole("dialog", { name: modal.title })).toBeVisible();
+      expect(claimAnnouncementPrompt).toHaveBeenCalledTimes(1);
+    } finally { blocker.remove(); }
+  });
+
+  it("rechecks the audience after another dialog opens during a successful claim", async () => {
+    const modal = prompt("claimed", "modal");
+    let finish!: (value: boolean) => void;
+    vi.mocked(claimAnnouncementPrompt).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    vi.mocked(listAnnouncementPrompts).mockImplementation(async ids =>
+      [{ ...modal, presented_at: ids.includes(modal.id) ? "now" : null }]);
+    display();
+    await waitFor(() => expect(claimAnnouncementPrompt).toHaveBeenCalledTimes(1));
+    const blocker = document.createElement("dialog");
+    blocker.open = true;
+    document.body.append(blocker);
+    try {
+      await act(async () => finish(true));
+      expect(screen.queryByRole("dialog", { name: modal.title })).toBeNull();
+      blocker.remove();
+      expect(await screen.findByRole("dialog", { name: modal.title })).toBeVisible();
+      expect(listAnnouncementPrompts).toHaveBeenCalledWith([modal.id], expect.any(AbortSignal));
+      expect(claimAnnouncementPrompt).toHaveBeenCalledTimes(1);
+    } finally { blocker.remove(); }
+  });
+
+  it("skips announcements with an invalid deadline and ignores modal publications after entry", async () => {
+    vi.mocked(listAnnouncementPrompts).mockResolvedValue([{ ...prompt("bad", "banner"), expires_at: "unknown" }]);
+    display();
+    await act(async () => {});
+    vi.mocked(listAnnouncementPrompts).mockResolvedValue([prompt("mid-session", "modal")]);
+    await act(async () => { fireEvent(window, new Event("focus")); });
+    expect(claimAnnouncementPrompt).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
   it("removes an open announcement exactly at its deadline between polls", async () => {
     vi.useFakeTimers();
     try {

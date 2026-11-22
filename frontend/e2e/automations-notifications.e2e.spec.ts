@@ -8,11 +8,12 @@ test("keeps global and form-specific rules separate and builds an email with con
   const globalTitle = "Письмо о новом ответе";
   const scopedTitle = "Письмо о выбранных темах";
   const rules = new Map<string, AutomationRule>();
+  const submissions = new Map<string, unknown>();
   let scopedFormId = "";
   const formTitle = "Карточка 1";
   const history: AutomationRun[] = [{
     id: "run", form_id: app.formId, form_title: app.form.title, response_id: null, status: "failed",
-    recipient_count: 1, sent_count: 0, failed_count: 1, last_error: "Сервер отклонил получателя",
+    recipient_count: 1, sent_count: 0, failed_count: 1, cancelled_count: 0, last_error: "Сервер отклонил получателя",
     created_at: "2026-11-22T09:00:00Z",
   }];
   await page.route("**/rest/v1/forms?*", (route) => {
@@ -20,7 +21,7 @@ test("keeps global and form-specific rules separate and builds an email with con
     return params.has("author_id") ? route.fulfill({ json: { id: scopedFormId, title: formTitle } }) : route.fallback();
   });
   await page.route("**/rest/v1/rpc/automation_form_fields", (route) => route.fulfill({ json: [
-    { path: ["name"], label: "Имя", type: "text", choices: null, input_type: null },
+    { path: ["school"], label: "Организация", type: "organization", choices: null, input_type: null },
     { path: ["topics"], label: "Темы", type: "checkbox", choices: ["Первая", "Вторая"], input_type: null },
   ] }));
   await page.route("**/rest/v1/automation_rules?*", (route) => {
@@ -38,16 +39,7 @@ test("keeps global and form-specific rules separate and builds an email with con
   await page.route("**/rest/v1/automation_runs?*", (route) => route.fulfill({ json: history }));
   await page.route("**/rest/v1/rpc/save_automation_rule", (route) => {
     const draft = route.request().postDataJSON();
-    expect(draft.p_event_type).toBe("response_received");
-    if (draft.p_name === globalTitle) {
-      expect(draft.p_conditions).toEqual([]);
-      expect(draft.p_form_id).toBeNull();
-    } else {
-      expect(draft.p_form_id).toBe(scopedFormId);
-      expect(draft.p_conditions).toEqual([{ path: ["topics"], op: "all_of", value: ["Первая", "Вторая"] }]);
-      expect(draft.p_action.recipientPath).toEqual(["name"]);
-      expect(draft.p_action.mode).toBe("full");
-    }
+    submissions.set(draft.p_name, draft);
     const id = draft.p_id ?? crypto.randomUUID();
     rules.set(id, {
       id, form_id: draft.p_form_id, form: draft.p_form_id ? { title: formTitle } : null, name: draft.p_name,
@@ -72,7 +64,7 @@ test("keeps global and form-specific rules separate and builds an email with con
   const editor = page.getByRole("dialog", { name: "Новое правило", exact: true });
   await page.setViewportSize({ width: 390, height: 840 });
   await expect(editor).toBeVisible();
-  expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect.poll(() => editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("automation-mobile.png") });
   await page.setViewportSize({ width: 1280, height: 800 });
   await editor.getByLabel("Название", { exact: true }).fill(globalTitle);
@@ -81,22 +73,34 @@ test("keeps global and form-specific rules separate and builds an email with con
   await expect(editor.getByText("Дополнительные условия")).toHaveCount(0);
   await next.click();
   await editor.getByLabel("Адреса получателей").fill("team@example.invalid, other@example.invalid");
+  await editor.getByLabel("Содержание").selectOption("full");
   await next.click();
   await expect(editor.getByRole("heading", { name: "Пример письма" })).toBeVisible();
   await editor.getByRole("button", { name: "Сохранить правило" }).click();
   await expect(page.getByRole("heading", { name: globalTitle })).toBeVisible();
+  expect(submissions.get(globalTitle)).toMatchObject({
+    p_event_type: "response_received", p_form_id: null, p_conditions: [],
+    p_action: { mode: "full", recipients: ["team@example.invalid", "other@example.invalid"] },
+  });
 
   await page.getByRole("link", { name: "Мои формы", exact: true }).click();
+  await page.getByRole("button", { name: "Показать таблицу" }).click();
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.locator("html")).not.toHaveAttribute("data-forms-transition", "true");
   const actionButton = page.getByRole("button", { name: "Действия формы " + formTitle, exact: true });
-  await actionButton.click();
+  await actionButton.press("ArrowDown");
   const menu = page.getByRole("menu", { name: "Меню действий формы " + formTitle, exact: true });
   await expect(menu.getByRole("menuitem").nth(1)).toHaveAccessibleName("Редактировать");
-  const scopedLink = menu.getByRole("menuitem", { name: /^Автоматизации/ });
-  await expect(menu.getByRole("menuitem").nth(2)).toHaveText(/Автоматизации/);
+  const scopedLink = menu.getByRole("menuitem").nth(2);
+  await expect(scopedLink).toHaveAccessibleName(/^Автоматизации/);
   await expect(scopedLink.getByLabel("Активных правил: 0")).toBeVisible();
-  const href = await scopedLink.getAttribute("href");
+  const href = await scopedLink.getAttribute("href", { timeout: 5_000 });
   scopedFormId = href!.split("/")[3];
-  await scopedLink.click();
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(scopedLink).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp("/dashboard/forms/" + scopedFormId + "/automations$"));
   await expect(page.getByRole("heading", { name: formTitle })).toBeVisible();
   await expect(page.getByText(globalTitle, { exact: true })).toHaveCount(0);
@@ -106,16 +110,25 @@ test("keeps global and form-specific rules separate and builds an email with con
   await next.click();
   await editor.getByText("Дополнительные условия", { exact: true }).click();
   await editor.getByRole("button", { name: "Добавить условие" }).click();
-  await editor.getByRole("combobox", { name: "Вопрос", exact: true }).selectOption('["topics"]');
+  await editor.getByText(/^Дополнительные условия/).click();
+  await next.click();
+  await expect(editor.getByRole("alert")).toContainText("Проверьте вопрос и значение каждого условия.");
+  const question = editor.getByRole("combobox", { name: "Вопрос", exact: true });
+  await expect(question).toBeVisible();
+  await question.selectOption('["topics"]');
   await editor.getByLabel("Сравнение").selectOption("all_of");
   await editor.getByRole("checkbox", { name: "Первая" }).check();
   await editor.getByRole("checkbox", { name: "Вторая" }).check();
   await next.click();
-  await editor.getByLabel("Получатель из ответа").selectOption('["name"]');
-  await editor.getByLabel("Содержание").selectOption("full");
+  await editor.getByLabel(/^Получатель из ответа/).selectOption('["school"]');
   await next.click();
   await editor.getByRole("button", { name: "Сохранить правило" }).click();
   await expect(page.getByRole("heading", { name: scopedTitle })).toBeVisible();
+  expect(submissions.get(scopedTitle)).toMatchObject({
+    p_event_type: "response_received", p_form_id: scopedFormId,
+    p_conditions: [{ path: ["topics"], op: "all_of", value: ["Первая", "Вторая"] }],
+    p_action: { recipientPath: ["school"], mode: "summary" },
+  });
   await expect(page.getByText("Сервер отклонил получателя", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Выключить", exact: true }).click();
   await expect(page.getByRole("button", { name: "Включить", exact: true })).toBeVisible();

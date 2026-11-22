@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +20,8 @@ vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToa
 const form = { id: "form", title: "Учебная форма" };
 const fields = [
   { path: ["topics"], label: "Темы", type: "checkbox", choices: [{ value: 0, text: "Физика" }, "История"] },
+  { path: ["school"], label: "Организация", type: "organization" },
+  { path: ["panel", "school"], label: "Организация в группе", type: "organization" },
   { path: ["amount"], label: "Количество", type: "text", input_type: "number" },
   { path: ["consent"], label: "Согласие", type: "boolean", choices: [true, false] },
 ];
@@ -30,7 +32,7 @@ const initialRule: AutomationRule = {
   action_config: { recipients: ["owner@example.invalid"], subject: "Ответ", body: "Пришёл ответ", mode: "summary" },
 };
 
-function renderPage(options: { rule?: object; entry?: string; accessibleForm?: boolean } = {}) {
+function renderPage(options: { rule?: object; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void> } = {}) {
   let rule = { ...initialRule, ...options.rule };
   const requests: { path: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init?: RequestInit) => {
@@ -40,12 +42,12 @@ function renderPage(options: { rule?: object; entry?: string; accessibleForm?: b
     requests.push({ path, params: url.searchParams, body });
     switch (path) {
       case "forms": return Response.json(options.accessibleForm === false ? [] : [form]);
-      case "rpc/automation_form_fields": return Response.json(fields);
+      case "rpc/automation_form_fields": await options.fieldsReady; return Response.json(fields);
       case "automation_rules":
         return Response.json(url.searchParams.get("form_id") === "is.null" && rule.form_id ? [] : [rule]);
       case "automation_runs": return Response.json([{
         id: "run", form_id: form.id, form_title: form.title, response_id: "answer",
-        status: "failed", recipient_count: 2, sent_count: 1, failed_count: 1,
+        status: "failed", recipient_count: 3, sent_count: 1, failed_count: 1, cancelled_count: 1,
         last_error: "Ошибка SMTP", created_at: "2026-11-22T10:00:00Z",
       }]);
       case "rpc/save_automation_rule": return Response.json(rule.id);
@@ -184,6 +186,69 @@ describe("AutomationsPage", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it("waits for questions and reopens collapsed conditions for a removed choice", async () => {
+    let loaded!: () => void;
+    const fieldsReady = new Promise<void>(resolve => { loaded = resolve; });
+    const { user } = renderPage({ entry: "/automations/rule", fieldsReady,
+      rule: { conditions: [{ path: ["topics"], op: "all_of", value: ["Архив", "История"] }] } });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    expect(next).toBeDisabled();
+    loaded();
+    const missing = await editor.findByRole("checkbox", { name: /Удалённый вариант · Архив/ });
+    const details = missing.closest("details")!;
+    await user.click(editor.getByText(/Дополнительные условия/));
+    expect(details.open).toBe(false);
+    await user.click(next);
+    expect(editor.getByRole("alert")).toHaveTextContent("Уберите удалённые варианты");
+    expect(details.open).toBe(true);
+    await user.click(missing);
+    await user.click(next);
+    expect(editor.getByText("Адреса получателей")).toBeVisible();
+  });
+
+  it("repairs an old recipient path and restricts organization recipients to summary", async () => {
+    const { requests, user } = renderPage({ entry: "/automations/rule",
+      rule: { action_config: { ...initialRule.action_config, recipientPath: ["amount"], mode: "full" } } });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    await user.click(next);
+    const recipient = await editor.findByLabelText("Получатель из ответа");
+    expect(editor.getByRole("option", { name: /Недоступный вопрос/ })).toBeDisabled();
+    expect(editor.queryByRole("option", { name: "Организация в группе" })).toBeNull();
+    await user.selectOptions(recipient, '["school"]');
+    expect(editor.getByLabelText("Содержание")).toHaveValue("summary");
+    expect(editor.getByRole("option", { name: "Полный ответ со ссылкой" })).toBeDisabled();
+    await user.click(next);
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.find(r => r.path === "rpc/save_automation_rule")?.body).toMatchObject({
+      p_action: { recipientPath: ["school"], mode: "summary" },
+    }));
+  });
+
+  it("checks the schedule limits before showing the email step", async () => {
+    const { user } = renderPage({ entry: "/automations/rule", rule: {
+      event_type: "recurring", interval_minutes: 1, scheduled_at: "2040-01-01T12:00:00Z",
+    } });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    await user.click(next);
+    expect(editor.getByRole("alert")).toHaveTextContent("от 15");
+    fireEvent.change(editor.getByLabelText("Повторять каждые"), { target: { value: "15" } });
+    fireEvent.change(editor.getByLabelText(/Первый запуск/), { target: { value: "2310-01-01T00:00" } });
+    await user.click(next);
+    expect(editor.getByRole("alert")).toHaveTextContent("2000–2200");
+    fireEvent.change(editor.getByLabelText(/Первый запуск/), { target: { value: "2040-01-01T12:00" } });
+    await user.click(next);
+    expect(editor.getByText("Адреса получателей")).toBeVisible();
+  });
+
   it("keeps the exact time when editing the name of a scheduled rule", async () => {
     const scheduledAt = "2026-11-21T09:12:54.123456+00:00";
     const { requests, user } = renderPage({ entry: "/automations/rule", rule: { event_type: "date", scheduled_at: scheduledAt } });
@@ -225,7 +290,7 @@ describe("AutomationsPage", () => {
     const { user } = renderPage({ entry: "/automations/rule" });
     expect(await screen.findByRole("link", { name: "Автоматизации формы" })).toHaveAttribute("href", "/dashboard/forms/form/automations");
     expect(await screen.findByText("Ошибка SMTP")).toBeInTheDocument();
-    expect(screen.getByText("Отправлено 1 из 2 · Ошибок: 1")).toBeInTheDocument();
+    expect(screen.getByText("Отправлено 1 из 3 · Ошибок: 1 · Отменено: 1")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Открыть ответ" })).toHaveAttribute("href", "/dashboard/forms/form/responses?response=answer");
     await user.click(screen.getByRole("button", { name: "Выключить" }));
     expect(await screen.findByRole("button", { name: "Включить" })).toBeInTheDocument();

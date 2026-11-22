@@ -1,3 +1,4 @@
+import { useActionMenuKeyboard } from "../../../shared/ui/useActionMenuKeyboard";
 import { MoreHorizontalIcon } from "../../../shared/ui/MoreHorizontalIcon";
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -36,18 +37,19 @@ function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
   event.stopPropagation();
 }
 
-function FormAutomationsItem({ formId, userId, onClose }: { formId: string; userId: string; onClose: () => void }) {
+function FormAutomationsItem({ formId, userId, disabled, onClose }: { formId: string; userId: string; disabled: boolean; onClose: () => void }) {
   const count = useQuery({
     queryKey: [...automationKey(userId), "active-count", formId],
     queryFn: ({ signal }) => countActiveFormRules(userId, formId, signal),
     refetchOnMount: true,
   });
   return <Link role="menuitem" className="form-menu-item" to={routes.formAutomations(formId)}
-    onClick={(event) => { stopCardEvent(event); onClose(); }}>
+    aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined}
+    onClick={event => { stopCardEvent(event); if (disabled) event.preventDefault(); else onClose(); }}>
     <Icon name="bolt" className="form-menu-item-icon" size={18} />
     <span className="form-menu-item-label">Автоматизации</span>
-    {count.data !== undefined && <small className="form-rule-count" aria-label={`Активных правил: ${count.data}`}
-      title={`Активных правил: ${count.data}`}>{count.data}</small>}
+    {count.data !== undefined && <span role="img" className="form-rule-count" aria-label={`Активных правил: ${count.data}`}
+      title={`Активных правил: ${count.data}`}>{count.data}</span>}
   </Link>;
 }
 
@@ -65,6 +67,7 @@ export function DashboardFormActionMenu({
   setOpenedMenu,
 }: DashboardFormActionMenuProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
+  const keyboard = useActionMenuKeyboard(actionMenuOpen, () => setOpenedMenu({ kind: "actions", formId: form.id }), () => setOpenedMenu(null));
   const title = getSurveyDisplayTitle(form);
   const isOwnForm = form.author_id === currentUserId;
   const isTemplate = isTemplateForm(form);
@@ -99,6 +102,9 @@ export function DashboardFormActionMenu({
         type="button"
         className="form-menu-trigger"
         aria-label={`${isTemplate ? "Действия шаблона" : "Действия формы"} ${title}`}
+        ref={keyboard.trigger}
+        aria-haspopup="menu"
+        onKeyDown={keyboard.triggerKeyDown}
         aria-expanded={actionMenuOpen}
         onClick={(event) => {
           stopCardEvent(event);
@@ -116,6 +122,8 @@ export function DashboardFormActionMenu({
         <div
           className="form-menu-dropdown"
           role="menu"
+          ref={keyboard.menu}
+          onKeyDown={keyboard.menuKeyDown}
           aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
           onClick={stopCardEvent}
         >
@@ -153,7 +161,7 @@ export function DashboardFormActionMenu({
             </button>
           )}
 
-          {isOwnForm && currentUserId && !isTemplate && <FormAutomationsItem formId={form.id} userId={currentUserId} onClose={() => setOpenedMenu(null)} />}
+          {isOwnForm && currentUserId && !isTemplate && <FormAutomationsItem formId={form.id} userId={currentUserId} disabled={isPending} onClose={() => setOpenedMenu(null)} />}
 
           {!isTemplate && (
             <button

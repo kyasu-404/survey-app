@@ -17,6 +17,15 @@ insert into public.notifications(id, user_id, category, event_key, title, messag
   ('ab000000-0000-4000-8000-000000000002', 'aa000000-0000-4000-8000-000000000004',
     'response_received', 'announcements-check-other', 'Чужое', '', now() - interval '1 hour');
 
+set local role anon;
+do $$
+begin
+  perform public.list_notification_feed();
+  raise exception 'An anonymous caller read the feed';
+exception when insufficient_privilege then null;
+end;
+$$;
+
 set local role authenticated;
 
 do $$
@@ -81,10 +90,22 @@ begin
   assert not exists(select from public.list_notification_feed() where id = published_id), 'User-only notice leaked to an admin';
   assert exists(select from public.list_notification_feed() where id = admin_notice_id), 'Admin-only notice is unavailable to an admin';
 
+  perform set_config('request.jwt.claim.sub', reader_one::text, true);
+  begin
+    perform public.change_announcement(published_id, null, 'withdraw');
+    raise exception 'A regular user changed an announcement';
+  exception when insufficient_privilege then null;
+  end;
+
   perform set_config('request.jwt.claim.sub', disabled_user::text, true);
   assert not exists(select from public.list_notification_feed()), 'Disabled user could read the feed';
   assert public.notification_unread_count() = 0, 'Disabled user could count notifications';
   assert not exists(select from public.list_announcement_prompts()), 'Disabled user could see prompts';
+  begin
+    perform public.mark_notifications_read(null);
+    raise exception 'A disabled user changed read status';
+  exception when insufficient_privilege then null;
+  end;
 
   perform set_config('request.jwt.claim.sub', reader_one::text, true);
   select * into entry from public.list_notification_feed(p_limit => 1);
@@ -195,6 +216,14 @@ insert into survey_announcements.announcements(id, title, message, audience, dis
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa000000-0000-4000-8000-000000000001', true);
 do $$
+declare
+  expired_id constant uuid := 'ac000000-0000-4000-8000-000000000001';
+  active_id constant uuid := 'ac000000-0000-4000-8000-000000000002';
+  fields constant jsonb := '{"title":"Расписание","message":"Время работы","audience":"all",
+    "display_mode":"feed","require_acknowledgement":false}';
+  stamp timestamptz;
+  expiry timestamptz;
+  url text;
 begin
   assert exists(select from public.list_admin_announcements('archived') where id = 'ac000000-0000-4000-8000-000000000001'),
     'Expired announcement is not in the archive';
@@ -204,6 +233,40 @@ begin
     'Expired announcement remains in the feed';
   assert exists(select from public.list_notification_feed() where id = 'ac000000-0000-4000-8000-000000000002'),
     'Due scheduled announcement is missing from the feed';
+
+  select updated_at into stamp from public.list_admin_announcements('published') where id = active_id;
+  begin
+    perform public.save_announcement(active_id, stamp, fields, 'schedule', now() + interval '1 day');
+    raise exception 'Editing moved an active publication into the future';
+  exception when serialization_failure then null;
+  end;
+
+  select updated_at, expires_at into stamp, expiry from public.list_admin_announcements('archived') where id = expired_id;
+  begin
+    perform public.save_announcement(expired_id, stamp, fields || jsonb_build_object('expires_at', now() + interval '1 day'), 'keep', null);
+    raise exception 'Editing an archived publication changed its expiry';
+  exception when serialization_failure then null;
+  end;
+  perform public.save_announcement(expired_id, stamp, fields || jsonb_build_object('expires_at', expiry), 'keep', null);
+  assert exists(select from public.list_admin_announcements('archived') where id = expired_id and expires_at = expiry),
+    'Editing the archived text did not preserve the expiry';
+
+  foreach url in array array['https://name@example.invalid/help', 'https://:', 'https://example.invalid:99999',
+    '/folder/../settings'] loop
+    begin
+      perform public.save_announcement(null, null, fields || jsonb_build_object('action_url', url), 'keep', null);
+      raise exception 'Accepted a malformed or non-canonical announcement link';
+    exception when invalid_parameter_value then null;
+    end;
+  end loop;
+  foreach url in array array['/preferences?from=feed#announcements', 'https://xn--e1afmkfd.xn--p1ai/help', 'http://[::1]:5173/'] loop
+    perform public.save_announcement(null, null, fields || jsonb_build_object('action_url', url), 'keep', null);
+  end loop;
+  begin
+    perform public.save_announcement(null, null, fields || jsonb_build_object('title', chr(9) || chr(10)), 'keep', null);
+    raise exception 'Accepted a title made of whitespace';
+  exception when invalid_parameter_value then null;
+  end;
 end;
 $$;
 

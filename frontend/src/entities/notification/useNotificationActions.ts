@@ -10,7 +10,7 @@ export function useNotificationActions(userId: string) {
   const { showToast } = useToast();
   const refresh = () => {
     window.dispatchEvent(new CustomEvent(notificationStatusEvent, { detail: userId }));
-    return queryClient.invalidateQueries({ queryKey: notificationKey(userId) });
+    void queryClient.invalidateQueries({ queryKey: notificationKey(userId) });
   };
   const mark = useMutation({
     mutationFn: markNotificationsRead,

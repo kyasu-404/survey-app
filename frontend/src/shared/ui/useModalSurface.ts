@@ -1,3 +1,4 @@
+import { lockBodyScroll } from "./lockBodyScroll";
 import { useEffect, useRef } from "react";
 
 export function useModalSurface() {
@@ -5,9 +6,8 @@ export function useModalSurface() {
   useEffect(() => {
     const element = dialog.current;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
     element?.showModal();
-    document.body.style.overflow = "hidden";
+    const unlock = lockBodyScroll();
     const keepFocus = (event: KeyboardEvent) => {
       if (event.key !== "Tab" || !element) return;
       const controls = Array.from(element.querySelectorAll<HTMLElement>(
@@ -25,7 +25,7 @@ export function useModalSurface() {
     return () => {
       element?.removeEventListener("keydown", keepFocus);
       element?.close();
-      document.body.style.overflow = previousOverflow;
+      unlock();
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
   }, []);

@@ -27,8 +27,29 @@ function choicesFor(field: AutomationField | undefined) {
     const value = typeof choice === "object" ? choice.value : choice;
     if (!["string", "number", "boolean"].includes(typeof value) || value === "") return [];
     const text = typeof choice === "object" ? choice.text : undefined;
-    return [{ value: String(value), label: typeof text === "string" ? text : text?.ru ?? text?.default ?? String(value) }];
+    const label = typeof text === "string" ? text.trim() : text?.ru?.trim() || text?.default?.trim();
+    return [{ value: String(value), label: label || String(value) }];
   });
+}
+
+export function conditionError(condition: Condition, fields: AutomationField[]) {
+  const field = fields.find(item => fieldKey(item.path) === fieldKey(condition.path));
+  const { op, value } = condition;
+  if (!field || value === "") return "Проверьте вопрос и значение каждого условия.";
+  if (op === "gt" || op === "lt") {
+    return /^[+-]?\d{1,30}([.,]\d{1,30})?$/.test(String(value)) ? null : "Введите число для сравнения.";
+  }
+  const multiple = isMultiple(op);
+  const values = Array.isArray(value) ? value : [value];
+  if (multiple && (!values.length || values.length > 50 || values.some(item => String(item).length > 1000))) {
+    return "Выберите от 1 до 50 вариантов длиной до 1000 символов каждый.";
+  }
+  const options = choicesFor(field);
+  if ((multiple || op === "eq") && Array.isArray(field.choices) &&
+    values.some(item => !options.some(option => option.value === String(item)))) {
+    return "Уберите удалённые варианты или выберите актуальные.";
+  }
+  return null;
 }
 
 type Props = {
@@ -53,7 +74,8 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
       const options = choicesFor(currentField);
       const multiple = isMultiple(condition.op);
       const selected = Array.isArray(condition.value) ? condition.value : [];
-      const usesChoices = options.length > 0 && (multiple || condition.op === "eq");
+      const usesChoices = Array.isArray(currentField?.choices) && (multiple || condition.op === "eq");
+      const removed = (multiple ? selected : [condition.value]).map(String).filter(value => value && !options.some(option => option.value === value));
       return (
         <div key={index} className="activity-condition">
           <div className="activity-condition-controls">
@@ -84,6 +106,10 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
           {multiple && usesChoices
             ? <fieldset className="activity-choices">
               <legend>Варианты ответа</legend>
+              {removed.map(value => <label className="activity-checkbox" key={value}>
+                <input type="checkbox" checked onChange={() => update(index, { ...condition, value: selected.filter(item => String(item) !== value) })} />
+                Удалённый вариант · {value}
+              </label>)}
               {options.map((option, row) => <label className="activity-checkbox" key={row}>
                 <input type="checkbox" checked={selected.some((value) => String(value) === option.value)} onChange={(event) => update(index, {
                   ...condition, value: event.target.checked ? [...selected, option.value] : selected.filter((value) => String(value) !== option.value),
@@ -94,6 +120,7 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
               ? <label className="activity-field">Значение
                 <select required value={String(condition.value)} onChange={(event) => update(index, { ...condition, value: event.target.value })}>
                   <option value="">Выберите вариант</option>
+                  {removed.map(value => <option key={value} value={value} disabled>Удалённый вариант · {value}</option>)}
                   {options.map((option, row) => <option key={row} value={option.value}>{option.label}</option>)}
                 </select>
               </label>

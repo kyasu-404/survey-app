@@ -52,9 +52,11 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       const title = fields.title.trim();
       const message = fields.message.trim();
       if (!title || !message) throw new Error("Заполните заголовок и текст объявления.");
-      const actionUrl = fields.action_url?.trim() || null;
+      const inputUrl = fields.action_url?.trim();
+      const actionUrl = safeAnnouncementUrl(inputUrl);
       const actionLabel = fields.action_label?.trim() || null;
-      if ((actionUrl && !safeAnnouncementUrl(actionUrl)) || (actionLabel && !actionUrl)) {
+      if ((inputUrl || actionLabel) && !actionUrl) {
+        setLinkOpen(true);
         throw new Error("Для кнопки укажите ссылку с http://, https:// или путь приложения, начинающийся с /.");
       }
       const mode = unchangedSchedule ? "keep" : publication;
@@ -65,7 +67,8 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       }
       const expiresAt = localDate(expires, row?.expires_at ?? null);
       const effectivePublication = mode === "keep" ? row?.publish_at : publishAt;
-      if (status !== "archived" && expiresAt && Date.parse(expiresAt) <= Math.max(now, Date.parse(effectivePublication ?? "") || now)) {
+      const keptExpiry = Boolean(mode === "keep" && expiresAt === row?.expires_at);
+      if (!keptExpiry && expiresAt && Date.parse(expiresAt) <= Math.max(now, Date.parse(effectivePublication ?? "") || now)) {
         throw new Error("Окончание действия должно быть позже текущего времени и даты публикации.");
       }
       try {
@@ -76,8 +79,10 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       }
       let next: AnnouncementStatus = mode === "publish" ? "published" : mode === "schedule" ? "scheduled" : status;
       if (next === "scheduled" && effectivePublication && Date.parse(effectivePublication) <= Date.now()) next = "published";
-      onSaved(next, mode === "keep" && row ? "Изменения сохранены." : saveTexts[next]);
+      if (next === "published" && expiresAt && Date.parse(expiresAt) <= Date.now()) next = "archived";
+      return { status: next, message: mode === "keep" && row ? "Изменения сохранены." : saveTexts[next] };
     },
+    onSuccess: result => onSaved(result.status, result.message),
     onError: cause => { setTab("edit"); setError(getErrorMessage(cause, "Не удалось сохранить объявление.")); },
   });
   function update<K extends keyof AnnouncementFields>(key: K, value: AnnouncementFields[K]) {
@@ -93,7 +98,7 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
 
   return <dialog className="card modal-card activity-rule-dialog announcement-editor-dialog" ref={dialog} aria-labelledby="announcement-editor-title"
     onCancel={event => { event.preventDefault(); if (!save.isPending) onClose(); }}>
-    <form noValidate onSubmit={submit} className="announcement-editor-form">
+    <form noValidate onSubmit={submit} onChange={() => setError("")} className="announcement-editor-form">
       <header className="activity-heading">
         <h2 id="announcement-editor-title">{row ? "Редактировать объявление" : "Новое объявление"}</h2>
         <button type="button" className="app-button icon-button" aria-label="Закрыть" disabled={save.isPending} onClick={onClose}><Icon name="close" /></button>

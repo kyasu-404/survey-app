@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatActivityTime } from "../../shared/lib/activityTime";
 import { MoreHorizontalIcon } from "../../shared/ui/MoreHorizontalIcon";
+import { useActionMenuKeyboard } from "../../shared/ui/useActionMenuKeyboard";
 import { ViewportMenu } from "../../shared/ui/ViewportMenu";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { audienceLabels, type AdminAnnouncement, type AnnouncementAction } from "./api";
@@ -11,7 +12,8 @@ export function AnnouncementRow({ row, busy, disabled, onEdit, onChange }: {
   row: AdminAnnouncement; busy: boolean; disabled: boolean; onEdit: () => void; onChange: (action: AnnouncementAction) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLButtonElement>(null);
+  const keyboard = useActionMenuKeyboard(open, () => setOpen(true), () => setOpen(false));
+  const anchor = keyboard.trigger;
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -27,7 +29,7 @@ export function AnnouncementRow({ row, busy, disabled, onEdit, onChange }: {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, [open]);
+  }, [open, anchor]);
 
   function run(action: AnnouncementAction) {
     setOpen(false);
@@ -57,16 +59,16 @@ export function AnnouncementRow({ row, busy, disabled, onEdit, onChange }: {
     <div ref={container} className="form-menu" onBlur={event => {
       if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
-      <button ref={anchor} type="button" className="form-menu-trigger" aria-expanded={open} aria-label={"Действия объявления «" + row.title + "»"}
+      <button ref={anchor} type="button" className="form-menu-trigger" aria-haspopup="menu" onKeyDown={keyboard.triggerKeyDown} aria-expanded={open} aria-label={"Действия объявления «" + row.title + "»"}
         onClick={() => setOpen(!open)} disabled={disabled}>{busy ? <InlineSpinner /> : <MoreHorizontalIcon />}</button>
-      <ViewportMenu anchor={anchor}>{open && <div className="form-menu-dropdown">
-        <button type="button" className="form-menu-item" onClick={() => { setOpen(false); onEdit(); }}>Редактировать</button>
-        <button type="button" className="form-menu-item" onClick={() => run("duplicate")}>Дублировать</button>
+      <ViewportMenu anchor={anchor}>{open && <div role="menu" aria-label="Действия объявления" ref={keyboard.menu} onKeyDown={keyboard.menuKeyDown} className="form-menu-dropdown">
+        <button role="menuitem" type="button" className="form-menu-item" onClick={() => { setOpen(false); anchor.current?.focus(); onEdit(); }}>Редактировать</button>
+        <button role="menuitem" type="button" className="form-menu-item" onClick={() => run("duplicate")}>Дублировать</button>
         {(row.status === "published" || row.status === "scheduled") &&
-          <button type="button" className="form-menu-item" onClick={() => run("withdraw")}>
+          <button role="menuitem" type="button" className="form-menu-item" onClick={() => run("withdraw")}>
             {row.status === "published" ? "Снять с публикации" : "Вернуть в черновики"}
           </button>}
-        {row.status !== "archived" && <button type="button" className="form-menu-item" onClick={() => run("archive")}>Архивировать</button>}
+        {row.status !== "archived" && <button role="menuitem" type="button" className="form-menu-item" onClick={() => run("archive")}>Архивировать</button>}
       </div>}</ViewportMenu>
     </div>
   </li>;

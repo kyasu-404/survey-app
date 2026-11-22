@@ -1,5 +1,6 @@
 import http from "node:http";
 import os from "node:os";
+import { parsePublicAppOrigin } from "./config.mjs";
 import { createMailPoller, parseMailJobStatus } from "./delivery.mjs";
 import { createSmtpTransportManager } from "./smtpTransport.mjs";
 import { isWorkerHealthy } from "./health.mjs";
@@ -12,14 +13,7 @@ import {
 const supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
 const encryptionKey = String(process.env.MAIL_SETTINGS_ENCRYPTION_KEY ?? "");
-const appOrigin = (() => {
-  try {
-    const url = new URL(process.env.PUBLIC_APP_URL ?? "");
-    return ["https:", "http:"].includes(url.protocol) ? url.origin : null;
-  } catch {
-    return null;
-  }
-})();
+const appOrigin = parsePublicAppOrigin(process.env.PUBLIC_APP_URL);
 const workerId = `${os.hostname()}:${process.pid}`;
 const pollIntervalMs = Math.max(1000, Number(process.env.MAIL_WORKER_POLL_INTERVAL_MS) || 3000);
 const concurrency = Math.min(20, Math.max(1, Number(process.env.MAIL_WORKER_CONCURRENCY) || 5));
@@ -58,7 +52,7 @@ const state = {
   lastCleanupResult: null,
   lastCleanupError: null,
   lastAutomationPollAt: null,
-  lastAutomationError: null,
+  lastAutomationError: appOrigin ? null : "Задайте PUBLIC_APP_URL в виде http(s)://host[:port] для обработки автоматизаций",
 };
 
 function apiHeaders(prefer = "return=representation") {
@@ -76,12 +70,12 @@ async function supabaseRequest(path, options = {}) {
     headers: { ...apiHeaders(), ...(options.headers ?? {}) },
     signal: AbortSignal.timeout(15_000),
   });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    const body = await response.json().catch(() => null);
     throw new Error(`Supabase API ${response.status}: ${body?.message ?? body?.error ?? "request failed"}`);
   }
-  return body;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
 async function callRpc(functionName, body) {
@@ -199,7 +193,7 @@ function scheduleCleanup() {
 let activeAutomations = Promise.resolve();
 let pollingAutomations = false;
 function scheduleAutomations() {
-  if (pollingAutomations) return;
+  if (!appOrigin || pollingAutomations) return;
   pollingAutomations = true;
   activeAutomations = callRpc("process_automations", { p_app_origin: appOrigin, p_limit: 50 })
     .then(() => {
@@ -208,18 +202,16 @@ function scheduleAutomations() {
     })
     .catch((error) => {
       state.lastAutomationError = "Не удалось обработать события автоматизации";
-      console.error("automation worker poll failed", { message: error.message });
+      console.error("automation worker poll failed", { message: error instanceof Error ? error.message : String(error) });
     })
     .finally(() => { pollingAutomations = false; });
 }
 
+if (!appOrigin) console.error(state.lastAutomationError);
 scheduleAutomations();
 schedulePoll();
 scheduleCleanup();
-let expiringUploads = false;
 async function cleanupExpiredUploads() {
-  if (expiringUploads) return;
-  expiringUploads = true;
   try {
     for (let batch = 0; batch < 5; batch++) {
       const rows = await callRpc("list_expired_survey_uploads", { batch_limit: 100 });
@@ -229,11 +221,17 @@ async function cleanupExpiredUploads() {
     }
     // Keep recent reservations for the IP budget, including manually removed files.
     await supabaseRequest(`/rest/v1/survey_upload_reservations?expires_at=lt.${encodeURIComponent(new Date(Date.now() - 8 * 86400000).toISOString())}`, { method: "DELETE" });
-  } catch (error) { console.error("expired upload cleanup failed", { message: error.message }); }
-  finally { expiringUploads = false; }
+  } catch (error) {
+    console.error("expired upload cleanup failed", { message: error instanceof Error ? error.message : String(error) });
+  }
 }
-const expiredUploadsTimer = setInterval(() => void cleanupExpiredUploads(), 300000);
-void cleanupExpiredUploads();
+
+let activeExpiredUploads = null;
+function scheduleExpiredUploads() {
+  activeExpiredUploads ??= cleanupExpiredUploads().finally(() => { activeExpiredUploads = null; });
+}
+const expiredUploadsTimer = setInterval(scheduleExpiredUploads, 300000);
+scheduleExpiredUploads();
 const timer = setInterval(schedulePoll, pollIntervalMs);
 const automationsTimer = setInterval(scheduleAutomations, Math.max(3000, pollIntervalMs));
 const cleanupTimer = setInterval(scheduleCleanup, cleanupCheckIntervalMs);
@@ -247,7 +245,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     clearInterval(automationsTimer);
     clearInterval(cleanupTimer);
     clearInterval(expiredUploadsTimer);
-    await Promise.all([activePoll, activeCleanup, activeAutomations]);
+    await Promise.all([activePoll, activeCleanup, activeAutomations, activeExpiredUploads]);
     smtpTransports.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();

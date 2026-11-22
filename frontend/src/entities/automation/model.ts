@@ -50,6 +50,7 @@ export type AutomationRun = {
   recipient_count: number;
   sent_count: number;
   failed_count: number;
+  cancelled_count: number;
   last_error: string | null;
   created_at: string;
 };

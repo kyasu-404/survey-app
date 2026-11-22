@@ -1,3 +1,4 @@
+import { lockBodyScroll } from "../../shared/ui/lockBodyScroll";
 import { useEffect, useRef, useState } from "react";
 import { matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "../routes";
@@ -60,8 +61,7 @@ export function AppLayout() {
     if (!isMobileMenuOpen) return;
     const main = mainRegion.current;
     const header = mobileHeader.current;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockBodyScroll();
     if (main) main.inert = true;
     if (header) header.inert = true;
     sidebarRegion.current?.querySelector<HTMLButtonElement>(".sidebar-toggle-button")?.focus();
@@ -89,7 +89,7 @@ export function AppLayout() {
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      unlock();
       if (main) main.inert = false;
       if (header) header.inert = false;
       showMenuButton.current?.focus({ preventScroll: true });

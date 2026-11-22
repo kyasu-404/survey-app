@@ -12,7 +12,7 @@
   gap: 8px;
 }
 
-.administration-nav .app-button[aria-current="page"] {
+:root .app-shell .administration-nav .app-button[aria-current="page"] {
   color: var(--theme-accent);
   border-color: var(--theme-accent);
   background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-page-surface));

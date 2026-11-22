@@ -36,7 +36,7 @@ export async function getAutomationRule(userId: string, id: string, signal?: Abo
 export async function listAutomationRuns(id: string, cursor?: TimelineCursor, signal?: AbortSignal) {
   const { data, error } = await runRequest("automations.history", (requestSignal) => {
     const query = apiClient.from("automation_runs")
-      .select("id,form_id,form_title,response_id,status,recipient_count,sent_count,failed_count,last_error,created_at").eq("rule_id", id);
+      .select("id,form_id,form_title,response_id,status,recipient_count,sent_count,failed_count,cancelled_count,last_error,created_at").eq("rule_id", id);
     if (cursor) query.or(timelineBefore(cursor));
     return query.order("created_at", { ascending: false }).order("id", { ascending: false })
       .limit(TIMELINE_PAGE_SIZE + 1).abortSignal(requestSignal);
@@ -76,12 +76,12 @@ export async function saveAutomationRule(id: string | null, rule: RuleConfig): P
     p_event_type: rule.event_type, p_threshold: rule.threshold, p_interval_minutes: rule.interval_minutes,
     p_scheduled_at: rule.scheduled_at, p_match_mode: rule.match_mode, p_conditions: rule.conditions, p_action: rule.action_config,
   }).abortSignal(signal));
-  if (error) throw new Error(error.code === "22023" || error.code === "42501" ? error.message : "Не удалось сохранить правило");
+  if (error) throw new Error(["22023", "42501"].includes(error.code) && /^[А-ЯЁ]/.test(error.message) ? error.message : "Не удалось сохранить правило");
   return data as string;
 }
 
 export async function setAutomationEnabled(id: string, enabled: boolean) {
   const { error } = await runRequest("automations.toggle", (signal) =>
     apiClient.rpc("set_automation_rule_enabled", { p_id: id, p_enabled: enabled }).abortSignal(signal));
-  if (error) throw new Error(error.code === "42501" ? error.message : "Не удалось изменить состояние правила");
+  if (error) throw new Error(["22023", "42501"].includes(error.code) && /^[А-ЯЁ]/.test(error.message) ? error.message : "Не удалось изменить состояние правила");
 }

@@ -43,7 +43,7 @@ function NotificationCenter({ userId }: { userId: string }) {
     initialPageParam: undefined as TimelineCursor | undefined,
     queryFn: ({ pageParam, signal }) => getNotifications(category, read, pageParam, signal),
     getNextPageParam: (last) => last.next,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     refetchInterval: 30_000,
   });
   const { mark, acknowledge } = useNotificationActions(userId);
@@ -62,7 +62,7 @@ function NotificationCenter({ userId }: { userId: string }) {
             <button type="button" className="app-button" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
               <Icon name="settings" /> Настроить
             </button>
-            <button type="button" className="app-button" disabled={unread.data === 0 || mark.isPending} onClick={() => mark.mutate(null)}>
+            <button type="button" className="app-button" disabled={!unread.data || unread.isError || mark.isPending} onClick={() => mark.mutate(null)}>
               Отметить все прочитанными
             </button>
           </div>
@@ -85,7 +85,7 @@ function NotificationCenter({ userId }: { userId: string }) {
         </div>
 
         {feed.isPending && <Skeleton className="activity-skeleton" />}
-        {feed.isError && <div role="alert" className="activity-state">
+        {feed.isError && !feed.isFetchNextPageError && <div role="alert" className="activity-state">
           <p>Не удалось загрузить уведомления.</p>
           <button type="button" className="app-button" onClick={() => void feed.refetch()}>Повторить</button>
         </div>}
@@ -127,7 +127,11 @@ function NotificationCenter({ userId }: { userId: string }) {
             </li>;
           })}
         </ul>}
-        {feed.hasNextPage && <button type="button" className="app-button activity-more" disabled={feed.isFetching}
+        {feed.isFetchNextPageError && <div role="alert" className="activity-state">
+          <p>Не удалось загрузить следующие уведомления.</p>
+          <button type="button" className="app-button" disabled={feed.isFetching} onClick={() => void feed.fetchNextPage()}>Повторить</button>
+        </div>}
+        {feed.hasNextPage && !feed.isFetchNextPageError && <button type="button" className="app-button activity-more" disabled={feed.isFetching}
           onClick={() => void feed.fetchNextPage()}>Показать ещё</button>}
       </section>
       {settingsOpen && <PreferencesDialog userId={userId} onClose={() => setSettingsOpen(false)} />}

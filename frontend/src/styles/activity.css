@@ -264,7 +264,7 @@
   font-weight: 700;
   line-height: 1;
 }
-.nav-link-active .notification-counter {
+.nav-link.nav-link-active .notification-counter {
   background: var(--theme-card-background);
   color: var(--theme-accent-strong);
 }

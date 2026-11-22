@@ -13,7 +13,8 @@ begin
         when 'matrixdynamic' then jsonb_build_array(answer)
         else jsonb_build_object('row',answer) end));
     assert rendered like '%Оценка: А%', 'The text cell must be rendered';
-    assert rendered like '%file: Уведомление.pdf%', 'The attachment name must be rendered';
+    assert rendered like '%file: Прикреплённый файл%' and rendered not like '%Уведомление.pdf%',
+      'File answers must use a generic notice without including user-supplied file metadata';
     assert rendered like '%Подпись доступна в ответе%', 'The signature notice must be rendered';
     assert rendered not like '%base64%' and rendered not like '%public/example/%',
       'A matrix parent leaked raw attachment or signature data';

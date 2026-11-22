@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as responseApi from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
 import { readAppCss } from "../../test/readAppCss";
@@ -803,6 +804,28 @@ describe("FormResponsesPage", () => {
     expect(renderer).toHaveAttribute("data-render-mode", "readonly-navigable");
     expect(renderer).toHaveAttribute("data-initial-data", JSON.stringify({ name: "Анна", comment: "Готово" }));
     expect(within(dialog).queryByRole("button", { name: /Завершить|Отправить/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps a manually opened row when the linked response finishes loading", async () => {
+    const linked = createResponse(2, "По ссылке");
+    const manual = createResponse(1, "Строка");
+    const deferred = createDeferred<SurveyResponse[]>();
+    vi.spyOn(responseApi, "getAllResponsesByForm").mockImplementationOnce(() => deferred.promise);
+    getFormById.mockResolvedValue({ id: "form-1", title: "Форма", author_id: "user-1",
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] } });
+    loadResponseRows.mockResolvedValue([manual]);
+    const client = createQueryClient();
+    client.setQueryData(getFormResponsesQueryKey("form-1", "linked", linked.id), linked);
+    render(<MemoryRouter initialEntries={["/dashboard/forms/form-1/responses?response=" + linked.id]}>
+      <QueryClientProvider client={client}><Routes>
+        <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+    await userEvent.click(await screen.findByText("Строка"));
+    expect(screen.getByRole("dialog", { name: "Ответ Строка" })).toBeVisible();
+    await act(async () => deferred.resolve([linked]));
+    expect(screen.getByRole("dialog", { name: "Ответ Строка" })).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Ответ на форму" })).toBeNull();
   });
 
   it("opens response preview on the first page that contains answer data", async () => {

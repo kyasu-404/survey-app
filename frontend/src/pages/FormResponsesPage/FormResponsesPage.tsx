@@ -195,7 +195,8 @@ function renderResponseCell(column: ResponsesTableColumn, value: string) {
 export default function FormResponsesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const fromFormsList = useLocation().state?.fromFormsList;
+  const location = useLocation();
+  const fromFormsList = location.state?.fromFormsList;
   const { showToast } = useToast();
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
@@ -221,24 +222,25 @@ export default function FormResponsesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const pageSize = 50;
   const responsesQueryKey = getFormResponsesQueryKey(id, "page", page, pageSize);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const linkedResponseId = searchParams.get("response");
   const linkedResponseQuery = useQuery({
     queryKey: getFormResponsesQueryKey(id, "linked", linkedResponseId),
     queryFn: async ({ signal }) => (await getAllResponsesByForm(id!, { responseIds: [linkedResponseId!], signal }))[0] ?? null,
     enabled: Boolean(id && linkedResponseId),
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: false,
   });
-  const preview = linkedResponseQuery.data && linkedResponseId
-    ? { label: "Ответ на форму", response: linkedResponseQuery.data }
-    : selectedResponsePreview;
+  const linkedPreview = linkedResponseQuery.isSuccess && linkedResponseQuery.isFetchedAfterMount && linkedResponseQuery.data
+    ? { label: "Ответ на форму", response: linkedResponseQuery.data } : null;
+  const preview = linkedResponseId ? linkedPreview : selectedResponsePreview;
 
-  function closeResponsePreview() {
-    setSelectedResponsePreview(null);
+  function clearResponseLink() {
     if (linkedResponseId) {
       const next = new URLSearchParams(searchParams);
       next.delete("response");
-      setSearchParams(next, { replace: true });
+      navigate({ pathname: location.pathname, search: next.toString(), hash: location.hash }, { replace: true, state: location.state });
     }
   }
 
@@ -517,7 +519,13 @@ export default function FormResponsesPage() {
     navigate(routes.formResponsesHtml(id));
   };
 
+  function closeResponsePreview() {
+    clearResponseLink();
+    setSelectedResponsePreview(null);
+  }
+
   const handleOpenResponsePreview = (response: SurveyResponse, row: ResponsesTableRow, index: number) => {
+    clearResponseLink();
     setSelectedResponsePreview({
       label: getResponsePreviewLabel(row, index, columns),
       response,
@@ -653,6 +661,8 @@ export default function FormResponsesPage() {
           </div>
         </div>
 
+        {linkedResponseId && (linkedResponseQuery.isError || (linkedResponseQuery.isFetchedAfterMount && linkedResponseQuery.data === null)) &&
+          <p className="activity-error" role="alert">Ответ по ссылке недоступен.</p>}
         {canDeleteResponses && selectedResponseIds.size > 0 && (
           <div className="responses-selection-bar" aria-live="polite">
             <strong className="responses-selection-count">Выбрано: {selectedResponseIds.size}</strong>
@@ -798,10 +808,8 @@ export default function FormResponsesPage() {
         )}
       </div>
 
-      {linkedResponseId && (linkedResponseQuery.isError || linkedResponseQuery.data === null) &&
-        <p className="activity-error" role="alert">Ответ по ссылке недоступен.</p>}
       <Presence kind="drawer">{preview && formQuery.data && (
-        <ResponsePreviewSheet form={formQuery.data} response={preview.response}
+        <ResponsePreviewSheet key={preview.response.id} form={formQuery.data} response={preview.response}
           label={preview.label}
           initialPageNo={getFirstAnsweredPageNo(formQuery.data.schema, preview.response.data)}
           onClose={closeResponsePreview} />

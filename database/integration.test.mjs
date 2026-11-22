@@ -34,6 +34,54 @@ const runPsql = async (database, path) => {
   } catch (error) { throw new Error(`${path}: ${error.stderr || error.message} (${error.code ?? "unknown"})`); }
 };
 
+async function checkAutomationQueueUpgrade(db, migration, owner, form) {
+  const rule = randomUUID(), run = randomUUID(), pending = randomUUID(), reminder = randomUUID();
+  const legacyAction = {
+    recipients: ["fixed@example.invalid"], recipientPath: ["contact"],
+    subject: "Migration fixture", body: "Migration fixture", mode: "summary",
+  };
+  await db.query("begin");
+  try {
+    await db.query(`
+      insert into public.automation_rules(id,user_id,form_id,name,event_type,match_mode,conditions,action_config)
+      values($1,$2,$3,'Legacy rule','response_received','all','[]',$4)
+    `, [rule, owner, form, legacyAction]);
+    await db.query(`
+      insert into public.automation_runs(id,rule_id,form_id,form_title,event_version,delivery_version,event_key,status,recipient_count)
+      values($1,$3,$4,'Migration fixture',1,1,'queued-fixture','queued',2),
+            ($2,$3,$4,'Migration fixture',1,1,'pending-fixture','pending',0)
+    `, [run, pending, rule, form]);
+    await db.query("insert into survey_automation.payloads values($1,$2)", [pending, { actionType: "email", action: legacyAction }]);
+    await db.query(`
+      insert into public.mail_batches(id,kind,form_id,created_by,total_count)
+      values($1,'automation',$3,$4,2),($2,'reminder',$3,$4,1)
+    `, [run, reminder, form, owner]);
+    await db.query(`
+      insert into public.mail_queue(batch_id,form_id,recipient_email,recipient_name,subject,body_text,
+        status,attempts,locked_at,locked_by,automation_run_id)
+      values($1,$3,'legacy-queued@example.invalid','Queued','Fixture','Fixture','queued',0,null,null,$1),
+            ($1,$3,'legacy-claimed@example.invalid','Claimed','Fixture','Fixture','processing',1,now(),'worker-fixture',$1),
+            ($2,$3,'ordinary@example.invalid','Ordinary','Fixture','Fixture','queued',0,null,null,null)
+    `, [run, reminder, form]);
+
+    await db.query(migration.trim().replace(/^begin;\s*/i, "").replace(/\s*commit;$/i, ""));
+    const jobs = await db.query("select recipient_name,status from public.mail_queue where batch_id in ($1,$2) order by recipient_name", [run, reminder]);
+    assert.deepEqual(jobs.rows, [
+      { recipient_name: "Claimed", status: "processing" },
+      { recipient_name: "Ordinary", status: "queued" },
+      { recipient_name: "Queued", status: "failed" },
+    ]);
+    assert.equal((await db.query("select enabled from public.automation_rules where id=$1", [rule])).rows[0].enabled, false);
+    assert.deepEqual((await db.query("select sent_count,failed_count,cancelled_count from public.automation_runs where id=$1", [run])).rows[0],
+      { sent_count: 0, failed_count: 0, cancelled_count: 1 });
+    await db.query("select public.process_automations('https://forms.example.invalid',50)");
+    assert.equal((await db.query("select status from public.automation_runs where id=$1", [pending])).rows[0].status, "cancelled");
+    assert.equal((await db.query("select 1 from public.mail_queue where automation_run_id=$1", [pending])).rowCount, 0);
+  } finally {
+    await db.query("rollback");
+  }
+}
+
 test("PostgreSQL: bootstrap, additive migration and attachment/deletion contention", { skip: !adminUrl, timeout: 300000 }, async () => {
   const admin = new Client({ connectionString: adminUrl });
   await admin.connect();
@@ -59,6 +107,8 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     ].map(name => source("./migrations/" + name)));
     const automationMigration = await source("./migrations/202611221200_automations_notifications.sql");
     const announcementMigration = await source("./migrations/202611221300_announcements.sql");
+    const automationReviewMigration = await source("./migrations/202611221400_automation_review_fixes.sql");
+    const announcementReviewMigration = await source("./migrations/202611221410_announcement_review_fixes.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -96,6 +146,9 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         if (!(await db.query("select to_regnamespace('survey_announcements') is not null present")).rows[0].present) {
           await db.query(announcementMigration);
         }
+        await checkAutomationQueueUpgrade(db, automationReviewMigration, owner, form);
+        await db.query(automationReviewMigration);
+        await db.query(announcementReviewMigration);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
@@ -107,6 +160,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/smtp_certificate_policy.sql");
       await runPsql(database, "./tests/automations.sql");
       await runPsql(database, "./tests/automation_regressions.sql");
+      await runPsql(database, "./tests/automation_review_fixes.sql");
       await runPsql(database, "./tests/announcements.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);

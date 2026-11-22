@@ -43,6 +43,21 @@ describe("notification center", () => {
     expect(screen.getByText("/notifications")).toBeVisible();
   });
 
+  it("retries the failed page with its cursor and disables bulk read until the counter is available", async () => {
+    const user = userEvent.setup();
+    const cursor = { id: "first", created_at: "2026-11-22T08:00:00Z" };
+    vi.mocked(api.getUnreadCount).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getNotifications)
+      .mockResolvedValueOnce({ items: [], next: cursor })
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ items: [], next: undefined });
+    openCenter();
+    expect(screen.getByRole("button", { name: "Отметить все прочитанными" })).toBeDisabled();
+    await user.click(await screen.findByRole("button", { name: "Показать ещё" }));
+    await user.click(await screen.findByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(vi.mocked(api.getNotifications).mock.calls.map(call => call[2])).toEqual([undefined, cursor, cursor]));
+  });
+
   it("keeps a read announcement available for explicit acknowledgement and filters the feed", async () => {
     const user = userEvent.setup();
     const item: Notification = { id: "notice", title: "Технические работы", message: "**Пятница**", category: "announcement",

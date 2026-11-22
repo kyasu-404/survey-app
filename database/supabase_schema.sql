@@ -2964,7 +2964,7 @@ begin
     raise exception 'Добавьте в форму вопрос «Организация»' using errcode = '22023';
   end if;
   if p_enabled is distinct from f.personal_links_enabled and exists (
-    select 1 from public.mail_queue where form_id = p_form_id and status in ('queued', 'processing')
+    select 1 from public.mail_queue where form_id = p_form_id and automation_run_id is null and status in ('queued', 'processing')
   ) then
     raise exception 'Дождитесь завершения текущей рассылки по форме' using errcode = '55000';
   end if;
@@ -3148,7 +3148,7 @@ begin
     and p.id = f.author_id) then
     raise exception 'Нет прав на рассылку по этой форме' using errcode = '42501';
   end if;
-  if exists (select 1 from public.mail_queue q where q.form_id = p_form_id and q.status in ('queued','processing')) then
+  if exists (select 1 from public.mail_queue q where q.form_id = p_form_id and q.automation_run_id is null and q.status in ('queued','processing')) then
     raise exception 'Previous reminder run is still active' using errcode = '55000';
   end if;
   insert into public.mail_batches(id, kind, form_id, created_by, total_count)
@@ -3627,6 +3627,18 @@ create index automation_targets_form on survey_automation.targets (form_id, rule
 create index automation_targets_due on survey_automation.targets (next_run_at, rule_id, form_id) where next_run_at is not null;
 create index automation_targets_check on survey_automation.targets (check_at, rule_id, form_id) where check_at is not null;
 
+alter table survey_automation.targets add column schedule_slot_at timestamptz;
+alter table public.automation_runs add column cancelled_count integer not null default 0;
+
+-- One counter per owner survives rule deletion and rolls over without a cleanup job.
+create table survey_automation.mail_usage (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  hour_start timestamptz not null,
+  recipient_count integer not null check (recipient_count between 1 and 500)
+);
+
+revoke all on survey_automation.mail_usage from public, anon, authenticated;
+
 create table survey_automation.payloads (
   run_id uuid primary key references public.automation_runs(id) on delete cascade,
   payload jsonb not null
@@ -3712,7 +3724,15 @@ end;
 $$;
 
 -- Layout panels are transparent. A repeating panel adds a level in response data.
-create function survey_automation.form_fields(p_schema jsonb)
+create function survey_automation.localized_text(p_text jsonb)
+returns text language sql immutable set search_path = '' as $$
+  select case jsonb_typeof(p_text)
+    when 'string' then nullif(btrim(p_text #>> '{}'),'')
+    when 'object' then coalesce(nullif(btrim(p_text->>'ru'),''),nullif(btrim(p_text->>'default'),''))
+  end;
+$$;
+
+create or replace function survey_automation.form_fields(p_schema jsonb)
 returns table(path text[], label text, question jsonb)
 language sql immutable set search_path = '' as $$
   with recursive nodes(node,parent_path,parent_label,depth) as (
@@ -3724,7 +3744,7 @@ language sql immutable set search_path = '' as $$
       n.depth+1
     from nodes n
     cross join lateral (select coalesce(nullif(n.node->>'valueName',''),n.node->>'name') as key,
-      coalesce(nullif(n.node->>'title',''),n.node->>'name') as label) field
+      coalesce(survey_automation.localized_text(n.node->'title'),n.node->>'name') as label) field
     cross join lateral jsonb_array_elements(
       (case when jsonb_typeof(n.node->'pages')='array' then n.node->'pages' else '[]'::jsonb end) ||
       (case when jsonb_typeof(n.node->'elements')='array' then n.node->'elements' else '[]'::jsonb end) ||
@@ -3734,7 +3754,7 @@ language sql immutable set search_path = '' as $$
     where n.depth<32
   )
   select distinct on (1) parent_path || coalesce(nullif(node->>'valueName',''),node->>'name'),
-    parent_label || coalesce(nullif(node->>'title',''),node->>'name'),node
+    parent_label || coalesce(survey_automation.localized_text(node->'title'),node->>'name'),node
   from nodes where char_length(node->>'name')>0 and node->>'type' in (
     'text','email','comment','boolean','rating','slider','integer','number','float','date','datetime','time','phone',
     'dropdown','radiogroup','checkbox','tagbox','imagepicker','ranking','organization')
@@ -3838,7 +3858,15 @@ returns timestamptz language sql immutable set search_path = '' as $$
   select p_start + greatest(0,floor(extract(epoch from p_now-p_start)/(p_interval*60)))::integer * make_interval(mins=>p_interval);
 $$;
 
-create function survey_automation.seed_targets(p_rule public.automation_rules,p_only_form uuid default null)
+create function survey_automation.allowed_recipient_path(p_schema jsonb,p_action jsonb)
+returns boolean language sql immutable set search_path = '' as $$
+  select coalesce(p_action->>'mode'='summary' and jsonb_array_length(p_action->'recipients')<50
+    and exists(select from survey_automation.form_fields(p_schema) q
+      where cardinality(q.path)=1 and to_jsonb(q.path)=p_action->'recipientPath'
+        and q.question->>'type'='organization'),false);
+$$;
+
+create or replace function survey_automation.seed_targets(p_rule public.automation_rules,p_only_form uuid default null)
 returns void language sql set search_path = '' as $$
   insert into survey_automation.targets(rule_id,form_id,next_run_at,last_received_at,gap_key,matching_count,count_ready)
   select p_rule.id,f.id,
@@ -3862,19 +3890,34 @@ returns void language sql set search_path = '' as $$
     count_ready=excluded.count_ready,
     count_cursor_at=null,
     count_cursor_id=null,
+    schedule_slot_at=null,
     check_at=null,
     check_response_id=null,
     last_received_at=greatest(targets.last_received_at,excluded.last_received_at),
-    gap_key=case when excluded.last_received_at>targets.last_received_at or targets.last_received_at is null
+    gap_key=case when targets.last_received_at is null or
+      (excluded.last_received_at,excluded.gap_key)>(targets.last_received_at,targets.gap_key)
       then excluded.gap_key else targets.gap_key end,
     next_run_at=case when targets.complete then null
       when p_rule.event_type='inactivity' and targets.next_run_at is null
-        and excluded.gap_key=targets.gap_key then null
+        and (excluded.last_received_at is null or (excluded.last_received_at,excluded.gap_key)
+          <=(targets.last_received_at,targets.gap_key)) then null
       when p_rule.event_type='recurring' then coalesce(targets.next_run_at,excluded.next_run_at)
       else excluded.next_run_at end;
 $$;
 
-create function public.save_automation_rule(
+create function survey_automation.resume_targets(p_rule public.automation_rules)
+returns void language plpgsql set search_path = '' as $$
+begin
+  perform survey_automation.seed_targets(p_rule);
+  if p_rule.event_type='recurring' then
+    update survey_automation.targets set next_run_at=
+      survey_automation.schedule_slot(p_rule.scheduled_at,p_rule.interval_minutes,now())+make_interval(mins=>p_rule.interval_minutes)
+    where rule_id=p_rule.id and next_run_at<=now();
+  end if;
+end;
+$$;
+
+create or replace function public.save_automation_rule(
   p_id uuid,p_form_id uuid,p_name text,p_description text,p_enabled boolean,p_event_type text,
   p_threshold numeric,p_interval_minutes integer,p_scheduled_at timestamptz,p_match_mode text,
   p_conditions jsonb,p_action jsonb
@@ -3896,6 +3939,7 @@ begin
     if not found then raise exception 'Выберите свою форму' using errcode='42501'; end if;
   end if;
 
+  p_name:=btrim(p_name,E' \t\n\r\f\013');
   if p_enabled is null or coalesce(char_length(btrim(p_name)),0) not between 1 and 120
     or char_length(coalesce(p_description,''))>1000 or coalesce(p_event_type,'') not in (
       'response_received','response_updated','response_count','matching_count','matching_share','inactivity','date','recurring')
@@ -3906,6 +3950,7 @@ begin
       (p_threshold is null or p_threshold not between 1 and 100000 or trunc(p_threshold)<>p_threshold))
     or (p_event_type='matching_share' and (p_threshold is null or p_threshold not between 0.01 and 100))
     or (p_event_type in ('inactivity','recurring') and (p_interval_minutes is null or p_interval_minutes not between 1 and 525600))
+    or (p_event_type='recurring' and p_interval_minutes<15)
     or (p_event_type in ('date','recurring') and (p_scheduled_at is null or not isfinite(p_scheduled_at)
       or p_scheduled_at not between '2000-01-01 UTC'::timestamptz and '2200-01-01 UTC'::timestamptz)) then
     raise exception 'Проверьте порог, дату или интервал' using errcode='22023';
@@ -3943,8 +3988,8 @@ begin
 
   if jsonb_typeof(p_action) is distinct from 'object' or octet_length(p_action::text)>56000 or
     jsonb_typeof(p_action->'recipients') is distinct from 'array' or
-    jsonb_typeof(p_action->'subject') is distinct from 'string' or coalesce(char_length(btrim(p_action->>'subject')),0) not between 1 and 500 or
-    jsonb_typeof(p_action->'body') is distinct from 'string' or coalesce(char_length(btrim(p_action->>'body')),0) not between 1 and 10000 or
+    jsonb_typeof(p_action->'subject') is distinct from 'string' or coalesce(char_length(btrim(p_action->>'subject',E' \t\n\r\f\013')),0) not between 1 and 500 or
+    jsonb_typeof(p_action->'body') is distinct from 'string' or coalesce(char_length(btrim(p_action->>'body',E' \t\n\r\f\013')),0) not between 1 and 10000 or
     coalesce(p_action->>'mode','') not in ('summary','full') then
     raise exception 'Проверьте параметры письма' using errcode='22023';
   end if;
@@ -3955,18 +4000,20 @@ begin
   select coalesce(array_agg(distinct survey_automation.email_address(r) order by survey_automation.email_address(r)),'{}')
     into recipients from jsonb_array_elements_text(p_action->'recipients') r;
   if p_action ? 'recipientPath' and p_action->'recipientPath'<>'null'::jsonb then
-    if not exists (select from survey_automation.form_fields(schema_json) q
-      where to_jsonb(q.path)=p_action->'recipientPath' and q.question->>'type' in ('text','email','organization')) then
-      raise exception 'Выберите вопрос с адресом или организацией' using errcode='22023';
+    if not survey_automation.allowed_recipient_path(schema_json,p_action || jsonb_build_object('recipients',recipients)) then
+      raise exception 'Выберите один вопрос «Организация» вне повторяющейся панели, краткое письмо и до 49 дополнительных адресов' using errcode='22023';
     end if;
   elsif cardinality(recipients)=0 then raise exception 'Укажите получателя письма' using errcode='22023';
   end if;
 
-  p_action:=jsonb_strip_nulls(jsonb_build_object('recipients',recipients,'subject',btrim(p_action->>'subject'),
-    'body',btrim(p_action->>'body'),'mode',p_action->>'mode','recipientPath',p_action->'recipientPath'));
+  p_action:=jsonb_strip_nulls(jsonb_build_object('recipients',recipients,'subject',btrim(p_action->>'subject',E' \t\n\r\f\013'),
+    'body',btrim(p_action->>'body',E' \t\n\r\f\013'),'mode',p_action->>'mode','recipientPath',p_action->'recipientPath'));
   -- Serialize rule changes with new forms so an all-forms rule always gets a target.
   perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||actor::text,0));
   if p_id is null then
+    if (select count(*) from public.automation_rules where user_id=actor)>=50 then
+      raise exception 'На одну учётную запись доступно до 50 правил' using errcode='22023';
+    end if;
     insert into public.automation_rules(user_id,form_id,name,description,enabled,event_type,threshold,interval_minutes,
         scheduled_at,match_mode,conditions,action_config)
       values(actor,p_form_id,btrim(p_name),coalesce(btrim(p_description),''),p_enabled,p_event_type,p_threshold,p_interval_minutes,
@@ -3987,12 +4034,16 @@ begin
       where id=p_id returning * into saved;
     if event_changed then delete from survey_automation.targets where rule_id=p_id; end if;
   end if;
-  if saved.enabled and (event_changed or not previous.enabled) then perform survey_automation.seed_targets(saved); end if;
+  if saved.enabled then
+    if previous.enabled=false then perform survey_automation.resume_targets(saved);
+    elsif event_changed then perform survey_automation.seed_targets(saved);
+    end if;
+  end if;
   return saved.id;
 end;
 $$;
 
-create function public.set_automation_rule_enabled(p_id uuid,p_enabled boolean)
+create or replace function public.set_automation_rule_enabled(p_id uuid,p_enabled boolean)
 returns void language plpgsql security definer set search_path = '' as $$
 declare current_rule public.automation_rules;
 begin
@@ -4003,10 +4054,15 @@ begin
   if p_enabled and current_rule.form_id is not null and not exists (
     select from public.forms where id=current_rule.form_id and author_id=auth.uid() and form_type<>'template'
   ) then raise exception 'Выберите свою форму' using errcode='42501'; end if;
+  if p_enabled and ((current_rule.event_type='recurring' and current_rule.interval_minutes<15)
+    or (current_rule.action_config ? 'recipientPath' and not survey_automation.allowed_recipient_path(
+      (select schema from public.forms where id=current_rule.form_id),current_rule.action_config))) then
+    raise exception 'Перед включением обновите настройки получателя или интервала' using errcode='22023';
+  end if;
   if p_enabled is distinct from current_rule.enabled then
     update public.automation_rules set enabled=p_enabled,updated_at=now(),delivery_version=delivery_version+(not p_enabled)::integer
       where id=p_id returning * into current_rule;
-    if p_enabled then perform survey_automation.seed_targets(current_rule); end if;
+    if p_enabled then perform survey_automation.resume_targets(current_rule); end if;
   end if;
 end;
 $$;
@@ -4040,7 +4096,7 @@ returns boolean language sql immutable set search_path = '' as $$
     else false end;
 $$;
 
-create function survey_automation.process_response_changes(
+create or replace function survey_automation.process_response_changes(
   p_form_id uuid,p_old jsonb,p_new jsonb,p_event text,p_change_id uuid
 )
 returns void language plpgsql set search_path = '' as $$
@@ -4086,7 +4142,8 @@ begin
         order by created_at desc,id desc limit 1;
       update survey_automation.targets
         set next_run_at=clock_timestamp()+make_interval(mins=>(target.rule).interval_minutes),
-          last_received_at=greatest(last_received_at,latest.created_at),gap_key=latest.id::text
+          last_received_at=greatest(last_received_at,latest.created_at),gap_key=latest.id::text,
+          count_cursor_at=null,count_cursor_id=null,schedule_slot_at=null
         where rule_id=target.rule_id and form_id=f.id;
     else
       if (target.rule).conditions='[]'::jsonb then
@@ -4219,13 +4276,15 @@ begin
 end;
 $$;
 
-create function survey_automation.on_profile_enabled()
+create or replace function survey_automation.on_profile_enabled()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare a public.automation_rules;
 begin
   perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||new.id::text,0));
-  for a in select * from public.automation_rules where user_id=new.id and enabled order by id loop
-    perform survey_automation.seed_targets(a);
+  -- Runs captured before the account was disabled must stay inactive after reactivation.
+  for a in update public.automation_rules set delivery_version=delivery_version+1
+    where user_id=new.id and enabled returning * loop
+    perform survey_automation.resume_targets(a);
   end loop;
   return new;
 end;
@@ -4355,57 +4414,92 @@ begin
 end;
 $$;
 
-create function survey_automation.process_schedules(p_now timestamptz,p_limit integer)
+create or replace function survey_automation.process_schedules(p_now timestamptz,p_limit integer)
 returns void language plpgsql set search_path = '' as $$
 declare
-  due record;
+  candidate record;
+  due survey_automation.targets;
+  deadline record;
+  rule public.automation_rules;
   f public.forms;
   r public.responses;
+  page record;
   slot timestamptz;
   next_slot timestamptz;
   key text;
 begin
-  for due in
-    select t.*,a as rule from survey_automation.targets t
-    join public.automation_rules a on a.id=t.rule_id
+  for candidate in
+    select t.rule_id,t.form_id from survey_automation.targets t
+    join public.automation_rules a on a.id=t.rule_id and a.enabled
+    join public.profiles p on p.id=a.user_id and not p.is_disabled
     join public.forms form on form.id=t.form_id and form.author_id=a.user_id and form.form_type<>'template'
-    join public.profiles p on p.id=a.user_id
-    where t.next_run_at<=p_now and a.enabled and not p.is_disabled
-    order by t.next_run_at,t.rule_id,t.form_id limit p_limit for update of t skip locked
+    where t.next_run_at<=p_now order by t.next_run_at,t.rule_id,t.form_id limit least(p_limit,4)
   loop
+    -- Acquire parents before the target, following the threshold worker's lock order.
+    select a.* into rule from public.automation_rules a
+    join public.forms form on form.id=candidate.form_id and form.author_id=a.user_id and form.form_type<>'template'
+    join public.profiles p on p.id=a.user_id and not p.is_disabled
+    where a.id=candidate.rule_id and a.enabled
+    for key share of form,p skip locked for share of a skip locked;
+    if not found then continue; end if;
+    select * into due from survey_automation.targets t
+    where t.rule_id=rule.id and t.form_id=candidate.form_id and t.next_run_at<=p_now and not t.complete
+    for no key update skip locked;
+    if not found then continue; end if;
     select * into f from public.forms where id=due.form_id;
-    if f.author_id is distinct from (due.rule).user_id or f.form_type='template' then continue; end if;
 
     next_slot:=null;
-    case (due.rule).event_type
+    slot:=null;
+    case rule.event_type
       when 'date' then key:='date';
       when 'inactivity' then key:='gap:'||due.gap_key;
       when 'recurring' then
-        slot:=survey_automation.schedule_slot((due.rule).scheduled_at,(due.rule).interval_minutes,p_now);
+        slot:=coalesce(due.schedule_slot_at,survey_automation.schedule_slot(rule.scheduled_at,rule.interval_minutes,p_now));
         key:='slot:'||extract(epoch from slot)::text;
-        next_slot:=slot+make_interval(mins=>(due.rule).interval_minutes);
+        next_slot:=survey_automation.schedule_slot(rule.scheduled_at,rule.interval_minutes,p_now)
+          +make_interval(mins=>rule.interval_minutes);
       else continue;
     end case;
-    select * into r from public.responses entry where entry.form_id=f.id
-      and survey_automation.matches(entry.data,(due.rule).conditions,(due.rule).match_mode)
-      order by created_at desc,id desc limit 1;
-    if r.id is not null or (due.rule).conditions='[]'::jsonb then
-      perform survey_automation.stage_run(due.rule,f,key,r);
+    if rule.conditions='[]'::jsonb then
+      select * into r from public.responses entry where entry.form_id=f.id
+        order by created_at desc,id desc limit 1;
+    else
+      -- Each target uses the count cursor for either a threshold or a scheduled search, never both.
+      with batch as materialized (
+        select entry.id,entry.created_at,entry.data from public.responses entry
+        where entry.form_id=f.id and (entry.created_at,entry.id)<(
+          coalesce(due.count_cursor_at,'infinity'::timestamptz),
+          coalesce(due.count_cursor_id,'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+        order by entry.created_at desc,entry.id desc limit 500
+      )
+      select (select count(*) from batch) as entries,tail.id,tail.created_at,
+        (select b.id from batch b where survey_automation.matches(b.data,rule.conditions,rule.match_mode)
+          order by b.created_at desc,b.id desc limit 1) as matching_id into page
+      from (select id,created_at from batch order by created_at,id limit 1) tail;
+      if page.matching_id is null and page.entries=500 then
+        update survey_automation.targets set count_cursor_at=page.created_at,count_cursor_id=page.id,
+          schedule_slot_at=slot,next_run_at=clock_timestamp() where rule_id=rule.id and form_id=f.id;
+        continue;
+      end if;
+      select * into r from public.responses where id=page.matching_id and form_id=f.id;
     end if;
-    update survey_automation.targets set next_run_at=next_slot,complete=((due.rule).event_type='date')
-      where rule_id=due.rule_id and form_id=f.id;
+    if r.id is not null or rule.conditions='[]'::jsonb then
+      perform survey_automation.stage_run(rule,f,key,r);
+    end if;
+    update survey_automation.targets set next_run_at=next_slot,complete=(rule.event_type='date'),
+      count_cursor_at=null,count_cursor_id=null,schedule_slot_at=null where rule_id=rule.id and form_id=f.id;
   end loop;
 
-  for due in
+  for deadline in
     select d.* from survey_automation.form_deadlines d where due_at<=p_now
     order by due_at,form_id limit p_limit for update skip locked
   loop
-    select * into f from public.forms where id=due.form_id;
-    if found and f.is_public and f.form_type<>'template' and f.deadline_at=due.due_at then
+    select * into f from public.forms where id=deadline.form_id;
+    if found and f.is_public and f.form_type<>'template' and f.deadline_at=deadline.due_at then
       perform survey_automation.notify(f.author_id,'form_status',
-        'deadline-reached:'||f.id||':'||extract(epoch from due.due_at)::text,'Срок приёма истёк',f.title,f.id);
+        'deadline-reached:'||f.id||':'||extract(epoch from deadline.due_at)::text,'Срок приёма истёк',f.title,f.id);
     end if;
-    delete from survey_automation.form_deadlines where form_id=due.form_id;
+    delete from survey_automation.form_deadlines where form_id=deadline.form_id;
   end loop;
 end;
 $$;
@@ -4463,19 +4557,24 @@ create trigger automation_clear_mail_content before update of status on public.m
   when (new.automation_run_id is not null and new.status in ('sent','failed') and new.status is distinct from old.status)
   execute function survey_automation.clear_delivered_content();
 
-create function survey_automation.record_delivery()
+create or replace function survey_automation.record_delivery()
 returns trigger language plpgsql security definer set search_path = '' as $$
-declare updated_run public.automation_runs;
+declare
+  updated_run public.automation_runs;
+  cancelled boolean := old.status='queued' and new.status='failed';
 begin
   update public.automation_runs r set
     sent_count=r.sent_count+(new.status='sent')::integer,
-    failed_count=r.failed_count+(new.status='failed')::integer,
+    failed_count=r.failed_count+(new.status='failed' and not cancelled)::integer,
+    cancelled_count=r.cancelled_count+cancelled::integer,
     last_error=coalesce(new.last_error,r.last_error),
-    status=case when r.sent_count+r.failed_count+1<r.recipient_count then 'queued'
-      when new.status='failed' or r.failed_count>0 or r.last_error is not null then 'failed'
+    status=case when r.sent_count+r.failed_count+r.cancelled_count+1<r.recipient_count then 'queued'
+      when (new.status='failed' and not cancelled) or r.failed_count>0 then 'failed'
+      when cancelled or r.cancelled_count>0 then 'cancelled'
+      when r.last_error is not null then 'failed'
       else 'succeeded' end
     where r.id=new.automation_run_id and r.status='queued' returning * into updated_run;
-  if updated_run.status in ('succeeded','failed') then perform survey_automation.terminal_notice(updated_run); end if;
+  if updated_run.status in ('succeeded','failed','cancelled') then perform survey_automation.terminal_notice(updated_run); end if;
   return new;
 end;
 $$;
@@ -4493,28 +4592,39 @@ returns text language sql immutable set search_path = '' as $$
   from regexp_matches(p_template,'\{\{[a-z_]+\}\}|[^{]+|.','gs') with ordinality tokens(m,position);
 $$;
 
-create function survey_automation.response_text(p_schema jsonb,p_data jsonb)
+create or replace function survey_automation.response_text(p_schema jsonb,p_data jsonb)
 returns text language sql set search_path = '' as $$
-  with bindings as (
+  with bindings as materialized (
     select b.* from public.survey_response_bindings(p_schema,p_data)
       with ordinality b(question,value,value_path,ord)
+  ), sensitive as materialized (
+    select distinct value_path from bindings
+    where question->>'type' in ('file','signaturepad') and value is not null and value<>'null'::jsonb
   ), printable as (
-    select ord,coalesce(nullif(b.question->>'title',''),b.question->>'name') as label,
-      case when b.question->>'type'='file' and jsonb_typeof(b.value)='array' then (
-        select string_agg(coalesce(nullif(file->>'name',''),'Прикреплённый файл'),', ' order by pos)
-        from jsonb_array_elements(b.value) with ordinality files(file,pos))
+    select ord,coalesce(survey_automation.localized_text(b.question->'title'),b.question->>'name') as label,
+      case when b.question->>'type'='file' then 'Прикреплённый файл'
+      when b.question->>'type'='boolean' and b.value=coalesce(nullif(b.question->'valueTrue','null'::jsonb),'true'::jsonb)
+        then coalesce(survey_automation.localized_text(b.question->'labelTrue'),'Да')
+      when b.question->>'type'='boolean' and b.value=coalesce(nullif(b.question->'valueFalse','null'::jsonb),'false'::jsonb)
+        then coalesce(survey_automation.localized_text(b.question->'labelFalse'),'Нет')
       when b.question->>'type'='signaturepad' then 'Подпись доступна в ответе'
       when b.question->>'type'='organization' then coalesce(o.alias,b.value #>> '{}')
       when jsonb_typeof(b.value)='array' and b.question->>'type' in ('checkbox','tagbox','imagepicker','ranking') then (
-        select string_agg(coalesce(choice->>'text',selected #>> '{}'),', ' order by pos)
+        select string_agg(coalesce(survey_automation.localized_text(choice->'text'),selected #>> '{}'),', ' order by pos)
         from jsonb_array_elements(b.value) with ordinality selections(selected,pos)
         left join lateral (select v as choice from jsonb_array_elements(
           case when jsonb_typeof(b.question->'choices')='array' then b.question->'choices' else '[]'::jsonb end
         ) v where v->'value'=selected limit 1) found on true)
-      else coalesce(ch.choice->>'text', b.value #>> '{}') end as content,
-      p_data #>> (b.value_path[1:cardinality(b.value_path)-1] ||
-        (b.value_path[cardinality(b.value_path)]||coalesce(nullif(p_schema->>'commentSuffix',''),'-Comment'))) as comment
+      else coalesce(survey_automation.localized_text(ch.choice->'text'), b.value #>> '{}') end as content,
+      case when b.question->>'type' not in ('file','signaturepad') and (
+          b.question @> '{"showOtherItem":true}' or b.question @> '{"showCommentArea":true}'
+          or b.question @> '{"hasOther":true}' or b.question @> '{"hasComment":true}')
+        and jsonb_typeof(p_data #> c.path)='string'
+        and not exists(select from sensitive s where c.path[1:cardinality(s.value_path)]=s.value_path)
+        then p_data #>> c.path end as comment
     from bindings b
+    cross join lateral (select b.value_path[1:cardinality(b.value_path)-1] ||
+      (b.value_path[cardinality(b.value_path)]||coalesce(nullif(p_schema->>'commentSuffix',''),'-Comment')) as path) c
     left join public.education_organizations o on b.question->>'type'='organization' and o.id=case
       when b.value #>> '{}' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (b.value #>> '{}')::uuid end
     left join lateral (select v as choice from jsonb_array_elements(
@@ -4522,12 +4632,15 @@ returns text language sql set search_path = '' as $$
     ) v where v->'value'=b.value limit 1) ch on true
     where b.value is not null and b.value<>'null'::jsonb
       and b.question->>'type' not in ('paneldynamic','matrixdynamic','matrixdropdown')
+      and (b.question->>'type' in ('file','signaturepad') or not exists (
+        select from sensitive s where b.value_path[1:cardinality(s.value_path)]=s.value_path
+          or s.value_path[1:cardinality(b.value_path)]=b.value_path))
   )
   select string_agg(label||': '||coalesce(content,'')||coalesce(E'\nКомментарий: '||comment,''),E'\n' order by ord)
   from printable;
 $$;
 
-create function survey_automation.dispatch_email(
+create or replace function survey_automation.dispatch_email(
   p_run public.automation_runs,p_form public.forms,p_origin text,p_snapshot jsonb
 )
 returns void language plpgsql set search_path = '' as $$
@@ -4535,8 +4648,11 @@ declare
   action jsonb;
   response_data jsonb;
   recipients text[];
-  field_type text;
-  dynamic_recipients text[];
+  org_value jsonb;
+  directory_email text;
+  marker text := '{{sent_at:'||p_run.id||'}}';
+  marker_start integer;
+  usage_hour timestamptz := date_trunc('hour',clock_timestamp(),'UTC');
   field_error text;
   respondent text;
   form_link text;
@@ -4546,7 +4662,8 @@ declare
   details text;
   data_values jsonb;
 begin
-  if p_origin is null or p_origin !~ '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' or length(p_origin)>300 then
+  if p_origin is null or p_origin !~ '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' or length(p_origin)>300
+    or coalesce(substring(p_origin from ':([0-9]{1,5})$')::integer,0)>65535 then
     raise exception 'Для ссылок в письмах задайте PUBLIC_APP_URL' using errcode='P0001';
   end if;
   if not exists(select from public.mail_settings where id=1 and enabled) then
@@ -4556,20 +4673,18 @@ begin
   response_data:=p_snapshot->'response';
   recipients:=array(select jsonb_array_elements_text(action->'recipients'));
   if action ? 'recipientPath' then
-    select q.question->>'type' into field_type from survey_automation.form_fields(p_form.schema) q
-      where to_jsonb(q.path)=action->'recipientPath';
-    if field_type in ('text','email','organization') then
-      select array_agg(distinct email order by email) into dynamic_recipients
-      from (
-        select survey_automation.email_address(case when field_type='organization' then o.email else v #>> '{}' end) email
-        from survey_automation.answer_values(response_data,array(select jsonb_array_elements_text(action->'recipientPath'))) v
-        left join public.education_organizations o on field_type='organization' and o.id=case
-          when v #>> '{}' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (v #>> '{}')::uuid end
-        where jsonb_typeof(v)='string'
-      ) addresses where email is not null;
+    if not survey_automation.allowed_recipient_path(p_form.schema,action) then
+      raise exception 'В настройках письма указан недоступный получатель или формат' using errcode='P0001';
     end if;
-    if dynamic_recipients is null then field_error:='В выбранном вопросе нет корректного адреса получателя'; end if;
-    recipients:=array(select distinct address from unnest(recipients||dynamic_recipients) address order by address);
+    org_value:=response_data->(action->'recipientPath'->>0);
+    select survey_automation.email_address(o.email) into directory_email
+      from public.education_organizations o
+      where jsonb_typeof(org_value)='string' and o.id=case
+        when org_value #>> '{}' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then (org_value #>> '{}')::uuid end
+        and not o.is_archived and o.organization_type=any(p_form.organization_types);
+    if directory_email is null then field_error:='В выбранном вопросе нет доступного адреса организации';
+    elsif not (directory_email=any(recipients)) then recipients:=array_append(recipients,directory_email);
+    end if;
   end if;
   if cardinality(recipients)=0 then raise exception '%',field_error using errcode='P0001'; end if;
   if cardinality(recipients)>50 then raise exception 'Для одного письма доступно до 50 получателей' using errcode='P0001'; end if;
@@ -4590,7 +4705,16 @@ begin
     'answer_count',p_snapshot->>'answerCount','matching_count',coalesce(p_snapshot->>'matchingCount','—'),
     'matching_percent',case when (p_snapshot->>'answerCount')::integer>0 and p_snapshot->>'matchingCount' is not null
       then round((p_snapshot->>'matchingCount')::numeric*100/(p_snapshot->>'answerCount')::integer,2)::text||'%' else '—' end);
-  subject_text:=left(btrim(regexp_replace(survey_automation.render_template(action->>'subject',data_values),'[[:cntrl:]]+',' ','g')),500);
+  subject_text:=btrim(regexp_replace(survey_automation.render_template(action->>'subject',data_values),'[[:cntrl:]]+',' ','g'));
+  if char_length(subject_text)>500 then
+    -- Never leave half an SMTP-time placeholder at the subject boundary.
+    marker_start:=strpos(substr(subject_text,502-length(marker),2*length(marker)-2),marker);
+    if marker_start between 1 and length(marker)-1 then
+      subject_text:=left(subject_text,500-length(marker)+marker_start);
+    else
+      subject_text:=left(subject_text,500);
+    end if;
+  end if;
   body_text:=survey_automation.render_template(action->>'body',data_values);
   if strpos(body_text,response_link)=0 then body_text:=body_text||E'\n\n'||response_link; end if;
   if action->>'mode'='full' and p_run.response_id is not null then
@@ -4598,6 +4722,17 @@ begin
     if details is not null then body_text:=body_text||E'\n\nОтвет:\n'||details; end if;
   end if;
   if char_length(body_text)>512000 then raise exception 'Ответ слишком длинный для письма. Выберите краткое письмо со ссылкой' using errcode='P0001'; end if;
+
+  insert into survey_automation.mail_usage as usage(user_id,hour_start,recipient_count)
+    values(p_form.author_id,usage_hour,cardinality(recipients))
+    on conflict (user_id) do update set hour_start=excluded.hour_start,
+      recipient_count=case when usage.hour_start=excluded.hour_start then usage.recipient_count else 0 end
+        +excluded.recipient_count
+    where usage.hour_start<excluded.hour_start or (usage.hour_start=excluded.hour_start
+      and usage.recipient_count+excluded.recipient_count<=500);
+  if not found then
+    raise exception 'Достигнут часовой лимит в 500 получателей автоматизаций' using errcode='P0001';
+  end if;
 
   insert into public.mail_batches(id,kind,form_id,created_by,total_count)
     values(p_run.id,'automation',p_form.id,p_form.author_id,cardinality(recipients));
@@ -4608,7 +4743,7 @@ begin
 end;
 $$;
 
-create function public.process_automations(p_app_origin text,p_limit integer default 50)
+create or replace function public.process_automations(p_app_origin text,p_limit integer default 50)
 returns integer language plpgsql security definer set search_path = '' as $$
 declare
   max_items integer := least(greatest(coalesce(p_limit,50),1),100);
@@ -4619,6 +4754,10 @@ declare
   completed integer := 0;
   sweep_time timestamptz := clock_timestamp();
 begin
+  if p_app_origin is null or p_app_origin !~ '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' or length(p_app_origin)>300
+    or coalesce(substring(p_app_origin from ':([0-9]{1,5})$')::integer,0)>65535 then
+    raise exception 'Для ссылок в письмах задайте PUBLIC_APP_URL' using errcode='P0001';
+  end if;
   if not pg_try_advisory_xact_lock(hashtextextended('survey-automation-worker',0)) then return 0; end if;
   perform survey_automation.process_schedules(sweep_time,max_items);
 
@@ -4813,20 +4952,52 @@ begin
 end;
 $$;
 
-create function public.save_announcement(
+create function survey_announcements.valid_action_url(p_url text)
+returns boolean language plpgsql immutable strict set search_path = '' as $$
+declare
+  url_parts text[];
+begin
+  if char_length(p_url) > 2048 or p_url ~ '[[:space:][:cntrl:]]' or strpos(p_url, chr(92)) > 0 then
+    return false;
+  end if;
+  if left(p_url, 1) = '/' then
+    -- Absolute paths are stored after the client normalizes dot segments.
+    return left(p_url, 2) <> '//'
+      and split_part(split_part(p_url, '?', 1), '#', 1) !~* '/(?:\.|%2e){1,2}(?:/|$)';
+  end if;
+
+  url_parts := regexp_match(p_url,
+    '^https?://(\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?)(?::([0-9]{1,5}))?(?:[/?#]|$)',
+    'i');
+  if url_parts is null or coalesce(url_parts[2]::integer, 0) > 65535 then
+    return false;
+  end if;
+  if left(url_parts[1], 1) = '[' then
+    return family(substr(url_parts[1], 2, length(url_parts[1]) - 2)::inet) = 6;
+  end if;
+  return true;
+exception when invalid_text_representation then
+  return false;
+end;
+$$;
+
+revoke all on function survey_announcements.valid_action_url(text) from public, anon, authenticated;
+
+create or replace function public.save_announcement(
   p_id uuid, p_expected_updated_at timestamptz, p_fields jsonb, p_publication text, p_publish_at timestamptz
 )
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare
   target survey_announcements.announcements%rowtype;
-  title_value text := btrim(p_fields->>'title');
-  message_value text := btrim(p_fields->>'message', E' \t\r\n');
+  title_value text := regexp_replace(p_fields->>'title', '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  message_value text := regexp_replace(p_fields->>'message', '^[[:space:]]+|[[:space:]]+$', '', 'g');
   audience_value text := p_fields->>'audience';
   display_value text := p_fields->>'display_mode';
-  label_value text := nullif(btrim(p_fields->>'action_label'), '');
-  url_value text := nullif(btrim(p_fields->>'action_url'), '');
+  label_value text := nullif(regexp_replace(p_fields->>'action_label', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
+  url_value text := nullif(regexp_replace(p_fields->>'action_url', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
   expires_value timestamptz;
   status_value text := 'draft';
+  current_status text;
   publish_value timestamptz;
 begin
   perform survey_announcements.require_admin();
@@ -4847,11 +5018,7 @@ begin
   if char_length(label_value) > 80 or (label_value is not null and url_value is null) then
     raise exception 'Укажите ссылку и подпись длиной до 80 символов' using errcode = '22023';
   end if;
-  if url_value is not null and (
-    char_length(url_value) > 2048 or url_value ~ '[[:space:][:cntrl:]]' or strpos(url_value, chr(92)) > 0
-    or not (left(url_value, 1) = '/' and left(url_value, 2) <> '//'
-      or url_value ~* '^https?://[^/?#]+')
-  ) then
+  if url_value is not null and not survey_announcements.valid_action_url(url_value) then
     raise exception 'Укажите ссылку HTTP, HTTPS или путь внутри приложения' using errcode = '22023';
   end if;
   begin
@@ -4867,10 +5034,17 @@ begin
     target := survey_announcements.lock_announcement(p_id, p_expected_updated_at);
     status_value := target.status;
     publish_value := target.publish_at;
-    if survey_announcements.effective_status(target.status, target.publish_at, target.expires_at) = 'archived' then
+    current_status := survey_announcements.effective_status(target.status, target.publish_at, target.expires_at);
+    if current_status = 'published' and p_publication <> 'keep' then
+      raise exception 'Объявление уже опубликовано. Обновите список и откройте его снова.' using errcode = '40001';
+    end if;
+    if current_status = 'archived' then
       status_value := 'archived';
       if p_publication <> 'keep' then
         raise exception 'Для новой публикации создайте копию архивного объявления' using errcode = '22023';
+      end if;
+      if expires_value is distinct from target.expires_at then
+        raise exception 'Объявление в архиве. Обновите список и откройте его снова.' using errcode = '40001';
       end if;
     end if;
   end if;

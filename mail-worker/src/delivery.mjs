@@ -118,21 +118,19 @@ export function createMailPoller({
         return;
       }
 
+      let transporter;
+      try {
+        transporter = smtpTransports.get(settings);
+      } catch {
+        state.lastError = "Не удалось подготовить SMTP. Проверьте настройки почты и ключ шифрования воркера.";
+        logger.error("mail worker SMTP configuration failed");
+        return;
+      }
+
       const jobs = await claimJobs();
       if (jobs.length === 0) {
         state.lastError = null;
         completed = true;
-        return;
-      }
-
-      let transporter;
-      try {
-        transporter = smtpTransports.get(settings);
-      } catch (error) {
-        const publicError = toPublicSmtpError(error);
-        // No SMTP send has started, so these jobs can safely be retried.
-        await Promise.all(jobs.map((job) => acknowledge(remember(job, false, publicError))));
-        state.lastError = pending.size ? ACK_ERROR : publicError;
         return;
       }
 

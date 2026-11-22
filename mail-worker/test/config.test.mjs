@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { createCipheriv, randomBytes } from "node:crypto";
 import test from "node:test";
-import { createTransportOptions, decryptPassword, toPublicSmtpError } from "../src/config.mjs";
+import { createTransportOptions, decryptPassword, parsePublicAppOrigin, toPublicSmtpError } from "../src/config.mjs";
+
+test("uses only HTTP origins supported by automation email links", () => {
+  assert.equal(parsePublicAppOrigin("https://forms.example.ru/"), "https://forms.example.ru");
+  assert.equal(parsePublicAppOrigin("http://localhost:5173"), "http://localhost:5173");
+  for (const value of [
+    "", "forms.example.ru", "ftp://forms.example.ru", "https://user@example.ru",
+    "http://[::1]:5173", "http://localhost:99999", "https://example.ru/path",
+    "https://example.ru?q", "https://example.ru#section", `https://${"a.".repeat(150)}ru`,
+  ]) assert.equal(parsePublicAppOrigin(value), null, value);
+});
 
 function encryptLikeEdgeFunction(password, key) {
   const iv = randomBytes(12);

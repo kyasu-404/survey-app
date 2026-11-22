@@ -46,11 +46,11 @@ export function RuleEmailTemplate({ subject, body, hasThreshold, onSubject, onBo
   return <>
     <label className="activity-field">Тема
       <input ref={subjectRef} required maxLength={500} value={subject} onFocus={() => setTarget("subject")}
-        onChange={(change) => onSubject(change.target.value)} />
+        onChange={change => { setLimitError(""); onSubject(change.target.value); }} />
     </label>
     <label className="activity-field">Текст письма
       <textarea ref={bodyRef} required rows={3} maxLength={10000} value={body} onFocus={() => setTarget("body")}
-        onChange={(change) => onBody(change.target.value)} />
+        onChange={change => { setLimitError(""); onBody(change.target.value); }} />
     </label>
     <details className="activity-variables rule-variables">
       <summary>Подстановки</summary>

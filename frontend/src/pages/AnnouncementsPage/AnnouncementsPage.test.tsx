@@ -14,13 +14,13 @@ const row = {
   title: "Новое расписание", message: "Подробности", audience: "all", display_mode: "feed",
   action_url: null, action_label: null, require_acknowledgement: false, expires_at: null,
 };
-function renderPage() {
+function renderPage(published: Omit<typeof row, "expires_at"> & { expires_at: string | null } = row) {
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init: RequestInit) => {
     const path = new URL(input).pathname.split("/").pop()!;
     const body = JSON.parse(String(init.body));
     requests.push({ path, body });
-    if (path === "list_admin_announcements") return Response.json(body.p_status === "published" ? [row] : []);
+    if (path === "list_admin_announcements") return Response.json(body.p_status === "published" ? [published] : []);
     if (path === "save_announcement" || path === "change_announcement") return Response.json(row.id);
     throw new Error("Unexpected request: " + path);
   });
@@ -48,6 +48,18 @@ describe("Административные объявления", () => {
     }));
   });
 
+  it("keeps an expired publication in the archive when its text is edited", async () => {
+    const expiry = "2026-01-02T10:00:00Z";
+    const { user, requests } = renderPage({ ...row, expires_at: expiry });
+    await user.click(screen.getByRole("tab", { name: "Опубликованные" }));
+    await user.click(await screen.findByRole("button", { name: row.title }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.type(editor.getByLabelText("Текст объявления"), "!");
+    await user.click(editor.getByRole("button", { name: "Сохранить изменения" }));
+    expect(await screen.findByRole("tab", { name: "Архивные", selected: true })).toBeVisible();
+    expect(requests.find(r => r.path === "save_announcement")?.body).toMatchObject({ p_fields: { expires_at: expiry } });
+  });
+
   it.each([
     ["Дублировать", "duplicate", "Черновики"],
     ["Снять с публикации", "withdraw", "Черновики"],
@@ -56,7 +68,7 @@ describe("Административные объявления", () => {
     const { user, requests } = renderPage();
     await user.click(screen.getByRole("tab", { name: "Опубликованные" }));
     await user.click(await screen.findByRole("button", { name: /Действия объявления/ }));
-    await user.click(screen.getByRole("button", { name: label }));
+    await user.click(screen.getByRole("menuitem", { name: label }));
     if (action === "archive") {
       await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Архивировать" }));
     }

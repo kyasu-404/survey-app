@@ -3,9 +3,12 @@ insert into auth.users(id,email) values
   ('a0000000-0000-4000-8000-000000000001','owner@example.invalid'),
   ('a0000000-0000-4000-8000-000000000002','other@example.invalid');
 update public.profiles set role='admin' where id='a0000000-0000-4000-8000-000000000002';
+insert into public.education_organizations(id,organization_type,number,alias,email) values
+  ('e0000000-0000-4000-8000-000000000001','school','1','Школа 1','recipient@пример.рф'),
+  ('e0000000-0000-4000-8000-000000000002','school','2','Школа 2','other-recipient@пример.рф');
 insert into public.forms(id,title,author_id,form_type,form_reason,schema) values
   ('b0000000-0000-4000-8000-000000000001','Проверка автоматизации','a0000000-0000-4000-8000-000000000001','anketa','plan',
-   '{"pages":[{"elements":[{"type":"text","name":"amount","valueName":"total","inputType":"number","title":"Количество"},{"type":"text","name":"contact","inputType":"email","title":"Получатель"},{"type":"checkbox","name":"topics","choices":["first","second"]}]}]}'),
+   '{"pages":[{"elements":[{"type":"text","name":"amount","valueName":"total","inputType":"number","title":"Количество"},{"type":"organization","name":"contact","title":"Получатель"},{"type":"checkbox","name":"topics","choices":["first","second"]}]}]}'),
   ('b0000000-0000-4000-8000-000000000002','Чужая форма','a0000000-0000-4000-8000-000000000002','anketa','plan','{"pages":[]}');
 
 update public.forms set created_at=now()-interval '1 day' where title='Проверка автоматизации';
@@ -26,8 +29,8 @@ begin
     raise exception 'valueName was not offered as an answer field';
   end if;
   rule_id := public.save_automation_rule(null,form_id,'Каждый ответ','',true,'response_received',null,null,null,'all','[]',
-    mail_action || '{"recipientPath":["contact"],"mode":"full"}');
-  perform public.save_automation_rule(null,null,'Все мои формы','',true,'response_received',null,null,null,'all','[]',mail_action);
+    mail_action || '{"recipientPath":["contact"]}');
+  perform public.save_automation_rule(null,null,'Все мои формы','',true,'response_received',null,null,null,'all','[]',mail_action || '{"mode":"full"}');
   perform public.save_automation_rule(null,form_id,'Изменение','',true,'response_updated',null,null,null,'any',matching,mail_action);
   perform public.save_automation_rule(null,form_id,'Два ответа','',true,'response_count',2,null,null,'all','[]',mail_action);
   perform public.save_automation_rule(null,form_id,'Два совпадения','',true,'matching_count',2,null,null,'all',matching,mail_action);
@@ -60,16 +63,16 @@ select set_config('request.jwt.claim.sub','',true);
 set local role anon;
 select * from public.submit_form_response(
   'b0000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001',
-  '{"total":4,"contact":"recipient@пример.рф","topics":["first"]}');
+  '{"total":4,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first"]}');
 select * from public.submit_form_response(
   'b0000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001',
-  '{"total":4,"contact":"recipient@пример.рф","topics":["first"]}');
+  '{"total":4,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first"]}');
 select * from public.submit_form_response(
   'b0000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-000000000002','d0000000-0000-4000-8000-000000000002',
-  '{"total":10,"contact":"other-recipient@пример.рф","topics":["first","second"]}');
+  '{"total":10,"contact":"e0000000-0000-4000-8000-000000000002","topics":["first","second"]}');
 reset role;
 
-update public.responses set data='{"total":12,"contact":"recipient@пример.рф","topics":["first","second"]}'
+update public.responses set data='{"total":12,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first","second"]}'
   where submission_id='d0000000-0000-4000-8000-000000000001';
 update public.responses set data=data where submission_id='d0000000-0000-4000-8000-000000000001';
 
@@ -90,7 +93,8 @@ begin
   if (select count(*) from public.mail_queue)<>13 or
     not exists(select from public.mail_queue where recipient_email='recipient@пример.рф'
       and body_text like '%https://forms.example.invalid/dashboard/forms/%/responses?response=%'
-      and body_text like '%Количество: 4%')
+      and body_text not like '%Количество: 4%') or
+    not exists(select from public.mail_queue where recipient_email='author@example.invalid' and body_text like '%Количество: 4%')
   then raise exception 'Expected separate, deduplicated recipients and a response link'; end if;
   for job in select * from public.claim_mail_jobs('test-worker',100) loop
     perform public.finish_mail_job(job.id,'test-worker',failed_job,'Тестовая ошибка SMTP');
@@ -156,7 +160,7 @@ begin
   -- A new response starts a fresh inactivity period and a later slot re-arms the periodic rule.
   update public.forms f set is_public=true where f.id=form_id;
   perform public.submit_form_response(form_id,gen_random_uuid(),gen_random_uuid(),
-    '{"total":13,"contact":"recipient@пример.рф","topics":["first","second"]}');
+    '{"total":13,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first","second"]}');
   update survey_automation.targets t set next_run_at=now()-interval '1 minute' where t.rule_id=inactivity_id;
   perform survey_automation.process_schedules(now()+interval '1 hour 1 minute',100);
   perform public.process_automations('https://forms.example.invalid',100);

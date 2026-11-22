@@ -1,0 +1,43 @@
+import { useLayoutEffect, useRef, type KeyboardEvent } from "react";
+
+const itemSelector = '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])';
+
+export function useActionMenuKeyboard(open: boolean, onOpen: () => void, onClose: () => void) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const lastItem = useRef(false);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const items = menu.current?.querySelectorAll<HTMLElement>(itemSelector);
+    items?.[lastItem.current ? items.length - 1 : 0]?.focus({ preventScroll: true });
+    lastItem.current = false;
+  }, [open]);
+
+  function triggerKeyDown(event: KeyboardEvent) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.stopPropagation();
+    event.preventDefault();
+    lastItem.current = event.key === "ArrowUp";
+    onOpen();
+  }
+
+  function menuKeyDown(event: KeyboardEvent) {
+    if (event.key === "Escape" || event.key === "Tab") {
+      event.stopPropagation();
+      if (event.key === "Escape") event.preventDefault();
+      trigger.current?.focus({ preventScroll: true });
+      onClose();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = Array.from(menu.current?.querySelectorAll<HTMLElement>(itemSelector) ?? []);
+    if (!items.length) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[next].focus({ preventScroll: true });
+  }
+  return { trigger, menu, triggerKeyDown, menuKeyDown };
+}

@@ -258,14 +258,24 @@ test("records a genuine SMTP rejection as failure", async () => {
   assert.equal(fixture.state.lastError, null);
 });
 
-test("requeues only unsent jobs when creating the SMTP transport fails", async () => {
+test("keeps jobs unclaimed and reports unhealthy until the SMTP settings work", async () => {
   const fixture = createFixture({ ids: ["first", "second"] });
+  const get = fixture.smtpTransports.get;
   fixture.smtpTransports.get = () => { throw new Error("Invalid SMTP settings"); };
   await fixture.poll();
+  await fixture.poll();
+  assert.equal(fixture.claims, 0);
   assert.deepEqual(fixture.delivered, []);
   assert.deepEqual([...fixture.queue.values()].map(({ status }) => status), ["queued", "queued"]);
-  assert.deepEqual(fixture.acknowledgements.map(({ success }) => success), [false, false]);
+  assert.deepEqual(fixture.acknowledgements, []);
   assert.ok(fixture.state.lastError);
+  assert.equal(isWorkerHealthy(fixture.state, Date.now(), 3_000), false);
+
+  fixture.smtpTransports.get = get;
+  await fixture.poll();
+  assert.deepEqual(fixture.delivered, ["first", "second"]);
+  assert.equal(fixture.claims, 1);
+  assert.equal(isWorkerHealthy(fixture.state, Date.now(), 3_000), true);
 });
 
 test("inserts the SMTP send time after an automation job has waited in the queue", async () => {

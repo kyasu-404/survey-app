@@ -55,7 +55,8 @@ function RuleHistory({ ruleId, userId }: { ruleId: string; userId: string }) {
         <div className="activity-row-body">
           <div className="activity-row-meta"><time dateTime={run.created_at}>{formatActivityTime(run.created_at)}</time></div>
           <strong>{run.form_title}</strong>
-          {run.recipient_count > 0 && <p>Отправлено {run.sent_count} из {run.recipient_count}{run.failed_count > 0 ? " · Ошибок: " + run.failed_count : ""}</p>}
+          {run.recipient_count > 0 && <p>Отправлено {run.sent_count} из {run.recipient_count}{run.failed_count > 0 ? " · Ошибок: " + run.failed_count : ""}
+            {run.cancelled_count > 0 ? " · Отменено: " + run.cancelled_count : ""}</p>}
           {run.last_error && <p className="activity-error">{run.last_error}</p>}
           <div className="activity-links">
             <Link to={run.response_id ? routes.formResponse(run.form_id, run.response_id) : routes.formResponses(run.form_id)}>

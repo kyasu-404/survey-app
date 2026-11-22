@@ -8,17 +8,12 @@ test("an administrator previews and schedules a formatted announcement", async (
   const app = await openSurveyApp(page);
   const title = "График технических работ";
   const rows: AdminAnnouncement[] = [];
+  let submitted: unknown;
   await page.route("**/rest/v1/rpc/list_admin_announcements", (route) =>
     route.fulfill({ json: rows.filter(row => row.status === route.request().postDataJSON().p_status) }));
   await page.route("**/rest/v1/rpc/save_announcement", (route) => {
     const draft = route.request().postDataJSON();
-    expect(draft.p_id).toBeNull();
-    expect(draft.p_publication).toBe("schedule");
-    expect(draft.p_publish_at).toBe(new Date("2040-05-08T10:15").toISOString());
-    expect(draft.p_fields).toMatchObject({
-      title, message: "**Плановое обновление**\n\n- Перерыв в работе",
-      display_mode: "banner", audience: "user", require_acknowledgement: true, action_url: "/preferences",
-    });
+    submitted = draft;
     const timestamp = new Date().toISOString();
     const id = crypto.randomUUID();
     rows.push({ ...draft.p_fields, id, status: "scheduled", audience_count: 4, familiar_count: 0,
@@ -43,17 +38,24 @@ test("an administrator previews and schedules a formatted announcement", async (
   await editor.getByRole("combobox", { name: "Способ отображения", exact: true }).selectOption("banner");
   await editor.getByRole("checkbox", { name: "Запросить подтверждение ознакомления" }).check();
   await editor.getByRole("combobox", { name: "Состояние публикации", exact: true }).selectOption("schedule");
-  await editor.getByLabel("Дата публикации", { exact: true }).fill("2040-05-08T10:15");
+  const scheduledTime = "2040-05-08T10:15";
+  const publishAt = await page.evaluate(time => new Date(time).toISOString(), scheduledTime);
+  await editor.getByLabel("Дата публикации", { exact: true }).fill(scheduledTime);
   await editor.getByRole("tab", { name: "Предпросмотр" }).click();
   await expect(editor.locator("strong").filter({ hasText: "Плановое обновление" })).toHaveCount(2);
   await expect(editor.getByRole("listitem").filter({ hasText: "Перерыв в работе" })).toHaveCount(2);
   await expect(editor.getByRole("button", { name: "Запланировать", exact: true })).toBeInViewport();
-  expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect.poll(() => editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("announcement-preview-mobile.png") });
   await editor.getByRole("button", { name: "Запланировать", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Запланированные" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: title, exact: true })).toBeVisible();
+  expect(submitted).toMatchObject({
+    p_id: null, p_publication: "schedule", p_publish_at: publishAt,
+    p_fields: { title, message: "**Плановое обновление**\n\n- Перерыв в работе",
+      display_mode: "banner", audience: "user", require_acknowledgement: true, action_url: "/preferences" },
+  });
   expect(app.pageErrors).toEqual([]);
 });
 

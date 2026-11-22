@@ -40,7 +40,11 @@ function ArchiveDialog({ row, onConfirm, onCancel }: { row: AdminAnnouncement; o
 }
 
 export default function AnnouncementsPage() {
-  const userId = useAuth().user!.id;
+  const { user } = useAuth();
+  return user ? <AdminAnnouncements key={user.id} userId={user.id} /> : null;
+}
+
+function AdminAnnouncements({ userId }: { userId: string }) {
   const client = useQueryClient();
   const { showToast } = useToast();
   const [status, setStatus] = useState<AnnouncementStatus>("draft");

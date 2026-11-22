@@ -123,8 +123,8 @@ test("request_role only trusts the profiles table", () => {
 });
 
 test("all security definer functions pin search_path", () => {
-  const definitions = schema.match(/create or replace function public\.[\s\S]*?\n\$\$;/gi) ?? [];
-  const securityDefiners = definitions.filter((definition) => /security definer/i.test(definition));
+  const definitions = [...schema.matchAll(/^create (?:or replace )?function [\w.]+\([\s\S]*?\bas\s+\$\$/gim)];
+  const securityDefiners = definitions.map(([declaration]) => declaration).filter(declaration => /\bsecurity definer\b/i.test(declaration));
 
   assert.ok(securityDefiners.length > 0, "Expected at least one SECURITY DEFINER function");
 
@@ -605,6 +605,21 @@ test("dashboard active statistics treat expired forms as closed", () => {
   assert.match(statsFunction, /count\(\*\) filter \(where f\.deadline_at > now\(\)\)/i);
 });
 
+
+test("review migrations and the bootstrap install identical function definitions", () => {
+  const migrations = [
+    "202611221400_automation_review_fixes.sql",
+    "202611221410_announcement_review_fixes.sql",
+  ];
+  for (const file of migrations) {
+    const sql = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
+    const definitions = [...sql.matchAll(/^create (?:or replace )?function ([\w.]+)\([\s\S]*?^\$\$;/gim)];
+    assert.ok(definitions.length > 0, file);
+    for (const [definition, name] of definitions) {
+      assert.ok(schema.includes(definition), name);
+    }
+  }
+});
 
 test("bootstrap has one atomic transaction and one canonical definition per function", () => {
   assert.equal([...schema.matchAll(/^begin;$/gim)].length, 1);

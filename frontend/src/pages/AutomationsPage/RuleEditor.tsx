@@ -8,9 +8,17 @@ import { Icon } from "../../shared/ui/Icon";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { RuleEmailPreview, RuleEmailTemplate } from "./RuleEmail";
 import "./ruleEditor.css";
-import { fieldKey, RuleConditions } from "./RuleConditions";
+import { conditionError, fieldKey, RuleConditions } from "./RuleConditions";
 
 const periods = { 1: "минуты", 60: "часы", 1440: "дни" };
+
+const earliestSchedule = "2000-01-01T00:00:00Z";
+const latestSchedule = "2200-01-01T00:00:00Z";
+const emailPattern = /^[\p{L}\p{N}.!#$%&'*+/=?^_{|}~-]+@[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?)+$/u;
+
+function validAddress(address: string) {
+  return Array.from(address).length <= 254 && emailPattern.test(address) && !/(^\.|\.\.|\.$)/.test(address.split("@")[0]);
+}
 
 const steps = ["Основное", "Событие", "Письмо", "Предпросмотр"];
 
@@ -43,6 +51,8 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
     formatDateTimeLocalValue(new Date(Date.now() + 60_000).toISOString()));
   const [matchMode, setMatchMode] = useState(rule?.match_mode ?? "all");
   const [conditions, setConditions] = useState<Condition[]>(rule?.conditions ?? []);
+  const conditionDetails = useRef<HTMLDetailsElement>(null);
+  const backdropPressed = useRef(false);
   const [recipients, setRecipients] = useState(rule?.action_config.recipients.join(", ") ?? "");
   const [recipientPath, setRecipientPath] = useState(rule?.action_config.recipientPath ?? []);
   const [subject, setSubject] = useState(rule?.action_config.subject ?? "{{form_title}} — уведомление");
@@ -53,16 +63,21 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const questions = useQuery({
     queryKey: ["automation-fields", userId, formId],
     queryFn: ({ signal }) => getAutomationFields(formId!, signal),
-    enabled: Boolean(formId) && step > 0,
+    enabled: Boolean(formId),
   });
   const fields = questions.data ?? [];
-  const recipientFields = fields.filter((field) => ["text", "email", "organization"].includes(field.type));
+  const recipientFields = fields.filter(field => field.type === "organization" && field.path.length === 1);
+  const loadingRequiredFields = questions.isPending && Boolean(formId) &&
+    ((step === 1 && conditions.length > 0) || (step === 2 && recipientPath.length > 0));
   const needsThreshold = ["response_count", "matching_count", "matching_share"].includes(event);
   const needsInterval = event === "inactivity" || event === "recurring";
   const needsDate = event === "date" || event === "recurring";
   const save = useMutation({ mutationFn: (config: RuleConfig) => saveAutomationRule(rule?.id ?? null, config), onSuccess: onSaved });
 
-  const addresses = recipients.split(/[\s,;]+/).filter(Boolean);
+  const addresses = [...new Set(recipients.toLowerCase().split(/[\s,;]+/).filter(Boolean))];
+  const recipientLimit = recipientPath.length ? 49 : 50;
+  const minimumMinutes = event === "recurring" ? 15 : 1;
+  const schedule = scheduledAt === originalSchedule && rule?.scheduled_at ? rule.scheduled_at : scheduledAt;
   const cleanConditions = conditions.map((condition) => ({
     ...condition,
     value: Array.isArray(condition.value)
@@ -78,27 +93,51 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
 
   function onSubmit(submission: FormEvent<HTMLFormElement>) {
     submission.preventDefault();
-    if (save.isPending) return;
+    if (save.isPending || loadingRequiredFields) return;
     if (step === 0 && !name.trim()) {
       setValidationError("Укажите название правила.");
       return;
     }
-    if (step === 1 && cleanConditions.some(({ path, value }) => value === "" || (Array.isArray(value) && !value.length)
-      || !fields.some((field) => fieldKey(field.path) === fieldKey(path)))) {
-      setValidationError("Проверьте вопрос и значение каждого условия.");
-      return;
+    if (step === 1) {
+      const count = Number(threshold);
+      if (needsThreshold && (!Number.isFinite(count) || (event === "matching_share"
+        ? count < 0.01 || count > 100 : !Number.isInteger(count) || count < 1 || count > 100000))) {
+        setValidationError("Проверьте порог срабатывания правила.");
+        return;
+      }
+      const minutes = Number(period) * periodUnit;
+      if (needsInterval && (!Number.isInteger(Number(period)) || minutes < minimumMinutes || minutes > 525600)) {
+        setValidationError(`Укажите целый период от ${minimumMinutes} до 525600 минут.`);
+        return;
+      }
+      const time = Date.parse(schedule);
+      if (needsDate && !(time >= Date.parse(earliestSchedule) && time <= Date.parse(latestSchedule))) {
+        setValidationError("Проверьте дату и время запуска (2000–2200 гг.).");
+        return;
+      }
+      const error = questions.isError && conditions.length ? "Не удалось загрузить вопросы."
+        : cleanConditions.map(condition => conditionError(condition, fields)).find(Boolean);
+      if (error) {
+        if (conditionDetails.current) conditionDetails.current.open = true;
+        setValidationError(error);
+        return;
+      }
     }
     if (step === 2) {
       if (!addresses.length && !recipientPath.length) {
         setValidationError("Укажите получателя письма.");
         return;
       }
-      if (addresses.length > 50 || addresses.some((address) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))) {
-        setValidationError("Укажите до 50 корректных адресов электронной почты.");
+      if (addresses.length > recipientLimit || addresses.some(address => !validAddress(address))) {
+        setValidationError(`Укажите до ${recipientLimit} корректных адресов электронной почты.`);
         return;
       }
       if (recipientPath.length && !recipientFields.some((field) => fieldKey(field.path) === fieldKey(recipientPath))) {
-        setValidationError("Проверьте вопрос с адресом получателя.");
+        setValidationError("Выберите вопрос со справочником организаций вне повторяющихся панелей или удалите получателя из ответа.");
+        return;
+      }
+      if (recipientPath.length && mode !== "summary") {
+        setValidationError("Для получателя из ответа выберите краткое письмо.");
         return;
       }
       if (!subject.trim() || !body.trim()) {
@@ -110,15 +149,11 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
       changeStep(step + 1);
       return;
     }
-    let schedule: string | null = null;
-    if (needsDate) {
-      schedule = scheduledAt === originalSchedule && rule?.scheduled_at
-        ? rule.scheduled_at : new Date(scheduledAt).toISOString();
-    }
+    const scheduledIso = !needsDate ? null : schedule === rule?.scheduled_at ? schedule : new Date(schedule).toISOString();
     save.mutate({
       form_id: formId || null, name, description, enabled, event_type: event, match_mode: matchMode, conditions: cleanConditions,
       threshold: needsThreshold ? Number(threshold) : null, interval_minutes: needsInterval ? Number(period) * periodUnit : null,
-      scheduled_at: schedule,
+      scheduled_at: scheduledIso,
       action_config: { recipients: addresses, recipientPath: recipientPath.length ? recipientPath : undefined, subject, body, mode },
     });
   }
@@ -126,12 +161,17 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   return (
     <dialog ref={dialog} className="card modal-card activity-rule-dialog" aria-labelledby="rule-editor-heading"
       onCancel={(cancel) => { cancel.preventDefault(); if (!save.isPending) onClose(); }}
+      onPointerDown={event => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        backdropPressed.current = event.target === dialog.current &&
+          (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
+      }}
       onClick={(click) => {
-        if (click.target !== dialog.current || save.isPending) return;
+        if (!backdropPressed.current || click.target !== dialog.current || save.isPending) return;
         const rect = click.currentTarget.getBoundingClientRect();
         if (click.clientX < rect.left || click.clientX > rect.right || click.clientY < rect.top || click.clientY > rect.bottom) onClose();
       }}>
-      <form onSubmit={onSubmit} className="activity-rule-editor">
+      <form noValidate onSubmit={onSubmit} onChange={() => { setValidationError(null); if (save.isError) save.reset(); }} className="activity-rule-editor">
         <header className="activity-heading">
           <h2 id="rule-editor-heading">{rule ? "Редактировать правило" : "Новое правило"}</h2>
           <button type="button" className="app-button icon-button" aria-label="Закрыть" onClick={onClose} disabled={save.isPending}><Icon name="close" /></button>
@@ -178,7 +218,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
             </>}
             {needsInterval && <div className="activity-editor-grid">
               <label className="activity-field">{event === "inactivity" ? "Период тишины" : "Повторять каждые"}
-                <input type="number" min={1} max={Math.floor(525600 / periodUnit)} required value={period} onChange={(change) => setPeriod(change.target.value)} />
+                <input type="number" min={Math.ceil(minimumMinutes / periodUnit)} max={Math.floor(525600 / periodUnit)} required value={period} onChange={(change) => setPeriod(change.target.value)} />
               </label>
               <label className="activity-field">Единица времени
                 <select value={periodUnit} onChange={(change) => setPeriodUnit(Number(change.target.value))}>
@@ -187,10 +227,11 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
               </label>
             </div>}
             {needsDate && <label className="activity-field">{event === "recurring" ? "Первый запуск по местному времени" : "Дата и время запуска по местному времени"}
-              <input type="datetime-local" required value={scheduledAt} onChange={(change) => setScheduledAt(change.target.value)} />
+              <input type="datetime-local" min={formatDateTimeLocalValue(earliestSchedule)} max={formatDateTimeLocalValue(latestSchedule)}
+                required value={scheduledAt} onChange={(change) => setScheduledAt(change.target.value)} />
             </label>}
             {event === "inactivity" && <p className="activity-muted">Период отсчитывается с включения правила или поступления последнего нового ответа.</p>}
-            {formId && <details className="activity-variables rule-conditions" open={conditions.length > 0 || undefined}>
+            {formId && <details ref={conditionDetails} className="activity-variables rule-conditions" open={conditions.length > 0 || undefined}>
               <summary>Дополнительные условия{conditions.length > 0 && ` (${conditions.length})`}</summary>
               <div className="rule-step-fields">
                 <p className="activity-muted">Без условий учитываются все ответы формы.</p>
@@ -199,7 +240,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                   Не удалось загрузить вопросы. <button type="button" className="app-button" onClick={() => void questions.refetch()}>Повторить</button>
                 </div>}
                 {questions.isSuccess && (fields.length || conditions.length ? <RuleConditions fields={fields} conditions={conditions} mode={matchMode}
-                  onMode={setMatchMode} onConditions={setConditions} /> : <p className="activity-muted">В форме пока нет вопросов для условий.</p>)}
+                  onMode={setMatchMode} onConditions={next => { setConditions(next); setValidationError(null); }} /> : <p className="activity-muted">В форме пока нет вопросов для условий.</p>)}
                 {["date", "recurring", "inactivity"].includes(event) && conditions.length > 0 &&
                   <p className="activity-muted">Для письма используется последний ответ, который подходит под условия.</p>}
               </div>
@@ -213,12 +254,14 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
               <small>Перечислите адреса через запятую или с новой строки.</small>
             </label>
             {formId && (recipientFields.length > 0 || recipientPath.length > 0) && <label className="activity-field">Получатель из ответа
-              <select value={fieldKey(recipientPath)} onChange={(change) => setRecipientPath(
-                recipientFields.find((field) => fieldKey(field.path) === change.target.value)?.path ?? [],
-              )}>
+              <select value={fieldKey(recipientPath)} onChange={change => {
+                const path = recipientFields.find(field => fieldKey(field.path) === change.target.value)?.path ?? [];
+                setRecipientPath(path);
+                if (path.length) setMode("summary");
+              }}>
                 <option value="">Не использовать</option>
                 {recipientPath.length > 0 && !recipientFields.some((field) => fieldKey(field.path) === fieldKey(recipientPath)) &&
-                  <option value={fieldKey(recipientPath)} disabled>Вопрос удалён · {recipientPath.join(" / ")}</option>}
+                  <option value={fieldKey(recipientPath)} disabled>Недоступный вопрос · {recipientPath.join(" / ")}</option>}
                 {recipientFields.map((field) => <option key={fieldKey(field.path)} value={fieldKey(field.path)}>{field.label}</option>)}
               </select>
             </label>}
@@ -227,11 +270,12 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
               Не удалось загрузить вопросы для выбора получателя. <button type="button" className="app-button"
                 onClick={() => void questions.refetch()}>Повторить</button>
             </p>}
+            {recipientPath.length > 0 && <p className="activity-muted">Организации из ответа можно отправить только краткое письмо.</p>}
             <RuleEmailTemplate subject={subject} body={body} hasThreshold={needsThreshold} onSubject={setSubject} onBody={setBody} />
             <label className="activity-field">Содержание
               <select value={mode} onChange={(change) => setMode(change.target.value as EmailAction["mode"])}>
                 <option value="summary">Краткое письмо со ссылкой</option>
-                <option value="full">Полный ответ со ссылкой</option>
+                <option value="full" disabled={Boolean(recipientPath.length)}>Полный ответ со ссылкой</option>
               </select>
             </label>
           </div>}
@@ -245,7 +289,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
         <footer className="activity-actions activity-dialog-actions">
           <button type="button" className="app-button" onClick={onClose} disabled={save.isPending}>Отмена</button>
           {step > 0 && <button type="button" className="app-button" disabled={save.isPending} onClick={() => changeStep(step - 1)}>Назад</button>}
-          <button type="submit" className="button-primary" disabled={save.isPending}>
+          <button type="submit" className="button-primary" disabled={save.isPending || loadingRequiredFields}>
             {step < steps.length - 1 ? "Далее" : save.isPending ? "Сохранение…" : "Сохранить правило"}
           </button>
         </footer>

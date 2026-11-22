@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { claimAnnouncementPrompt, listAnnouncementPrompts, type AnnouncementPrompt } from "../../entities/announcement/promptApi";
 import { notificationStatusEvent } from "../../entities/notification/useNotificationActions";
 
-const openDialogSelector = 'dialog[open], [role="dialog"][aria-modal="true"]';
+const openDialogSelector = 'dialog[open], [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
 
 function isEligible(prompt: AnnouncementPrompt) {
-  const expired = prompt.expires_at && Date.parse(prompt.expires_at) <= Date.now();
-  return !expired && !prompt.acknowledged_at && (!prompt.read_at || prompt.require_acknowledgement);
+  const withinDeadline = prompt.expires_at === null || Date.parse(prompt.expires_at) > Date.now();
+  return withinDeadline && !prompt.acknowledged_at && (!prompt.read_at || prompt.require_acknowledgement);
 }
 
 export function useAnnouncementPrompts(userId: string) {
@@ -27,6 +27,22 @@ export function useAnnouncementPrompts(userId: string) {
     let busy = false;
     let refreshRequested = false;
     let timer: number;
+    let deferredClaim: string | null = null;
+    let dialogObserver: MutationObserver | undefined;
+    function modalBlocked() {
+      if (!document.querySelector(openDialogSelector)) return false;
+      if (!dialogObserver) {
+        dialogObserver = new MutationObserver(() => {
+          if (document.querySelector(openDialogSelector)) return;
+          dialogObserver?.disconnect();
+          dialogObserver = undefined;
+          void refresh();
+        });
+        dialogObserver.observe(document.body, { subtree: true, childList: true, attributes: true,
+          attributeFilter: ["open", "role", "aria-modal"] });
+      }
+      return true;
+    }
     // A read can be cancelled safely. Only claim after a fresh audience check while this session is active.
     async function refresh() {
       if (signal.aborted || document.hidden) return;
@@ -34,23 +50,30 @@ export function useAnnouncementPrompts(userId: string) {
       busy = true;
       window.clearTimeout(timer);
       try {
-        const rows = await listAnnouncementPrompts(visible.current.map(item => item.id), signal);
+        const ids = visible.current.map(item => item.id);
+        if (deferredClaim) ids.push(deferredClaim);
+        const rows = await listAnnouncementPrompts(ids, signal);
         if (signal.aborted || document.hidden) return;
         const eligible = rows.filter(isEligible);
         const next = visible.current.flatMap(item => eligible.filter(row => row.id === item.id && row.display_mode === item.display_mode));
         if (next.length || visible.current.length) update(next);
         if (entryModalId.current === undefined) {
-          entryModalId.current = document.querySelector(openDialogSelector) ? null :
-            eligible.find(row => row.display_mode === "modal" && !row.presented_at)?.id ?? null;
+          entryModalId.current = eligible.find(row => row.display_mode === "modal" && !row.presented_at)?.id ?? null;
         }
         for (const row of eligible) {
-          if (row.presented_at || visible.current.some(item => item.display_mode === row.display_mode)) continue;
-          if (row.display_mode === "modal" && (row.id !== entryModalId.current || document.querySelector(openDialogSelector))) continue;
+          if (visible.current.some(item => item.display_mode === row.display_mode)) continue;
+          const modal = row.display_mode === "modal";
+          if (row.presented_at && row.id !== deferredClaim) continue;
+          if (modal && (row.id !== entryModalId.current || modalBlocked())) continue;
           if (signal.aborted || document.hidden) break;
-          if (await claimAnnouncementPrompt(row, signal) && !signal.aborted && isEligible(row)) {
-            update([...visible.current, row]);
-            if (row.display_mode === "modal") entryModalId.current = null;
+          const claimed = row.id === deferredClaim || await claimAnnouncementPrompt(row, signal);
+          if (!claimed || signal.aborted || !isEligible(row)) continue;
+          if (modal && (modalBlocked() || document.hidden)) {
+            deferredClaim = row.id;
+            continue;
           }
+          update([...visible.current, row]);
+          if (modal) { entryModalId.current = null; deferredClaim = null; }
         }
       } catch {
         // The center reports feed errors. Retry supplemental displays on focus and the next poll.
@@ -71,6 +94,7 @@ export function useAnnouncementPrompts(userId: string) {
     window.addEventListener(notificationStatusEvent, onStatusChange);
     return () => {
       controller.abort();
+      dialogObserver?.disconnect();
       window.clearTimeout(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
