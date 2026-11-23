@@ -1,14 +1,22 @@
 import { createDecipheriv } from "node:crypto";
 
 export function parsePublicAppOrigin(value) {
+  const url = String(value ?? "").trim();
   // Keep the origin passed to process_automations within the database contract.
-  if (!value || !/^https?:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?\/?$/.test(value)) return null;
+  if (!/^https?:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?\/?$/.test(url)) return null;
   try {
-    const { origin, port } = new URL(value);
+    const { origin, port } = new URL(url);
     return port !== "0" && origin.length <= 300 ? origin : null;
   } catch {
     return null;
   }
+}
+
+export function parseBoundedInteger(value, fallback, min, max) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed !== 0
+    ? Math.min(max, Math.max(min, Math.trunc(parsed)))
+    : fallback;
 }
 
 export function decryptPassword(serialized, base64Key) {
@@ -61,7 +69,7 @@ export function toPublicSmtpError(error) {
     || message.includes("certificate") || message.includes("self-signed")) {
     return "Не удалось проверить сертификат SMTP-сервера. Проверьте сертификат или включите «Не проверять сертификат сервера» в настройках SMTP.";
   }
-  if (message.includes("certificate") || message.includes("tls") || message.includes("ssl")) {
+  if (message.includes("tls") || message.includes("ssl")) {
     return "Не удалось установить защищённое SMTP-соединение; проверьте порт и режим шифрования";
   }
   if (["ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "ESOCKET"].includes(code)) {

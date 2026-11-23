@@ -1517,6 +1517,25 @@ describe("SurveyBuilder", () => {
     });
   });
 
+  it("keeps the draft and hides internal PostgREST errors", async () => {
+    createSurveyMutateAsync.mockRejectedValueOnce({
+      code: "23514",
+      message: 'new row violates check constraint "forms_schema_check"',
+    });
+    renderBuilder();
+    await waitFor(() => expect(creatorInstances).toHaveLength(1));
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+    const dialog = within(await screen.findByRole("dialog", { name: "Настройки формы" }));
+    await userEvent.selectOptions(dialog.getByLabelText("Тип формы"), "monitoring");
+    await userEvent.selectOptions(dialog.getByLabelText("Основание формы"), "order");
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+      "Не удалось сохранить форму. Несохранённые изменения остались в редакторе.", "error",
+    ));
+    expect(dialog.getByLabelText("Тип формы")).toHaveValue("monitoring");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("shows empty form metadata selects with visual placeholders instead of placeholder options", async () => {
     const appCss = readAppCss();
 

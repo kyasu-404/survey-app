@@ -92,7 +92,7 @@ export function ShareFormModal({ form, initialTab = "link", onClose }: {
       </div>
       <SectionTabs id="form-share" label="Способ поделиться" tabs={[
         { value: "link", label: "Ссылка" }, { value: "qr", label: "QR-код" }, { value: "embed", label: "Код для сайта" }, ...(isAuthor ? [{ value: "mail" as const, label: "Рассылка" }] : []),
-      ]} value={tab} onChange={next => { if (mailBusy) return; setTab(next); if (next === "mail") setMailVisited(true); }} />
+      ]} value={tab} disabled={mailBusy} onChange={next => { setTab(next); if (next === "mail") setMailVisited(true); }} />
       {!form.is_public && <p className="dashboard-share-notice">Форма закрыта. Откройте её для приёма ответов, чтобы посетители могли её заполнить.</p>}
       <div className="dashboard-share-panel" role="tabpanel" id="form-share-panel-link" aria-labelledby="form-share-tab-link" hidden={tab !== "link"}>
         <label className="dashboard-share-field">

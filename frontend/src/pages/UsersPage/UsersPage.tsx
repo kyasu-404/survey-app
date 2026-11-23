@@ -100,18 +100,18 @@ export default function UsersPage() {
       </div>
 
       <Presence kind="modal">{actions.isCreateUserOpen && (
-        <CreateUserForm isCreatePending={actions.createUserPending} isPasswordValid={actions.isPasswordValid}
+        <CreateUserForm isCreatePending={actions.createUserPending} passwordError={actions.newPasswordError}
           newUser={actions.newUser} onCreateUser={() => void actions.onCreateUser()}
           onCancel={() => actions.setIsCreateUserOpen(false)} setNewUser={actions.setNewUser} />
       )}</Presence>
 
       <Presence kind="modal">{actions.passwordModal && (
         <PasswordModal
-          isPasswordValid={actions.isModalPasswordValid}
+          passwordError={actions.modalPasswordError}
           isPending={actions.updatePasswordPending}
           modal={actions.passwordModal}
           onCancel={() => actions.setPasswordModal(null)}
-          onChangePassword={() => void actions.onChangePassword()}
+          onChangePassword={actions.onChangePassword}
           onPasswordChange={actions.updatePasswordModalValue}
         />
       )}</Presence>

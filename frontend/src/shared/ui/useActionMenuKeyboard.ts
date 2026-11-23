@@ -22,6 +22,12 @@ export function useActionMenuKeyboard(open: boolean, onOpen: () => void, onClose
   }
 
   function menuKeyDown(event: KeyboardEvent) {
+    if (event.key === " " && event.target instanceof HTMLAnchorElement && event.target.matches('a[href][role="menuitem"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat && event.target.matches(itemSelector)) event.target.click();
+      return;
+    }
     if (event.key === "Escape" || event.key === "Tab") {
       event.stopPropagation();
       if (event.key === "Escape") event.preventDefault();

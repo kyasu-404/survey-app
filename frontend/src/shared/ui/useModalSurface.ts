@@ -1,30 +1,36 @@
 import { lockBodyScroll } from "./lockBodyScroll";
 import { useEffect, useRef } from "react";
 
+const controlsSelector = "button, a[href], input, select, textarea, details > summary:first-of-type, [tabindex]";
+const hiddenSelector = '[hidden], [inert], [aria-hidden="true"], details:not([open]) > :not(summary:first-of-type)';
+
 export function useModalSurface() {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
+    if (!element) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    element?.showModal();
+    if (!element.open) element.showModal();
     const unlock = lockBodyScroll();
     const keepFocus = (event: KeyboardEvent) => {
-      if (event.key !== "Tab" || !element) return;
-      const controls = Array.from(element.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]',
-      )).filter(control => control.tabIndex >= 0 && control.getClientRects().length > 0 && !control.closest('[hidden], [inert], [aria-hidden="true"]'));
+      if (event.key !== "Tab" || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const controls = Array.from(element.querySelectorAll<HTMLElement>(controlsSelector)).filter(control =>
+        control.tabIndex >= 0 && !control.matches(":disabled") && !control.closest(hiddenSelector)
+        && control.getClientRects().length > 0 && getComputedStyle(control).visibility === "visible",
+      );
       const first = controls[0];
       const last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault(); last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault(); first?.focus();
+      const active = document.activeElement;
+      if (!first || active === element || active === (event.shiftKey ? first : last)) {
+        event.preventDefault();
+        const target = event.shiftKey ? last : first;
+        (target ?? element).focus();
       }
     };
-    element?.addEventListener("keydown", keepFocus);
+    element.addEventListener("keydown", keepFocus);
     return () => {
-      element?.removeEventListener("keydown", keepFocus);
-      element?.close();
+      element.removeEventListener("keydown", keepFocus);
+      if (element.open) element.close();
       unlock();
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };

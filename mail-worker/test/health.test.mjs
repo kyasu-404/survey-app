@@ -32,8 +32,23 @@ test("health reports poll errors even while the worker is busy", () => {
   }, now, 3_000), false);
   assert.equal(isWorkerHealthy({
     lastSuccessfulPollAt: "2026-08-07T09:59:59.000Z",
+    lastMailProgressAt: "2026-08-07T09:59:59.000Z",
     lastAutomationPollAt: processed,
     lastError: null,
     busy: true,
   }, now, 3_000), true);
+});
+
+test("a busy poll with no recent mail progress becomes unhealthy", () => {
+  const now = Date.parse("2026-08-07T10:00:00.000Z");
+  const state = {
+    busy: true,
+    lastSuccessfulPollAt: "2026-08-07T09:55:00.000Z",
+    lastMailProgressAt: "2026-08-07T09:58:45.000Z",
+    lastAutomationPollAt: processed,
+  };
+  assert.equal(isWorkerHealthy(state, now, 3_000), true);
+  assert.equal(isWorkerHealthy({ ...state, lastMailProgressAt: "2026-08-07T09:57:59.000Z" }, now, 3_000), false);
+  assert.equal(isWorkerHealthy({ ...state, lastMailProgressAt: null }, now, 3_000), false);
+  assert.equal(isWorkerHealthy({ ...state, lastAutomationPollAt: "2026-08-07T09:58:45.000Z" }, now, 3_000), false);
 });

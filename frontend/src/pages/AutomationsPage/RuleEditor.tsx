@@ -1,7 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createAuthCacheGuard } from "../../app/providers/authCache";
 import { getAutomationFields, saveAutomationRule, type AutomationForm } from "../../entities/automation/api";
 import { automationEvents, type AutomationEvent, type AutomationRule, type Condition, type EmailAction, type RuleConfig } from "../../entities/automation/model";
+import { getFormOrganizations } from "../../entities/organization/api";
+import { getOrganizationDisplayName, ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { getErrorMessage } from "../../shared/lib/error";
 import { Icon } from "../../shared/ui/Icon";
@@ -29,11 +32,16 @@ function displayPeriod(minutes?: number | null) {
   return value % 1440 === 0 ? 1440 : value % 60 === 0 ? 60 : 1;
 }
 
+function requiresConditions(event: AutomationEvent) {
+  return event === "matching_count" || event === "matching_share";
+}
+
 type Props = { userId: string; form: AutomationForm | null; rule: AutomationRule | null; onClose: () => void; onSaved: (id: string) => void };
 
-type RuleField = "name" | "threshold" | "period" | "schedule" | "recipients" | "recipientPath" | "subject" | "body" | "mode" | RuleConditionField;
+type RuleField = "name" | "threshold" | "period" | "schedule" | "conditions" | "recipients" | "recipientPath" | "subject" | "body" | "mode" | RuleConditionField;
 
 export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
+  const queryClient = useQueryClient();
   const dialog = useModalSurface();
   const [name, setName] = useState(rule?.name ?? "");
   const [description, setDescription] = useState(rule?.description ?? "");
@@ -53,7 +61,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
     formatDateTimeLocalValue(new Date(Date.now() + 60_000).toISOString()));
   const [matchMode, setMatchMode] = useState(rule?.match_mode ?? "all");
   const [conditions, setConditions] = useState<Condition[]>(rule?.conditions ?? []);
-  const [conditionsOpen, setConditionsOpen] = useState(() => Boolean(rule?.conditions.length));
+  const [conditionsOpen, setConditionsOpen] = useState(() => Boolean(rule && (rule.conditions.length || requiresConditions(rule.event_type))));
   const backdropPressed = useRef(false);
   const [recipients, setRecipients] = useState(rule?.action_config.recipients.join(", ") ?? "");
   const [recipientPath, setRecipientPath] = useState(rule?.action_config.recipientPath ?? []);
@@ -95,15 +103,30 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
     enabled: Boolean(formId),
   });
   const fields = questions.data ?? [];
-  const recipientFields = fields.filter(field => field.type === "organization" && field.path.length === 1);
+  const organizationFields = fields.filter(field => field.type === ORGANIZATION_QUESTION_TYPE);
+  const recipientFields = organizationFields.filter(field => field.path.length === 1);
+  const usesOrganization = conditions.some(condition =>
+    organizationFields.some(field => fieldKey(field.path) === fieldKey(condition.path)));
+  const organizations = useQuery({
+    queryKey: ["automation-organizations", userId, formId],
+    queryFn: ({ signal }) => getFormOrganizations(formId!, signal),
+    enabled: Boolean(formId) && step === 1 && usesOrganization,
+  });
+  const organizationChoices = organizations.data?.map(org => ({ value: org.id, text: getOrganizationDisplayName(org) })) ?? [];
+  const conditionFields = fields.map(field => field.type === ORGANIZATION_QUESTION_TYPE
+    ? { ...field, choices: organizationChoices } : field);
   const requiredFieldsUnavailable = Boolean(formId) && (
-    (step === 1 && conditions.length > 0 && questions.isPending) ||
+    (step === 1 && conditions.length > 0 && (questions.isPending || (usesOrganization && !organizations.isSuccess))) ||
     (step === 2 && recipientPath.length > 0 && !questions.isSuccess)
   );
   const needsThreshold = ["response_count", "matching_count", "matching_share"].includes(event);
   const needsInterval = event === "inactivity" || event === "recurring";
   const needsDate = event === "date" || event === "recurring";
-  const save = useMutation({ mutationFn: (config: RuleConfig) => saveAutomationRule(rule?.id ?? null, config), onSuccess: onSaved });
+  const needsConditions = Boolean(formId) && requiresConditions(event);
+  const save = useMutation({
+    mutationFn: (config: RuleConfig) => saveAutomationRule(rule?.id ?? null, config),
+    onMutate: () => createAuthCacheGuard(queryClient),
+  });
 
   const addresses = [...new Set(recipients.toLowerCase().split(/[\s,;]+/).filter(Boolean))];
   const recipientLimit = recipientPath.length ? 49 : 50;
@@ -154,8 +177,13 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
         setConditionsOpen(true);
         return;
       }
+      if (needsConditions && !conditions.length) {
+        setConditionsOpen(true);
+        invalid("conditions", "Добавьте хотя бы одно условие.");
+        return;
+      }
       for (const [index, condition] of cleanConditions.entries()) {
-        const error = conditionError(condition, fields);
+        const error = conditionError(condition, conditionFields);
         if (error) {
           setConditionsOpen(true);
           invalid(`condition-${index}-${error.field}`, error.message);
@@ -205,7 +233,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
       threshold: needsThreshold ? Number(threshold) : null, interval_minutes: needsInterval ? Number(period) * periodUnit : null,
       scheduled_at: scheduledIso,
       action_config: { recipients: addresses, recipientPath: recipientPath.length ? recipientPath : undefined, subject, body, mode },
-    });
+    }, { onSuccess: (id, _, isCurrentAuth) => { if (isCurrentAuth?.()) onSaved(id); } });
   }
 
   const saveError = getErrorMessage(save.error, "Не удалось сохранить правило");
@@ -260,7 +288,11 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
           </div>}
           {step === 1 && <div className="rule-step-fields">
             <label className="activity-field">Когда срабатывает правило
-              <select value={event} onChange={(change) => setEvent(change.target.value as AutomationEvent)}>
+              <select value={event} onChange={(change) => {
+                const next = change.target.value as AutomationEvent;
+                setEvent(next);
+                if (requiresConditions(next)) setConditionsOpen(true);
+              }}>
                 {Object.entries(automationEvents).filter(([id]) => formId || id === rule?.event_type
                   || (id !== "matching_count" && id !== "matching_share")).map(([id, label]) => <option value={id} key={id}>{label}</option>)}
               </select>
@@ -301,14 +333,23 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
             {event === "inactivity" && <p className="activity-muted">Период отсчитывается с включения правила или поступления последнего нового ответа.</p>}
             {formId && <details className="activity-variables rule-conditions" open={conditionsOpen}
               onToggle={event => setConditionsOpen(event.currentTarget.open)}>
-              <summary>Дополнительные условия{conditions.length > 0 && ` (${conditions.length})`}</summary>
+              <summary {...ruleErrorAttributes(errorFor("conditions"))}>
+                {needsConditions ? "Условия" : "Дополнительные условия"}{conditions.length > 0 && ` (${conditions.length})`}
+              </summary>
               <div className="rule-step-fields">
-                <p className="activity-muted">Без условий учитываются все ответы формы.</p>
+                <RuleFieldErrorMessage error={errorFor("conditions")} />
+                {!needsConditions && <p className="activity-muted">Без условий учитываются все ответы формы.</p>}
                 {questions.isPending && <p className="activity-muted">Загрузка вопросов…</p>}
                 {questions.isError && <div className="activity-error" role="alert">
                   Не удалось загрузить вопросы. <button type="button" className="app-button" onClick={() => void questions.refetch()}>Повторить</button>
                 </div>}
-                {questions.isSuccess && (fields.length || conditions.length ? <RuleConditions fields={fields} conditions={conditions} mode={matchMode}
+                {usesOrganization && organizations.isPending && <p className="activity-muted" role="status">Загрузка справочника организаций…</p>}
+                {usesOrganization && organizations.isError && <div className="activity-error" role="alert">
+                  Не удалось загрузить организации. <button type="button" className="app-button" onClick={() => void organizations.refetch()}>Повторить</button>
+                </div>}
+                {usesOrganization && organizations.isSuccess && !organizationChoices.length &&
+                  <p className="activity-muted">В справочнике нет доступных организаций для этой формы.</p>}
+                {questions.isSuccess && (conditionFields.length || conditions.length ? <RuleConditions fields={conditionFields} conditions={conditions} mode={matchMode}
                   errorFor={errorFor} onMode={setMatchMode} onConditions={next => { setConditions(next); setValidationError(null); }} /> : <p className="activity-muted">В форме пока нет вопросов для условий.</p>)}
                 {["date", "recurring", "inactivity"].includes(event) && conditions.length > 0 &&
                   <p className="activity-muted">Для письма используется последний ответ, который подходит под условия.</p>}

@@ -54,13 +54,24 @@ export function RuleHistory({ ruleId, userId }: { ruleId: string; userId: string
     initialPageParam: undefined as TimelineCursor | undefined,
     queryFn: ({ pageParam, signal }) => listAutomationRuns(ruleId, pageParam, signal),
     getNextPageParam: (last) => last.next,
-    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: ({ state }) => {
+      if (state.status !== "success" || !state.data) return false;
+      const pages = state.data.pages;
+      return !pages[0]?.items.length || pages.some(page => page.items.some(
+        run => run.status === "pending" || run.status === "queued",
+      )) ? 10_000 : false;
+    },
   });
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
   return <section aria-labelledby="rule-history-heading" className="automation-section">
-    <h2 id="rule-history-heading">История срабатываний</h2>
+    <header className="activity-heading">
+      <h2 id="rule-history-heading">История срабатываний</h2>
+      {history.isSuccess && <button type="button" className="app-button" disabled={history.isFetching}
+        onClick={() => void history.refetch()}>Обновить историю</button>}
+    </header>
     {history.isPending && <Skeleton className="activity-skeleton" />}
-    {history.isError && <div className="activity-state" role="alert">
+    {history.isError && !history.isFetchNextPageError && <div className="activity-state" role="alert">
       <p>Не удалось загрузить историю.</p>
       <button type="button" className="app-button" onClick={() => void history.refetch()}>Повторить</button>
     </div>}
@@ -68,7 +79,11 @@ export function RuleHistory({ ruleId, userId }: { ruleId: string; userId: string
     {runs.length > 0 && <ul className="automation-cards">
       {runs.map((run) => <RunCard key={run.id} run={run} />)}
     </ul>}
-    {history.hasNextPage && <button type="button" className="app-button activity-more" disabled={history.isFetching}
+    {history.isFetchNextPageError && <div className="activity-state" role="alert">
+      <p>Не удалось загрузить следующую страницу истории.</p>
+      <button type="button" className="app-button" disabled={history.isFetching} onClick={() => void history.fetchNextPage()}>Повторить</button>
+    </div>}
+    {history.hasNextPage && !history.isFetchNextPageError && <button type="button" className="app-button activity-more" disabled={history.isFetching}
       onClick={() => void history.fetchNextPage()}>Показать ещё</button>}
   </section>;
 }

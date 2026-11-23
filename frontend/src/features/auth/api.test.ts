@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { login } from "./api";
+import { RequestTimeoutError } from "../../shared/api/request";
+import { changeOwnPassword, login } from "./api";
 
-const { authLogin, fromProfiles } = vi.hoisted(() => ({
+const { authLogin, fromProfiles, updateCurrentUserPassword } = vi.hoisted(() => ({
   authLogin: vi.fn(),
   fromProfiles: vi.fn(),
+  updateCurrentUserPassword: vi.fn(),
 }));
 
 vi.mock("../../shared/api", () => ({
   apiClient: {
     auth: {
       login: authLogin,
+      updateCurrentUserPassword,
     },
     from: fromProfiles,
   },
@@ -53,5 +56,20 @@ describe("login", () => {
 
     await expect(login("anna@example.test", "password"))
       .resolves.toBe("Анна");
+  });
+});
+
+describe("changeOwnPassword", () => {
+  it("times out an auth request that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      updateCurrentUserPassword.mockReturnValueOnce(new Promise(() => {}));
+      const settled = vi.fn();
+      void changeOwnPassword("current-password", "new-password").then(settled, settled);
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(settled).toHaveBeenCalledWith(expect.any(RequestTimeoutError));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

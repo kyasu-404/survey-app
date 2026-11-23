@@ -250,7 +250,7 @@ describe("UsersPage", () => {
 
     await userEvent.type(screen.getByPlaceholderText("Имя"), "Иван");
     await userEvent.type(screen.getByPlaceholderText("Email"), "ivan@example.com");
-    await userEvent.type(screen.getByPlaceholderText("Минимум 8 символов"), "password123");
+    await userEvent.type(screen.getByPlaceholderText("Минимум 12 символов"), "password1234");
     await userEvent.selectOptions(within(createGrid).getByRole("combobox"), "admin");
     await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
     await userEvent.type(screen.getByRole("searchbox", { name: "Поиск по имени" }), "ма");
@@ -269,7 +269,7 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     expect(screen.getByPlaceholderText("Имя")).toHaveValue("Иван");
     expect(screen.getByPlaceholderText("Email")).toHaveValue("ivan@example.com");
-    expect(screen.getByPlaceholderText("Минимум 8 символов")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Минимум 12 символов")).toHaveValue("");
     expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("ма");
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("disabled");
 
@@ -317,7 +317,7 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
     expect(screen.getByPlaceholderText("Имя")).toHaveValue("");
     expect(screen.getByPlaceholderText("Email")).toHaveValue("");
-    expect(screen.getByPlaceholderText("Минимум 8 символов")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Минимум 12 символов")).toHaveValue("");
     expect(screen.getByRole("searchbox", { name: "Поиск по имени" })).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Фильтр по роли" })).toHaveValue("all");
     expect(screen.getByRole("combobox", { name: "Фильтр по статусу" })).toHaveValue("all");

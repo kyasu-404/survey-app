@@ -50,7 +50,7 @@ test("changes roles through the server-side admin client and rejects self change
   const updateRoleCase = source.match(/case "updateRole":[\s\S]*?default:/);
 
   assert.ok(updateRoleCase, "updateRole action should exist");
-  assert.match(updateRoleCase[0], /if \(payload\.userId === requester\.id\)/);
+  assert.match(updateRoleCase[0], /if \(isSelfRequest\)/);
   assert.match(updateRoleCase[0], /You cannot change your own role/);
   assert.match(updateRoleCase[0], /adminClient[\s\S]*?\.from\("profiles"\)[\s\S]*?\.update\(\{ role: payload\.role \}\)/);
   assert.match(updateRoleCase[0], /\.select\("id"\)[\s\S]*?\.maybeSingle\(\)/);
@@ -65,11 +65,4 @@ test("rolls back a newly created auth user when profile persistence fails", () =
   assert.match(createCase[0], /rollbackError/);
   assert.match(createCase[0], /rolled back/i);
   assert.match(createCase[0], /partially created/i);
-});
-
-test("keeps administrative password resets for other users", () => {
-  const reset = source.match(/case "updatePassword":[\s\S]*?case "setDisabled":/);
-
-  assert.ok(reset);
-  assert.match(reset[0], /if \(payload\.userId === requester\.id\)[\s\S]*?return errorResponse[\s\S]*?adminClient\.auth\.admin\.updateUserById/);
 });

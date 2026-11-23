@@ -105,6 +105,11 @@ begin
 
   perform set_config('request.jwt.claim.sub', admin_one::text, true);
   begin
+    perform public.list_admin_announcements('draft', p_before_id => gen_random_uuid());
+    raise exception 'The admin announcement list accepted an incomplete cursor';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
     perform public.save_announcement(null, null, fields || '{"action_url":"//example.invalid"}', 'publish', null);
     raise exception 'Accepted an unsafe action link';
   exception when invalid_parameter_value then null;

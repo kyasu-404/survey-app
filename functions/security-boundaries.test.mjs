@@ -244,21 +244,99 @@ test("delete-form delegates all references to SQL and removes more than 1000 pat
   }
 });
 
+const administratorId = "ad010000-0000-4000-8000-000000000001";
+const employeeId = "ad010000-0000-4000-8000-000000000002";
+
 test("setDisabled delegates the atomic Auth/profile transition to SQL and rejects invalid input", async () => {
   for (const code of [null, "42501", "P0002", "XX000"]) {
     const calls = [];
     const client = {
-      auth: { getUser: async () => ({ data: { user: { id: "administrator" } } }) },
+      auth: { getUser: async () => ({ data: { user: { id: administratorId } } }) },
       from: () => ({ select() { return this; }, eq() { return this; }, single: async () => ({ data: { role: "admin", is_disabled: false } }) }),
       rpc: async (name, args) => { calls.push({ name, args }); return code ? { error: { code, message: "rejected" } } : { data: true }; },
     };
-    const send = disabled => handlerFor("user-admin", {}, client)(null, "POST", { action: "setDisabled", userId: "target", disabled }, { Authorization: "Bearer test" });
+    const send = disabled => handlerFor("user-admin", {}, client)(null, "POST", { action: "setDisabled", userId: employeeId, disabled }, { Authorization: "Bearer test" });
     assert.equal((await send(true)).status, code === "42501" ? 403 : code === "P0002" ? 404 : code ? 400 : 200);
-    assert.deepEqual(calls, [{ name: "set_employee_disabled", args: { p_user_id: "target", p_disabled: true, p_actor_id: "administrator" } }]);
+    assert.deepEqual(calls, [{ name: "set_employee_disabled", args: { p_user_id: employeeId, p_disabled: true, p_actor_id: administratorId } }]);
     calls.length = 0;
     for (const disabled of ["false", null, undefined, 1]) assert.equal((await send(disabled)).status, 400);
     assert.deepEqual(calls, []);
   }
+});
+
+function userAdminFixture() {
+  const calls = [];
+  const client = {
+    auth: {
+      getUser: async () => ({ data: { user: { id: administratorId } } }),
+      admin: {
+        async createUser(attributes) {
+          calls.push({ action: "create", attributes });
+          return { data: { user: { id: "created-user" } } };
+        },
+        async updateUserById(userId, attributes) {
+          calls.push({ action: "updatePassword", userId, attributes });
+          return {};
+        },
+      },
+    },
+    from: () => ({
+      select() { return this; },
+      eq() { return this; },
+      single: async () => ({ data: { role: "admin", is_disabled: false } }),
+      upsert: async () => ({}),
+    }),
+  };
+  const request = handlerFor("user-admin", {}, client);
+  return { calls, send: payload => request(null, "POST", payload, { Authorization: "Bearer test" }) };
+}
+
+test("updatePassword handles self, another user and invalid reset requests", async () => {
+  const { calls, send } = userAdminFixture();
+  const password = "🔑".repeat(18);
+  const reset = { action: "updatePassword", userId: employeeId, password };
+
+  assert.equal((await send({ ...reset, userId: administratorId })).status, 403);
+  assert.equal((await send({ ...reset, userId: administratorId.toUpperCase() })).status, 403);
+  for (const invalid of [
+    { userId: null }, { userId: [employeeId] }, { userId: "" }, { userId: "invalid-id" },
+    { password: 1234 }, { password: "12345678901" },
+    { password: "🔑".repeat(11) }, { password: "🔑".repeat(19) },
+  ]) {
+    assert.equal((await send({ ...reset, ...invalid })).status, 400, JSON.stringify(invalid));
+  }
+  assert.deepEqual(calls, []);
+
+  const response = await send(reset);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+  assert.deepEqual(calls, [{ action: "updatePassword", userId: employeeId, attributes: { password } }]);
+});
+
+test("create validates the JSON body and user fields before calling Auth", async () => {
+  const { calls, send } = userAdminFixture();
+  const create = { action: "create", name: " Имя ", email: " person@example.test ", password: "123456789012", role: "user" };
+  for (const payload of [
+    null, [], 1, "", { action: null },
+    { ...create, name: true }, { ...create, email: {} }, { ...create, password: null },
+    { ...create, password: "12345678901" }, { ...create, password: "я".repeat(37) },
+  ]) {
+    assert.equal((await send(payload)).status, 400, JSON.stringify(payload));
+  }
+  assert.deepEqual(calls, []);
+
+  const response = await send(create);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { userId: "created-user" });
+  assert.deepEqual(calls, [{
+    action: "create",
+    attributes: {
+      email: "person@example.test",
+      email_confirm: true,
+      password: create.password,
+      user_metadata: { name: "Имя" },
+    },
+  }]);
 });
 
 test("schema settings retain untouched deadlines and limits and reject malformed changes before writing", async () => {

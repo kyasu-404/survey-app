@@ -65,6 +65,17 @@ describe("notification center", () => {
     await waitFor(() => expect(vi.mocked(api.getNotifications).mock.calls.map(call => call[2])).toEqual([undefined, cursor, cursor]));
   });
 
+  it.each(["automation_succeeded", "constructor"])("renders a notification with unrecognized category %s", async (category) => {
+    vi.mocked(api.getNotifications).mockResolvedValue({ items: [{
+      id: "legacy", title: "Результат отправки", message: "Письмо отправлено", category: category as Notification["category"],
+      created_at: "2026-11-22T08:00:00Z", read_at: null, form_id: null, rule_id: null, response_id: null, announcement: null,
+    }], next: undefined });
+    openCenter();
+    const card = await screen.findByRole("article", { name: "Результат отправки" });
+    expect(within(card).getByText("Уведомление")).toBeVisible();
+    expect(within(card).getByText("Письмо отправлено")).toBeVisible();
+  });
+
   it("keeps a read announcement available for explicit acknowledgement and filters the feed", async () => {
     const user = userEvent.setup();
     const item: Notification = { id: "notice", title: "Технические работы", message: "**Пятница**", category: "announcement",

@@ -88,22 +88,25 @@ function AdminAnnouncements({ userId }: { userId: string }) {
         </button>
       </header>
       <SectionTabs id="admin-announcements" label="Статус объявления" tabs={statusTabs} value={status} onChange={setStatus} />
-      <div role="tabpanel" id={"admin-announcements-panel-" + status} aria-labelledby={"admin-announcements-tab-" + status} className="announcement-admin-panel">
-        {list.isPending && <div role="status" aria-label="Загрузка объявлений"><Skeleton className="activity-skeleton" /></div>}
-        {list.isError && <div role="alert" className="activity-state">
-          <p>{getErrorMessage(list.error, "Не удалось загрузить объявления.")}</p>
-          <button type="button" className="app-button" onClick={() => void list.refetch()}>Повторить</button>
-        </div>}
-        {list.isSuccess && !rows.length && <p className="activity-state">{emptyText[status]}</p>}
-        {rows.length > 0 && <ul className="activity-list">{rows.map(row => <AnnouncementRow key={row.id} row={row}
-          disabled={change.isPending} busy={change.isPending && change.variables.row.id === row.id}
-          onEdit={() => setEditor(row)} onChange={action => {
-            if (action === "archive") setArchive(row);
-            else change.mutate({ row, action });
-          }} />)}</ul>}
-        {list.hasNextPage && <button type="button" className="app-button activity-more" disabled={list.isFetching}
-          onClick={() => void list.fetchNextPage()}>{list.isFetchingNextPage ? "Загрузка…" : "Показать ещё"}</button>}
-      </div>
+      {statusTabs.map(({ value }) => <div key={value} role="tabpanel" id={"admin-announcements-panel-" + value}
+        aria-labelledby={"admin-announcements-tab-" + value} className="announcement-admin-panel" hidden={status !== value}>
+        {status === value && <>
+          {list.isPending && <div role="status" aria-label="Загрузка объявлений"><Skeleton className="activity-skeleton" /></div>}
+          {list.isError && <div role="alert" className="activity-state">
+            <p>{getErrorMessage(list.error, "Не удалось загрузить объявления.")}</p>
+            <button type="button" className="app-button" onClick={() => void list.refetch()}>Повторить</button>
+          </div>}
+          {list.isSuccess && !rows.length && <p className="activity-state">{emptyText[status]}</p>}
+          {rows.length > 0 && <ul className="activity-list">{rows.map(row => <AnnouncementRow key={row.id} row={row}
+            disabled={change.isPending} busy={change.isPending && change.variables.row.id === row.id}
+            onEdit={() => setEditor(row)} onChange={action => {
+              if (action === "archive") setArchive(row);
+              else change.mutate({ row, action });
+            }} />)}</ul>}
+          {list.hasNextPage && <button type="button" className="app-button activity-more" disabled={list.isFetching}
+            onClick={() => void list.fetchNextPage()}>{list.isFetchingNextPage ? "Загрузка…" : "Показать ещё"}</button>}
+        </>}
+      </div>)}
     </section>
     {editor && <AnnouncementEditor row={editor === "new" ? null : editor} onClose={() => setEditor(null)} onSaved={finish} onSaveError={refresh} />}
     {archive && <ArchiveDialog row={archive} onCancel={() => setArchive(null)} onConfirm={() => {

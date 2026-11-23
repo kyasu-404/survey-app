@@ -10,12 +10,13 @@ export function AnnouncementPreview({ fields }: { fields: AnnouncementFields }) 
     ...fields, id: "preview", acknowledged_at: null,
     title: fields.title.trim() || "Заголовок объявления",
     message: fields.message.trim() || "Текст объявления",
+    action_url: fields.action_url?.trim() ?? null,
   };
   return <div className="announcement-previews">
     <section>
       <h3>Центр уведомлений</h3>
       <NotificationCard category="announcement" title={prompt.title} unread preview actions={<>
-        <AnnouncementAction actionLabel={fields.action_label} actionUrl={fields.action_url} preview />
+        <AnnouncementAction actionLabel={prompt.action_label} actionUrl={prompt.action_url} preview />
         {fields.require_acknowledgement && <button type="button" disabled className="app-button">Ознакомился</button>}
       </>}>
         <AnnouncementContent message={prompt.message} />

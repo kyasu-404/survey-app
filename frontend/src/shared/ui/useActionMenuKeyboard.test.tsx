@@ -11,6 +11,22 @@ function Menu({ middleDisabled = false }: { middleDisabled?: boolean }) {
   </div>;
 }
 
+it("activates a menu link on Space without scrolling", () => {
+  const onClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement>) => event.preventDefault());
+  function LinkMenu() {
+    const keyboard = useActionMenuKeyboard(true, vi.fn(), vi.fn());
+    return <div ref={keyboard.menu} role="menu" onKeyDown={keyboard.menuKeyDown}>
+      <a role="menuitem" href="/automations" onClick={onClick}>Автоматизации</a>
+    </div>;
+  }
+
+  render(<LinkMenu />);
+  const link = screen.getByRole("menuitem", { name: "Автоматизации" });
+  expect(link).toHaveFocus();
+  expect(fireEvent.keyDown(link, { key: " " })).toBe(false);
+  expect(onClick).toHaveBeenCalledOnce();
+});
+
 it("moves from the menu container to the last or first action according to the arrow", () => {
   render(<Menu />);
   const menu = screen.getByRole("menu");

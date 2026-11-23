@@ -4,13 +4,15 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
-import { getAutomationForm, getAutomationRule, listAutomationRules, setAutomationEnabled, type AutomationFilter, type AutomationForm } from "../../entities/automation/api";
+import { createAuthCacheGuard } from "../../app/providers/authCache";
+import { archiveAutomationRule, getAutomationForm, getAutomationRule, listAutomationRules, setAutomationEnabled, type AutomationFilter, type AutomationForm } from "../../entities/automation/api";
 import { automationEvents, automationKey, type AutomationRule, type AutomationRuleListItem } from "../../entities/automation/model";
 import type { TimelineCursor } from "../../shared/api/timelinePage";
 import { getErrorMessage } from "../../shared/lib/error";
 import { Icon } from "../../shared/ui/Icon";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { RuleEditor } from "./RuleEditor";
 
 import { RuleHistory } from "./RuleHistory";
@@ -22,8 +24,13 @@ function RuleStateButton({ rule, userId }: { rule: AutomationRule; userId: strin
   const { showToast } = useToast();
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => setAutomationEnabled(rule.id, enabled),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: automationKey(userId) }),
-    onError: (error) => showToast(getErrorMessage(error, "Не удалось изменить состояние правила"), "error"),
+    onMutate: () => createAuthCacheGuard(queryClient),
+    onSuccess: (_, __, isCurrentAuth) => {
+      if (isCurrentAuth?.()) return queryClient.invalidateQueries({ queryKey: automationKey(userId) });
+    },
+    onError: (error, _, isCurrentAuth) => {
+      if (isCurrentAuth?.()) showToast(getErrorMessage(error, "Не удалось изменить состояние правила"), "error");
+    },
   });
   const status = rule.enabled ? "Включено" : "Выключено";
   return <button type="button" className="app-button rule-status-button" data-enabled={rule.enabled}
@@ -41,7 +48,7 @@ function RuleCard({ rule, userId }: { rule: AutomationRuleListItem; userId: stri
   return <li className="automation-card">
     <div className="automation-card-heading">
       <h3>{rule.name}</h3>
-      <RuleStateButton rule={rule} userId={userId} />
+      {rule.archived_at ? <span className="activity-status">В архиве</span> : <RuleStateButton rule={rule} userId={userId} />}
     </div>
     {rule.description && <p className="automation-description">{rule.description}</p>}
     <dl className="automation-facts">
@@ -67,10 +74,42 @@ function RuleCard({ rule, userId }: { rule: AutomationRuleListItem; userId: stri
   </li>;
 }
 
+function ArchiveRuleDialog({ name, pending, error, onClose, onConfirm }: {
+  name: string; pending: boolean; error: Error | null; onClose: () => void; onConfirm: () => void;
+}) {
+  const dialog = useModalSurface();
+  return <dialog ref={dialog} className="card modal-card rule-archive-dialog"
+    aria-labelledby="rule-archive-heading" aria-describedby="rule-archive-description"
+    onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
+    <h2 id="rule-archive-heading">Архивировать правило?</h2>
+    <p id="rule-archive-description">Правило «{name}» будет выключено. История срабатываний сохранится.</p>
+    {error && <p className="activity-error" role="alert">{getErrorMessage(error, "Не удалось архивировать правило")}</p>}
+    <div className="activity-actions">
+      <button type="button" className="app-button" disabled={pending} onClick={onClose}>Отмена</button>
+      <button type="button" className="button-primary" disabled={pending} onClick={onConfirm}>
+        {pending && <InlineSpinner />} Архивировать
+      </button>
+    </div>
+  </dialog>;
+}
+
 function AutomationDetail({ ruleId, userId }: { ruleId: string; userId: string }) {
   const [editing, setEditing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const archive = useMutation({
+    mutationFn: () => archiveAutomationRule(ruleId),
+    onMutate: () => createAuthCacheGuard(queryClient),
+    onSuccess: async (_, __, isCurrentAuth) => {
+      if (!isCurrentAuth?.()) return;
+      await queryClient.invalidateQueries({ queryKey: automationKey(userId) });
+      if (isCurrentAuth()) {
+        showToast("Правило архивировано", "success");
+        setArchiving(false);
+      }
+    },
+  });
   const result = useQuery({
     queryKey: [...automationKey(userId), "rule", ruleId],
     queryFn: ({ signal }) => getAutomationRule(userId, ruleId, signal),
@@ -95,17 +134,20 @@ function AutomationDetail({ ruleId, userId }: { ruleId: string; userId: string }
           <p>{rule.form_id ? rule.form?.title ?? "Выбранная форма" : "Все ваши формы"} · {automationEvents[rule.event_type]}</p>
           {rule.description && <p>{rule.description}</p>}
         </div>
-        <div className="activity-actions">
+        {rule.archived_at ? <span className="activity-status">В архиве</span> : <div className="activity-actions">
           <RuleStateButton rule={rule} userId={userId} />
           <button type="button" className="app-button" onClick={() => setEditing(true)}><Icon name="edit" /> Редактировать</button>
-        </div>
+          <button type="button" className="app-button" onClick={() => { archive.reset(); setArchiving(true); }}>Архивировать</button>
+        </div>}
       </header>
       <RuleHistory ruleId={rule.id} userId={userId} />
-      {editing && <RuleEditor userId={userId} rule={rule} form={rule.form_id ? { id: rule.form_id, title: rule.form?.title ?? "Выбранная форма" } : null} onClose={() => setEditing(false)} onSaved={() => {
+      {editing && !rule.archived_at && <RuleEditor userId={userId} rule={rule} form={rule.form_id ? { id: rule.form_id, title: rule.form?.title ?? "Выбранная форма" } : null} onClose={() => setEditing(false)} onSaved={() => {
         void queryClient.invalidateQueries({ queryKey: automationKey(userId) });
         showToast("Правило сохранено", "success");
         setEditing(false);
       }} />}
+      {archiving && <ArchiveRuleDialog name={rule.name} pending={archive.isPending} error={archive.error}
+        onClose={() => setArchiving(false)} onConfirm={() => archive.mutate()} />}
     </>}
   </section>;
 }
@@ -150,12 +192,13 @@ function AutomationList({ userId, form }: { userId: string; form: AutomationForm
         </label>
         <label className="activity-field">Статус
           <select value={filter} onChange={(change) => setFilter(change.target.value as AutomationFilter)}>
-            <option value="all">Все правила</option><option value="enabled">Включённые</option><option value="disabled">Выключенные</option>
+            <option value="all">Вне архива</option><option value="enabled">Включённые</option><option value="disabled">Выключенные</option>
+            <option value="archived">Архивные</option>
           </select>
         </label>
       </div>
       {rules.isPending && <Skeleton className="activity-skeleton" />}
-      {rules.isError && <div className="activity-state" role="alert">
+      {rules.isError && !rules.isFetchNextPageError && <div className="activity-state" role="alert">
         <p>Не удалось загрузить правила.</p>
         <button type="button" className="app-button" onClick={() => void rules.refetch()}>Повторить</button>
       </div>}
@@ -172,7 +215,11 @@ function AutomationList({ userId, form }: { userId: string; form: AutomationForm
       {items.length > 0 && <ul className="automation-cards">
         {items.map((rule) => <RuleCard key={rule.id} rule={rule} userId={userId} />)}
       </ul>}
-      {rules.hasNextPage && <button type="button" className="app-button activity-more" disabled={rules.isFetching}
+      {rules.isFetchNextPageError && <div className="activity-state" role="alert">
+        <p>Не удалось загрузить следующую страницу правил.</p>
+        <button type="button" className="app-button" disabled={rules.isFetching} onClick={() => void rules.fetchNextPage()}>Повторить</button>
+      </div>}
+      {rules.hasNextPage && !rules.isFetchNextPageError && <button type="button" className="app-button activity-more" disabled={rules.isFetching}
         onClick={() => void rules.fetchNextPage()}>Показать ещё</button>}
     </section>
     {creating && <RuleEditor userId={userId} rule={null} form={form} onClose={() => setCreating(false)} onSaved={(id) => {

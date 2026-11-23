@@ -5,13 +5,13 @@ import type { AutomationField, AutomationRule, AutomationRuleListItem, Automatio
 
 type RuleWithRunCount = AutomationRule & { successful_runs: { count: number }[] };
 
-const RULE_COLUMNS = "id,created_at,form_id,name,description,enabled,event_type,threshold,interval_minutes,scheduled_at,match_mode,conditions,action_config,form:forms(title)";
+const RULE_COLUMNS = "id,created_at,archived_at,form_id,name,description,enabled,event_type,threshold,interval_minutes,scheduled_at,match_mode,conditions,action_config,form:forms(title)";
 
 function containsSearch(value: string) {
   return "%" + value.replace(/[\\%_]/g, "\\$&") + "%";
 }
 
-export type AutomationFilter = "all" | "enabled" | "disabled";
+export type AutomationFilter = "all" | "enabled" | "disabled" | "archived";
 
 export async function listAutomationRules(userId: string, formId: string | null, search: string, filter: AutomationFilter, cursor?: TimelineCursor, signal?: AbortSignal) {
   const { data, error } = await runRequest("automations.list", (requestSignal) => {
@@ -20,7 +20,9 @@ export async function listAutomationRules(userId: string, formId: string | null,
     if (formId === null) query.is("form_id", null);
     else query.eq("form_id", formId);
     if (search) query.ilike("name", containsSearch(search));
-    if (filter !== "all") query.eq("enabled", filter === "enabled");
+    if (filter === "archived") query.not("archived_at", "is", null);
+    else query.is("archived_at", null);
+    if (filter === "enabled" || filter === "disabled") query.eq("enabled", filter === "enabled");
     if (cursor) query.or(timelineBefore(cursor));
     return query.order("created_at", { ascending: false }).order("id", { ascending: false })
       .limit(TIMELINE_PAGE_SIZE + 1).abortSignal(requestSignal);
@@ -90,4 +92,10 @@ export async function setAutomationEnabled(id: string, enabled: boolean) {
   const { error } = await runRequest("automations.toggle", (signal) =>
     apiClient.rpc("set_automation_rule_enabled", { p_id: id, p_enabled: enabled }).abortSignal(signal));
   if (error) throw new Error(["22023", "42501"].includes(error.code) && /^[А-ЯЁ]/.test(error.message) ? error.message : "Не удалось изменить состояние правила");
+}
+
+export async function archiveAutomationRule(id: string) {
+  const { error } = await runRequest("automations.archive", (signal) =>
+    apiClient.rpc("archive_automation_rule", { p_id: id }).abortSignal(signal));
+  if (error) throw new Error("Не удалось архивировать правило");
 }

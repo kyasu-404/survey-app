@@ -1,6 +1,7 @@
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import os from "node:os";
-import { parsePublicAppOrigin } from "./config.mjs";
+import { parseBoundedInteger, parsePublicAppOrigin } from "./config.mjs";
 import { createMailPoller, parseMailJobStatus } from "./delivery.mjs";
 import { createSmtpTransportManager } from "./smtpTransport.mjs";
 import { isWorkerHealthy } from "./health.mjs";
@@ -14,11 +15,13 @@ const supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
 const encryptionKey = String(process.env.MAIL_SETTINGS_ENCRYPTION_KEY ?? "");
 const appOrigin = parsePublicAppOrigin(process.env.PUBLIC_APP_URL);
-const workerId = `${os.hostname()}:${process.pid}`;
-const pollIntervalMs = Math.max(1000, Number(process.env.MAIL_WORKER_POLL_INTERVAL_MS) || 3000);
-const concurrency = Math.min(20, Math.max(1, Number(process.env.MAIL_WORKER_CONCURRENCY) || 5));
+const workerId = `${os.hostname()}:${process.pid}:${randomBytes(6).toString("hex")}`;
+const pollIntervalMs = parseBoundedInteger(process.env.MAIL_WORKER_POLL_INTERVAL_MS, 3000, 1000, 2_147_483_647);
+const concurrency = parseBoundedInteger(process.env.MAIL_WORKER_CONCURRENCY, 5, 1, 20);
 const smtpTransports = createSmtpTransportManager({ encryptionKey, concurrency });
-const healthPort = Math.min(65535, Math.max(1, Number(process.env.MAIL_WORKER_HEALTH_PORT) || 8080));
+const healthPort = parseBoundedInteger(process.env.MAIL_WORKER_HEALTH_PORT, 8080, 1, 65535);
+// Allow a claimed batch to finish SMTP and retry its ACKs before Docker stops the container.
+const SHUTDOWN_TIMEOUT_MS = 140_000;
 const cleanupRetentionHours = Math.min(
   720,
   Math.max(
@@ -41,6 +44,7 @@ const cleanupCheckIntervalMs = Math.min(
 const state = {
   startedAt: new Date().toISOString(),
   lastPollAt: null,
+  lastMailProgressAt: null,
   lastSuccessfulPollAt: null,
   lastSuccessAt: null,
   lastError: null,
@@ -125,7 +129,7 @@ async function loadJobStatus(jobId) {
   return parseMailJobStatus(rows);
 }
 
-const poll = createMailPoller({ state, loadSettings, claimJobs, finishJob, loadJobStatus, smtpTransports });
+const mailPoller = createMailPoller({ state, loadSettings, claimJobs, finishJob, loadJobStatus, smtpTransports });
 
 async function cleanupStorage() {
   if (state.cleanupBusy) return;
@@ -181,7 +185,7 @@ const server = http.createServer((request, response) => {
 let activePoll = Promise.resolve();
 function schedulePoll() {
   if (state.busy) return;
-  activePoll = poll();
+  activePoll = mailPoller.poll();
 }
 
 let activeCleanup = Promise.resolve();
@@ -241,13 +245,22 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    setTimeout(() => process.exit(1), 10_000).unref();
+    setTimeout(() => {
+      console.error("mail worker shutdown timed out", { pendingAcknowledgements: state.pendingAcknowledgements });
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS).unref();
     clearInterval(timer);
     clearInterval(automationsTimer);
     clearInterval(cleanupTimer);
     clearInterval(expiredUploadsTimer);
-    await Promise.all([activePoll, activeCleanup, activeAutomations, activeExpiredUploads]);
+    mailPoller.stop();
+    await Promise.all([activePoll.then(mailPoller.flushPending), activeCleanup, activeAutomations, activeExpiredUploads]);
+    const { pendingAcknowledgements } = state;
+    if (pendingAcknowledgements) {
+      console.error("mail worker stopped with pending acknowledgements", { pendingAcknowledgements });
+    }
+    process.exitCode = pendingAcknowledgements ? 1 : 0;
     smtpTransports.close();
-    server.close(() => process.exit(0));
+    server.close();
   });
 }

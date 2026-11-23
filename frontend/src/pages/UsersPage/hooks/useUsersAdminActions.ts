@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createUser,
@@ -10,6 +10,7 @@ import {
 import { useToast } from "../../../app/providers/ToastProvider";
 import { USERS_QUERY_ROOT } from "../../../entities/survey/model/queryKeys";
 import { getErrorMessage } from "../../../shared/lib/error";
+import { getNewPasswordError } from "../../../shared/lib/passwordPolicy";
 import { scheduleQueryInvalidation } from "../../../shared/lib/queryRefresh";
 import type { DeleteUserModalState, NewUserForm, PasswordModalState, RoleChangeModalState } from "../types";
 import { EMPTY_NEW_USER, getUsersPageSessionState, updateUsersPageSessionState } from "../usersPageSessionState";
@@ -101,8 +102,8 @@ export function useUsersAdminActions() {
     },
   });
 
-  const isPasswordValid = useMemo(() => newUser.password.length >= 8, [newUser.password.length]);
-  const isModalPasswordValid = useMemo(() => (passwordModal?.password.length ?? 0) >= 8, [passwordModal?.password.length]);
+  const newPasswordError = getNewPasswordError(newUser.password);
+  const modalPasswordError = passwordModal ? getNewPasswordError(passwordModal.password) : null;
 
   const onCreateUser = async () => {
     if (!newUser.name.trim()) {
@@ -110,8 +111,8 @@ export function useUsersAdminActions() {
       return;
     }
 
-    if (!isPasswordValid) {
-      showToast("Пароль должен быть не короче 8 символов", "error");
+    if (newPasswordError) {
+      showToast(newPasswordError, "error");
       return;
     }
 
@@ -138,17 +139,17 @@ export function useUsersAdminActions() {
     setPasswordModal((current) => (current ? { ...current, password } : current));
   };
 
-  const onChangePassword = async () => {
+  const onChangePassword = () => {
     if (!passwordModal) {
       return;
     }
 
-    if (!isModalPasswordValid) {
-      showToast("Пароль должен быть не короче 8 символов", "error");
+    if (modalPasswordError) {
+      showToast(modalPasswordError, "error");
       return;
     }
 
-    await updateUserPasswordMutation.mutateAsync({
+    updateUserPasswordMutation.mutate({
       userId: passwordModal.userId,
       password: passwordModal.password,
     });
@@ -184,8 +185,8 @@ export function useUsersAdminActions() {
     createUserPending: createUserMutation.isPending,
     deleteUserModal,
     deleteUserPending: deleteUserMutation.isPending,
-    isModalPasswordValid,
-    isPasswordValid,
+    modalPasswordError,
+    newPasswordError,
     isStatusChangePending: setUserDisabledMutation.isPending,
     newUser,
     onChangePassword,

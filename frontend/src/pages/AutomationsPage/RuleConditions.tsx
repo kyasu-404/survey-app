@@ -12,6 +12,7 @@ const operations: Record<ConditionOperation, string> = {
 };
 
 const multiValueFields = new Set(["checkbox", "tagbox", "imagepicker", "ranking"]);
+const organizationOperations = new Set<ConditionOperation>(["eq", "any_of"]);
 
 export function fieldKey(path?: string[]) {
   return path?.length ? JSON.stringify(path) : "";
@@ -41,7 +42,7 @@ function choicesFor(field: AutomationField | undefined) {
   });
 }
 
-type ConditionError = { field: "question" | "value"; message: string };
+type ConditionError = { field: "question" | "operation" | "value"; message: string };
 export type RuleConditionField = `condition-${number}-${ConditionError["field"]}`;
 
 export function conditionError(condition: Condition, fields: AutomationField[]): ConditionError | null {
@@ -51,6 +52,9 @@ export function conditionError(condition: Condition, fields: AutomationField[]):
     field: "question",
     message: condition.path.length ? "Этот вопрос больше недоступен. Выберите другой." : "Выберите вопрос для условия.",
   };
+  if (field.type === "organization" && !organizationOperations.has(op)) {
+    return { field: "operation", message: "Для организации выберите «Равно» или «Один из вариантов»." };
+  }
   if (op === "gt" || op === "lt") {
     return /^[+-]?\d{1,30}([.,]\d{1,30})?$/.test(String(value))
       ? null : { field: "value", message: "Введите число для сравнения." };
@@ -92,6 +96,8 @@ export function RuleConditions({ fields, conditions, mode, errorFor, onMode, onC
     </label>}
     {conditions.map((condition, index) => {
       const currentField = fields.find((field) => fieldKey(field.path) === fieldKey(condition.path));
+      const availableOperations = Object.entries(operations)
+        .filter(([op]) => currentField?.type !== "organization" || organizationOperations.has(op as ConditionOperation));
       const options = choicesFor(currentField);
       const multiple = isMultiple(condition.op);
       const selected = Array.isArray(condition.value) ? condition.value : [];
@@ -100,6 +106,7 @@ export function RuleConditions({ fields, conditions, mode, errorFor, onMode, onC
       const removed = [...new Set(savedOptions.map(conditionValueKey))]
         .filter(value => value && !options.some(option => option.value === value));
       const questionError = errorFor(`condition-${index}-question`);
+      const operationError = errorFor(`condition-${index}-operation`);
       const valueError = errorFor(`condition-${index}-value`);
       return (
         <div key={index} className="activity-condition">
@@ -118,17 +125,20 @@ export function RuleConditions({ fields, conditions, mode, errorFor, onMode, onC
               </select>
             </label>
             <label className="activity-field">Сравнение
-              <select value={condition.op} onChange={(event) => {
+              <select value={condition.op} {...ruleErrorAttributes(operationError)} onChange={(event) => {
                 const op = event.target.value as ConditionOperation;
                 update(index, { ...condition, op, value: isMultiple(op) ? [] : "" });
               }}>
-                {Object.entries(operations).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                {!availableOperations.some(([op]) => op === condition.op) &&
+                  <option value={condition.op} disabled>{operations[condition.op]} · недоступно</option>}
+                {availableOperations.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </select>
             </label>
             <button type="button" className="app-button icon-button" aria-label={"Удалить условие " + (index + 1)}
               onClick={() => onConditions(conditions.filter((_, row) => row !== index))}><Icon name="close" /></button>
           </div>
           <RuleFieldErrorMessage error={questionError} />
+          <RuleFieldErrorMessage error={operationError} />
           {multiple && usesChoices
             ? <fieldset className="activity-choices" tabIndex={valueError ? -1 : undefined} {...ruleErrorAttributes(valueError)}>
               <legend>Варианты ответа</legend>

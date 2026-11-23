@@ -14,7 +14,9 @@ const row = {
   title: "Новое расписание", message: "Подробности", audience: "all", display_mode: "feed",
   action_url: null, action_label: null, require_acknowledgement: false, expires_at: null,
 };
-function renderPage(published: Omit<typeof row, "expires_at"> & { expires_at: string | null } = row) {
+function renderPage(published: Omit<typeof row, "expires_at" | "action_label" | "action_url"> & {
+  expires_at: string | null; action_label: string | null; action_url: string | null;
+} = row) {
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init: RequestInit) => {
     const path = new URL(input).pathname.split("/").pop()!;
@@ -32,6 +34,44 @@ function renderPage(published: Omit<typeof row, "expires_at"> & { expires_at: st
 
 describe("Административные объявления", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("ссылается на существующую панель с каждой вкладки", async () => {
+    const { user } = renderPage();
+    const assertPanels = (tablist: HTMLElement) => {
+      for (const tab of within(tablist).getAllByRole("tab")) {
+        const panel = document.getElementById(tab.getAttribute("aria-controls")!);
+        expect(panel).toHaveAttribute("role", "tabpanel");
+        expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+        expect(panel?.hidden).toBe(tab.getAttribute("aria-selected") === "false");
+      }
+    };
+
+    const statuses = screen.getByRole("tablist", { name: "Статус объявления" });
+    assertPanels(statuses);
+    await user.click(within(statuses).getByRole("tab", { name: "Опубликованные" }));
+    assertPanels(statuses);
+
+    await user.click(await screen.findByRole("button", { name: row.title }));
+    const modes = within(screen.getByRole("dialog")).getByRole("tablist", { name: "Режим редактора" });
+    assertPanels(modes);
+    await user.click(within(modes).getByRole("tab", { name: "Предпросмотр" }));
+    assertPanels(modes);
+  });
+
+  it("показывает в предпросмотре ссылку с пробелами по краям и сохраняет очищенный адрес", async () => {
+    const { user, requests } = renderPage({
+      ...row, display_mode: "banner", action_label: "Документация", action_url: " /preferences ",
+    });
+    await user.click(screen.getByRole("tab", { name: "Опубликованные" }));
+    await user.click(await screen.findByRole("button", { name: row.title }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("tab", { name: "Предпросмотр" }));
+    expect(editor.getAllByText("Документация", { selector: ".announcement-action" })).toHaveLength(2);
+    await user.click(editor.getByRole("button", { name: "Сохранить изменения" }));
+    await waitFor(() => expect(requests.find(r => r.path === "save_announcement")?.body).toMatchObject({
+      p_fields: { action_url: "/preferences" },
+    }));
+  });
 
   it("сохраняет версию и исходную дату публикации при редактировании", async () => {
     const { user, requests } = renderPage();

@@ -29,12 +29,13 @@ export function NotificationCard({
 }: NotificationCardProps) {
   const titleId = useId();
   const Heading = preview ? "h4" : "h2";
+  const knownCategory = Object.prototype.hasOwnProperty.call(categoryIcons, category);
 
   return <article className="notification-card" aria-labelledby={titleId} data-unread={unread}>
     <header className="notification-card-header">
       <div className="notification-card-category">
-        <Icon name={categoryIcons[category]} size={18} />
-        <span>{notificationCategories[category]}</span>
+        <Icon name={knownCategory ? categoryIcons[category] : "notifications"} size={18} />
+        <span>{knownCategory ? notificationCategories[category] : "Уведомление"}</span>
         {unread && <span className="notification-card-unread" role="img" aria-label="Непрочитанное" />}
       </div>
       {(createdAt || unread) && <div className="notification-card-meta">

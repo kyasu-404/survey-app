@@ -1,9 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { changeOwnPassword } from "../../features/auth/api";
+import { getNewPasswordError, NEW_PASSWORD_MIN_LENGTH } from "../../shared/lib/passwordPolicy";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 
-const minimumLength = 12;
-const maximumBytes = 72;
 const fields = [
   { key: "current", label: "Текущий пароль", autoComplete: "current-password" },
   { key: "password", label: "Новый пароль", autoComplete: "new-password" },
@@ -18,12 +17,8 @@ const emptyValues: PasswordValues = { current: "", password: "", confirmation: "
 
 function validatePassword({ current, password, confirmation }: PasswordValues): PasswordIssue | null {
   if (!current) return { field: "current", message: "Укажите текущий пароль." };
-  if (Array.from(password).length < minimumLength) {
-    return { field: "password", message: "Новый пароль должен содержать не менее 12 символов." };
-  }
-  if (new TextEncoder().encode(password).length > maximumBytes) {
-    return { field: "password", message: "Сократите новый пароль: в кодировке UTF-8 он должен занимать не более 72 байт." };
-  }
+  const passwordError = getNewPasswordError(password);
+  if (passwordError) return { field: "password", message: passwordError };
   if (password === current) return { field: "password", message: "Выберите пароль, который отличается от текущего." };
   if (!confirmation) return { field: "confirmation", message: "Повторите новый пароль." };
   if (password !== confirmation) return { field: "confirmation", message: "Пароли не совпадают." };
@@ -108,7 +103,7 @@ export function PasswordSettings() {
             <input id={id} name={key} type="password" autoComplete={autoComplete} value={values[key]}
               required disabled={pending} aria-invalid={fieldError ? true : undefined}
               aria-describedby={fieldError ? id + "-error" : undefined}
-              placeholder={key === "password" ? "Не менее 12 символов" : undefined}
+              placeholder={key === "password" ? `Не менее ${NEW_PASSWORD_MIN_LENGTH} символов` : undefined}
               onChange={event => {
                 const value = event.currentTarget.value;
                 setValues(current => ({ ...current, [key]: value }));

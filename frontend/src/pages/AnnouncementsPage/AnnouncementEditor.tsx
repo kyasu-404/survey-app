@@ -104,8 +104,9 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
         <button type="button" className="app-button icon-button" aria-label="Закрыть" disabled={save.isPending} onClick={onClose}><Icon name="close" /></button>
       </header>
       <SectionTabs id="announcement-editor" label="Режим редактора" tabs={editorTabs} value={tab} onChange={setTab} />
-      <div key={tab} className="activity-editor-body" role="tabpanel" id={"announcement-editor-panel-" + tab} aria-labelledby={"announcement-editor-tab-" + tab}>
-        {tab === "preview" ? <AnnouncementPreview fields={fields} /> : <>
+      <div className="activity-editor-body" role="tabpanel" id="announcement-editor-panel-edit"
+        aria-labelledby="announcement-editor-tab-edit" hidden={tab !== "edit"}>
+        {tab === "edit" && <>
           <fieldset disabled={save.isPending} className="activity-editor-step">
             <legend>Содержание</legend>
             <label className="activity-field">Заголовок
@@ -166,6 +167,10 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
             {(status !== "archived" || expires) && <small className="activity-muted">Время местное.</small>}
           </fieldset>
         </>}
+      </div>
+      <div className="activity-editor-body" role="tabpanel" id="announcement-editor-panel-preview"
+        aria-labelledby="announcement-editor-tab-preview" hidden={tab !== "preview"}>
+        {tab === "preview" && <AnnouncementPreview fields={fields} />}
       </div>
       <footer className="announcement-editor-footer">
         {error && <p className="activity-error activity-dialog-error" role="alert">{error}</p>}

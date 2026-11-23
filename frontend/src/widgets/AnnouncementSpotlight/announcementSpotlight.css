@@ -12,7 +12,10 @@
 .announcement-banner {
   margin-bottom: 14px;
   border-inline-start: 3px solid var(--theme-accent);
-  background: var(--theme-accent-soft);
+}
+.card.announcement-banner {
+  background: var(--theme-card-background);
+  background: color-mix(in srgb, var(--theme-accent) 9%, var(--theme-card-background));
 }
 .announcement-banner .announcement-content {
   max-height: min(32dvh, 16rem);

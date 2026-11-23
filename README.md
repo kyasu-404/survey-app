@@ -46,6 +46,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
 ## Edge Function для админ-операций пользователей
 
 Создание пользователя, удаление, сброс пароля другого пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
+При создании и сбросе пароль должен содержать не менее 12 символов и занимать не более 72 байт в UTF-8.
 
 Цепочка:
 
@@ -206,9 +207,23 @@ Worker атомарно забирает задания через `FOR UPDATE S
 разовой даты, периода тишины и интервала расписания действует отдельная защита от повторов.
 После простоя воркер выполняет последнее пропущенное срабатывание периодического правила.
 
-Для существующей БД примените по порядку ещё не установленные миграции из `database/migrations/`.
-Перед применением `202611221400_automation_review_fixes.sql` штатно остановите
-`mail-worker`, чтобы дать уже начатым отправкам завершиться.
+При обновлении self-hosted Docker скопируйте новую версию Edge Function `user-admin`,
+контекст сборки воркера и Compose-overlay из корня репозитория:
+
+```bash
+cp -R ./functions/user-admin ./supabase/docker/volumes/functions/
+cp -R ./mail-worker ./supabase/docker/
+cp ./mail-worker/docker-compose.mail-worker.yml ./supabase/docker/docker-compose.mail-worker.yml
+```
+
+Проверьте `PUBLIC_APP_URL` в `./supabase/docker/.env`. Перед миграциями остановите
+воркер из каталога `./supabase/docker`, чтобы дать уже начатым отправкам завершиться:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop mail-worker
+```
+
+В существующей БД примените по порядку ещё не установленные миграции из `database/migrations/`:
 
 1. `202611221200_automations_notifications.sql`
 2. `202611221300_announcements.sql`
@@ -217,21 +232,31 @@ Worker атомарно забирает задания через `FOR UPDATE S
 5. `202611231200_review_followup.sql`
 6. `202611231300_notification_center_delivery_events.sql`
 7. `202611231400_default_response_notification_opt_in.sql`
+8. `202611231500_review_regressions.sql`
 
-Затем пересоберите `mail-worker` и frontend. Воркера запускайте с `PUBLIC_APP_URL` и включённым
-SMTP-коннектором в «Администрировании». Воркер обрабатывает даты и сроки форм даже при
+Из `./supabase/docker` пересоздайте Edge Runtime, чтобы применились изменения `user-admin`,
+и пересоберите воркер с обновлённым overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml \
+  up -d --build --force-recreate --no-deps functions mail-worker
+```
+
+Затем пересоберите и опубликуйте frontend. Для отправки писем включите SMTP-коннектор
+в «Администрировании». Воркер обрабатывает даты и сроки форм даже при
 выключенной отправке. Срабатывания правил и успешные отправки видны в истории правил.
 Если почтовый сервер вернул ошибку или подтвердить приёмку не удалось,
 событие отображается в истории правила и в уведомлениях. Воркер не повторяет автоматическое
 письмо после попытки SMTP с неопределённым результатом. Полное письмо содержит текст ответов,
 а вложения и подписи доступны по ссылке в приложении.
 
-### Развёртывание Edge Function вне self-hosted Docker
+### Развёртывание Edge Functions вне self-hosted Docker
 
-Для Supabase CLI разверните функцию и передайте ей те же секреты:
+Через Supabase CLI разверните функции и передайте настройки почты:
 
 ```bash
 supabase functions deploy mail-admin
+supabase functions deploy user-admin
 supabase secrets set \
   MAIL_SETTINGS_ENCRYPTION_KEY="$MAIL_SETTINGS_ENCRYPTION_KEY" \
   PUBLIC_APP_URL="https://forms.example.ru" \

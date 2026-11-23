@@ -8,9 +8,10 @@ type SectionTabsProps<T extends string> = {
   value: T;
   onChange: (value: T) => void;
   compact?: boolean;
+  disabled?: boolean;
 };
 
-export function SectionTabs<T extends string>({ id, label, tabs, value, onChange, compact }: SectionTabsProps<T>) {
+export function SectionTabs<T extends string>({ id, label, tabs, value, onChange, compact, disabled }: SectionTabsProps<T>) {
   function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next: number;
     switch (event.key) {
@@ -21,6 +22,7 @@ export function SectionTabs<T extends string>({ id, label, tabs, value, onChange
       default: return;
     }
     event.preventDefault();
+    if (disabled) return;
     onChange(tabs[next].value);
     document.getElementById(`${id}-tab-${tabs[next].value}`)?.focus();
   }
@@ -29,9 +31,9 @@ export function SectionTabs<T extends string>({ id, label, tabs, value, onChange
     const selected = value === tab.value;
     return <button key={tab.value} type="button" role="tab"
       id={`${id}-tab-${tab.value}`} aria-controls={`${id}-panel-${tab.value}`}
-      aria-selected={selected} tabIndex={selected ? 0 : -1}
+      aria-selected={selected} tabIndex={selected ? 0 : -1} disabled={disabled && !selected}
       className={compact ? "app-button" : selected ? "active" : undefined}
-      onClick={() => onChange(tab.value)} onKeyDown={event => moveTab(event, index)}>
+      onClick={() => { if (!disabled) onChange(tab.value); }} onKeyDown={event => moveTab(event, index)}>
       {tab.label}
     </button>;
   });

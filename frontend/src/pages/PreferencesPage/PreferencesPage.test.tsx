@@ -5,8 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PreferencesPage from "./PreferencesPage";
 
-const { changeOwnPassword } = vi.hoisted(() => ({ changeOwnPassword: vi.fn() }));
-vi.mock("../../features/auth/api", () => ({ changeOwnPassword }));
+const { updateCurrentUserPassword } = vi.hoisted(() => ({ updateCurrentUserPassword: vi.fn() }));
+vi.mock("../../shared/api", () => ({ apiClient: { auth: { updateCurrentUserPassword } } }));
 vi.mock("../../app/providers/AuthProvider", () => ({ useAuth: () => ({ user: { id: "viewer" } }) }));
 vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../entities/notification/api", () => ({
@@ -28,7 +28,7 @@ const securityPath = "/preferences?tab=security";
 
 describe("personal settings", () => {
   beforeEach(() => {
-    changeOwnPassword.mockReset();
+    updateCurrentUserPassword.mockReset();
   });
 
   it("shows notifications first and opens the password form with keyboard navigation", async () => {
@@ -64,11 +64,34 @@ describe("personal settings", () => {
     await user.type(confirmation, "mismatch-password");
     await user.click(submit);
     expect(confirmation).toHaveAccessibleDescription("Пароли не совпадают.");
-    expect(changeOwnPassword).not.toHaveBeenCalled();
+    expect(updateCurrentUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("enforces the UTF-8 limit and explains a rate-limited auth response", async () => {
+    updateCurrentUserPassword.mockResolvedValueOnce({ error: { status: 429 } });
+    const user = renderSettings(securityPath);
+    const current = screen.getByLabelText("Текущий пароль");
+    const password = screen.getByLabelText("Новый пароль", { exact: true });
+    const confirmation = screen.getByLabelText("Повторите новый пароль");
+    const submit = screen.getByRole("button", { name: "Сменить пароль" });
+    const byteLimit = "я".repeat(36);
+    await user.type(current, oldPassword);
+    await user.type(password, byteLimit + "!");
+    await user.type(confirmation, byteLimit + "!");
+    await user.click(submit);
+    expect(password).toHaveAccessibleDescription(/не более 72 байт/);
+    expect(updateCurrentUserPassword).not.toHaveBeenCalled();
+
+    await user.type(password, "{Backspace}");
+    await user.type(confirmation, "{Backspace}");
+    await user.click(submit);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Слишком много попыток.");
+    expect(updateCurrentUserPassword).toHaveBeenCalledWith(oldPassword, byteLimit);
+    expect(submit).toBeEnabled();
   });
 
   it("reports a rejected current password, then changes it and clears the form", async () => {
-    changeOwnPassword.mockRejectedValueOnce({ code: "current_password_invalid" }).mockResolvedValueOnce(undefined);
+    updateCurrentUserPassword.mockResolvedValueOnce({ error: { code: "current_password_invalid" } }).mockResolvedValueOnce({ error: null });
     const user = renderSettings(securityPath);
     const current = screen.getByLabelText("Текущий пароль");
     const password = screen.getByLabelText("Новый пароль", { exact: true });
@@ -85,7 +108,7 @@ describe("personal settings", () => {
     await user.type(current, oldPassword);
     await user.click(submit);
     expect(await screen.findByRole("status")).toHaveTextContent("Пароль изменён.");
-    expect(changeOwnPassword.mock.calls[1]).toEqual([oldPassword, newPassword]);
+    expect(updateCurrentUserPassword.mock.calls[1]).toEqual([oldPassword, newPassword]);
     expect(current).toHaveValue("");
     expect(password).toHaveValue("");
     expect(confirmation).toHaveValue("");

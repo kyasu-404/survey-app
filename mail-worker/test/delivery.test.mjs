@@ -40,7 +40,7 @@ function createFixture({ ids = ["first"], failAck = () => null, send = async () 
       return { async sendMail(message) { await send(message); delivered.push(message.subject); } };
     },
   };
-  const poll = createMailPoller({
+  const { poll } = createMailPoller({
     state,
     smtpTransports,
     logger,
@@ -48,7 +48,7 @@ function createFixture({ ids = ["first"], failAck = () => null, send = async () 
     async loadSettings() { settingsLoads += 1; return settings; },
     async claimJobs() {
       claims += 1;
-      const rows = [...queue.values()].filter((row) => row.status === "queued"
+      const rows = [...queue.values()].filter((row) => (row.status === "queued" && (row.next_attempt_at ?? 0) <= nowMs)
         || (row.status === "processing" && row.locked_at < nowMs - 600_000));
       for (const row of rows) {
         row.status = "processing";
@@ -199,6 +199,63 @@ test("reports a terminal failed ACK conflict without freezing unrelated deliveri
   assert.deepEqual(fixture.acknowledgements.map(({ success }) => success), [true, true, true]);
   assert.equal(fixture.queue.get("unrelated").status, "sent");
   assert.equal(fixture.state.pendingAcknowledgements, 0);
+});
+
+test("drops an accepted ACK after another worker returns its job to the queue", async () => {
+  const now = Date.parse("2026-11-23T09:00:00Z");
+  const fixture = createFixture({
+    nowAt: now, failAck: ({ id, success, attempt }) => id === "first" && success && attempt === 1 ? "before" : null,
+  });
+  const unrelated = { ...fixture.queue.get("first"), id: "unrelated", subject: "unrelated" };
+  await fixture.poll();
+
+  fixture.advance(660_000);
+  Object.assign(fixture.queue.get("first"), { status: "queued", locked_by: null, next_attempt_at: now + 720_000 });
+  fixture.queue.set(unrelated.id, unrelated);
+  await fixture.poll();
+
+  assert.deepEqual(fixture.delivered, ["first", "unrelated"]);
+  assert.equal(fixture.queue.get("first").status, "queued");
+  assert.equal(fixture.queue.get("unrelated").status, "sent");
+  assert.equal(fixture.state.pendingAcknowledgements, 0);
+  assert.equal(fixture.state.lastError, null);
+  assert.equal(fixture.state.lastAcknowledgementConflict?.jobId, "first");
+  assert.equal(fixture.state.lastAcknowledgementConflict?.status, "queued");
+});
+
+test("updates health progress at claim and when a delivery acknowledgement finishes", async () => {
+  const slow = deferred();
+  const fast = deferred();
+  const bothStarted = deferred();
+  let deliveries = 0;
+  let time = Date.parse("2026-11-23T09:00:00Z");
+  const fixture = createFixture({
+    ids: ["slow", "fast"], nowAt: time,
+    async send(message) {
+      if (++deliveries === 2) bothStarted.resolve();
+      await (message.subject === "slow" ? slow.promise : fast.promise);
+    },
+  });
+  const advance = (ms) => {
+    time += ms;
+    fixture.advance(ms);
+    fixture.state.lastAutomationPollAt = new Date(time).toISOString();
+  };
+  const poll = fixture.poll();
+  await bothStarted.promise;
+  try {
+    advance(75_000);
+    assert.equal(isWorkerHealthy(fixture.state, time, 3000), true);
+    fast.resolve();
+    await new Promise(setImmediate);
+    assert.equal(fixture.state.lastMailProgressAt, new Date(time).toISOString());
+    advance(55_000);
+    assert.equal(isWorkerHealthy(fixture.state, time, 3000), true);
+  } finally {
+    fast.resolve();
+    slow.resolve();
+    await poll;
+  }
 });
 
 test("confirms job absence only from a genuine empty status response array", () => {

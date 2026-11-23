@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createCipheriv, randomBytes } from "node:crypto";
 import test from "node:test";
-import { createTransportOptions, decryptPassword, parsePublicAppOrigin, toPublicSmtpError } from "../src/config.mjs";
+import { createTransportOptions, decryptPassword, parseBoundedInteger, parsePublicAppOrigin, toPublicSmtpError } from "../src/config.mjs";
 
 test("uses only HTTP origins supported by automation email links", () => {
   assert.equal(parsePublicAppOrigin("https://forms.example.ru/"), "https://forms.example.ru");
+  assert.equal(parsePublicAppOrigin("  https://forms.example.ru/  "), "https://forms.example.ru");
   assert.equal(parsePublicAppOrigin("http://localhost:5173"), "http://localhost:5173");
   for (const value of [
     "", "forms.example.ru", "ftp://forms.example.ru", "https://user@example.ru",
@@ -12,6 +13,15 @@ test("uses only HTTP origins supported by automation email links", () => {
     "http://localhost:0", "https://forms.example.ru:00000/",
     "https://example.ru?q", "https://example.ru#section", `https://${"a.".repeat(150)}ru`,
   ]) assert.equal(parsePublicAppOrigin(value), null, value);
+});
+
+test("integer settings fall back for non-finite values and stay within operating bounds", () => {
+  for (const input of [undefined, "", "0", "Infinity", "-Infinity", "NaN", "invalid"]) {
+    assert.equal(parseBoundedInteger(input, 5, 1, 20), 5);
+  }
+  assert.equal(parseBoundedInteger("2.9", 5, 1, 20), 2);
+  assert.equal(parseBoundedInteger("-1", 5, 1, 20), 1);
+  assert.equal(parseBoundedInteger("21", 5, 1, 20), 20);
 });
 
 function encryptLikeEdgeFunction(password, key) {

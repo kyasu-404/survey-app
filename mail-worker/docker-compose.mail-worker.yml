@@ -10,6 +10,7 @@ services:
       context: ./mail-worker
     container_name: survey-mail-worker
     restart: unless-stopped
+    stop_grace_period: 145s
     depends_on:
       kong:
         condition: service_healthy

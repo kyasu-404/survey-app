@@ -38,6 +38,7 @@ export type RuleConfig = {
 export type AutomationRule = RuleConfig & {
   id: string;
   created_at: string;
+  archived_at: string | null;
   form: { title: string } | null;
 };
 

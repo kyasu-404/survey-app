@@ -1,4 +1,5 @@
 import { apiClient } from "../../shared/api";
+import { runRequest } from "../../shared/api/request";
 
 export async function login(email: string, password: string) {
   const { data, error } = await apiClient.auth.login(email, password);
@@ -33,6 +34,7 @@ export async function logout() {
 }
 
 export async function changeOwnPassword(currentPassword: string, password: string) {
-  const { error } = await apiClient.auth.updateCurrentUserPassword(currentPassword, password);
+  const { error } = await runRequest("auth.updateCurrentUserPassword", () =>
+    apiClient.auth.updateCurrentUserPassword(currentPassword, password));
   if (error) throw error;
 }

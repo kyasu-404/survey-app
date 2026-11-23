@@ -5,6 +5,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRule, AutomationRun } from "../../entities/automation/model";
 import { countActiveFormRules } from "../../entities/automation/api";
+import { refreshAuthDependentQueries } from "../../app/providers/authCache";
+import { TIMELINE_PAGE_SIZE } from "../../shared/api/timelinePage";
 import AutomationsPage from "./AutomationsPage";
 
 vi.mock("../../shared/config/env", () => ({
@@ -18,6 +20,7 @@ vi.mock("../../app/providers/AuthProvider", () => ({
 vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 const form = { id: "form", title: "Учебная форма" };
+const schoolId = "23628a77-48d0-4667-b6db-601196fde005";
 const failedRun: AutomationRun = {
   id: "run", form_id: form.id, form_title: form.title, response_id: "answer", event_key: "received:answer",
   status: "failed", recipient_count: 3, sent_count: 1, failed_count: 1, cancelled_count: 1,
@@ -31,31 +34,63 @@ const fields = [
   { path: ["consent"], label: "Согласие", type: "boolean", choices: [true, false] },
 ];
 const initialRule: AutomationRule = {
-  id: "rule", created_at: "2026-11-22T09:00:00Z", form_id: form.id, form: { title: form.title },
+  id: "rule", created_at: "2026-11-22T09:00:00Z", archived_at: null, form_id: form.id, form: { title: form.title },
   name: "Правило", description: "", enabled: true, event_type: "response_received",
   threshold: null, interval_minutes: null, scheduled_at: null, match_mode: "all", conditions: [],
   action_config: { recipients: ["owner@example.invalid"], subject: "Ответ", body: "Пришёл ответ", mode: "summary" },
 };
 
-function renderPage(options: { rule?: object; runs?: AutomationRun[]; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void>; fieldsUnavailable?: () => boolean } = {}) {
+function renderPage(options: {
+  rule?: object;
+  runs?: AutomationRun[];
+  entry?: string;
+  accessibleForm?: boolean;
+  fieldsReady?: Promise<void>;
+  fieldsUnavailable?: () => boolean;
+  saveReady?: Promise<void>;
+  paginated?: "automation_rules" | "automation_runs";
+} = {}) {
   let rule = { ...initialRule, ...options.rule };
+  let failNextPage = true;
   const requests: { path: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init?: RequestInit) => {
     const url = new URL(input);
     const path = url.pathname.replace("/rest/v1/", "");
     const body = typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : null;
     requests.push({ path, params: url.searchParams, body });
+    function paginatedResponse<T extends { id: string }>(items: T[]) {
+      if (options.paginated !== path) return Response.json(items);
+      if (!url.searchParams.has("or")) {
+        return Response.json(Array.from({ length: TIMELINE_PAGE_SIZE + 1 }, (_, index) => ({ ...items[0], id: "item-" + index })));
+      }
+      if (failNextPage) {
+        failNextPage = false;
+        return Response.json({ message: "Failed to load page" }, { status: 400 });
+      }
+      return Response.json(items);
+    }
     switch (path) {
       case "forms": return Response.json(options.accessibleForm === false ? [] : [form]);
       case "rpc/automation_form_fields":
         await options.fieldsReady;
         return options.fieldsUnavailable?.() ? Response.json({ message: "Offline" }, { status: 503 }) : Response.json(fields);
-      case "automation_rules":
-        return Response.json(url.searchParams.get("form_id") === "is.null" && rule.form_id ? [] : [
-          { ...rule, successful_runs: [{ count: 3 }] },
-        ]);
-      case "automation_runs": return Response.json(options.runs ?? [failedRun]);
-      case "rpc/save_automation_rule": return Response.json(rule.id);
+      case "rpc/list_form_organizations":
+        return Response.json([{ id: schoolId, organization_type: "school", number: "45", alias: "ГБОУ школа" }]);
+      case "automation_rules": {
+        const archived = url.searchParams.get("archived_at");
+        if (url.searchParams.get("form_id") === "is.null" && rule.form_id ||
+          archived === "is.null" && rule.archived_at || archived === "not.is.null" && !rule.archived_at) {
+          return Response.json([]);
+        }
+        return paginatedResponse([{ ...rule, successful_runs: [{ count: 3 }] }]);
+      }
+      case "automation_runs": return paginatedResponse(options.runs ?? [failedRun]);
+      case "rpc/save_automation_rule":
+        await options.saveReady;
+        return Response.json(rule.id);
+      case "rpc/archive_automation_rule":
+        rule = { ...rule, enabled: false, archived_at: "2026-11-23T10:00:00Z" };
+        return Response.json(null);
       case "rpc/set_automation_rule_enabled":
         rule = { ...rule, enabled: Boolean(body?.p_enabled) };
         return Response.json(null);
@@ -73,8 +108,9 @@ function renderPage(options: { rule?: object; runs?: AutomationRun[]; entry?: st
     </MemoryRouter>
   </QueryClientProvider>;
   const { rerender } = render(page());
-  return { requests, user: userEvent.setup(), switchUser(id: string) {
+  return { client, requests, user: userEvent.setup(), switchUser(id: string) {
     currentUser.id = id;
+    refreshAuthDependentQueries(client);
     rerender(page());
   } };
 }
@@ -368,6 +404,11 @@ describe("AutomationsPage", () => {
     await user.click(editor.getByRole("button", { name: "Далее" }));
     await user.selectOptions(editor.getByLabelText("Когда срабатывает правило"), "matching_share");
     await user.click(editor.getByRole("button", { name: "Далее" }));
+    expect(editor.getByRole("alert")).toHaveTextContent("Добавьте хотя бы одно условие.");
+    await user.click(await editor.findByRole("button", { name: "Добавить условие" }));
+    await user.selectOptions(editor.getByLabelText("Вопрос", { exact: true }), JSON.stringify(["amount"]));
+    await user.type(editor.getByLabelText("Значение", { exact: true }), "5");
+    await user.click(editor.getByRole("button", { name: "Далее" }));
     const subject = editor.getByRole<HTMLInputElement>("textbox", { name: "Тема" });
     await user.click(subject);
     subject.setSelectionRange(0, subject.value.length);
@@ -423,5 +464,76 @@ describe("AutomationsPage", () => {
     expect(status).toHaveTextContent("Включено");
     await user.click(status);
     expect(await screen.findByRole("button", { name: "Статус правила «Правило»: Выключено" })).toBeInTheDocument();
+  });
+
+  it("stores organization IDs selected from the form directory", async () => {
+    const { requests, user } = renderPage({ entry: "/automations/rule" });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    await user.click(editor.getByText("Дополнительные условия"));
+    await user.click(await editor.findByRole("button", { name: "Добавить условие" }));
+    await user.selectOptions(editor.getByLabelText("Вопрос", { exact: true }), JSON.stringify(["school"]));
+    await user.selectOptions(await editor.findByRole("combobox", { name: "Значение" }), schoolId);
+    expect(editor.getByRole<HTMLOptionElement>("option", { name: "ГБОУ школа 45" }).selected).toBe(true);
+    expect(requests.find(({ path }) => path === "rpc/list_form_organizations")?.body).toEqual({ p_form_id: form.id });
+    await user.click(next);
+    expect(editor.getByLabelText("Получатель из ответа")).toBeInTheDocument();
+    await user.click(next);
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.find(({ path }) => path === "rpc/save_automation_rule")?.body?.p_conditions)
+      .toEqual([{ path: ["school"], op: "eq", value: schoolId }]));
+  });
+
+  it("does not handle a completed rule creation in a different login session", async () => {
+    let releaseSave = () => {};
+    const saveReady = new Promise<void>(resolve => { releaseSave = resolve; });
+    const { client, requests, switchUser, user } = renderPage({ saveReady });
+    await user.click(screen.getByRole("button", { name: "Создать правило" }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Сообщать о новых ответах" }));
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    await user.type(editor.getByLabelText(/Адреса получателей/), "owner@example.invalid");
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.some(({ path }) => path === "rpc/save_automation_rule")).toBe(true));
+    switchUser("another-user");
+    releaseSave();
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(showToast).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Автоматизации" })).toBeVisible();
+    expect(requests.some(({ path, params }) => path === "automation_rules" && params.has("id"))).toBe(false);
+  });
+
+  it.each([
+    { path: "automation_rules" as const, entry: "/dashboard/forms/form/automations", message: "Не удалось загрузить следующую страницу правил." },
+    { path: "automation_runs" as const, entry: "/automations/rule", message: "Не удалось загрузить следующую страницу истории." },
+  ])("retries the failed cursor of $path without refetching the first page", async ({ path, entry, message }) => {
+    const { requests, user } = renderPage({ entry, paginated: path });
+    await user.click(await screen.findByRole("button", { name: "Показать ещё" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    const getCursors = () => requests.filter(request => request.path === path).map(request => request.params.get("or"));
+    const [, cursor] = getCursors();
+    expect(cursor).toContain("item-24");
+    await user.click(screen.getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(getCursors()).toEqual([null, cursor, cursor]);
+  });
+
+  it("archives a rule without losing access to its history", async () => {
+    const { requests, user } = renderPage({ entry: "/automations/rule" });
+    await user.click(await screen.findByRole("button", { name: "Архивировать" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Архивировать правило?" }));
+    await user.click(dialog.getByRole("button", { name: "Архивировать" }));
+    expect(await screen.findByText("В архиве")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Редактировать" })).not.toBeInTheDocument();
+    expect(screen.getByText("Ошибка SMTP")).toBeVisible();
+    expect(requests.find(({ path }) => path === "rpc/archive_automation_rule")?.body).toEqual({ p_id: "rule" });
+    await user.click(screen.getByRole("link", { name: "Автоматизации формы" }));
+    expect(await screen.findByText(/Создайте первое правило/)).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("Статус"), "archived");
+    expect(await screen.findByRole("link", { name: /Подробнее.*Правило/ })).toBeVisible();
   });
 });

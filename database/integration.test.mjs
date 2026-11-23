@@ -112,6 +112,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const reviewFollowupMigration = await source("./migrations/202611231200_review_followup.sql");
     const notificationCenterMigration = await source("./migrations/202611231300_notification_center_delivery_events.sql");
     const responseNotificationOptInMigration = await source("./migrations/202611231400_default_response_notification_opt_in.sql");
+    const reviewRegressionsMigration = await source("./migrations/202611231500_review_regressions.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -171,6 +172,24 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         const preferences = await db.query("select muted_categories from public.notification_preferences where user_id in ($1,$2) order by cardinality(muted_categories)", [owner, administrator]);
         assert.deepEqual(preferences.rows.map(row => row.muted_categories), [["response_received"], ["form_status", "response_received"]]);
         assert.equal((await db.query("select count(*)::int n from public.notifications where id=$1", [notice])).rows[0].n, 1);
+
+        const thresholdRule = randomUUID();
+        await db.query(`
+          insert into public.automation_rules(id,user_id,form_id,name,event_type,threshold,match_mode,conditions,action_config)
+          values($1,$2,$3,'Existing numeric threshold','matching_count',6,'all',
+            '[{"path":["amount"],"op":"eq","value":"5.0"}]','{}')
+        `, [thresholdRule, owner, form]);
+        await db.query(`
+          insert into survey_automation.targets(rule_id,form_id,matching_count,count_ready,check_at)
+          values($1,$2,5,true,'2026-11-23T00:00:00Z')
+        `, [thresholdRule, form]);
+        await db.query(reviewRegressionsMigration);
+        const { rows: [thresholdTarget] } = await db.query(`
+          select r.archived_at,r.enabled,t.matching_count,t.count_ready,t.check_at is not null check_retained
+          from survey_automation.targets t join public.automation_rules r on r.id=t.rule_id where t.rule_id=$1
+        `, [thresholdRule]);
+        assert.deepEqual(thresholdTarget, { archived_at: null, enabled: true, matching_count: 0, count_ready: false, check_retained: true });
+        await db.query("delete from public.automation_rules where id=$1", [thresholdRule]);
         await db.query("delete from public.notifications where id=$1", [notice]);
         await db.query("delete from auth.users where id=$1", [administrator]);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
@@ -186,6 +205,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/automation_regressions.sql");
       await runPsql(database, "./tests/automation_review_fixes.sql");
       await runPsql(database, "./tests/announcements.sql");
+      await runPsql(database, "./tests/review_regressions.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }
@@ -239,6 +259,32 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       const deletion = await pending;
       assert.ifError(deletion.error);
       assert.deepEqual(deletion.result.rows[0].result.objectPaths, [editedPath]);
+
+      // A writer waits for form deletion before it holds the rule needed by the cascade.
+      const mailAction = { recipients: ["owner@example.invalid"], subject: "Test", body: "Test", mode: "summary" };
+      for (const enableViaSave of [true, false]) {
+        const deletingForm = randomUUID(), disabledRule = randomUUID();
+        await db.query("insert into public.forms(id,title,author_id,form_type,form_reason,schema) values($1,'Deletion race',$2,'anketa','plan','{}')",
+          [deletingForm, owner]);
+        await db.query(`
+          insert into public.automation_rules(id,user_id,form_id,name,enabled,event_type,match_mode,conditions,action_config)
+          values($1,$2,$3,'Deletion race',false,'response_received','all','[]',$4)
+        `, [disabledRule, owner, deletingForm, mailAction]);
+        await a.query("begin");
+        await a.query("select from public.forms where id=$1 for update", [deletingForm]);
+        await b.query("begin");
+        await b.query("select set_config('request.jwt.claim.sub',$1,true)", [owner]);
+        const enable = enableViaSave
+          ? b.query("select public.save_automation_rule($1,$2,'Deletion race','',true,'response_received',null,null,null,'all','[]',$3)",
+            [disabledRule, deletingForm, mailAction])
+          : b.query("select public.set_automation_rule_enabled($1,true)", [disabledRule]);
+        pending = enable.then(result => ({result}), error => ({error}));
+        await waitForRowLock();
+        await a.query("select public.delete_form_with_files($1,$2)", [deletingForm, owner]);
+        await a.query("commit");
+        assert.equal((await pending).error?.code, "42501", "Rule editing did not handle concurrent form deletion");
+        await b.query("rollback");
+      }
 
       // An edit during catch-up must update the subtotal of the page the worker just committed.
       const countedForm = randomUUID();

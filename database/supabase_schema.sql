@@ -1563,10 +1563,24 @@ begin
   if length(btrim(p_worker_id)) not between 1 and 200 then
     raise exception 'Invalid worker id' using errcode='22023';
   end if;
+
+  -- A worker can lose its last lease before recording a result. Finalize those
+  -- jobs without holding up other workers or increasing their attempt count.
+  with exhausted as (
+    select q.id from public.mail_queue q
+    where q.automation_run_id is null and q.attempts>=q.max_attempts
+      and (q.status='queued' or (q.status='processing' and q.locked_at<now()-interval '10 minutes'))
+    order by q.next_attempt_at,q.created_at,q.id
+    limit least(greatest(p_limit,1),100) for update skip locked
+  )
+  update public.mail_queue q set status='failed',locked_at=null,locked_by=null,
+    last_error=coalesce(q.last_error,'Не удалось подтвердить отправку письма')
+    from exhausted e where q.id=e.id;
+
   return query
   with candidates as (
     select q.id from public.mail_queue q
-    where (
+    where q.attempts<q.max_attempts and (
       (q.status='queued' and q.next_attempt_at<=now()
         and (q.automation_run_id is null or survey_automation.run_is_active(q.automation_run_id)))
       or (q.automation_run_id is null and q.status = 'processing' and q.locked_at<now()-interval '10 minutes')
@@ -3581,9 +3595,13 @@ create table public.automation_rules (
   event_version integer not null default 1,
   delivery_version integer not null default 1,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  archived_at timestamptz,
+  constraint automation_rules_archive_state check (archived_at is null or not enabled)
 );
 create index automation_rules_user_list on public.automation_rules (user_id, created_at desc, id desc);
+create index automation_rules_active_list on public.automation_rules (user_id, created_at desc, id desc)
+  where archived_at is null;
 create index automation_rules_form on public.automation_rules (form_id) where form_id is not null;
 create index automation_rules_all_forms on public.automation_rules (user_id) where form_id is null and enabled;
 
@@ -3605,6 +3623,7 @@ create table public.automation_runs (
   unique (rule_id, event_version, form_id, event_key)
 );
 create index automation_runs_history on public.automation_runs (rule_id, created_at desc, id desc);
+create index automation_runs_succeeded on public.automation_runs (rule_id) where status='succeeded';
 create index automation_runs_pending on public.automation_runs (created_at, id) where status='pending';
 create index automation_runs_form_active on public.automation_runs (form_id) where status in ('pending','queued');
 
@@ -3671,7 +3690,8 @@ create table public.notifications (
 );
 create index notifications_user_list on public.notifications (user_id, created_at desc, id desc);
 create index notifications_user_category on public.notifications (user_id, category, created_at desc, id desc);
-create index notifications_user_unread on public.notifications (user_id, created_at desc, id desc) where read_at is null;
+create index notifications_user_unread on public.notifications (user_id, created_at desc, id desc)
+  where read_at is null and category not in ('automation_triggered', 'automation_succeeded');
 
 alter table public.automation_rules enable row level security;
 alter table public.automation_runs enable row level security;
@@ -3714,13 +3734,16 @@ $$;
 create or replace function public.save_notification_preferences(p_muted_categories text[])
 returns void language plpgsql security definer set search_path = '' as $$
 begin
-  -- Ignore retired categories submitted by a tab opened before the update.
-  p_muted_categories := array_remove(array_remove(p_muted_categories,'automation_triggered'),'automation_succeeded');
-  if p_muted_categories is null or cardinality(p_muted_categories)>4 or array_position(p_muted_categories,null) is not null
-    or not p_muted_categories <@ array['response_received','response_updated','automation_failed','form_status'] then
+  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode='42501'; end if;
+  if p_muted_categories is null or coalesce(array_ndims(p_muted_categories),1)<>1 or exists (
+    select from unnest(p_muted_categories) category where category is null or category not in (
+      'response_received','response_updated','automation_failed','form_status','automation_triggered','automation_succeeded')
+  ) then
     raise exception 'Неизвестный тип уведомлений' using errcode='22023';
   end if;
-  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode='42501'; end if;
+  -- Ignore retired categories submitted by a tab opened before the update.
+  select coalesce(array_agg(distinct category order by category),'{}') into p_muted_categories
+  from unnest(p_muted_categories) category where category not in ('automation_triggered','automation_succeeded');
   insert into public.notification_preferences(user_id,muted_categories) values(auth.uid(),p_muted_categories)
   on conflict (user_id) do update set muted_categories=excluded.muted_categories;
 end;
@@ -3746,15 +3769,16 @@ language sql immutable set search_path = '' as $$
       case when n.node->>'type'='paneldynamic' then n.parent_label || field.label || ' / ' else n.parent_label end,
       n.depth+1
     from nodes n
-    cross join lateral (select coalesce(nullif(n.node->>'valueName',''),n.node->>'name') as key,
-      coalesce(survey_automation.localized_text(n.node->'title'),n.node->>'name') as label) field
+    cross join lateral (select coalesce(nullif(n.node->>'valueName',''),nullif(n.node->>'name','')) as key,
+      coalesce(survey_automation.localized_text(n.node->'title'),nullif(n.node->>'name',''),
+        nullif(n.node->>'valueName','')) as label) field
     cross join lateral jsonb_array_elements(
       (case when jsonb_typeof(n.node->'pages')='array' then n.node->'pages' else '[]'::jsonb end) ||
       (case when jsonb_typeof(n.node->'elements')='array' then n.node->'elements' else '[]'::jsonb end) ||
       (case when n.node->>'type'='paneldynamic' and jsonb_typeof(n.node->'templateElements')='array'
         then n.node->'templateElements' else '[]'::jsonb end)
     ) children(node)
-    where n.depth<32
+    where n.depth<32 and (n.node->>'type' is distinct from 'paneldynamic' or field.key is not null)
   )
   select distinct on (1) parent_path || coalesce(nullif(node->>'valueName',''),node->>'name'),
     parent_label || coalesce(survey_automation.localized_text(node->'title'),node->>'name'),node
@@ -3802,7 +3826,7 @@ begin
 end;
 $$;
 
-create function survey_automation.condition_matches(p_answer jsonb,p_condition jsonb)
+create or replace function survey_automation.condition_matches(p_answer jsonb,p_condition jsonb)
 returns boolean language plpgsql immutable set search_path = '' as $$
 begin
   case p_condition->>'op'
@@ -3811,7 +3835,11 @@ begin
         if jsonb_array_length(p_answer)<>1 then return false; end if;
         p_answer:=p_answer->0;
       end if;
-      return jsonb_typeof(p_answer) in ('string','number','boolean') and p_answer #>> '{}' = p_condition->>'value';
+      return jsonb_typeof(p_answer) in ('string','number','boolean') and (
+        p_answer #>> '{}' = p_condition->>'value' or
+        ((jsonb_typeof(p_answer)='number' or jsonb_typeof(p_condition->'value')='number') and
+          coalesce(survey_automation.number(p_answer)=survey_automation.number(p_condition->'value'),false))
+      );
     when 'gt' then return survey_automation.number(p_answer)>survey_automation.number(p_condition->'value');
     when 'lt' then return survey_automation.number(p_answer)<survey_automation.number(p_condition->'value');
     when 'contains' then return jsonb_typeof(p_answer)='string' and strpos(lower(p_answer #>> '{}'),lower(p_condition->>'value'))>0;
@@ -4014,8 +4042,26 @@ begin
     'body',btrim(p_action->>'body',E' \t\n\r\f\013'),'mode',p_action->>'mode','recipientPath',p_action->'recipientPath'));
   -- Serialize rule changes with new forms so an all-forms rule always gets a target.
   perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||actor::text,0));
+  if p_id is not null then
+    select * into previous from public.automation_rules where id=p_id and user_id=actor;
+    if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
+    if previous.archived_at is not null then raise exception 'Правило в архиве' using errcode='42501'; end if;
+  end if;
+  event_changed:=p_id is null or row(previous.form_id,previous.event_type,previous.threshold,previous.interval_minutes,
+    previous.scheduled_at,previous.match_mode,previous.conditions) is distinct from
+    row(p_form_id,p_event_type,p_threshold,p_interval_minutes,p_scheduled_at,p_match_mode,p_conditions);
+  -- Deletion locks forms before cascading to rules and their targets.
+  perform from public.forms f
+  where f.id in (previous.form_id,p_form_id)
+    or (p_enabled and p_form_id is null and (event_changed or not previous.enabled)
+      and f.author_id=actor and f.form_type<>'template')
+  order by f.id for key share;
+  if p_form_id is not null and not exists (
+    select from public.forms f where f.id=p_form_id and f.author_id=actor and f.form_type<>'template'
+  ) then raise exception 'Выберите свою форму' using errcode='42501'; end if;
+
   if p_id is null then
-    if (select count(*) from public.automation_rules where user_id=actor)>=50 then
+    if (select count(*) from public.automation_rules where user_id=actor and archived_at is null)>=50 then
       raise exception 'На одну учётную запись доступно до 50 правил' using errcode='22023';
     end if;
     insert into public.automation_rules(user_id,form_id,name,description,enabled,event_type,threshold,interval_minutes,
@@ -4023,19 +4069,14 @@ begin
       values(actor,p_form_id,btrim(p_name),p_description,p_enabled,p_event_type,p_threshold,p_interval_minutes,
         p_scheduled_at,p_match_mode,p_conditions,p_action)
       returning * into saved;
-    event_changed:=true;
   else
-    select * into previous from public.automation_rules where id=p_id and user_id=actor for no key update;
-    if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
-    event_changed:=row(previous.form_id,previous.event_type,previous.threshold,previous.interval_minutes,
-      previous.scheduled_at,previous.match_mode,previous.conditions) is distinct from
-      row(p_form_id,p_event_type,p_threshold,p_interval_minutes,p_scheduled_at,p_match_mode,p_conditions);
     update public.automation_rules set form_id=p_form_id,name=btrim(p_name),description=p_description,
       enabled=p_enabled,event_type=p_event_type,threshold=p_threshold,interval_minutes=p_interval_minutes,scheduled_at=p_scheduled_at,
       match_mode=p_match_mode,conditions=p_conditions,action_config=p_action,updated_at=now(),
       event_version=event_version+event_changed::integer,
-      delivery_version=delivery_version+(previous.enabled and not p_enabled)::integer
-      where id=p_id returning * into saved;
+      delivery_version=delivery_version+((previous.enabled and not p_enabled) or previous.action_config is distinct from p_action)::integer
+      where id=p_id and user_id=actor returning * into saved;
+    if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
     if event_changed then delete from survey_automation.targets where rule_id=p_id; end if;
   end if;
   if saved.enabled then
@@ -4053,8 +4094,14 @@ declare current_rule public.automation_rules;
 begin
   if not public.request_is_enabled() or p_enabled is null then raise exception 'Нет доступа' using errcode='42501'; end if;
   perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||auth.uid()::text,0));
-  select * into current_rule from public.automation_rules where id=p_id and user_id=auth.uid() for no key update;
+  select * into current_rule from public.automation_rules where id=p_id and user_id=auth.uid();
   if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
+  if current_rule.archived_at is not null then raise exception 'Правило в архиве' using errcode='42501'; end if;
+  perform from public.forms f
+  where f.id=current_rule.form_id
+    or (p_enabled and not current_rule.enabled and current_rule.form_id is null
+      and f.author_id=current_rule.user_id and f.form_type<>'template')
+  order by f.id for key share;
   if p_enabled and current_rule.form_id is not null and not exists (
     select from public.forms where id=current_rule.form_id and author_id=auth.uid() and form_type<>'template'
   ) then raise exception 'Выберите свою форму' using errcode='42501'; end if;
@@ -4065,11 +4112,35 @@ begin
   end if;
   if p_enabled is distinct from current_rule.enabled then
     update public.automation_rules set enabled=p_enabled,updated_at=now(),delivery_version=delivery_version+(not p_enabled)::integer
-      where id=p_id returning * into current_rule;
+      where id=p_id and user_id=current_rule.user_id returning * into current_rule;
+    if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
     if p_enabled then perform survey_automation.resume_targets(current_rule); end if;
   end if;
 end;
 $$;
+
+create or replace function public.archive_automation_rule(p_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+  current_rule public.automation_rules;
+begin
+  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode='42501'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||actor::text,0));
+  select * into current_rule from public.automation_rules where id=p_id and user_id=actor;
+  if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
+  if current_rule.archived_at is not null then return; end if;
+
+  perform from public.forms where id=current_rule.form_id for key share;
+  update public.automation_rules set enabled=false,archived_at=now(),updated_at=now(),delivery_version=delivery_version+1
+  where id=p_id and user_id=actor;
+  if not found then raise exception 'Правило не найдено' using errcode='42501'; end if;
+  delete from survey_automation.targets where rule_id=p_id;
+end;
+$$;
+
+revoke all on function public.archive_automation_rule(uuid) from public, anon, authenticated;
+grant execute on function public.archive_automation_rule(uuid) to authenticated;
 
 create or replace function survey_automation.stage_run(
   p_rule public.automation_rules,p_form public.forms,p_event_key text,p_response public.responses,
@@ -4283,6 +4354,10 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 declare a public.automation_rules;
 begin
   perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||new.id::text,0));
+  perform from public.forms f
+  where exists (select from public.automation_rules r where r.user_id=new.id and r.enabled
+    and (r.form_id=f.id or (r.form_id is null and f.author_id=new.id and f.form_type<>'template')))
+  order by f.id for key share;
   -- Runs captured before the account was disabled must stay inactive after reactivation.
   for a in update public.automation_rules set delivery_version=delivery_version+1
     where user_id=new.id and enabled returning * loop
@@ -4318,7 +4393,7 @@ $$;
 create trigger automation_form_delete after delete on public.forms
   for each row execute function survey_automation.cancel_deleted_form_runs();
 
-create function survey_automation.process_threshold_checks(p_limit integer)
+create or replace function survey_automation.process_threshold_checks(p_limit integer)
 returns void language plpgsql set search_path = '' as $$
 declare
   batch_size constant integer := 1000;
@@ -4336,7 +4411,8 @@ begin
     from survey_automation.targets t
     join public.automation_rules a on a.id=t.rule_id and a.enabled
     join public.profiles p on p.id=a.user_id and not p.is_disabled
-    where t.check_at is not null
+    join public.forms form on form.id=t.form_id and form.author_id=a.user_id and form.form_type<>'template'
+    where t.check_at is not null and not t.complete
     order by t.check_at,t.rule_id,t.form_id limit least(p_limit,4)
   loop
     -- Match the deletion path's lock order and skip a rule being edited.
@@ -4514,6 +4590,8 @@ alter table public.mail_batches add constraint mail_batches_form_kind check (
 );
 
 alter table public.mail_queue add column automation_run_id uuid references public.automation_runs(id) on delete cascade;
+create index mail_queue_ordinary_exhausted on public.mail_queue (next_attempt_at, created_at, id)
+  where automation_run_id is null and status in ('queued','processing') and attempts>=max_attempts;
 create index mail_queue_automation_run on public.mail_queue (automation_run_id) where automation_run_id is not null;
 create index mail_queue_automation_active on public.mail_queue (created_at,id)
   where automation_run_id is not null and status in ('queued','processing');
@@ -4910,7 +4988,7 @@ begin
 end;
 $$;
 
-create function public.list_admin_announcements(
+create or replace function public.list_admin_announcements(
   p_status text, p_before_at timestamptz default null, p_before_id uuid default null, p_limit integer default 26
 )
 returns table (
@@ -4923,6 +5001,9 @@ begin
   perform survey_announcements.require_admin();
   if p_status is null or p_status not in ('draft', 'scheduled', 'published', 'archived') then
     raise exception 'Неизвестное состояние объявления' using errcode = '22023';
+  end if;
+  if (p_before_at is null) <> (p_before_id is null) then
+    raise exception 'Укажите дату и идентификатор для следующей страницы' using errcode = '22023';
   end if;
 
   return query
@@ -4990,18 +5071,24 @@ create or replace function public.save_announcement(
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare
   target survey_announcements.announcements%rowtype;
-  title_value text := regexp_replace(p_fields->>'title', '^[[:space:]]+|[[:space:]]+$', '', 'g');
-  message_value text := regexp_replace(p_fields->>'message', '^[[:space:]]+|[[:space:]]+$', '', 'g');
-  audience_value text := p_fields->>'audience';
-  display_value text := p_fields->>'display_mode';
-  label_value text := nullif(regexp_replace(p_fields->>'action_label', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
-  url_value text := nullif(regexp_replace(p_fields->>'action_url', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
+  title_value text;
+  message_value text;
+  audience_value text;
+  display_value text;
+  label_value text;
+  url_value text;
   expires_value timestamptz;
   status_value text := 'draft';
   current_status text;
   publish_value timestamptz;
 begin
   perform survey_announcements.require_admin();
+  title_value := regexp_replace(p_fields->>'title', '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  message_value := regexp_replace(p_fields->>'message', '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  audience_value := p_fields->>'audience';
+  display_value := p_fields->>'display_mode';
+  label_value := nullif(regexp_replace(p_fields->>'action_label', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
+  url_value := nullif(regexp_replace(p_fields->>'action_url', '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
   if jsonb_typeof(p_fields) is distinct from 'object'
     or jsonb_typeof(p_fields->'title') is distinct from 'string'
     or jsonb_typeof(p_fields->'message') is distinct from 'string'
@@ -5126,7 +5213,12 @@ returns table (
   id uuid, category text, title text, message text, form_id uuid, response_id uuid, rule_id uuid,
   created_at timestamptz, read_at timestamptz, announcement jsonb
 )
-language sql stable security definer set search_path = '' as $$
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if (p_before_at is null) <> (p_before_id is null) then
+    raise exception 'Укажите дату и идентификатор для следующей страницы' using errcode = '22023';
+  end if;
+  return query
   with viewer as (
     select auth.uid() as user_id, public.request_role() as role_name
   ), page_size as (
@@ -5154,6 +5246,7 @@ language sql stable security definer set search_path = '' as $$
      order by a.publish_at desc, a.id desc limit (select size from page_size))
   )
   select c.* from candidates c order by c.created_at desc, c.id desc limit (select size from page_size);
+end;
 $$;
 
 create or replace function public.notification_unread_count()

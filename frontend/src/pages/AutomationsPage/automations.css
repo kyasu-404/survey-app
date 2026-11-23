@@ -187,3 +187,9 @@
   padding-inline-start: 20px;
   color: var(--theme-text-muted);
 }
+
+.modal-card.rule-archive-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}

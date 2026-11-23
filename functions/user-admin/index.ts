@@ -10,37 +10,6 @@ type ListedUser = {
   created_at: string;
 };
 
-type UserAdminAction =
-  | {
-      action: "list";
-    }
-  | {
-      action: "create";
-      name: string;
-      email: string;
-      password: string;
-      role: UserRole;
-    }
-  | {
-      action: "delete";
-      userId: string;
-    }
-  | {
-      action: "updatePassword";
-      userId: string;
-      password: string;
-    }
-  | {
-      action: "setDisabled";
-      userId: string;
-      disabled: boolean;
-    }
-  | {
-      action: "updateRole";
-      userId: string;
-      role: UserRole;
-    };
-
 type RequestLogContext = {
   requestId: string;
   traceparent: string | null;
@@ -53,6 +22,8 @@ type RequestLogContext = {
 
 const defaultAllowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
+const minimumPasswordLength = 12;
+const maximumPasswordBytes = 72;
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-trace-id, x-client-release, traceparent",
@@ -155,12 +126,20 @@ function errorResponse(req: Request, status: number, error: string, requestLogCo
   return jsonResponse(req, status, { error }, requestLogContext);
 }
 
-function getTargetUserId(payload: UserAdminAction) {
-  return "userId" in payload ? payload.userId : undefined;
-}
-
 function isUserRole(value: unknown): value is UserRole {
   return value === "admin" || value === "user";
+}
+
+function getTargetUserId(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const id = value.trim().toLowerCase();
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id) ? id : undefined;
+}
+
+function isValidPassword(value: unknown): value is string {
+  return typeof value === "string" && value.length <= maximumPasswordBytes
+    && Array.from(value).length >= minimumPasswordLength
+    && new TextEncoder().encode(value).length <= maximumPasswordBytes;
 }
 
 Deno.serve(async (req) => {
@@ -224,18 +203,25 @@ Deno.serve(async (req) => {
     return errorResponse(req, 403, "Forbidden", { ...requestLogContext, userId: requester.id });
   }
 
-  let payload: UserAdminAction;
+  let payload: Record<string, unknown> & { action: string };
   try {
-    payload = (await req.json()) as UserAdminAction;
+    const body: unknown = await req.json();
+    if (body === null || typeof body !== "object" || Array.isArray(body)
+      || !("action" in body) || typeof body.action !== "string") {
+      throw new TypeError("Expected a JSON object with an action");
+    }
+    payload = body as typeof payload;
   } catch {
     return errorResponse(req, 400, "Invalid JSON payload", { ...requestLogContext, userId: requester.id });
   }
 
+  const targetUserId = getTargetUserId(payload.userId);
+  const isSelfRequest = targetUserId === requester.id.toLowerCase();
   const actionLogContext: RequestLogContext = {
     ...requestLogContext,
     operation: `user-admin.${payload.action}`,
     userId: requester.id,
-    targetUserId: getTargetUserId(payload),
+    targetUserId,
   };
 
   console.info("user-admin action started", actionLogContext);
@@ -271,7 +257,9 @@ Deno.serve(async (req) => {
     }
 
     case "create": {
-      if (!payload.name?.trim() || !payload.email?.trim() || payload.password.length < 8 || !isUserRole(payload.role)) {
+      if (typeof payload.name !== "string" || !payload.name.trim()
+        || typeof payload.email !== "string" || !payload.email.trim()
+        || !isValidPassword(payload.password) || !isUserRole(payload.role)) {
         return errorResponse(req, 400, "Invalid create payload", actionLogContext);
       }
 
@@ -336,15 +324,15 @@ Deno.serve(async (req) => {
     }
 
     case "delete": {
-      if (!payload.userId) {
+      if (!targetUserId) {
         return errorResponse(req, 400, "userId is required", actionLogContext);
       }
 
-      if (payload.userId === requester.id) {
+      if (isSelfRequest) {
         return errorResponse(req, 400, "You cannot delete yourself", actionLogContext);
       }
 
-      const { error } = await adminClient.auth.admin.deleteUser(payload.userId);
+      const { error } = await adminClient.auth.admin.deleteUser(targetUserId);
       if (error) {
         return errorResponse(req, 400, error.message, actionLogContext);
       }
@@ -355,14 +343,14 @@ Deno.serve(async (req) => {
     }
 
     case "updatePassword": {
-      if (!payload.userId || typeof payload.password !== "string" || payload.password.length < 8) {
+      if (!targetUserId || !isValidPassword(payload.password)) {
         return errorResponse(req, 400, "Invalid password update payload", actionLogContext);
       }
-      if (payload.userId === requester.id) {
+      if (isSelfRequest) {
         return errorResponse(req, 403, "Смените свой пароль во вкладке «Безопасность» личных настроек", actionLogContext);
       }
 
-      const { error } = await adminClient.auth.admin.updateUserById(payload.userId, {
+      const { error } = await adminClient.auth.admin.updateUserById(targetUserId, {
         password: payload.password,
       });
 
@@ -376,16 +364,16 @@ Deno.serve(async (req) => {
     }
 
     case "setDisabled": {
-      if (!payload.userId || typeof payload.disabled !== "boolean") {
+      if (!targetUserId || typeof payload.disabled !== "boolean") {
         return errorResponse(req, 400, "userId and boolean disabled are required", actionLogContext);
       }
 
-      if (payload.userId === requester.id) {
+      if (isSelfRequest) {
         return errorResponse(req, 400, "You cannot disable yourself", actionLogContext);
       }
 
       const { data: changed, error } = await adminClient.rpc("set_employee_disabled", {
-        p_user_id: payload.userId,
+        p_user_id: targetUserId,
         p_disabled: payload.disabled,
         p_actor_id: requester.id,
       });
@@ -404,18 +392,18 @@ Deno.serve(async (req) => {
     }
 
     case "updateRole": {
-      if (!payload.userId || !isUserRole(payload.role)) {
+      if (!targetUserId || !isUserRole(payload.role)) {
         return errorResponse(req, 400, "Invalid role update payload", actionLogContext);
       }
 
-      if (payload.userId === requester.id) {
+      if (isSelfRequest) {
         return errorResponse(req, 400, "You cannot change your own role", actionLogContext);
       }
 
       const { data: updatedProfile, error } = await adminClient
         .from("profiles")
         .update({ role: payload.role })
-        .eq("id", payload.userId)
+        .eq("id", targetUserId)
         .select("id")
         .maybeSingle();
 

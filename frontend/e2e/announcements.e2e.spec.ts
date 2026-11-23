@@ -33,6 +33,10 @@ test("an administrator previews and schedules a formatted announcement", async (
   await editor.getByLabel("Заголовок", { exact: true }).fill(title);
   const message = editor.getByLabel("Текст объявления", { exact: true });
   await message.fill("- Привет");
+  const listFormat = editor.getByRole("button", { name: "Маркированный список" });
+  await message.press("Shift+Tab");
+  await expect(listFormat).toBeFocused();
+  await expect(listFormat).toHaveCSS("outline-offset", "-2px");
   await message.selectText();
   await editor.getByRole("button", { name: "Курсив", exact: true }).click();
   await expect(message).toHaveValue("- *Привет*");
@@ -66,6 +70,36 @@ test("an administrator previews and schedules a formatted announcement", async (
       display_mode: "banner", audience: "user", require_acknowledgement: true, action_url: "/preferences" },
   });
   expect(app.pageErrors).toEqual([]);
+});
+
+test("keeps archive confirmation reachable on a short viewport", async ({ page }) => {
+  await openSurveyApp(page);
+  const timestamp = "2026-11-23T09:00:00Z";
+  const row: AdminAnnouncement = {
+    id: crypto.randomUUID(), title: "Технические работы в информационной системе ".repeat(2),
+    message: "График работ", status: "published", audience: "all", display_mode: "feed",
+    created_at: timestamp, updated_at: timestamp, publish_at: timestamp, expires_at: null,
+    action_label: null, action_url: null, require_acknowledgement: false, audience_count: 3, familiar_count: 0,
+  };
+  await page.route("**/rest/v1/rpc/list_admin_announcements", route =>
+    route.fulfill({ json: route.request().postDataJSON().p_status === "published" ? [row] : [] }));
+  await page.route("**/rest/v1/rpc/change_announcement", route => route.fulfill({ json: row.id }));
+  await page.getByRole("link", { name: "Администрирование", exact: true }).click();
+  await page.getByRole("navigation", { name: "Администрирование" }).getByRole("link", { name: "Объявления" }).click();
+  await page.getByRole("tab", { name: "Опубликованные", exact: true }).click();
+  await page.getByRole("button", { name: /Действия объявления/ }).click();
+  await page.getByRole("menuitem", { name: "Архивировать", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Архивировать объявление?" });
+  await page.setViewportSize({ width: 880, height: 120 });
+  await expect(dialog).toHaveCSS("overflow-y", "auto");
+  await expect.poll(() => dialog.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await dialog.getByRole("button", { name: "Отмена" }).press("Tab");
+  const confirm = dialog.getByRole("button", { name: "Архивировать", exact: true });
+  await expect(confirm).toBeFocused();
+  await expect(confirm).toBeInViewport();
+  await confirm.press("Enter");
+  await expect(page.getByRole("tab", { name: "Архивные", selected: true })).toBeVisible();
 });
 
 test("shows banner and entry modal once, then keeps them in the personal feed", async ({ page }) => {

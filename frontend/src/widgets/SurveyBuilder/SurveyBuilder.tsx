@@ -102,7 +102,7 @@ function getBuilderSaveError(error: unknown, isTemplate = false) {
   if (message === "Form not found") {
     return { message: "Форма не найдена. Откройте список форм.", retryable };
   }
-  return { message: message || `${fallback} ${editorNotice}`, retryable };
+  return { message: /^[А-ЯЁ]/i.test(message) ? message : `${fallback} ${editorNotice}`, retryable };
 }
 
 const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;

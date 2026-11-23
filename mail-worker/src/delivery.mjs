@@ -22,6 +22,7 @@ export function createMailPoller({
   // Retry queue acknowledgements independently from SMTP delivery. This state
   // survives failed polls, not process crashes or another worker's lease claim.
   const pending = new Map();
+  let stopping = false;
   state.pendingAcknowledgements = 0;
 
   function remember(job, success, error = null) {
@@ -44,12 +45,12 @@ export function createMailPoller({
           // Confirmed absence is terminal; it must not block unrelated mail.
           deliveryConfirmed = false;
           logger.warn("mail job acknowledgement cancelled because the job was deleted", { jobId: job.id, batchId: job.batch_id });
-        } else if (persisted.status === "failed") {
-          // A foreign worker can exhaust retries after reclaiming an expired
-          // lease. Surface this terminal conflict without freezing all mail.
+        } else if (persisted.status === "failed" || persisted.status === "queued") {
+          // Another worker can fail or requeue a job after reclaiming its lease.
+          // This acknowledgement can no longer be committed by our worker.
           deliveryConfirmed = false;
           state.lastAcknowledgementConflict = { jobId: job.id, status: persisted.status, at: now().toISOString() };
-          logger.error("mail delivery acknowledgement conflicts with terminal queue status", { jobId: job.id, batchId: job.batch_id, status: persisted.status });
+          logger.error("mail delivery acknowledgement lost its lease", { jobId: job.id, batchId: job.batch_id, status: persisted.status });
         } else if (persisted.status !== "sent") {
           throw new Error("Mail delivery acknowledgement is unconfirmed");
         }
@@ -60,7 +61,13 @@ export function createMailPoller({
     } catch (error) {
       state.lastError = ACK_ERROR;
       logger.error("mail job acknowledgement failed", { jobId: job.id, batchId: job.batch_id, code: error?.code ?? null });
+    } finally {
+      state.lastMailProgressAt = now().toISOString();
     }
+  }
+
+  async function flushPending() {
+    await Promise.all([...pending.values()].map(acknowledge));
   }
 
   async function sendJob(transporter, settings, job) {
@@ -94,22 +101,25 @@ export function createMailPoller({
     await acknowledge(remember(job, success, publicError));
   }
 
-  return async function poll() {
-    if (state.busy) return;
+  async function poll() {
+    if (state.busy || stopping) return;
     state.busy = true;
     state.lastPollAt = now().toISOString();
+    if (state.lastSuccessfulPollAt) state.lastMailProgressAt = state.lastPollAt;
     let completed = false;
 
     try {
       // Do this even when SMTP has since been disabled. Do not claim more jobs
       // while an earlier accepted message could be reclaimed after lease expiry.
-      await Promise.all([...pending.values()].map(acknowledge));
+      await flushPending();
       if (pending.size) {
         state.lastError = ACK_ERROR;
         return;
       }
 
+      if (stopping) return;
       const settings = await loadSettings();
+      if (stopping) return;
       state.configured = Boolean(settings?.enabled);
       if (!settings?.enabled) {
         smtpTransports.close();
@@ -128,6 +138,7 @@ export function createMailPoller({
       }
 
       const jobs = await claimJobs();
+      state.lastMailProgressAt = now().toISOString();
       if (jobs.length === 0) {
         state.lastError = null;
         completed = true;
@@ -150,5 +161,11 @@ export function createMailPoller({
       if (completed) state.lastSuccessfulPollAt = now().toISOString();
       state.busy = false;
     }
+  }
+
+  return {
+    poll,
+    flushPending,
+    stop() { stopping = true; },
   };
 }

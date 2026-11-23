@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { MessageEditor } from "./MessageEditor";
 
 function renderEditor(message: string) {
@@ -41,4 +41,22 @@ it("keeps complete markup selected across several list items", async () => {
   const emphasized = "- ***Первое***\n  * ***Второе***";
   await format(0, input.value.length, "Курсив", italic, italic);
   await format(input.selectionStart, input.selectionEnd, "Полужирный", emphasized, emphasized);
+});
+
+it("removes bold when the selection includes both delimiters", async () => {
+  const { input, format } = renderEditor("**Текст**");
+  await format(0, input.value.length, "Полужирный", "Текст", "Текст");
+});
+
+it("toggles one emphasis style while keeping the other and preserving the selection", async () => {
+  const { input, format } = renderEditor("- Привет");
+  await format(2, input.value.length, "Курсив", "- *Привет*", "Привет");
+  await format(input.selectionStart, input.selectionEnd, "Полужирный", "- ***Привет***", "Привет");
+  await format(input.selectionStart, input.selectionEnd, "Курсив", "- **Привет**", "Привет");
+  await format(input.selectionStart, input.selectionEnd, "Полужирный", "- Привет", "Привет");
+});
+
+it("associates each editor with its own label", () => {
+  render(<><MessageEditor value="Первое" onChange={vi.fn()} /><MessageEditor value="Второе" onChange={vi.fn()} /></>);
+  expect(screen.getAllByRole("textbox", { name: "Текст объявления" })).toHaveLength(2);
 });
