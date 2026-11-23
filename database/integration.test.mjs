@@ -113,6 +113,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const notificationCenterMigration = await source("./migrations/202611231300_notification_center_delivery_events.sql");
     const responseNotificationOptInMigration = await source("./migrations/202611231400_default_response_notification_opt_in.sql");
     const reviewRegressionsMigration = await source("./migrations/202611231500_review_regressions.sql");
+    const formClosedMigration = await source("./migrations/202611231600_form_closed_automation.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -193,6 +194,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         await db.query("delete from public.notifications where id=$1", [notice]);
         await db.query("delete from auth.users where id=$1", [administrator]);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
+        await db.query(formClosedMigration);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
@@ -204,6 +206,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/automations.sql");
       await runPsql(database, "./tests/automation_regressions.sql");
       await runPsql(database, "./tests/automation_review_fixes.sql");
+      await runPsql(database, "./tests/form_closed_automation.sql");
       await runPsql(database, "./tests/announcements.sql");
       await runPsql(database, "./tests/review_regressions.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {

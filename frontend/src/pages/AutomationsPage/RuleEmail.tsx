@@ -13,18 +13,20 @@ type TemplateProps = {
   subject: string;
   body: string;
   hasThreshold: boolean;
+  includeResponse: boolean;
   subjectError?: RuleFieldError;
   bodyError?: RuleFieldError;
   onSubject: (value: string) => void;
   onBody: (value: string) => void;
 };
 
-export function RuleEmailTemplate({ subject, body, hasThreshold, subjectError, bodyError, onSubject, onBody }: TemplateProps) {
+export function RuleEmailTemplate({ subject, body, hasThreshold, includeResponse, subjectError, bodyError, onSubject, onBody }: TemplateProps) {
   const subjectRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [target, setTarget] = useState<"subject" | "body">("body");
   const [limitError, setLimitError] = useState("");
-  const groups = hasThreshold ? [...tokenGroups, { title: "Порог", values: matchingValues }] : tokenGroups;
+  const availableGroups = tokenGroups.filter(group => includeResponse || !("response_link" in group.values));
+  const groups = hasThreshold ? [...availableGroups, { title: "Порог", values: matchingValues }] : availableGroups;
 
   function insertToken(key: string) {
     const input = target === "subject" ? subjectRef.current : bodyRef.current;
@@ -88,14 +90,16 @@ type PreviewProps = {
   recipients: string[];
   recipientField?: string;
   hasThreshold: boolean;
+  includeResponse: boolean;
 };
 
-export function RuleEmailPreview({ subject, body, mode, formTitle, recipients, recipientField, hasThreshold }: PreviewProps) {
+export function RuleEmailPreview({ subject, body, mode, formTitle, recipients, recipientField, hasThreshold, includeResponse }: PreviewProps) {
   const formLink = "https://example.org/dashboard/forms/demo/responses";
-  const responseLink = formLink + "?response=demo";
+  const responseLink = includeResponse ? formLink + "?response=demo" : formLink;
   const values: Record<string, string> = {
     form_title: formTitle || "Учебная форма", form_link: formLink, response_link: responseLink,
-    respondent: "Анна Иванова", response_time: "16.09.2026 10:30 МСК", sent_at: "16.09.2026 10:31 МСК",
+    respondent: includeResponse ? "Анна Иванова" : "Не указан",
+    response_time: includeResponse ? "16.09.2026 10:30 МСК" : "—", sent_at: "16.09.2026 10:31 МСК",
     answer_count: "12", matching_count: hasThreshold ? "3" : "—", matching_percent: hasThreshold ? "25%" : "—",
   };
   const render = (template: string) => template.replace(/\{\{([a-z_]+)\}\}/g,

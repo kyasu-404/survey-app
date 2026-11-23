@@ -3584,7 +3584,7 @@ create table public.automation_rules (
   description text not null default '' check (char_length(description) <= 1000),
   enabled boolean not null default true,
   event_type text not null check (event_type in ('response_received','response_updated','response_count',
-    'matching_count','matching_share','inactivity','date','recurring')),
+    'matching_count','matching_share','inactivity','date','recurring','form_closed')),
   threshold numeric,
   interval_minutes integer,
   scheduled_at timestamptz,
@@ -3597,7 +3597,8 @@ create table public.automation_rules (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   archived_at timestamptz,
-  constraint automation_rules_archive_state check (archived_at is null or not enabled)
+  constraint automation_rules_archive_state check (archived_at is null or not enabled),
+  constraint automation_rules_form_closed_global check (event_type<>'form_closed' or form_id is null)
 );
 create index automation_rules_user_list on public.automation_rules (user_id, created_at desc, id desc);
 create index automation_rules_active_list on public.automation_rules (user_id, created_at desc, id desc)
@@ -3647,6 +3648,7 @@ create index automation_targets_due on survey_automation.targets (next_run_at, r
 create index automation_targets_check on survey_automation.targets (check_at, rule_id, form_id) where check_at is not null;
 
 alter table survey_automation.targets add column schedule_slot_at timestamptz;
+alter table survey_automation.targets add column form_close_armed_at timestamptz;
 alter table public.automation_runs add column cancelled_count integer not null default 0;
 
 -- One counter per owner survives rule deletion and rolls over without a cleanup job.
@@ -3899,7 +3901,7 @@ $$;
 
 create or replace function survey_automation.seed_targets(p_rule public.automation_rules,p_only_form uuid default null)
 returns void language sql set search_path = '' as $$
-  insert into survey_automation.targets(rule_id,form_id,next_run_at,last_received_at,gap_key,matching_count,count_ready)
+  insert into survey_automation.targets(rule_id,form_id,next_run_at,last_received_at,gap_key,matching_count,count_ready,form_close_armed_at)
   select p_rule.id,f.id,
     case p_rule.event_type
       when 'date' then case when p_rule.scheduled_at>=f.created_at then p_rule.scheduled_at end
@@ -3908,7 +3910,8 @@ returns void language sql set search_path = '' as $$
       when 'inactivity' then greatest(now(),f.created_at,latest.created_at)+make_interval(mins=>p_rule.interval_minutes)
     end,
     latest.created_at,coalesce(latest.id::text,'none'),0,
-    p_rule.conditions='[]'::jsonb or p_rule.event_type not in ('response_count','matching_count','matching_share')
+    p_rule.conditions='[]'::jsonb or p_rule.event_type not in ('response_count','matching_count','matching_share'),
+    case when p_rule.event_type='form_closed' then clock_timestamp() end
   from public.forms f
   left join lateral (
     select r.id,r.created_at from public.responses r
@@ -3922,6 +3925,7 @@ returns void language sql set search_path = '' as $$
     count_cursor_at=null,
     count_cursor_id=null,
     schedule_slot_at=null,
+    form_close_armed_at=coalesce(targets.form_close_armed_at,excluded.form_close_armed_at),
     check_at=null,
     check_response_id=null,
     last_received_at=greatest(targets.last_received_at,excluded.last_received_at),
@@ -3936,7 +3940,7 @@ returns void language sql set search_path = '' as $$
       else excluded.next_run_at end;
 $$;
 
-create function survey_automation.resume_targets(p_rule public.automation_rules)
+create or replace function survey_automation.resume_targets(p_rule public.automation_rules)
 returns void language plpgsql set search_path = '' as $$
 begin
   perform survey_automation.seed_targets(p_rule);
@@ -3944,6 +3948,8 @@ begin
     update survey_automation.targets set next_run_at=
       survey_automation.schedule_slot(p_rule.scheduled_at,p_rule.interval_minutes,now())+make_interval(mins=>p_rule.interval_minutes)
     where rule_id=p_rule.id and next_run_at<=now();
+  elsif p_rule.event_type='form_closed' then
+    update survey_automation.targets set form_close_armed_at=clock_timestamp() where rule_id=p_rule.id;
   end if;
 end;
 $$;
@@ -3974,9 +3980,12 @@ begin
   p_description:=coalesce(btrim(p_description,E' \t\n\r\f\013'),'');
   if p_enabled is null or coalesce(char_length(btrim(p_name)),0) not between 1 and 120
     or char_length(p_description)>1000 or coalesce(p_event_type,'') not in (
-      'response_received','response_updated','response_count','matching_count','matching_share','inactivity','date','recurring')
+      'response_received','response_updated','response_count','matching_count','matching_share','inactivity','date','recurring','form_closed')
     or coalesce(p_match_mode,'') not in ('all','any') then
     raise exception 'Проверьте название и настройки события' using errcode='22023';
+  end if;
+  if p_event_type='form_closed' and p_form_id is not null then
+    raise exception 'Завершение сбора ответов доступно только для общих автоматизаций' using errcode='22023';
   end if;
   if (p_event_type in ('response_count','matching_count') and
       (p_threshold is null or p_threshold not between 1 and 100000 or trunc(p_threshold)<>p_threshold))
@@ -4299,12 +4308,24 @@ create trigger automation_response_update after update on public.responses
 create trigger automation_response_delete after delete on public.responses
   referencing old table as old_responses for each statement execute function survey_automation.on_response_changes();
 
-create function survey_automation.on_form_changes()
+create or replace function survey_automation.stage_form_closed(p_form public.forms,p_event_key text,p_closed_at timestamptz)
+returns void language sql set search_path = '' as $$
+  select survey_automation.stage_run(a,p_form,p_event_key,null)
+  from public.automation_rules a
+  join survey_automation.targets t on t.rule_id=a.id and t.form_id=p_form.id
+  join public.profiles p on p.id=a.user_id and not p.is_disabled
+  where a.user_id=p_form.author_id and a.enabled and a.form_id is null and a.event_type='form_closed'
+    and t.form_close_armed_at<=p_closed_at
+  order by a.id;
+$$;
+
+create or replace function survey_automation.on_form_changes()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
   a public.automation_rules;
   owner uuid;
   content text;
+  changed_at timestamptz;
 begin
   if tg_op='UPDATE' and old.author_id=new.author_id and old.form_type=new.form_type
     and old.deadline_at is not distinct from new.deadline_at and old.is_public=new.is_public then return new;
@@ -4326,7 +4347,26 @@ begin
     end if;
   end if;
 
-  if new.form_type<>'template' and new.is_public and new.deadline_at is not null and new.deadline_at>now() then
+  changed_at:=clock_timestamp();
+  if tg_op='UPDATE' and old.form_type<>'template' and new.form_type<>'template'
+    and old.author_id=new.author_id and old.is_public then
+    if old.deadline_at<=changed_at then
+      -- Preserve expiry when the deadline or publication is edited before the
+      -- worker has consumed its deadline row. The row is always guarded by the form lock.
+      if exists (select from survey_automation.form_deadlines d where d.form_id=old.id and d.due_at=old.deadline_at) then
+        perform survey_automation.stage_form_closed(old,
+          'closed:deadline:'||extract(epoch from old.deadline_at)::text,old.deadline_at);
+      end if;
+    elsif not new.is_public then
+      perform survey_automation.stage_form_closed(new,case
+        when new.responses_count>=least(coalesce(new.max_responses,100000),100000) then 'closed:limit:'
+        else 'closed:manual:' end||new.revision,changed_at);
+    elsif new.deadline_at<=changed_at then
+      perform survey_automation.stage_form_closed(new,'closed:deadline:'||new.revision,changed_at);
+    end if;
+  end if;
+
+  if new.form_type<>'template' and new.is_public and new.deadline_at>changed_at then
     insert into survey_automation.form_deadlines(form_id,due_at) values(new.id,new.deadline_at)
     on conflict (form_id) do update set due_at=excluded.due_at;
   else
@@ -4569,15 +4609,21 @@ begin
   end loop;
 
   for deadline in
-    select d.* from survey_automation.form_deadlines d where due_at<=p_now
-    order by due_at,form_id limit p_limit for update skip locked
+    -- Updates to a form can replace or consume its deadline. Both paths take
+    -- the form lock before touching the deadline row.
+    select d.* from survey_automation.form_deadlines d
+    join public.forms form on form.id=d.form_id
+    where d.due_at<=p_now
+    order by d.due_at,d.form_id limit p_limit for no key update of form skip locked
   loop
     select * into f from public.forms where id=deadline.form_id;
     if found and f.is_public and f.form_type<>'template' and f.deadline_at=deadline.due_at then
       perform survey_automation.notify(f.author_id,'form_status',
         'deadline-reached:'||f.id||':'||extract(epoch from deadline.due_at)::text,'Срок приёма истёк',f.title,f.id);
+      perform survey_automation.stage_form_closed(f,
+        'closed:deadline:'||extract(epoch from deadline.due_at)::text,deadline.due_at);
     end if;
-    delete from survey_automation.form_deadlines where form_id=deadline.form_id;
+    delete from survey_automation.form_deadlines where form_id=deadline.form_id and due_at=deadline.due_at;
   end loop;
 end;
 $$;

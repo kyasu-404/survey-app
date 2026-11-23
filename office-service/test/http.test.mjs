@@ -8,7 +8,7 @@ import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
 const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx',template_field_count:1};
-async function setup(t,{disabled=false,role='user',result,commandResult,documentAtRead}={}){
+async function setup(t,{env={},disabled=false,role='user',result,commandResult,resultsFeed,documentAtRead}={}){
  const statements=[];
  let documentReads=0;
  const query=async(sql,args=[])=>{
@@ -19,6 +19,7 @@ async function setup(t,{disabled=false,role='user',result,commandResult,document
   if(sql.includes('onlyoffice_settings'))return {rows:[settings]};
   if(sql.includes('select id,name,role,is_disabled'))return {rows:[{id:userId,role,is_disabled:disabled,name:'Test'}]};
   if(sql.startsWith('select * from public.office_generation_results'))return {rows:result?[result]:[]};
+  if(sql.includes('public.office_generation_results') && sql.includes('public.office_generation_jobs'))return {rows:[resultsFeed]};
   if(sql.startsWith('select * from public.forms'))return {rows:[{id:formId}]};
   if(sql.startsWith('select * from public.office_documents')) {
    const current=documentAtRead ? documentAtRead(++documentReads) : doc;
@@ -34,7 +35,7 @@ async function setup(t,{disabled=false,role='user',result,commandResult,document
   t.mock.method(globalThis,'fetch',(url,options)=>String(url)==='http://onlyoffice/command'
    ? Promise.resolve(Response.json(commandResult)) : originalFetch(url,options));
  }
- const app=createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64')}});
+ const app=createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64'),...env}});
  const server=createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(r=>server.close(r)));
  const base=`http://127.0.0.1:${server.address().port}/api/office`;
  return {statements,request:(path,options)=>fetch(base+path,options)};
@@ -101,6 +102,19 @@ test('cross-origin plugin configuration is public but data API origin is restric
  const config=await request('/plugin/config.json',{headers:{Origin:'https://docs.test'}});assert.equal(config.status,200);assert.equal(config.headers.get('access-control-allow-origin'),'*');
  assert.equal((await request('/settings',{headers:{Origin:'https://evil.test',Authorization:'Bearer employee'}})).status,403);
 });
+test('a configured browser origin can use the Office API and other origins stay restricted',async t=>{
+ const localOrigin='http://127.0.0.1:5173';
+ const {request}=await setup(t,{role:'admin',env:{OFFICE_ALLOWED_ORIGINS:` ${localOrigin}, http://localhost:5173 `}});
+ for(const Origin of ['https://forms.test',localOrigin,'http://localhost:5173']){
+  assert.equal((await request('/settings',{headers:{Origin,Authorization:'Bearer employee'}})).status,200);
+ }
+ for(const Origin of ['http://127.0.0.1:5174','http://127.0.0.1.test:5173','null']){
+  assert.equal((await request('/settings',{headers:{Origin,Authorization:'Bearer employee'}})).status,403);
+ }
+ assert.equal((await request('/settings',{headers:{Origin:localOrigin}})).status,401);
+ const production=await setup(t,{role:'admin'});
+ assert.equal((await production.request('/settings',{headers:{Origin:localOrigin,Authorization:'Bearer employee'}})).status,403);
+});
 test('document-scoped plugin cannot start a batch generation or download source files',async t=>{
  const {request,statements}=await setup(t);
  const token=sign({purpose:'plugin',exp:Math.floor(Date.now()/1000)+300,sub:userId,formId,documentId},key.toString('hex')+':survey-office-capability-v1');
@@ -130,6 +144,18 @@ test('results require employee authentication and enforce creator/admin deletion
  assert.equal((await request(`/results/${result.id}/files/9`,{headers})).status,404);
  const admin=await setup(t,{result,role:'admin'});assert.equal((await admin.request(`/results/${result.id}`,{method:'DELETE',headers})).status,200);
  assert.ok(admin.statements.some(s=>s.sql.startsWith('delete from public.office_generation_results')));
+});
+
+test('the results feed reads archives and job states from one PostgreSQL snapshot',async t=>{
+ const job={id:randomUUID(),form_id:formId,name:'Test.docx',state:'running',created_at:'2026-09-21T09:00:00.000Z'};
+ const result={id:randomUUID(),form_id:formId,name:'Test.zip',files:['first.docx'],created_at:'2026-09-21T09:00:00.000Z'};
+ const {request,statements}=await setup(t,{resultsFeed:{results:[result],jobs:[job]}});
+ const response=await request(`/forms/${formId}/results`,{headers:{Authorization:'Bearer employee'}});
+ assert.equal(response.status,200);
+ assert.deepEqual(await response.json(),{results:[result],jobs:[job]});
+ const feedReads=statements.filter(s=>s.sql.includes('public.office_generation_results') || s.sql.includes('public.office_generation_jobs'));
+ assert.equal(feedReads.length,1);
+ assert.deepEqual(feedReads[0].args,[formId]);
 });
 
 test('plugin bootstrap pins its origin from server settings, not request parameters',async t=>{

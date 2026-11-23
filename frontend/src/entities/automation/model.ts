@@ -5,9 +5,12 @@ export const automationEvents = {
   matching_count: "Количество ответов по условиям",
   matching_share: "Доля ответов по условиям",
   inactivity: "Период без новых ответов",
+  form_closed: "Завершение сбора ответов",
   date: "Дата и время",
   recurring: "Повтор по расписанию",
 } as const;
+
+export const formClosedDescription = "Когда форма закрывается вручную, по сроку или достижению лимита.";
 
 export type AutomationEvent = keyof typeof automationEvents;
 export type ConditionOperation = "eq" | "gt" | "lt" | "contains" | "any_of" | "all_of";

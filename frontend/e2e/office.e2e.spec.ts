@@ -46,6 +46,42 @@ test('template actions and persistent results, with notification above the dialo
  await page.getByRole('tab',{name:'Макеты'}).click();await menu().click();await page.getByRole('menuitem',{name:'Удалить',exact:true}).click();await page.getByRole('button',{name:'Удалить документ'}).click();await expect(page.getByText('Макетов пока нет. Загрузите файл или создайте новый.')).toBeVisible();
 });
 
+test('shows Office progress and reloads results after a temporarily empty response', async ({ page }) => {
+ const {formId}=await openSurveyApp(page,{responseCount:1});
+ const doc={id:'40000000-0000-4000-8000-000000000002',form_id:formId,name:'Справка.xlsx',file_type:'xlsx',created_by:'10000000-0000-4000-8000-000000000001',updated_at:'2026-09-14T12:00:00Z',binding_count:1,size_bytes:1024};
+ const job={id:'50000000-0000-4000-8000-000000000002',form_id:formId,name:doc.name,created_at:'2026-09-14T12:00:00Z',state:'queued'};
+ const result={...job,template_id:doc.id,name:'Справка.zip',file_type:'xlsx',files:['1.xlsx'],size_bytes:1024};
+ let resultReads=0, completed=false;
+ await page.route('**/api/office/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/status'))return route.fulfill({json:{enabled:true}});
+  if(path.endsWith('/documents'))return route.fulfill({json:{documents:[doc],enabled:true,max_file_mb:25,response_count:1}});
+  if(path.endsWith('/sources'))return route.fulfill({json:{questions:[]}});
+  if(path.endsWith('/generate'))return route.fulfill({status:202,json:job});
+  if(path.endsWith('/results')){
+   resultReads++;
+   if(completed)return route.fulfill({json:{results:[result],jobs:[]}});
+   return route.fulfill({json:{results:[],jobs:resultReads===1?[]:[{...job,state:'running'}]}});
+  }
+  return route.fulfill({status:404});
+ });
+ await page.goto(`/dashboard/forms/${formId}/responses`);
+ const documents=page.getByRole('button',{name:'Документы',exact:true});
+ await documents.click();
+ await page.getByRole('button',{name:'Сформировать документы',exact:true}).click();
+ await page.getByRole('button',{name:'Сформировать 1 документов',exact:true}).click();
+ await expect.poll(()=>resultReads).toBeGreaterThan(0);
+ await expect(page.getByRole('progressbar',{name:'Формирование Справка.xlsx'})).toBeVisible();
+ await expect(page.getByText('Документы формируются…')).toBeVisible();
+ await page.getByRole('button',{name:'Закрыть документы'}).click();
+ await documents.click();
+ await expect(page.getByRole('tab',{name:'Результат'})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('progressbar',{name:'Формирование Справка.xlsx'})).toBeVisible();
+ completed=true;
+ await expect(page.getByRole('button',{name:'Скачать 1.xlsx'})).toBeVisible();
+ await expect(page.getByRole('progressbar')).toHaveCount(0);
+});
+
 test('Office status polling runs only while the documents dialog is open', async ({ page }) => {
  const { formId, pageErrors } = await openSurveyApp(page, { responseCount: 1 });
  let statusRequests = 0;

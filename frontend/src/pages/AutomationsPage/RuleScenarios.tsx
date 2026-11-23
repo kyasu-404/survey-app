@@ -1,4 +1,4 @@
-import type { AutomationEvent } from "../../entities/automation/model";
+import { formClosedDescription, type AutomationEvent } from "../../entities/automation/model";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { Icon, type IconName } from "../../shared/ui/Icon";
 
@@ -11,7 +11,7 @@ export type RuleScenario = {
   periodDays?: number;
 };
 
-const scenarios: { title: string; description: string; icon: IconName; draft: RuleScenario | null }[] = [
+const scenarios: { title: string; description: string; icon: IconName; draft: RuleScenario | null; scope?: "form" | "global" }[] = [
   {
     title: "Сообщать о новых ответах",
     description: "Отправлять письмо со ссылкой при поступлении нового ответа.",
@@ -39,12 +39,25 @@ const scenarios: { title: string; description: string; icon: IconName; draft: Ru
     title: "Отправлять сводку по расписанию",
     description: "Например, каждую пятницу в 09:00 по местному времени.",
     icon: "schedule",
+    scope: "form",
     draft: {
       name: "Сводка по расписанию",
       event: "recurring",
       subject: "{{form_title}} — сводка по ответам",
       body: "Сводка по форме «{{form_title}}».\nВсего ответов: {{answer_count}}.\nОткрыть ответы: {{form_link}}",
       periodDays: 7,
+    },
+  },
+  {
+    title: "Сообщать о завершении сбора ответов",
+    description: formClosedDescription,
+    icon: "check_circle",
+    scope: "global",
+    draft: {
+      name: "Завершение сбора ответов",
+      event: "form_closed",
+      subject: "{{form_title}} — сбор ответов завершён",
+      body: "Сбор ответов по форме «{{form_title}}» завершён.\nВсего ответов: {{answer_count}}.\nОткрыть ответы: {{form_link}}",
     },
   },
   {
@@ -63,9 +76,9 @@ export function nextFridayMorning(now = new Date()) {
   return formatDateTimeLocalValue(start.toISOString());
 }
 
-export function RuleScenarios({ onChoose }: { onChoose: (draft: RuleScenario | null) => void }) {
+export function RuleScenarios({ scope, onChoose }: { scope: "form" | "global"; onChoose: (draft: RuleScenario | null) => void }) {
   return <ul className="rule-scenarios">
-    {scenarios.map(({ title, description, icon, draft }) => <li key={title}>
+    {scenarios.filter(scenario => !scenario.scope || scenario.scope === scope).map(({ title, description, icon, draft }) => <li key={title}>
       <button type="button" className="rule-scenario" aria-label={title} aria-description={description} onClick={() => onChoose(draft)}>
         <Icon name={icon} size={18} />
         <span><strong>{title}</strong><small>{description}</small></span>

@@ -7,6 +7,7 @@ import {useNavigate} from 'react-router-dom';
 import {useAuth} from '../../app/providers/AuthProvider';
 import {useToast} from '../../app/providers/ToastProvider';
 import {officeRequest,downloadOfficeDocument,type OfficeDocument,type OfficeJob} from '../../entities/office/api';
+import {getActiveOfficeJob,rememberOfficeJob} from '../../entities/office/results';
 import {getErrorMessage} from '../../shared/lib/error';
 import {SectionTabs} from '../../shared/ui/SectionTabs';
 import {GenerateDocuments} from './GenerateDocuments';
@@ -16,14 +17,22 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
  const navigate=useNavigate(),queryClient=useQueryClient(),{showToast}=useToast(),{user,profile}=useAuth();
  const dialog=useRef<HTMLDialogElement>(null),templatesPanel=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null);
  const menuAnchor=useRef<HTMLButtonElement>(null);
- const [search,setSearch]=useState(''),[name,setName]=useState('Новый макет'),[tab,setTab]=useState<'templates'|'results'>('templates'),[focusResult,setFocusResult]=useState<string>();
+ const [search,setSearch]=useState(''),[name,setName]=useState('Новый макет');
+ const [focusResult,setFocusResult]=useState(()=>getActiveOfficeJob(queryClient,formId)?.id);
+ const [tab,setTab]=useState<'templates'|'results'>(()=>focusResult?'results':'templates');
  const [mode,setMode]=useState<'create'|'rename'|null>(null),[selected,setSelected]=useState<OfficeDocument|null>(null),[menu,setMenu]=useState<string|null>(null);
  const [format,setFormat]=useState<'xlsx'|'docx'>('xlsx'),[generation,setGeneration]=useState<OfficeDocument|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const query=useQuery({queryKey:['office-documents',formId],queryFn:()=>officeRequest<{documents:OfficeDocument[];enabled:boolean;max_file_mb:number;response_count:number}>(`/forms/${formId}/documents`),staleTime:0,refetchOnMount:'always'});
  useEffect(()=>{dialog.current?.showModal();},[]);
  useEffect(()=>{const close=(e:MouseEvent)=>{if(!(e.target as Element).closest('.office-menu-shell'))setMenu(null);};document.addEventListener('click',close);return()=>document.removeEventListener('click',close);},[]);
  async function run(fn:()=>Promise<unknown>){setBusy(true);setError('');setMenu(null);try{await fn();setMode(null);await query.refetch();}catch(e){setError(getErrorMessage(e,'Не удалось выполнить операцию'));}finally{setBusy(false);}}
- async function generated(job:OfficeJob){setGeneration(null);setFocusResult(job.id);setTab('results');showToast('Задание добавлено в очередь. Окно можно закрыть.','success');await queryClient.invalidateQueries({queryKey:['office-results',formId]});}
+ function generated(job:OfficeJob){
+  rememberOfficeJob(queryClient,job);
+  setGeneration(null);
+  setFocusResult(job.id);
+  setTab('results');
+  showToast('Задание добавлено в очередь. Окно можно закрыть.','success');
+ }
  return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();if(menu)setMenu(null);else onClose();}} aria-labelledby="documents-title">
   <header><div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div><button type="button" className="app-button" onClick={onClose} aria-label="Закрыть документы">×</button></header>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>
@@ -33,7 +42,7 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
    {(error || query.error) && <p role="alert" className="office-error">{error || getErrorMessage(query.error,'Не удалось загрузить макеты')}</p>}
    {query.data && !query.data.enabled && <p className="office-notice">ONLYOFFICE отключён. Файлы доступны для скачивания и управления.</p>}
    {query.isLoading && <p role="status">Загрузка макетов…</p>}
-   {generation && <GenerateDocuments key={generation.id} doc={generation} total={query.data?.response_count ?? 0} selectedIds={selectedResponseIds} onClose={()=>setGeneration(null)} onGenerated={result=>void generated(result)}/>}
+   {generation && <GenerateDocuments key={generation.id} doc={generation} total={query.data?.response_count ?? 0} selectedIds={selectedResponseIds} onClose={()=>setGeneration(null)} onGenerated={generated}/>}
    <div className="office-document-list">
     {query.data?.documents.filter(d=>d.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(doc=><article key={doc.id}>
      <div className="office-document-copy"><strong>{doc.name}</strong><span>{doc.author_name || 'Сотрудник'} · {new Date(doc.updated_at).toLocaleString('ru-RU')}</span><span>Полей макета: {doc.binding_count} · {(doc.size_bytes/1024).toLocaleString('ru-RU',{maximumFractionDigits:0})} КБ</span>{doc.last_save_error && <span className="office-error">{doc.last_save_error}</span>}</div>

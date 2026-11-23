@@ -163,6 +163,30 @@ describe("AutomationsPage", () => {
     }));
   });
 
+  it("creates a general form closure rule with an aggregate email", async () => {
+    const { requests, user } = renderPage();
+    await user.click(screen.getByRole("button", { name: "Создать правило" }));
+    const editor = within(screen.getByRole("dialog"));
+    expect(editor.queryByRole("button", { name: "Отправлять сводку по расписанию" })).not.toBeInTheDocument();
+    const scenario = editor.getByRole("button", { name: "Сообщать о завершении сбора ответов" });
+    expect(scenario).toHaveAccessibleDescription("Когда форма закрывается вручную, по сроку или достижению лимита.");
+    await user.click(scenario);
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    expect(editor.getByRole("combobox", { name: "Когда срабатывает правило" })).toHaveValue("form_closed");
+    expect(editor.getByRole("option", { name: "Повтор по расписанию" })).toBeInTheDocument();
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    await user.type(editor.getByLabelText(/Адреса получателей/), "owner@example.org");
+    await user.click(editor.getByText("Подстановки", { exact: true }));
+    expect(editor.queryByRole("button", { name: /^Ссылка на ответ$/ })).not.toBeInTheDocument();
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    expect(editor.getByText(/Всего ответов: 12/)).toBeVisible();
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.find(({ path }) => path === "rpc/save_automation_rule")?.body).toMatchObject({
+      p_form_id: null, p_event_type: "form_closed", p_scheduled_at: null, p_interval_minutes: null, p_conditions: [],
+      p_action: { mode: "summary", recipients: ["owner@example.org"] },
+    }));
+  });
+
   it("prefills a configurable threshold rule and explains an invalid count next to the field", async () => {
     const { requests, user } = renderPage();
     await user.click(await screen.findByRole("button", { name: "Создать правило" }));
@@ -191,13 +215,15 @@ describe("AutomationsPage", () => {
     }));
   });
 
-  it("prefills a weekly summary and lets users change its schedule", async () => {
-    const { user } = renderPage();
+  it("prefills a weekly summary for one form and lets users change its schedule", async () => {
+    const { user } = renderPage({ entry: "/dashboard/forms/form/automations" });
     await user.click(await screen.findByRole("button", { name: "Создать правило" }));
     const editor = within(screen.getByRole("dialog"));
+    expect(editor.queryByRole("button", { name: "Сообщать о завершении сбора ответов" })).not.toBeInTheDocument();
     await user.click(editor.getByRole("button", { name: "Отправлять сводку по расписанию" }));
     await user.click(editor.getByRole("button", { name: "Далее" }));
     expect(editor.getByLabelText("Когда срабатывает правило")).toHaveValue("recurring");
+    expect(editor.queryByRole("option", { name: "Завершение сбора ответов" })).not.toBeInTheDocument();
     expect(editor.getByLabelText("Повторять каждые")).toHaveValue(7);
     expect(editor.getByLabelText("Единица времени")).toHaveValue("1440");
     const firstRun = editor.getByLabelText<HTMLInputElement>("Первый запуск по местному времени");

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAuthCacheGuard } from "../../app/providers/authCache";
 import { getAutomationFields, saveAutomationRule, type AutomationForm } from "../../entities/automation/api";
-import { automationEvents, type AutomationEvent, type AutomationRule, type Condition, type EmailAction, type RuleConfig } from "../../entities/automation/model";
+import { automationEvents, formClosedDescription, type AutomationEvent, type AutomationRule, type Condition, type EmailAction, type RuleConfig } from "../../entities/automation/model";
 import { getFormOrganizations } from "../../entities/organization/api";
 import { getOrganizationDisplayName, ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
@@ -122,6 +122,8 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const needsThreshold = ["response_count", "matching_count", "matching_share"].includes(event);
   const needsInterval = event === "inactivity" || event === "recurring";
   const needsDate = event === "date" || event === "recurring";
+  const formClosed = event === "form_closed";
+  const emailMode = formClosed ? "summary" : mode;
   const needsConditions = Boolean(formId) && requiresConditions(event);
   const save = useMutation({
     mutationFn: (config: RuleConfig) => saveAutomationRule(rule?.id ?? null, config),
@@ -232,7 +234,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
       form_id: formId || null, name, description, enabled, event_type: event, match_mode: matchMode, conditions: cleanConditions,
       threshold: needsThreshold ? Number(threshold) : null, interval_minutes: needsInterval ? Number(period) * periodUnit : null,
       scheduled_at: scheduledIso,
-      action_config: { recipients: addresses, recipientPath: recipientPath.length ? recipientPath : undefined, subject, body, mode },
+      action_config: { recipients: addresses, recipientPath: recipientPath.length ? recipientPath : undefined, subject, body, mode: emailMode },
     }, { onSuccess: (id, _, isCurrentAuth) => { if (isCurrentAuth?.()) onSaved(id); } });
   }
 
@@ -266,7 +268,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
 
         <div className="activity-editor-body" key={step}>
           <h3 className="rule-step-heading" tabIndex={-1} ref={stepHeading}>{choosingScenario ? "Что вы хотите автоматизировать?" : steps[step]}</h3>
-          {choosingScenario && <RuleScenarios onChoose={chooseScenario} />}
+          {choosingScenario && <RuleScenarios scope={formId ? "form" : "global"} onChoose={chooseScenario} />}
           {step === 0 && <div className="rule-step-fields">
             <div>
               <label className="activity-field">Название
@@ -293,10 +295,11 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                 setEvent(next);
                 if (requiresConditions(next)) setConditionsOpen(true);
               }}>
-                {Object.entries(automationEvents).filter(([id]) => formId || id === rule?.event_type
+                {Object.entries(automationEvents).filter(([id]) => formId ? id !== "form_closed" : id === rule?.event_type
                   || (id !== "matching_count" && id !== "matching_share")).map(([id, label]) => <option value={id} key={id}>{label}</option>)}
               </select>
             </label>
+            {formClosed && <p className="activity-muted">{formClosedDescription}</p>}
             {needsThreshold && <>
               <div>
                 <label className="activity-field">{event === "matching_share" ? "Доля ответов, %" : "Количество ответов"}
@@ -388,22 +391,22 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                 onClick={() => void questions.refetch()}>Повторить</button>
             </p>}
             {recipientPath.length > 0 && <p className="activity-muted">Организации из ответа можно отправить только краткое письмо.</p>}
-            <RuleEmailTemplate subject={subject} body={body} hasThreshold={needsThreshold}
+            <RuleEmailTemplate subject={subject} body={body} hasThreshold={needsThreshold} includeResponse={!formClosed}
               subjectError={errorFor("subject")} bodyError={errorFor("body")}
               onSubject={next => { setSubject(next); setValidationError(null); }}
               onBody={next => { setBody(next); setValidationError(null); }} />
-            <label className="activity-field">Содержание
+            {!formClosed && <label className="activity-field">Содержание
               <select value={mode} {...ruleErrorAttributes(errorFor("mode"))}
                 onChange={(change) => setMode(change.target.value as EmailAction["mode"])}>
                 <option value="summary">Краткое письмо со ссылкой</option>
                 <option value="full" disabled={Boolean(recipientPath.length)}>Полный ответ со ссылкой</option>
               </select>
-            </label>
+            </label>}
             <RuleFieldErrorMessage error={errorFor("mode")} />
           </div>}
-          {step === 3 && <RuleEmailPreview subject={subject} body={body} mode={mode} formTitle={form?.title} recipients={addresses}
+          {step === 3 && <RuleEmailPreview subject={subject} body={body} mode={emailMode} formTitle={form?.title} recipients={addresses}
             recipientField={recipientFields.find((field) => fieldKey(field.path) === fieldKey(recipientPath))?.label}
-            hasThreshold={needsThreshold} />}
+            hasThreshold={needsThreshold} includeResponse={!formClosed} />}
         </div>
         {save.isError && <p className="activity-error activity-dialog-error" role="alert">
           {genericSaveError ? saveError + ". Повторите попытку. Введённые данные остались в редакторе." : saveError}

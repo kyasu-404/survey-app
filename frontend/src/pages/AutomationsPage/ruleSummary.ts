@@ -34,6 +34,8 @@ export function describeRuleTrigger(rule: AutomationRule) {
       return threshold === null ? event : `Доля ответов по условиям достигает ${threshold} %`;
     case "inactivity":
       return interval ? `Нет новых ответов (период: ${interval})` : event;
+    case "form_closed":
+      return "Завершается сбор ответов по одной из ваших форм";
     case "date":
       return rule.scheduled_at ? `В заданное время, ${formatActivityTime(rule.scheduled_at)}` : event;
     case "recurring":
@@ -60,9 +62,14 @@ const runEvents = new Map([
   ["gap", "Период без новых ответов по форме"],
   ["date", "Запуск в заданное время для формы"],
   ["slot", "Запуск по расписанию для формы"],
+  ["closed", "Завершён сбор ответов по форме"],
+  ["closed:manual", "Сбор ответов завершён вручную по форме"],
+  ["closed:deadline", "Истёк срок сбора ответов по форме"],
+  ["closed:limit", "Достигнут лимит ответов по форме"],
 ]);
 
 export function describeRunEvent(run: AutomationRun) {
-  const event = runEvents.get(run.event_key?.split(":", 1)[0]) ?? "Сработало правило для формы";
+  const [prefix, reason] = (run.event_key ?? "").split(":", 2);
+  const event = runEvents.get(`${prefix}:${reason}`) ?? runEvents.get(prefix) ?? "Сработало правило для формы";
   return `${event} «${run.form_title}»`;
 }

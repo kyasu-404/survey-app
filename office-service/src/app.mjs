@@ -15,6 +15,15 @@ export function createApp({pool, supabase, env = process.env}) {
   const key = encryptionKey(env.ONLYOFFICE_SETTINGS_ENCRYPTION_KEY);
   const tokenKey = Buffer.from(key).toString('hex') + ':survey-office-capability-v1';
   const appUrl = baseUrl(env.PUBLIC_APP_URL);
+  const appAddress = new URL(appUrl);
+  const allowedOrigins = new Set([appAddress.origin]);
+  for (const value of (env.OFFICE_ALLOWED_ORIGINS ?? '').split(',')) {
+    const origin = value.trim();
+    if (!origin) continue;
+    const address = new URL(baseUrl(origin));
+    requireValue(address.pathname === '/', 'OFFICE_ALLOWED_ORIGINS принимает только адреса без пути');
+    allowedOrigins.add(address.origin);
+  }
   const store = supabase.storage.from(BUCKET);
   const query = async (sql,args=[]) => (await pool.query(sql,args)).rows;
   const settings = async () => (await query('select * from public.onlyoffice_settings where id=1'))[0];
@@ -40,7 +49,7 @@ export function createApp({pool, supabase, env = process.env}) {
   }
   const employeeOnly = auth => requireValue(!auth.claims,'Токен плагина не разрешает эту операцию',403);
   const archives = createResponseArchiveRoutes({
-    env, send, secureCookies: new URL(appUrl).protocol === 'https:',
+    env, send, secureCookies: appAddress.protocol === 'https:',
     authenticateEmployee: async token => employeeOnly(await authenticate(token)),
   });
   function adminOnly(auth) { employeeOnly(auth); requireValue(auth.profile.role==='admin','Требуются права администратора',403); }
@@ -189,7 +198,7 @@ export function createApp({pool, supabase, env = process.env}) {
   async function handle(req,res) {
     const url=new URL(req.url,'http://office.local'),path=url.pathname.replace(/^\/api\/office/,'');
     const origin=req.headers.origin;
-    requireValue(!origin || origin===new URL(appUrl).origin || (path.startsWith('/plugin/') && req.method==='GET'),'Недопустимый origin',403);
+    requireValue(!origin || allowedOrigins.has(origin) || (path.startsWith('/plugin/') && req.method==='GET'),'Недопустимый origin',403);
     if(req.method==='OPTIONS') return send(res,204,'');
     if(path==='/health') {await query('select 1'); return send(res,200,{ok:true});}
     const prepareArchive = path.match(/^\/forms\/([^/]+)\/response-archive$/);
@@ -259,9 +268,18 @@ export function createApp({pool, supabase, env = process.env}) {
       }
       employeeOnly(auth);
       if(formMatch[2]==='results' && req.method==='GET') {
-        const results=await query('select r.id,r.form_id,r.template_id,r.name,r.file_type,r.files,r.size_bytes,r.created_by,r.created_at,p.name as author_name from public.office_generation_results r left join public.profiles p on p.id=r.created_by where r.form_id=$1 order by r.created_at desc limit 100',[form.id]);
-        const jobs=await query("select id,form_id,name,state,error,created_at from public.office_generation_jobs where form_id=$1 and (state in ('queued','running') or (state='failed' and created_at>now()-interval '1 day')) order by created_at desc limit 100",[form.id]);
-        return send(res,200,{results,jobs});
+        // Read both lists in one snapshot so a completing job always has a job or a result.
+        const [feed]=await query(`select
+          (select coalesce(jsonb_agg(results order by results.created_at desc,results.id desc),'[]'::jsonb)
+           from (select r.id,r.form_id,r.template_id,r.name,r.file_type,r.files,r.size_bytes,r.created_by,r.created_at,
+                 p.name as author_name from public.office_generation_results r
+                 left join public.profiles p on p.id=r.created_by
+                 where r.form_id=$1 order by r.created_at desc,r.id desc limit 100) results) as results,
+          (select coalesce(jsonb_agg(jobs order by jobs.created_at desc,jobs.id desc),'[]'::jsonb)
+           from (select id,form_id,name,state,error,created_at from public.office_generation_jobs
+                 where form_id=$1 and (state in ('queued','running') or (state='failed' and created_at>now()-interval '1 day'))
+                 order by created_at desc,id desc limit 100) jobs) as jobs`,[form.id]);
+        return send(res,200,feed);
       }
       requireValue(formMatch[2]==='documents','Метод не поддерживается',405);
       if(req.method==='GET') {

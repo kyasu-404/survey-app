@@ -121,6 +121,9 @@ test('Office HTTP save persists bindings in PostgreSQL and generates from the co
  assert.deepEqual(Buffer.from(await (await request(`/documents/${doc.id}/download`)).arrayBuffer()),template);
  const queued=await request(`/documents/${doc.id}/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({response_ids:[responseId]})});
  assert.equal(queued.status,202);const job=await queued.json();
+ const pending=await (await request(`/forms/${form}/results`)).json();
+ assert.deepEqual(pending.results,[]);
+ assert.deepEqual(pending.jobs.map(({id,state})=>({id,state})),[{id:job.id,state:'queued'}]);
  assert.equal(await processGenerationJob({pool,store}),true);
  const results=await (await request(`/forms/${form}/results`)).json();assert.equal(results.results[0].id,job.id);assert.equal(results.jobs.length,0);
  const archive=unzipSync(Buffer.from(await (await request(`/results/${job.id}/download`)).arrayBuffer()));

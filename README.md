@@ -233,6 +233,7 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop mail
 6. `202611231300_notification_center_delivery_events.sql`
 7. `202611231400_default_response_notification_opt_in.sql`
 8. `202611231500_review_regressions.sql`
+9. `202611231600_form_closed_automation.sql`
 
 Из `./supabase/docker` пересоздайте Edge Runtime, чтобы применились изменения `user-admin`,
 и пересоберите воркер с обновлённым overlay:

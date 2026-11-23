@@ -1,7 +1,42 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import type { AutomationRule, AutomationRun } from "../src/entities/automation/model";
 import type { Notification } from "../src/entities/notification/model";
 import { openSurveyApp } from "./fixtures/surveyApp";
+
+async function expectVisibleFocusOutline(field: Locator, scrollArea: string) {
+  await field.focus();
+  await expect(field).toBeFocused();
+  await expect.poll(() => field.evaluate((input, selector) => {
+    const scroll = input.closest(selector)!.getBoundingClientRect();
+    const control = input.getBoundingClientRect();
+    const style = getComputedStyle(input);
+    const width = parseFloat(style.outlineWidth);
+    const outer = Math.max(0, width + parseFloat(style.outlineOffset));
+    return style.outlineStyle !== "none" && width > 0 &&
+      control.left - outer >= scroll.left && control.right + outer <= scroll.right &&
+      control.top - outer >= scroll.top && control.bottom + outer <= scroll.bottom;
+  }, scrollArea)).toBe(true);
+}
+
+test("keeps the entire focus outline visible in automation and document dialogs", async ({ page }) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 1 });
+  await page.route("**/rest/v1/automation_rules?*", route => route.fulfill({ json: [] }));
+  await page.route("**/api/office/status", route => route.fulfill({ json: { enabled: true } }));
+  await page.route("**/api/office/forms/*/documents", route =>
+    route.fulfill({ json: { documents: [], enabled: true, max_file_mb: 25, response_count: 1 } }));
+
+  await page.goto("/automations");
+  await page.getByRole("button", { name: "Создать правило" }).click();
+  const editor = page.getByRole("dialog", { name: "Новое правило" });
+  await editor.getByRole("button", { name: "Настроить своё правило" }).click();
+  await expectVisibleFocusOutline(editor.getByRole("textbox", { name: "Название", exact: true }), ".activity-editor-body");
+  await editor.getByRole("button", { name: "Закрыть", exact: true }).click();
+
+  await page.goto(`/dashboard/forms/${formId}/responses`);
+  await page.getByRole("button", { name: "Документы", exact: true }).click();
+  const documents = page.getByRole("dialog", { name: "Документы" });
+  await expectVisibleFocusOutline(documents.getByRole("textbox", { name: "Поиск документов" }), ".office-tab-panel");
+});
 
 test("keeps global and form-specific rules separate and builds an email with conditions", async ({ page }, testInfo) => {
   const app = await openSurveyApp(page, { responseCount: 1, profileRole: "user" });
