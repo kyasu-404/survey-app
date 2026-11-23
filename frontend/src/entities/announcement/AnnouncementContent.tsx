@@ -55,19 +55,23 @@ function messageBlocks(message: string) {
   return blocks;
 }
 
-type Props = { message: string; actionLabel?: string | null; actionUrl?: string | null; onAction?: () => void; preview?: boolean };
+type ActionProps = { actionLabel?: string | null; actionUrl?: string | null; onAction?: () => void; preview?: boolean };
 
-export function AnnouncementContent({ message, actionLabel, actionUrl, onAction, preview }: Props) {
+export function AnnouncementAction({ actionLabel, actionUrl, onAction, preview }: ActionProps) {
   const inApp = useInRouterContext();
   const href = safeAnnouncementUrl(actionUrl);
+  if (!href) return null;
   const caption = actionLabel?.trim() || "Подробнее";
+  if (preview) return <span className="announcement-action">{caption}</span>;
+  const internal = href.startsWith("/");
+  if (internal && inApp) return <Link className="announcement-action" to={href} onClick={onAction}>{caption}</Link>;
+  return <a className="announcement-action" href={href} onClick={onAction}
+    target={internal ? undefined : "_blank"} rel={internal ? undefined : "noopener noreferrer"}>{caption}</a>;
+}
+
+export function AnnouncementContent({ message, ...action }: ActionProps & { message: string }) {
   return <div className="announcement-content">
     {messageBlocks(message)}
-    {href && (preview ? <span className="announcement-action">{caption}</span> : href.startsWith("/") && inApp
-      ? <Link className="announcement-action" to={href} onClick={onAction}>{caption}</Link>
-      : <a className="announcement-action" href={href} onClick={onAction}
-      target={href.startsWith("/") ? undefined : "_blank"} rel={href.startsWith("/") ? undefined : "noopener noreferrer"}>
-      {caption}
-    </a>)}
+    <AnnouncementAction {...action} />
   </div>;
 }

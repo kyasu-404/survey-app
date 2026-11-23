@@ -16,6 +16,7 @@ export const routes = {
   builderEdit: (id: string) => `/builder/${id}`,
   users: "/users",
   settings: "/preferences",
+  settingsSecurity: "/preferences?tab=security",
   administration: "/settings",
   announcements: "/settings/announcements",
   notifications: "/notifications",

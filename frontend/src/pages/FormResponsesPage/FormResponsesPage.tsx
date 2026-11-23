@@ -2,7 +2,7 @@ import { Presence } from "../../shared/ui/Presence";
 import {officeRequest} from '../../entities/office/api';
 import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -17,13 +17,16 @@ import {
 import { deleteResponses, getAllResponsesByForm, getResponsesByForm } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
+import { getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
 import { getFormReasonLabel, getFormTypeLabel } from "../../entities/survey/model/formOptions";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
+import { isTemplateForm } from "../../entities/survey/model/surveyModel";
 import type { SurveyForm, SurveySchema } from "../../entities/survey/types";
 import { Icon } from "../../shared/ui/Icon";
 import pinBlackIcon from "../../img/Pin_black.svg";
 import pinWhiteIcon from "../../img/Pin_white.svg";
 import { supabaseClient } from "../../shared/api";
+import { copyTextToClipboard } from "../../shared/lib/browser";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { hasArchiveFileQuestions } from "../../entities/response/lib/responseFiles";
@@ -37,6 +40,8 @@ import { ResponsePreviewSheet } from "./ResponsePreviewSheet";
 import { ResponseReportModal } from "./ResponseReportModal";
 import { useNewResponseHighlights } from "./useNewResponseHighlights";
 import { createRealtimeRecovery } from "../../shared/lib/realtimeRecovery";
+
+const ShareFormModal = lazy(() => import("../DashboardPage/components/ShareFormModal").then(module => ({ default: module.ShareFormModal })));
 
 type SelectedResponsePreview = {
   label: string;
@@ -206,6 +211,7 @@ export default function FormResponsesPage() {
   const [responseReport, setResponseReport] = useState<ResponseReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [shareDialog, setShareDialog] = useState<{ formId: string; tab: "link" | "mail" } | null>(null);
   const officeStatus = useQuery({
     queryKey: ["office-status"],
     queryFn: () => officeRequest<{ enabled: boolean }>("/status"),
@@ -250,6 +256,7 @@ export default function FormResponsesPage() {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
     setResponseReport(null);
+    setShareDialog(null);
     setIsHeaderPinned(false);
     setIsPreparingZip(false);
     return () => {
@@ -333,6 +340,11 @@ export default function FormResponsesPage() {
     .find((error) => error && !isAbortError(error)) ?? null;
   const totalResponses = responsesQuery.data?.count ?? 0;
   const totalPages = responsesQuery.data?.totalPages ?? 1;
+  const form = formQuery.data;
+  const canShareForm = Boolean(form?.is_public && !isTemplateForm(form) && !getDeadlineStatePatch(form));
+  const canInviteOrganizations = canShareForm && Boolean(
+    user && form?.author_id === user.id && form.personal_links_enabled && usesOrganizationDirectory,
+  );
   const canDeleteResponses = Boolean(
     formQuery.data && (formQuery.data.author_id === user?.id || profile?.role === "admin"),
   );
@@ -519,6 +531,22 @@ export default function FormResponsesPage() {
     navigate(routes.formResponsesHtml(id));
   };
 
+  const handleCopyFormLink = async () => {
+    if (!form || !canShareForm) return;
+
+    try {
+      if (await copyTextToClipboard(`${window.location.origin}${routes.survey(form.id)}`)) {
+        showToast("Ссылка скопирована", "success");
+        return;
+      }
+    } catch {
+      // The share dialog offers a selectable URL even without clipboard access.
+    }
+
+    setShareDialog(current => current ?? { formId: form.id, tab: "link" });
+    showToast("Выделите и скопируйте ссылку вручную.", "warning");
+  };
+
   function closeResponsePreview() {
     clearResponseLink();
     setSelectedResponsePreview(null);
@@ -699,10 +727,26 @@ export default function FormResponsesPage() {
         )}
 
         {!isLoading && !combinedError && !rows.length && (
-          <div className="dashboard-empty-state responses-page-empty">
-            <h4>Ответов пока нет</h4>
-            <p>Новые ответы появятся здесь автоматически после отправки формы.</p>
-          </div>
+          form ? (
+            <div className="dashboard-empty-state responses-page-empty">
+              <h4>Ответов пока нет</h4>
+              {canShareForm && responsesQuery.data?.count === 0 ? (
+                <>
+                  <p>{canInviteOrganizations ? "Скопируйте ссылку на форму или отправьте приглашения." : "Скопируйте ссылку на форму."}</p>
+                  <div className="responses-page-empty-actions">
+                    <button type="button" className="button-primary" onClick={() => void handleCopyFormLink()}>
+                      Скопировать ссылку
+                    </button>
+                    {canInviteOrganizations && (
+                      <button type="button" className="app-button" aria-haspopup="dialog" onClick={() => setShareDialog({ formId: form.id, tab: "mail" })}>
+                        Отправить приглашения
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : !canShareForm && !isTemplateForm(form) && <p>Форма закрыта для ответов.</p>}
+            </div>
+          ) : <p className="responses-page-error">Форма не найдена или недоступна.</p>
         )}
 
         {!isLoading && !combinedError && !!rows.length && (
@@ -808,6 +852,11 @@ export default function FormResponsesPage() {
         )}
       </div>
 
+      {form && shareDialog?.formId === form.id && (
+        <Suspense fallback={<p role="status">Открываем окно «Поделиться формой»…</p>}>
+          <ShareFormModal key={form.id} form={form} initialTab={shareDialog.tab} onClose={() => setShareDialog(null)} />
+        </Suspense>
+      )}
       <Presence kind="drawer">{preview && formQuery.data && (
         <ResponsePreviewSheet key={preview.response.id} form={formQuery.data} response={preview.response}
           label={preview.label}

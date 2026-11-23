@@ -4,7 +4,6 @@ import {
   createUser,
   deleteUser,
   setUserDisabled,
-  updateMyPassword,
   updateUserPassword,
   updateUserRole,
 } from "../../../features/users/api";
@@ -102,17 +101,6 @@ export function useUsersAdminActions() {
     },
   });
 
-  const updatePasswordMutation = useMutation({
-    mutationFn: updateMyPassword,
-    onSuccess: () => {
-      setPasswordModal(null);
-      showToast("Пароль обновлён", "success");
-    },
-    onError: (error) => {
-      showToast(getErrorMessage(error, "Не удалось обновить пароль"), "error");
-    },
-  });
-
   const isPasswordValid = useMemo(() => newUser.password.length >= 8, [newUser.password.length]);
   const isModalPasswordValid = useMemo(() => (passwordModal?.password.length ?? 0) >= 8, [passwordModal?.password.length]);
 
@@ -138,12 +126,11 @@ export function useUsersAdminActions() {
     }
   };
 
-  const openPasswordModal = (userId: string, title: string, isOwnPassword: boolean) => {
+  const openPasswordModal = (userId: string, title: string) => {
     setPasswordModal({
       userId,
       title,
       password: "",
-      isOwnPassword,
     });
   };
 
@@ -158,11 +145,6 @@ export function useUsersAdminActions() {
 
     if (!isModalPasswordValid) {
       showToast("Пароль должен быть не короче 8 символов", "error");
-      return;
-    }
-
-    if (passwordModal.isOwnPassword) {
-      await updatePasswordMutation.mutateAsync(passwordModal.password);
       return;
     }
 
@@ -221,6 +203,6 @@ export function useUsersAdminActions() {
     setPasswordModal,
     setRoleChangeModal,
     updatePasswordModalValue,
-    updatePasswordPending: updatePasswordMutation.isPending || updateUserPasswordMutation.isPending,
+    updatePasswordPending: updateUserPasswordMutation.isPending,
   };
 }

@@ -1,5 +1,6 @@
 import { type AutomationField, type Condition, type ConditionOperation, type ConditionValue } from "../../entities/automation/model";
 import { Icon } from "../../shared/ui/Icon";
+import { RuleFieldErrorMessage, ruleErrorAttributes, type RuleFieldError } from "./RuleValidation";
 
 const operations: Record<ConditionOperation, string> = {
   eq: "Равно",
@@ -40,22 +41,33 @@ function choicesFor(field: AutomationField | undefined) {
   });
 }
 
-export function conditionError(condition: Condition, fields: AutomationField[]) {
+type ConditionError = { field: "question" | "value"; message: string };
+export type RuleConditionField = `condition-${number}-${ConditionError["field"]}`;
+
+export function conditionError(condition: Condition, fields: AutomationField[]): ConditionError | null {
   const field = fields.find(item => fieldKey(item.path) === fieldKey(condition.path));
   const { op, value } = condition;
-  if (!field || value === "") return "Проверьте вопрос и значение каждого условия.";
+  if (!field) return {
+    field: "question",
+    message: condition.path.length ? "Этот вопрос больше недоступен. Выберите другой." : "Выберите вопрос для условия.",
+  };
   if (op === "gt" || op === "lt") {
-    return /^[+-]?\d{1,30}([.,]\d{1,30})?$/.test(String(value)) ? null : "Введите число для сравнения.";
+    return /^[+-]?\d{1,30}([.,]\d{1,30})?$/.test(String(value))
+      ? null : { field: "value", message: "Введите число для сравнения." };
   }
   const multiple = isMultiple(op);
+  if (value === "") return {
+    field: "value",
+    message: Array.isArray(field.choices) ? "Выберите вариант ответа." : "Введите значение для сравнения.",
+  };
   const values = Array.isArray(value) ? value : [value];
   if (multiple && (!values.length || values.length > 50 || values.some(item => String(item).length > 1000))) {
-    return "Выберите от 1 до 50 вариантов длиной до 1000 символов каждый.";
+    return { field: "value", message: "Выберите от 1 до 50 вариантов длиной до 1000 символов каждый." };
   }
   const options = choicesFor(field);
   if ((multiple || op === "eq") && Array.isArray(field.choices) &&
     values.some(item => !options.some(option => option.value === String(item)))) {
-    return "Уберите удалённые варианты или выберите актуальные.";
+    return { field: "value", message: "Уберите удалённые варианты или выберите актуальные." };
   }
   return null;
 }
@@ -64,11 +76,12 @@ type Props = {
   fields: AutomationField[];
   conditions: Condition[];
   mode: "all" | "any";
+  errorFor: (field: RuleConditionField) => RuleFieldError | undefined;
   onMode: (mode: "all" | "any") => void;
   onConditions: (conditions: Condition[]) => void;
 };
 
-export function RuleConditions({ fields, conditions, mode, onMode, onConditions }: Props) {
+export function RuleConditions({ fields, conditions, mode, errorFor, onMode, onConditions }: Props) {
   const update = (index: number, next: Condition) => onConditions(conditions.map((condition, row) => row === index ? next : condition));
 
   return <>
@@ -86,11 +99,13 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
       const savedOptions = Array.isArray(condition.value) ? condition.value : [condition.value];
       const removed = [...new Set(savedOptions.map(conditionValueKey))]
         .filter(value => value && !options.some(option => option.value === value));
+      const questionError = errorFor(`condition-${index}-question`);
+      const valueError = errorFor(`condition-${index}-value`);
       return (
         <div key={index} className="activity-condition">
           <div className="activity-condition-controls">
             <label className="activity-field">Вопрос
-              <select required value={fieldKey(condition.path)} onChange={(event) => {
+              <select required value={fieldKey(condition.path)} {...ruleErrorAttributes(questionError)} onChange={(event) => {
                 const field = fields.find((item) => fieldKey(item.path) === event.target.value);
                 const multiValue = field && multiValueFields.has(field.type);
                 update(index, { path: field?.path ?? [], op: multiValue ? "any_of" : "eq", value: multiValue ? [] : "" });
@@ -113,8 +128,9 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
             <button type="button" className="app-button icon-button" aria-label={"Удалить условие " + (index + 1)}
               onClick={() => onConditions(conditions.filter((_, row) => row !== index))}><Icon name="close" /></button>
           </div>
+          <RuleFieldErrorMessage error={questionError} />
           {multiple && usesChoices
-            ? <fieldset className="activity-choices">
+            ? <fieldset className="activity-choices" tabIndex={valueError ? -1 : undefined} {...ruleErrorAttributes(valueError)}>
               <legend>Варианты ответа</legend>
               {removed.map(value => <label className="activity-checkbox" key={value}>
                 <input type="checkbox" checked onChange={() => update(index, { ...condition, value: selected.filter(item => conditionValueKey(item) !== value) })} />
@@ -128,7 +144,8 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
             </fieldset>
             : usesChoices
               ? <label className="activity-field">Значение
-                <select required value={conditionValueKey(savedOptions[0] ?? "")} onChange={(event) => update(index, { ...condition, value: event.target.value })}>
+                <select required value={conditionValueKey(savedOptions[0] ?? "")} {...ruleErrorAttributes(valueError)}
+                  onChange={(event) => update(index, { ...condition, value: event.target.value })}>
                   <option value="">Выберите вариант</option>
                   {removed.map(value => <option key={value} value={value} disabled>Удалённый вариант · {value}</option>)}
                   {options.map((option, row) => <option key={row} value={option.value}>{option.label}</option>)}
@@ -136,11 +153,12 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
               </label>
               : <label className="activity-field">{multiple ? "Варианты через запятую" : "Значение"}
                 <input required maxLength={2000} inputMode={condition.op === "gt" || condition.op === "lt" ? "decimal" : "text"}
-                  value={multiple ? selected.join(",") : String(condition.value)}
+                  value={multiple ? selected.join(",") : String(condition.value)} {...ruleErrorAttributes(valueError)}
                   onChange={(event) => update(index, {
                     ...condition, value: multiple ? event.target.value.split(",") : event.target.value,
                   })} />
               </label>}
+          <RuleFieldErrorMessage error={valueError} />
         </div>
       );
     })}

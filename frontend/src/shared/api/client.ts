@@ -43,8 +43,8 @@ export const apiClient = {
           data: metadata,
         },
       }),
-    updateCurrentUserPassword: (password: string) =>
-      supabaseClient.auth.updateUser({ password }),
+    updateCurrentUserPassword: (currentPassword: string, password: string) =>
+      supabaseClient.auth.updateUser({ current_password: currentPassword, password }),
     logout: () => supabaseClient.auth.signOut(),
     onAuthStateChange: (callback: Parameters<typeof supabaseClient.auth.onAuthStateChange>[0]) =>
       supabaseClient.auth.onAuthStateChange(callback),

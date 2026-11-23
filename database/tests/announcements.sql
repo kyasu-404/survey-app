@@ -17,6 +17,40 @@ insert into public.notifications(id, user_id, category, event_key, title, messag
   ('ab000000-0000-4000-8000-000000000002', 'aa000000-0000-4000-8000-000000000004',
     'response_received', 'announcements-check-other', 'Чужое', '', now() - interval '1 hour');
 
+-- Rows written before service events were removed must stay outside the personal feed.
+insert into public.notifications(user_id, category, event_key, title, message)
+select viewer.id, category, category, 'Legacy service event', ''
+from public.profiles viewer
+cross join unnest(array['automation_triggered', 'automation_succeeded']) as category
+where viewer.id in ('aa000000-0000-4000-8000-000000000001', 'aa000000-0000-4000-8000-000000000003');
+
+set local role authenticated;
+do $$
+declare
+  viewer_id uuid;
+  expected_visible integer;
+begin
+  for viewer_id, expected_visible in
+    select * from (values
+      ('aa000000-0000-4000-8000-000000000001'::uuid, 0),
+      ('aa000000-0000-4000-8000-000000000003'::uuid, 1)
+    ) as viewers(id, visible)
+  loop
+    perform set_config('request.jwt.claim.sub', viewer_id::text, true);
+    assert (select count(*) from public.notifications) = expected_visible, 'Legacy service events passed RLS';
+    assert (select count(*) from public.list_notification_feed()) = expected_visible, 'Legacy service events appeared in the feed';
+    assert not exists (select from public.list_notification_feed('automation_triggered')), 'Legacy category filter returned rows';
+    assert not exists (select from public.list_notification_feed('automation_succeeded', 'unread')), 'Legacy success filter returned rows';
+    assert public.notification_unread_count() = expected_visible, 'Legacy service events inflated the unread count';
+    assert public.mark_notifications_read(null) = expected_visible, 'Bulk read included hidden service events';
+    perform public.save_notification_preferences(array['automation_triggered','response_updated','automation_succeeded']);
+    assert (select muted_categories from public.notification_preferences) = array['response_updated'], 'Old client saved retired preferences';
+  end loop;
+end;
+$$;
+reset role;
+update public.notifications set read_at = null where event_key = 'announcements-check-own';
+
 set local role anon;
 do $$
 begin

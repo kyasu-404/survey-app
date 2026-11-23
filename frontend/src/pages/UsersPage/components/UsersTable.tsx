@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { routes } from "../../../app/routes";
 import type { UserProfile, UserRole } from "../../../entities/user/types";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { getStatusLabel, getUserDisplayName } from "../usersPageUtils";
@@ -7,7 +9,7 @@ type UsersTableProps = {
   isDeletePending: boolean;
   isRoleChangePending: boolean;
   isStatusChangePending: boolean;
-  onOpenPasswordModal: (userId: string, title: string, isOwnPassword: boolean) => void;
+  onOpenPasswordModal: (userId: string, title: string) => void;
   onRequestDelete: (userId: string, userName: string) => void;
   onRequestRoleChange: (
     userId: string,
@@ -101,18 +103,12 @@ export function UsersTable({
                 <td>{profile.created_at ? new Date(profile.created_at).toLocaleString("ru-RU") : "—"}</td>
                 <td>
                   <div className="users-table-actions">
-                    <button
-                      className="users-yellow-button"
-                      onClick={() =>
-                        onOpenPasswordModal(
-                          profile.id,
-                          isOwnUser ? "Смена моего пароля" : `Смена пароля: ${profile.name || profile.email}`,
-                          isOwnUser,
-                        )
-                      }
-                    >
-                      Сменить пароль
-                    </button>
+                    {isOwnUser
+                      ? <Link className="app-button users-yellow-button" to={routes.settingsSecurity}>Сменить пароль</Link>
+                      : <button type="button" className="users-yellow-button"
+                          onClick={() => onOpenPasswordModal(profile.id, `Смена пароля: ${profile.name || profile.email}`)}>
+                          Сменить пароль
+                        </button>}
                     <button
                       className="users-danger-button"
                       onClick={() => onRequestDelete(profile.id, profile.name || profile.email)}

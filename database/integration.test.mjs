@@ -110,6 +110,8 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const automationReviewMigration = await source("./migrations/202611221400_automation_review_fixes.sql");
     const announcementReviewMigration = await source("./migrations/202611221410_announcement_review_fixes.sql");
     const reviewFollowupMigration = await source("./migrations/202611231200_review_followup.sql");
+    const notificationCenterMigration = await source("./migrations/202611231300_notification_center_delivery_events.sql");
+    const responseNotificationOptInMigration = await source("./migrations/202611231400_default_response_notification_opt_in.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -151,6 +153,26 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         await db.query(automationReviewMigration);
         await db.query(announcementReviewMigration);
         await db.query(reviewFollowupMigration);
+        await db.query("insert into public.notification_preferences values($1, array['automation_triggered','form_status','automation_succeeded'])", [owner]);
+        await db.query(notificationCenterMigration);
+        assert.deepEqual((await db.query("select muted_categories from public.notification_preferences where user_id=$1", [owner])).rows[0].muted_categories, ["form_status"]);
+
+        const administrator = randomUUID();
+        const notice = randomUUID();
+        await db.query("insert into auth.users(id,email) values($1,'admin-upgrade@example.invalid')", [administrator]);
+        await db.query("update public.profiles set role='admin' where id=$1", [administrator]);
+        await db.query("insert into public.notification_preferences values($1, '{}')", [administrator]);
+        await db.query(`
+          insert into public.notifications(id,user_id,category,event_key,title,message)
+          values($1,$2,'response_received','before-upgrade','Existing notice','Migration fixture')
+        `, [notice, owner]);
+
+        await db.query(responseNotificationOptInMigration);
+        const preferences = await db.query("select muted_categories from public.notification_preferences where user_id in ($1,$2) order by cardinality(muted_categories)", [owner, administrator]);
+        assert.deepEqual(preferences.rows.map(row => row.muted_categories), [["response_received"], ["form_status", "response_received"]]);
+        assert.equal((await db.query("select count(*)::int n from public.notifications where id=$1", [notice])).rows[0].n, 1);
+        await db.query("delete from public.notifications where id=$1", [notice]);
+        await db.query("delete from auth.users where id=$1", [administrator]);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");

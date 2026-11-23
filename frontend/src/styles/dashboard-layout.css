@@ -670,6 +670,14 @@
   margin-top: 0;
 }
 
+.responses-page-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .responses-table {
   width: 100%;
   border-collapse: collapse;

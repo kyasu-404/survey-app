@@ -1,8 +1,6 @@
 export const preferenceCategories = {
   response_received: "Новые ответы",
   response_updated: "Изменения ответов",
-  automation_triggered: "Срабатывания правил",
-  automation_succeeded: "Успешные отправки",
   automation_failed: "Ошибки автоматизации",
   form_status: "Состояние форм",
 } as const;

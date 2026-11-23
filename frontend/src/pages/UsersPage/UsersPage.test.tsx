@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readAppCss } from "../../test/readAppCss";
 import UsersPage from "./UsersPage";
@@ -11,7 +12,6 @@ const {
   deleteUser,
   setUserDisabled,
   updateUserRole,
-  updateMyPassword,
   updateUserPassword,
   showToast,
 } = vi.hoisted(() => ({
@@ -20,7 +20,6 @@ const {
   deleteUser: vi.fn(),
   setUserDisabled: vi.fn(),
   updateUserRole: vi.fn(),
-  updateMyPassword: vi.fn(),
   updateUserPassword: vi.fn(),
   showToast: vi.fn(),
 }));
@@ -31,7 +30,6 @@ vi.mock("../../features/users/api", () => ({
   getAllUsers,
   setUserDisabled,
   updateUserRole,
-  updateMyPassword,
   updateUserPassword,
 }));
 
@@ -47,6 +45,10 @@ vi.mock("../../app/providers/AuthProvider", () => ({
     loading: false,
   }),
 }));
+
+function UsersTestPage() {
+  return <MemoryRouter><UsersPage /></MemoryRouter>;
+}
 
 function createQueryClient() {
   return new QueryClient({
@@ -77,7 +79,7 @@ describe("UsersPage", () => {
 
     const { container } = render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -102,13 +104,14 @@ describe("UsersPage", () => {
 
     const { container } = render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
     expect(await screen.findByRole("heading", { name: "Пользователи" })).toBeInTheDocument();
     expect(await screen.findByText("admin@example.com")).toBeInTheDocument();
     expect(container.querySelector(".users-page-card")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Сменить мой пароль" })).toHaveAttribute("href", "/preferences?tab=security");
     expect(container.querySelector(".users-page-controls")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Имя")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+ Добавить пользователя" })).toBeInTheDocument();
@@ -183,7 +186,7 @@ describe("UsersPage", () => {
 
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -231,7 +234,7 @@ describe("UsersPage", () => {
 
     const firstRender = render(
       <QueryClientProvider client={queryClient}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -257,7 +260,7 @@ describe("UsersPage", () => {
 
     const secondRender = render(
       <QueryClientProvider client={queryClient}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -294,7 +297,7 @@ describe("UsersPage", () => {
 
     const firstRender = render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -306,7 +309,7 @@ describe("UsersPage", () => {
 
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -342,7 +345,7 @@ describe("UsersPage", () => {
 
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
@@ -413,16 +416,14 @@ describe("UsersPage", () => {
 
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <UsersPage />
+        <UsersTestPage />
       </QueryClientProvider>,
     );
 
     expect(await screen.findByText("Мария")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Сменить мой пароль" })).toHaveClass("users-neutral-button");
+    expect(screen.getByRole("link", { name: "Сменить мой пароль" })).toHaveClass("users-neutral-button");
 
-    await userEvent.click(screen.getByRole("button", { name: "Сменить мой пароль" }));
-    expect(screen.getByRole("heading", { name: "Смена моего пароля" })).toHaveClass("users-modal-title");
-    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("link", { name: "Сменить мой пароль" })).toHaveAttribute("href", "/preferences?tab=security");
 
     const mariaRow = screen.getByText("Мария").closest("tr");
     expect(mariaRow).not.toBeNull();

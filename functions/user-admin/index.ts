@@ -355,8 +355,11 @@ Deno.serve(async (req) => {
     }
 
     case "updatePassword": {
-      if (!payload.userId || payload.password.length < 8) {
+      if (!payload.userId || typeof payload.password !== "string" || payload.password.length < 8) {
         return errorResponse(req, 400, "Invalid password update payload", actionLogContext);
+      }
+      if (payload.userId === requester.id) {
+        return errorResponse(req, 403, "Смените свой пароль во вкладке «Безопасность» личных настроек", actionLogContext);
       }
 
       const { error } = await adminClient.auth.admin.updateUserById(payload.userId, {

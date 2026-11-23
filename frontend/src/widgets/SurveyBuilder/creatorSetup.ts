@@ -222,6 +222,8 @@ export function createCreatorInstance(
   });
 
   creator.locale = "ru";
+  // The app gives context-specific save feedback while Creator keeps its modified state.
+  creator.showErrorOnFailedSave = false;
   // Keep the add button compact and its type picker reachable on phones.
   creator.rememberLastQuestionType = false;
   creator.applyCreatorTheme(creatorTheme);

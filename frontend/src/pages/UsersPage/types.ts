@@ -11,7 +11,6 @@ export type PasswordModalState = {
   userId: string;
   title: string;
   password: string;
-  isOwnPassword: boolean;
 };
 
 export type DeleteUserModalState = {

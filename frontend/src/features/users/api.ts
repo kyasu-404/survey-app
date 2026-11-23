@@ -1,5 +1,4 @@
 import { supabase } from "../../shared/api/supabase";
-import { apiClient } from "../../shared/api";
 import type { UserProfile, UserRole } from "../../entities/user/types";
 import { runRequest } from "../../shared/api/request";
 
@@ -139,12 +138,4 @@ export async function updateUserPassword(userId: string, password: string) {
     userId,
     password,
   });
-}
-
-export async function updateMyPassword(password: string) {
-  const { error } = await runRequest(
-    "auth.updateCurrentUserPassword",
-    () => apiClient.auth.updateCurrentUserPassword(password),
-  );
-  if (error) throw error;
 }

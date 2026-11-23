@@ -66,3 +66,10 @@ test("rolls back a newly created auth user when profile persistence fails", () =
   assert.match(createCase[0], /rolled back/i);
   assert.match(createCase[0], /partially created/i);
 });
+
+test("keeps administrative password resets for other users", () => {
+  const reset = source.match(/case "updatePassword":[\s\S]*?case "setDisabled":/);
+
+  assert.ok(reset);
+  assert.match(reset[0], /if \(payload\.userId === requester\.id\)[\s\S]*?return errorResponse[\s\S]*?adminClient\.auth\.admin\.updateUserById/);
+});

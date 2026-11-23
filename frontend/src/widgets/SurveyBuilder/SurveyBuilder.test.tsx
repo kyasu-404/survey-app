@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
 import type { SurveySchema } from "../../entities/survey/types";
+import { RequestTimeoutError } from "../../shared/api/request";
 import { SUPABASE_URL } from "../../shared/config/env";
 import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { readAppCss } from "../../test/readAppCss";
@@ -1458,6 +1459,64 @@ describe("SurveyBuilder", () => {
     expect(navigate).toHaveBeenCalledWith(routes.dashboardMy, { replace: true, state: { refreshList: true } });
   });
 
+  it("reports each invalid form setting beside its input and clears the error when corrected", async () => {
+    renderBuilder();
+    await waitFor(() => expect(creatorInstances).toHaveLength(1));
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+
+    const dialog = within(await screen.findByRole("dialog", { name: "Настройки формы" }));
+    const type = dialog.getByLabelText("Тип формы");
+    const reason = dialog.getByLabelText("Основание формы");
+    const limit = dialog.getByLabelText("Лимит ответов");
+    await userEvent.type(limit, "1.5");
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить" }));
+
+    expect(type).toHaveAccessibleDescription("Выберите тип формы.");
+    expect(reason).toHaveAccessibleDescription("Выберите основание формы.");
+    expect(limit).toHaveAccessibleDescription("Укажите целое число ответов от 1 до 100 000.");
+    expect(limit).toHaveAttribute("aria-invalid", "true");
+    expect(createSurveyMutateAsync).not.toHaveBeenCalled();
+
+    await userEvent.selectOptions(type, "monitoring");
+    expect(type).not.toHaveAttribute("aria-invalid", "true");
+    expect(reason).toHaveAttribute("aria-invalid", "true");
+    await userEvent.selectOptions(reason, "order");
+    await userEvent.clear(limit);
+    await userEvent.type(limit, "25");
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(createSurveyMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ maxResponses: 25 })));
+  });
+
+  it("keeps a new form and its entered settings ready to retry after a network failure", async () => {
+    createSurveyMutateAsync.mockRejectedValueOnce({ code: "", message: "TypeError: Failed to fetch" });
+    renderBuilder();
+    await waitFor(() => expect(creatorInstances).toHaveLength(1));
+    act(() => {
+      const creator = creatorInstances[0];
+      creator.JSON = { ...creator.JSON, title: "Новый черновик" };
+      creator.onModified.fire(creator, { type: "PROPERTY_CHANGED" });
+    });
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, vi.fn()); });
+
+    const dialog = within(await screen.findByRole("dialog", { name: "Настройки формы" }));
+    await userEvent.selectOptions(dialog.getByLabelText("Тип формы"), "monitoring");
+    await userEvent.selectOptions(dialog.getByLabelText("Основание формы"), "order");
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+      "Не удалось сохранить форму. Проверьте соединение и повторите попытку. Несохранённые изменения остались в редакторе.",
+      "error",
+    ));
+    expect(creatorInstances[0].JSON.title).toBe("Новый черновик");
+    expect(navigate).not.toHaveBeenCalled();
+
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(createSurveyMutateAsync).toHaveBeenCalledTimes(2));
+    expect(createSurveyMutateAsync.mock.calls[1][0]).toMatchObject({
+      title: "Новый черновик", formType: "monitoring", formReason: "order",
+    });
+  });
+
   it("shows empty form metadata selects with visual placeholders instead of placeholder options", async () => {
     const appCss = readAppCss();
 
@@ -1533,6 +1592,34 @@ describe("SurveyBuilder", () => {
         title: "Черновая форма",
       }),
     });
+  });
+
+  it.each([
+    [new RequestTimeoutError("forms.save", 12000), "Проверьте соединение и повторите попытку"],
+    [new Error("Failed to send a request to the Edge Function"), "Проверьте соединение и повторите попытку"],
+    [new Error("Форма изменена в другой вкладке. Сохраните черновик и откройте актуальную версию."), "Форма изменена в другой вкладке"],
+    [new Error("Пользователь не авторизован"), "Войдите в систему"],
+    [{ code: "42501", message: "У вас нет прав на редактирование этой формы" }, "У вас нет прав на редактирование этой формы"],
+  ])("keeps the current editor contents when a save fails with %s", async (error, message) => {
+    const form = { ...createTemplateForm({ id: "form-7", title: "Original" }), form_type: "anketa", revision: 4 };
+    getFormById.mockResolvedValue(form);
+    saveSurveySchema.mockRejectedValueOnce(error);
+    renderBuilder(form.id);
+    await waitFor(() => expect(creatorInstances[0]?.JSON.title).toBe("Original"));
+    act(() => {
+      const creator = creatorInstances[0];
+      creator.JSON = { ...creator.JSON, title: "Local edit" };
+      creator.onModified.fire(creator, { type: "PROPERTY_CHANGED" });
+    });
+
+    const callback = vi.fn();
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, callback); });
+
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining(message), "error");
+    expect(callback).toHaveBeenCalledWith(1, false);
+    expect(creatorInstances[0].JSON.title).toBe("Local edit");
+    expect(localStorage.getItem(getSurveyBuilderDraftStorageKey("user-1", form.id))).toContain("Local edit");
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("preserves dirty edits and their original revision when realtime refreshes the form", async () => {
@@ -1744,6 +1831,34 @@ describe("SurveyBuilder", () => {
       replace: true,
       state: { refreshList: true },
     });
+  });
+
+  it("offers to retry a failed compatibility confirmation without losing the request", async () => {
+    const form = { ...createTemplateForm({ id: "answered-form" }), form_type: "survey", responses_count: 5 };
+    getFormById.mockResolvedValue(form);
+    saveSurveySchema.mockResolvedValueOnce({
+      status: "confirmation_required",
+      safeChanges: [],
+      warnings: ["Добавлен необязательный вопрос"],
+      breakingChanges: [],
+    }).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    renderBuilder(form.id, 5);
+    await waitFor(() => expect(creatorInstances[0]?.JSON.title).toBe(form.title));
+    const callback = vi.fn();
+    await act(async () => { await creatorInstances[0].saveSurveyFunc?.(1, callback); });
+
+    const dialog = within(await screen.findByRole("dialog", { name: "Предупреждение об изменениях формы" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить изменения" }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining("Проверьте соединение и повторите попытку"),
+      "error",
+    ));
+    expect(callback).not.toHaveBeenCalled();
+
+    await userEvent.click(dialog.getByRole("button", { name: "Сохранить изменения" }));
+    await waitFor(() => expect(callback).toHaveBeenCalledWith(1, true));
+    expect(saveSurveySchema.mock.calls[2]).toEqual(saveSurveySchema.mock.calls[1]);
   });
 
   it("blocks incompatible changes and can copy the modified schema", async () => {

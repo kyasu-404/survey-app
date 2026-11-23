@@ -1,7 +1,9 @@
 import { apiClient } from "../../shared/api/client";
 import { runRequest } from "../../shared/api/request";
 import { TIMELINE_PAGE_SIZE, timelineBefore, timelinePage, type TimelineCursor } from "../../shared/api/timelinePage";
-import type { AutomationField, AutomationRule, AutomationRun, RuleConfig } from "./model";
+import type { AutomationField, AutomationRule, AutomationRuleListItem, AutomationRun, RuleConfig } from "./model";
+
+type RuleWithRunCount = AutomationRule & { successful_runs: { count: number }[] };
 
 const RULE_COLUMNS = "id,created_at,form_id,name,description,enabled,event_type,threshold,interval_minutes,scheduled_at,match_mode,conditions,action_config,form:forms(title)";
 
@@ -13,7 +15,8 @@ export type AutomationFilter = "all" | "enabled" | "disabled";
 
 export async function listAutomationRules(userId: string, formId: string | null, search: string, filter: AutomationFilter, cursor?: TimelineCursor, signal?: AbortSignal) {
   const { data, error } = await runRequest("automations.list", (requestSignal) => {
-    const query = apiClient.from("automation_rules").select(RULE_COLUMNS).eq("user_id", userId);
+    const query = apiClient.from("automation_rules").select(RULE_COLUMNS + ",successful_runs:automation_runs(count)")
+      .eq("user_id", userId).eq("successful_runs.status", "succeeded");
     if (formId === null) query.is("form_id", null);
     else query.eq("form_id", formId);
     if (search) query.ilike("name", containsSearch(search));
@@ -23,7 +26,10 @@ export async function listAutomationRules(userId: string, formId: string | null,
       .limit(TIMELINE_PAGE_SIZE + 1).abortSignal(requestSignal);
   }, { signal });
   if (error) throw new Error("Не удалось загрузить правила");
-  return timelinePage((data ?? []) as unknown as AutomationRule[]);
+  const items = ((data ?? []) as unknown as RuleWithRunCount[]).map(
+    ({ successful_runs, ...rule }): AutomationRuleListItem => ({ ...rule, successfulRunCount: successful_runs?.[0]?.count ?? null }),
+  );
+  return timelinePage(items);
 }
 
 export async function getAutomationRule(userId: string, id: string, signal?: AbortSignal) {
@@ -36,7 +42,7 @@ export async function getAutomationRule(userId: string, id: string, signal?: Abo
 export async function listAutomationRuns(id: string, cursor?: TimelineCursor, signal?: AbortSignal) {
   const { data, error } = await runRequest("automations.history", (requestSignal) => {
     const query = apiClient.from("automation_runs")
-      .select("id,form_id,form_title,response_id,status,recipient_count,sent_count,failed_count,cancelled_count,last_error,created_at").eq("rule_id", id);
+      .select("id,form_id,form_title,response_id,event_key,status,recipient_count,sent_count,failed_count,cancelled_count,last_error,created_at").eq("rule_id", id);
     if (cursor) query.or(timelineBefore(cursor));
     return query.order("created_at", { ascending: false }).order("id", { ascending: false })
       .limit(TIMELINE_PAGE_SIZE + 1).abortSignal(requestSignal);

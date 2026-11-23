@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAuthCacheGuard } from "../../app/providers/authCache";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -7,6 +7,7 @@ import { getNotificationPreferences, saveNotificationPreferences } from "./api";
 import { notificationPreferencesKey, preferenceCategories, type PreferenceCategory } from "./model";
 
 export function NotificationPreferences({ userId, onSaved }: { userId: string; onSaved?: () => void }) {
+  const headingId = useId();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [draft, setDraft] = useState<PreferenceCategory[] | null>(null);
@@ -38,8 +39,8 @@ export function NotificationPreferences({ userId, onSaved }: { userId: string; o
     <button type="button" className="app-button" onClick={() => void preferences.refetch()}>Повторить</button>
   </div>;
   return <form onSubmit={submit} className="activity-preferences">
-    <fieldset disabled={save.isPending}>
-      <legend>Уведомления в приложении</legend>
+    <fieldset aria-labelledby={headingId} disabled={save.isPending}>
+      <h2 id={headingId}>Уведомления в приложении</h2>
       <p className="activity-muted">Выберите события, о которых хотите узнавать. Объявления администрации видны всегда.</p>
       {Object.entries(preferenceCategories).map(([id, label]) => {
         const category = id as PreferenceCategory;

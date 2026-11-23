@@ -155,6 +155,19 @@
     transform: none;
   }
 
+  .section-navigation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  :root .app-shell .section-navigation .app-button:is([aria-current="page"], [aria-selected="true"]) {
+    color: var(--theme-accent);
+    border-color: var(--theme-accent);
+    background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-page-surface));
+    font-weight: 700;
+  }
+
   :root .app-shell .button-primary,
   :root .app-shell .button-primary:hover {
     min-height: 42px;
@@ -261,10 +274,8 @@
   .form-menu-trigger > svg { display: block; flex-shrink: 0; }
   :root .app-shell .dashboard-status-trigger-glossy::before,
   :root .app-shell .dashboard-status-trigger-glossy::after { content: none; }
-  :root .app-shell .dashboard-form-actions .form-menu-trigger,
-  :root .app-shell .dashboard-form-actions .form-menu-trigger:hover,
-  :root .app-shell .templates-actions-menu-shell .form-menu-trigger,
-  :root .app-shell .templates-actions-menu-shell .form-menu-trigger:hover {
+  :root .app-shell :is(.dashboard-form-actions, .templates-actions-menu-shell, .announcement-admin-row) .form-menu-trigger,
+  :root .app-shell :is(.dashboard-form-actions, .templates-actions-menu-shell, .announcement-admin-row) .form-menu-trigger:hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -280,8 +291,7 @@
     box-shadow: none;
     transform: none;
   }
-  :root .app-shell .dashboard-form-actions .form-menu-trigger:hover,
-  :root .app-shell .templates-actions-menu-shell .form-menu-trigger:hover { background: var(--theme-surface-muted); }
+  :root .app-shell :is(.dashboard-form-actions, .templates-actions-menu-shell, .announcement-admin-row) .form-menu-trigger:hover { background: var(--theme-surface-muted); }
 
   :root .dashboard-forms-table th { padding: 14px 16px; background: var(--theme-surface-muted); font-size: 12px; font-weight: 500; }
   :root .dashboard-forms-table td { padding: 13px 16px; border-color: var(--theme-border); }
@@ -734,10 +744,8 @@
   :root[data-theme] .dashboard-forms-grid > .dashboard-form-card { padding: 14px; }
   :root .dashboard-form-footer { margin-top: 10px; }
   :root .dashboard-form-title { font-size: 17px; }
-  :root .app-shell .dashboard-form-actions .form-menu-trigger,
-  :root .app-shell .dashboard-form-actions .form-menu-trigger:hover,
-  :root .app-shell .templates-actions-menu-shell .form-menu-trigger,
-  :root .app-shell .templates-actions-menu-shell .form-menu-trigger:hover { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  :root .app-shell :is(.dashboard-form-actions, .templates-actions-menu-shell, .announcement-admin-row) .form-menu-trigger,
+  :root .app-shell :is(.dashboard-form-actions, .templates-actions-menu-shell, .announcement-admin-row) .form-menu-trigger:hover { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   .templates-pin-button { width: 44px; height: 44px; }
   :root .app-shell .deadline-modal-actions > button,
   :root .app-shell .responses-delete-button { min-height: 44px; }

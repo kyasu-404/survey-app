@@ -5,16 +5,3 @@
   width: min(1040px, 100%);
   margin-inline: auto;
 }
-
-.administration-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-:root .app-shell .administration-nav .app-button[aria-current="page"] {
-  color: var(--theme-accent);
-  border-color: var(--theme-accent);
-  background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-page-surface));
-  font-weight: 700;
-}

@@ -1,5 +1,6 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useId, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { hasOrganizationQuestion } from "../../entities/organization/model";
+import type { FormSaveSettings } from "../../entities/survey/api/surveysApi";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../entities/survey/model/formOptions";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { OrganizationTypeSettings } from "./OrganizationTypeSettings";
@@ -123,16 +124,63 @@ export function BuilderCompatibilityDialog({ compatibilityDialog, isCompatibilit
   );
 }
 
+type SettingsField = "formType" | "formReason" | "deadlineAt" | "maxResponses";
+type SettingsFieldErrors = Partial<Record<SettingsField, string>>;
+
 export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSettings, isPostSaveSettingsSaving, closePostSaveSettings, handleSavePostSaveSettings }: {
   postSaveSettings: PostSaveSettingsState;
   setPostSaveSettings: Dispatch<SetStateAction<PostSaveSettingsState | null>>;
   isPostSaveSettingsSaving: boolean;
   closePostSaveSettings: () => void;
-  handleSavePostSaveSettings: () => Promise<void>;
+  handleSavePostSaveSettings: (settings: Required<FormSaveSettings>) => Promise<void>;
 }) {
+  const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
+  const errorId = useId();
+  const deadlineInputRef = useRef<HTMLInputElement>(null);
+  const limitInputRef = useRef<HTMLInputElement>(null);
+
+  const clearFieldError = (field: SettingsField) => {
+    setFieldErrors((errors) => errors[field] ? { ...errors, [field]: undefined } : errors);
+  };
+  const getFieldErrorAttributes = (field: SettingsField) => ({
+    "aria-invalid": fieldErrors[field] ? true : undefined,
+    "aria-describedby": fieldErrors[field] ? `${errorId}-${field}` : undefined,
+  });
+  const renderFieldError = (field: SettingsField) => fieldErrors[field] && (
+    <small id={`${errorId}-${field}`} className="builder-settings-field-error" role="alert">{fieldErrors[field]}</small>
+  );
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isPostSaveSettingsSaving) return;
+
+    const formType = postSaveSettings.formTypeValue.trim();
+    const formReason = postSaveSettings.formReasonValue.trim();
+    const deadlineValue = postSaveSettings.deadlineValue.trim();
+    const responseLimitValue = postSaveSettings.responseLimitValue.trim();
+    const deadline = deadlineValue ? new Date(deadlineValue) : null;
+    const maxResponses = responseLimitValue ? Number(responseLimitValue) : null;
+    const errors: SettingsFieldErrors = {};
+
+    if (!formType) errors.formType = "Выберите тип формы.";
+    if (!formReason) errors.formReason = "Выберите основание формы.";
+    if (deadlineInputRef.current?.validity.badInput || (deadline && !Number.isFinite(deadline.getTime()))) {
+      errors.deadlineAt = "Укажите дату и время дедлайна полностью или очистите поле.";
+    }
+    if (limitInputRef.current?.validity.badInput
+      || (maxResponses !== null && (!Number.isInteger(maxResponses) || maxResponses < 1 || maxResponses > 100_000))) {
+      errors.maxResponses = "Укажите целое число ответов от 1 до 100 000.";
+    }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    void handleSavePostSaveSettings({ formType, formReason, deadlineAt: deadline?.toISOString() ?? null, maxResponses });
+  };
+
   return (
     <div className="modal-backdrop">
-      <div className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
+      <form noValidate onSubmit={handleSubmit} className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
         <h3 className="deadline-modal-title">Настройки формы</h3>
         <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
         <div className="deadline-modal-primary-grid">
@@ -144,11 +192,13 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
               <select
                 aria-label="Тип формы"
                 value={postSaveSettings.formTypeValue}
-                onChange={(event) =>
+                {...getFieldErrorAttributes("formType")}
+                onChange={(event) => {
+                  clearFieldError("formType");
                   setPostSaveSettings((current) =>
                     current ? { ...current, formTypeValue: event.target.value } : current,
-                  )
-                }
+                  );
+                }}
               >
                 <option value="" disabled hidden />
                 {REGULAR_FORM_TYPE_OPTIONS.map((option) => (
@@ -163,6 +213,7 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
                 </span>
               )}
             </div>
+            {renderFieldError("formType")}
           </label>
           <label className="deadline-field">
             <span>
@@ -172,11 +223,13 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
               <select
                 aria-label="Основание формы"
                 value={postSaveSettings.formReasonValue}
-                onChange={(event) =>
+                {...getFieldErrorAttributes("formReason")}
+                onChange={(event) => {
+                  clearFieldError("formReason");
                   setPostSaveSettings((current) =>
                     current ? { ...current, formReasonValue: event.target.value } : current,
-                  )
-                }
+                  );
+                }}
               >
                 <option value="" disabled hidden />
                 {FORM_REASON_OPTIONS.map((option) => (
@@ -191,35 +244,46 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
                 </span>
               )}
             </div>
+            {renderFieldError("formReason")}
           </label>
         </div>
         <label className="deadline-field">
           <span>Дедлайн</span>
           <input
+            ref={deadlineInputRef}
             type="datetime-local"
+            aria-label="Дедлайн"
             value={postSaveSettings.deadlineValue}
-            onChange={(event) =>
+            {...getFieldErrorAttributes("deadlineAt")}
+            onChange={(event) => {
+              clearFieldError("deadlineAt");
               setPostSaveSettings((current) =>
                 current ? { ...current, deadlineValue: event.target.value, deadlineChanged: true } : current,
-              )
-            }
+              );
+            }}
           />
+          {renderFieldError("deadlineAt")}
         </label>
         <label className="deadline-field">
           <span>Лимит ответов</span>
           <input
+            ref={limitInputRef}
             type="number"
+            aria-label="Лимит ответов"
             min={1}
             max={100000}
             step={1}
             inputMode="numeric"
             value={postSaveSettings.responseLimitValue}
-            onChange={(event) =>
+            {...getFieldErrorAttributes("maxResponses")}
+            onChange={(event) => {
+              clearFieldError("maxResponses");
               setPostSaveSettings((current) =>
                 current ? { ...current, responseLimitValue: event.target.value, responseLimitChanged: true } : current,
-              )
-            }
+              );
+            }}
           />
+          {renderFieldError("maxResponses")}
         </label>
         <div className="builder-response-settings builder-response-settings-modal">
           <div>
@@ -259,12 +323,12 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
           <button type="button" className="deadline-action-cancel-button" onClick={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
             Отмена
           </button>
-          <button type="button" className="deadline-save-button" onClick={() => void handleSavePostSaveSettings()} disabled={isPostSaveSettingsSaving}>
+          <button type="submit" className="deadline-save-button" disabled={isPostSaveSettingsSaving}>
             {isPostSaveSettingsSaving && <InlineSpinner />}
             Сохранить
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

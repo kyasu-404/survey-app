@@ -41,11 +41,16 @@ export type AutomationRule = RuleConfig & {
   form: { title: string } | null;
 };
 
+export type AutomationRuleListItem = AutomationRule & {
+  successfulRunCount: number | null;
+};
+
 export type AutomationRun = {
   id: string;
   form_id: string;
   form_title: string;
   response_id: string | null;
+  event_key: string;
   status: "pending" | "queued" | "succeeded" | "failed" | "cancelled";
   recipient_count: number;
   sent_count: number;

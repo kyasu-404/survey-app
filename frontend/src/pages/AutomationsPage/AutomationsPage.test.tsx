@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AutomationRule } from "../../entities/automation/model";
+import type { AutomationRule, AutomationRun } from "../../entities/automation/model";
 import { countActiveFormRules } from "../../entities/automation/api";
 import AutomationsPage from "./AutomationsPage";
 
@@ -18,6 +18,11 @@ vi.mock("../../app/providers/AuthProvider", () => ({
 vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast }) }));
 
 const form = { id: "form", title: "Учебная форма" };
+const failedRun: AutomationRun = {
+  id: "run", form_id: form.id, form_title: form.title, response_id: "answer", event_key: "received:answer",
+  status: "failed", recipient_count: 3, sent_count: 1, failed_count: 1, cancelled_count: 1,
+  last_error: "Ошибка SMTP", created_at: "2026-11-22T10:00:00Z",
+};
 const fields = [
   { path: ["topics"], label: "Темы", type: "checkbox", choices: [{ value: 0, text: "Физика" }, "История"] },
   { path: ["school"], label: "Организация", type: "organization" },
@@ -32,7 +37,7 @@ const initialRule: AutomationRule = {
   action_config: { recipients: ["owner@example.invalid"], subject: "Ответ", body: "Пришёл ответ", mode: "summary" },
 };
 
-function renderPage(options: { rule?: object; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void>; fieldsUnavailable?: () => boolean } = {}) {
+function renderPage(options: { rule?: object; runs?: AutomationRun[]; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void>; fieldsUnavailable?: () => boolean } = {}) {
   let rule = { ...initialRule, ...options.rule };
   const requests: { path: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init?: RequestInit) => {
@@ -46,12 +51,10 @@ function renderPage(options: { rule?: object; entry?: string; accessibleForm?: b
         await options.fieldsReady;
         return options.fieldsUnavailable?.() ? Response.json({ message: "Offline" }, { status: 503 }) : Response.json(fields);
       case "automation_rules":
-        return Response.json(url.searchParams.get("form_id") === "is.null" && rule.form_id ? [] : [rule]);
-      case "automation_runs": return Response.json([{
-        id: "run", form_id: form.id, form_title: form.title, response_id: "answer",
-        status: "failed", recipient_count: 3, sent_count: 1, failed_count: 1, cancelled_count: 1,
-        last_error: "Ошибка SMTP", created_at: "2026-11-22T10:00:00Z",
-      }]);
+        return Response.json(url.searchParams.get("form_id") === "is.null" && rule.form_id ? [] : [
+          { ...rule, successful_runs: [{ count: 3 }] },
+        ]);
+      case "automation_runs": return Response.json(options.runs ?? [failedRun]);
       case "rpc/save_automation_rule": return Response.json(rule.id);
       case "rpc/set_automation_rule_enabled":
         rule = { ...rule, enabled: Boolean(body?.p_enabled) };
@@ -98,12 +101,13 @@ describe("AutomationsPage", () => {
 
   it("loads only global rules without listing forms or exposing form questions", async () => {
     const { requests, user } = renderPage();
-    await screen.findByText(/Общих правил пока нет/);
+    await screen.findByText("Создайте первое правило, чтобы получать уведомления о новых ответах.");
     const query = requests.find(({ path }) => path === "automation_rules")!.params;
     expect(query.get("form_id")).toBe("is.null");
     expect(query.get("user_id")).toBe("eq.owner");
     await user.click(screen.getByRole("button", { name: "Создать правило" }));
     const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Настроить своё правило" }));
     expect(editor.queryByRole("combobox")).not.toBeInTheDocument();
     await user.type(editor.getByLabelText("Название", { exact: true }), "Общее");
     await user.click(editor.getByRole("button", { name: "Далее" }));
@@ -114,6 +118,7 @@ describe("AutomationsPage", () => {
     expect(editor.queryByLabelText("Получатель из ответа")).not.toBeInTheDocument();
     await user.click(editor.getByRole("button", { name: "Далее" }));
     expect(editor.getByRole("alert")).toHaveTextContent("Укажите получателя письма");
+    expect(editor.getByLabelText(/Адреса получателей/)).toHaveAccessibleDescription(/Укажите получателя письма/);
     await user.type(editor.getByLabelText(/Адреса получателей/), "owner@example.org");
     await user.click(editor.getByRole("button", { name: "Далее" }));
     await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
@@ -122,10 +127,55 @@ describe("AutomationsPage", () => {
     }));
   });
 
+  it("prefills a configurable threshold rule and explains an invalid count next to the field", async () => {
+    const { requests, user } = renderPage();
+    await user.click(await screen.findByRole("button", { name: "Создать правило" }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Сообщать о достижении количества ответов" }));
+    expect(editor.getByLabelText("Название", { exact: true })).toHaveValue("Порог ответов");
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    expect(editor.getByLabelText("Когда срабатывает правило")).toHaveValue("response_count");
+    const threshold = editor.getByLabelText("Количество ответов", { exact: true });
+    expect(threshold).toHaveValue(50);
+    await user.clear(threshold);
+    await user.click(next);
+    expect(threshold).toHaveFocus();
+    expect(threshold).toHaveAccessibleDescription("Укажите целое число ответов от 1 до 100 000.");
+    await user.type(threshold, "100");
+    await user.click(next);
+    expect(editor.getByLabelText("Тема", { exact: true })).toHaveValue("{{form_title}} — достигнут порог ответов");
+    const recipients = editor.getByLabelText(/Адреса получателей/);
+    expect(recipients).toHaveValue("");
+    await user.type(recipients, "team@example.invalid");
+    await user.click(next);
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.find(({ path }) => path === "rpc/save_automation_rule")?.body).toMatchObject({
+      p_event_type: "response_count", p_threshold: 100, p_action: { recipients: ["team@example.invalid"] },
+    }));
+  });
+
+  it("prefills a weekly summary and lets users change its schedule", async () => {
+    const { user } = renderPage();
+    await user.click(await screen.findByRole("button", { name: "Создать правило" }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Отправлять сводку по расписанию" }));
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    expect(editor.getByLabelText("Когда срабатывает правило")).toHaveValue("recurring");
+    expect(editor.getByLabelText("Повторять каждые")).toHaveValue(7);
+    expect(editor.getByLabelText("Единица времени")).toHaveValue("1440");
+    const firstRun = editor.getByLabelText<HTMLInputElement>("Первый запуск по местному времени");
+    const firstDate = new Date(firstRun.value);
+    expect(firstDate.getDay()).toBe(5);
+    expect(firstDate.getHours()).toBe(9);
+    expect(firstDate.getTime()).toBeGreaterThan(Date.now());
+  });
+
   it("discards an open rule editor when the active account changes", async () => {
     const { user, switchUser } = renderPage();
     await user.click(await screen.findByRole("button", { name: "Создать правило" }));
     const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Настроить своё правило" }));
     await user.type(editor.getByLabelText("Название", { exact: true }), "Черновик владельца");
     switchUser("another-user");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -146,6 +196,7 @@ describe("AutomationsPage", () => {
     const { requests, user } = renderPage({ entry: "/dashboard/forms/form/automations" });
     await user.click(await screen.findByRole("button", { name: "Создать правило" }));
     const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Настроить своё правило" }));
     await user.type(editor.getByLabelText("Название", { exact: true }), "Уведомление");
     expect(editor.getByText(form.title)).toBeInTheDocument();
     expect(requests.find(({ path }) => path === "automation_rules")?.params.get("form_id")).toBe("eq.form");
@@ -288,7 +339,7 @@ describe("AutomationsPage", () => {
     fireEvent.change(editor.getByLabelText("Повторять каждые"), { target: { value: "15" } });
     fireEvent.change(editor.getByLabelText(/Первый запуск/), { target: { value: "2310-01-01T00:00" } });
     await user.click(next);
-    expect(editor.getByRole("alert")).toHaveTextContent("2000–2200");
+    expect(editor.getByLabelText(/Первый запуск/)).toHaveAccessibleDescription("Укажите дату и время запуска с 2000 по 2200 год.");
     fireEvent.change(editor.getByLabelText(/Первый запуск/), { target: { value: "2040-01-01T12:00" } });
     await user.click(next);
     expect(editor.getByText("Адреса получателей")).toBeVisible();
@@ -331,13 +382,46 @@ describe("AutomationsPage", () => {
     expect(editor.getByRole("textbox", { name: "Тема" })).toHaveValue("{{matching_count}}");
   });
 
+  it("explains what global rules do and loads their full success count with the list", async () => {
+    const { requests, user } = renderPage({ rule: { form_id: null, form: null, event_type: "response_count", threshold: 50 } });
+    expect(await screen.findByRole("heading", { name: "Общие правила" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Правило" })).toBeVisible();
+    expect(screen.getByText("Количество ответов достигает 50")).toBeVisible();
+    expect(screen.getByText("Отправить письмо указанному получателю")).toBeVisible();
+    expect(screen.getByText("Успешных запусков: 3")).toBeVisible();
+    const list = requests.find(({ path }) => path === "automation_rules")!.params;
+    expect(list.get("select")).toContain("successful_runs:automation_runs(count)");
+    expect(list.get("successful_runs.status")).toBe("eq.succeeded");
+    expect(requests.some(({ path }) => path === "automation_runs")).toBe(false);
+    await user.click(screen.getByRole("link", { name: /Подробнее.*Правило/ }));
+    expect(await screen.findByRole("heading", { name: "История срабатываний" })).toBeVisible();
+  });
+
+  it("identifies the event and form from each stored run after the rule changes", async () => {
+    renderPage({ entry: "/automations/rule", rule: { form_id: null, form: null, event_type: "date" }, runs: [
+      failedRun,
+      { ...failedRun, id: "schedule", event_key: "slot:123", form_id: "another-form", form_title: "Вторая форма",
+        response_id: null, status: "succeeded", recipient_count: 1, sent_count: 1, failed_count: 0, cancelled_count: 0,
+        last_error: null },
+    ] });
+    expect(await screen.findByRole("heading", { name: "Новый ответ на форму «Учебная форма»" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Запуск по расписанию для формы «Вторая форма»" })).toBeVisible();
+    expect(screen.getByText("Отправлено писем: 1 из 1")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Ответы формы" })).toHaveAttribute("href", "/dashboard/forms/another-form/responses");
+  });
+
   it("shows delivery history and refreshes the rule after disabling it", async () => {
     const { user } = renderPage({ entry: "/automations/rule" });
     expect(await screen.findByRole("link", { name: "Автоматизации формы" })).toHaveAttribute("href", "/dashboard/forms/form/automations");
     expect(await screen.findByText("Ошибка SMTP")).toBeInTheDocument();
-    expect(screen.getByText("Отправлено 1 из 3 · Ошибок: 1 · Отменено: 1")).toBeInTheDocument();
+    expect(screen.getByText("Отправлено писем: 1 из 3")).toBeVisible();
+    await user.click(screen.getByText("Подробности отправки"));
+    expect(screen.getByText("Ошибок отправки: 1")).toBeVisible();
+    expect(screen.getByText("Отменено: 1")).toBeVisible();
     expect(screen.getByRole("link", { name: "Открыть ответ" })).toHaveAttribute("href", "/dashboard/forms/form/responses?response=answer");
-    await user.click(screen.getByRole("button", { name: "Выключить" }));
-    expect(await screen.findByRole("button", { name: "Включить" })).toBeInTheDocument();
+    const status = screen.getByRole("button", { name: "Статус правила «Правило»: Включено" });
+    expect(status).toHaveTextContent("Включено");
+    await user.click(status);
+    expect(await screen.findByRole("button", { name: "Статус правила «Правило»: Выключено" })).toBeInTheDocument();
   });
 });

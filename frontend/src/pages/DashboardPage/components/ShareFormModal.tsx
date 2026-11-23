@@ -18,13 +18,18 @@ function escapeAttribute(value: string) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function ShareFormModal({ form, onClose }: { form: SurveyFormSummary; onClose: () => void }) {
+export function ShareFormModal({ form, initialTab = "link", onClose }: {
+  form: SurveyFormSummary;
+  initialTab?: "link" | "mail";
+  onClose: () => void;
+}) {
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAuthor = Boolean(user && form.author_id === user.id);
   const dialog = useModalSurface();
-  const [tab, setTab] = useState<"link" | "qr" | "embed" | "mail">("link");
-  const [mailVisited, setMailVisited] = useState(false);
+  const startWithMail = isAuthor && initialTab === "mail";
+  const [tab, setTab] = useState<"link" | "qr" | "embed" | "mail">(startWithMail ? "mail" : "link");
+  const [mailVisited, setMailVisited] = useState(startWithMail);
   const [mailBusy, setMailBusy] = useState(false);
   const close = () => { if (!mailBusy) onClose(); };
   const openComposer = () => { setMailVisited(true); setTab("mail"); };

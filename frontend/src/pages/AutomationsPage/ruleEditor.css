@@ -57,3 +57,70 @@
 @media (max-width: 520px) {
   .rule-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.activity-rule-dialog .rule-editor-scenario {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.rule-scenarios {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.rule-scenario {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  text-align: start;
+  font: inherit;
+  color: var(--theme-text);
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.rule-scenario:hover,
+.rule-scenario:focus-visible {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent-soft);
+}
+
+.rule-scenario .material-symbols-outlined { color: var(--theme-accent-strong); }
+.rule-scenario strong { display: block; font-size: .95rem; }
+.rule-scenario small { display: block; margin-top: 3px; color: var(--theme-text-muted); }
+
+.rule-field-error { margin: 4px 0 0; font-size: .88rem; }
+.activity-rule-editor [aria-invalid="true"] { border-color: var(--theme-danger-border); }
+
+.activity-page .rule-status-button {
+  min-height: 32px;
+  padding: 5px 12px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.activity-page .rule-status-button[data-enabled="true"] {
+  color: var(--theme-success-text);
+  background: var(--theme-success-background);
+  border-color: transparent;
+}
+
+.activity-page .rule-status-button[data-enabled="false"] {
+  color: var(--theme-danger-text);
+  background: var(--theme-danger-background);
+  border-color: var(--theme-danger-border);
+}
+
+.activity-page .rule-status-button:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--theme-outline);
+}
+
+.activity-empty-copy { margin: 0; }

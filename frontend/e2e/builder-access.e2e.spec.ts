@@ -32,3 +32,43 @@ for (const responseCount of [0, 2]) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+test("a failed save shows one helpful message and can be retried with the edited form", async ({ page }) => {
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  const { formId, pageErrors } = await openSurveyApp(page, {
+    responseCount: 0,
+    elements: [{ type: "text", name: "name", title: "Имя" }],
+  });
+  const savedTitles: string[] = [];
+  await page.route("**/functions/v1/form-admin", async (route) => {
+    savedTitles.push(route.request().postDataJSON().title);
+    if (savedTitles.length === 1) {
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fulfill({ json: { status: "updated", safeChanges: [], warnings: [], breakingChanges: [] } });
+  });
+
+  await page.goto(`/builder/${formId}`);
+  const grid = page.locator(".svc-side-bar__container");
+  const general = grid.getByRole("button", { name: "Общие", exact: true });
+  if (await general.getAttribute("aria-expanded") !== "true") await general.click();
+  const title = grid.getByRole("textbox", { name: "Название опроса", exact: true });
+  const save = page.getByRole("button", { name: "Сохранить опрос", exact: true });
+  await title.fill("Название после правки");
+  await title.press("Tab");
+  await save.click();
+
+  await expect(page.getByText(
+    "Не удалось сохранить форму. Проверьте соединение и повторите попытку. Несохранённые изменения остались в редакторе.",
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.getByText("Ошибка! Содержание редактора не сохранено.")).toHaveCount(0);
+  await expect(title).toHaveValue("Название после правки");
+  await expect(save).toBeEnabled();
+
+  await save.click();
+  await expect(page).toHaveURL(/\/dashboard\/my$/);
+  expect(savedTitles).toEqual(["Название после правки", "Название после правки"]);
+  expect(pageErrors).toEqual([]);
+});

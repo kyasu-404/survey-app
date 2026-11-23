@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { EmailAction } from "../../entities/automation/model";
+import { RuleFieldErrorMessage, ruleErrorAttributes, type RuleFieldError } from "./RuleValidation";
 
 const tokenGroups = [
   { title: "Форма", values: { form_title: "Название формы", form_link: "Ссылка на ответы формы" } },
@@ -12,11 +13,13 @@ type TemplateProps = {
   subject: string;
   body: string;
   hasThreshold: boolean;
+  subjectError?: RuleFieldError;
+  bodyError?: RuleFieldError;
   onSubject: (value: string) => void;
   onBody: (value: string) => void;
 };
 
-export function RuleEmailTemplate({ subject, body, hasThreshold, onSubject, onBody }: TemplateProps) {
+export function RuleEmailTemplate({ subject, body, hasThreshold, subjectError, bodyError, onSubject, onBody }: TemplateProps) {
   const subjectRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [target, setTarget] = useState<"subject" | "body">("body");
@@ -44,14 +47,20 @@ export function RuleEmailTemplate({ subject, body, hasThreshold, onSubject, onBo
   }
 
   return <>
-    <label className="activity-field">Тема
-      <input ref={subjectRef} required maxLength={500} value={subject} onFocus={() => setTarget("subject")}
-        onChange={change => { setLimitError(""); onSubject(change.target.value); }} />
-    </label>
-    <label className="activity-field">Текст письма
-      <textarea ref={bodyRef} required rows={3} maxLength={10000} value={body} onFocus={() => setTarget("body")}
-        onChange={change => { setLimitError(""); onBody(change.target.value); }} />
-    </label>
+    <div>
+      <label className="activity-field">Тема
+        <input ref={subjectRef} required maxLength={500} value={subject} {...ruleErrorAttributes(subjectError)}
+          onFocus={() => setTarget("subject")} onChange={change => { setLimitError(""); onSubject(change.target.value); }} />
+      </label>
+      <RuleFieldErrorMessage error={subjectError} />
+    </div>
+    <div>
+      <label className="activity-field">Текст письма
+        <textarea ref={bodyRef} required rows={3} maxLength={10000} value={body} {...ruleErrorAttributes(bodyError)}
+          onFocus={() => setTarget("body")} onChange={change => { setLimitError(""); onBody(change.target.value); }} />
+      </label>
+      <RuleFieldErrorMessage error={bodyError} />
+    </div>
     <details className="activity-variables rule-variables">
       <summary>Подстановки</summary>
       <label className="activity-field">Куда вставить

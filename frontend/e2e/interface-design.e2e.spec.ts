@@ -318,3 +318,54 @@ for (const theme of ["sand", "graphite"]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+for (const theme of ["sand", "graphite"]) {
+  test(`${theme}: personal and activity pages share the application background`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
+    const app = await openSurveyApp(page);
+    const surface = page.locator(".activity-page");
+
+    for (const [path, title] of [
+      ["/notifications", "Уведомления"],
+      ["/automations", "Автоматизации"],
+      ["/settings/announcements", "Объявления"],
+      ["/preferences", "Настройки"],
+    ]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+      await expect(surface).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(surface).toHaveCSS("background-image", "none");
+      await expect(surface).toHaveCSS("box-shadow", "none");
+    }
+
+    await page.goto("/settings/announcements");
+    const reference = page.getByRole("navigation", { name: "Администрирование", exact: true })
+      .getByRole("link", { name: "Объявления", exact: true });
+    await expect(reference).toBeVisible();
+    const pillStyle = (control: Locator) => control.evaluate(element => {
+      const { backgroundColor, borderColor, borderRadius, color, minHeight } = getComputedStyle(element);
+      return { backgroundColor, borderColor, borderRadius, color, minHeight };
+    });
+    const referenceStyle = await pillStyle(reference);
+    await page.goto("/preferences");
+    const notificationTab = page.getByRole("tab", { name: "Уведомления", exact: true });
+    await expect(notificationTab).toHaveAttribute("aria-selected", "true");
+    expect(await pillStyle(notificationTab)).toEqual(referenceStyle);
+    expect((await notificationTab.boundingBox())!.width).toBeLessThan(200);
+
+    await notificationTab.press("ArrowRight");
+    const securityTab = page.getByRole("tab", { name: "Безопасность", exact: true });
+    await expect(securityTab).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "Безопасность" })).toBeVisible();
+    await securityTab.blur();
+    await page.screenshot({ path: testInfo.outputPath("personal-settings-desktop.png") });
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const sidebar = page.locator(".sidebar-region[aria-hidden=true] .sidebar");
+    await expect.poll(() => sidebar.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath("personal-settings-mobile.png") });
+    expect(app.pageErrors).toEqual([]);
+  });
+}

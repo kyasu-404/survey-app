@@ -3,14 +3,14 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
-import { AnnouncementContent } from "../../entities/announcement/AnnouncementContent";
+import { AnnouncementAction, AnnouncementContent } from "../../entities/announcement/AnnouncementContent";
+import { NotificationCard } from "../../entities/notification/NotificationCard";
 import { getNotifications } from "../../entities/notification/api";
 import { NotificationPreferences } from "../../entities/notification/NotificationPreferences";
 import { notificationCategories, notificationKey, type NotificationCategory, type NotificationReadFilter } from "../../entities/notification/model";
 import { useNotificationActions } from "../../entities/notification/useNotificationActions";
 import { useUnreadCount } from "../../entities/notification/useNotifications";
 import type { TimelineCursor } from "../../shared/api/timelinePage";
-import { formatActivityTime } from "../../shared/lib/activityTime";
 import { Icon } from "../../shared/ui/Icon";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
@@ -52,7 +52,7 @@ function NotificationCenter({ userId }: { userId: string }) {
 
   return (
     <div className="dashboard-page">
-      <section className="card activity-page notification-center">
+      <section className="activity-page notification-center">
         <header className="activity-heading">
           <div>
             <h1>Уведомления</h1>
@@ -96,34 +96,27 @@ function NotificationCenter({ userId }: { userId: string }) {
             "Здесь появятся события по вашим формам, автоматизациям и объявления администрации."}</p>
           {filtered && <button className="app-button" type="button" onClick={() => { setCategory(""); setRead("all"); }}>Сбросить фильтры</button>}
         </div>}
-        {items.length > 0 && <ul className="activity-list">
+        {items.length > 0 && <ul className="notification-grid" role="list" aria-label="Лента уведомлений">
           {items.map((item) => {
             const details = item.announcement;
             const markRead = () => { if (!item.read_at) mark.mutate(item.id); };
-            return <li key={item.id} className={"activity-row" + (!item.read_at ? " activity-row-unread" : "")}>
-              <div className="activity-row-body">
-                <div className="activity-row-meta">
-                  {!item.read_at && <span className="activity-unread-dot" role="img" aria-label="Непрочитанное" />}
-                  <span>{notificationCategories[item.category]}</span>
-                  <time dateTime={item.created_at}>{formatActivityTime(item.created_at)}</time>
-                </div>
-                <h2 className="notification-row-title">{item.title}</h2>
-                {details ? <AnnouncementContent message={item.message} actionLabel={details.action_label} actionUrl={details.action_url} onAction={markRead} /> : <p>{item.message}</p>}
-                {(item.form_id || item.rule_id) && <div className="activity-links">
-                  {item.form_id && (item.response_id
-                    ? <Link to={routes.formResponse(item.form_id, item.response_id)} onClick={markRead}>Открыть ответ</Link>
-                    : <Link to={routes.builderEdit(item.form_id)} onClick={markRead}>Открыть форму</Link>)}
-                  {item.rule_id && <Link to={routes.automation(item.rule_id)} onClick={markRead}>Открыть правило</Link>}
-                </div>}
-                {details?.require_acknowledgement && (details.acknowledged_at
-                  ? <span className="notification-acknowledged"><Icon name="check_circle" size={16} /> Ознакомление подтверждено</span>
-                  : <button type="button" className="app-button notification-ack" disabled={acknowledge.isPending}
-                    onClick={() => acknowledge.mutate(item.id)}>Ознакомился</button>)}
-              </div>
-              {!item.read_at && <button type="button" className="app-button icon-button"
-                aria-label="Отметить прочитанным" title="Отметить прочитанным" disabled={mark.isPending} onClick={markRead}>
-                <Icon name="check_circle" />
-              </button>}
+            const hasActions = item.form_id || item.rule_id || details?.action_url || details?.require_acknowledgement;
+            const actions = hasActions && <>
+              {details && <AnnouncementAction actionLabel={details.action_label} actionUrl={details.action_url} onAction={markRead} />}
+              {item.form_id && (item.response_id
+                ? <Link to={routes.formResponse(item.form_id, item.response_id)} onClick={markRead}>Открыть ответ</Link>
+                : <Link to={routes.builderEdit(item.form_id)} onClick={markRead}>Открыть форму</Link>)}
+              {item.rule_id && <Link to={routes.automation(item.rule_id)} onClick={markRead}>Открыть правило</Link>}
+              {details?.require_acknowledgement && (details.acknowledged_at
+                ? <span className="notification-acknowledged"><Icon name="check_circle" size={16} /> Ознакомление подтверждено</span>
+                : <button type="button" className="app-button" disabled={acknowledge.isPending}
+                  onClick={() => acknowledge.mutate(item.id)}>Ознакомился</button>)}
+            </>;
+            return <li key={item.id}>
+              <NotificationCard category={item.category} title={item.title} createdAt={item.created_at}
+                unread={!item.read_at} markPending={mark.isPending} onMarkRead={markRead} actions={actions}>
+                {details ? <AnnouncementContent message={item.message} /> : <p>{item.message}</p>}
+              </NotificationCard>
             </li>;
           })}
         </ul>}

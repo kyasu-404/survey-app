@@ -31,3 +31,8 @@ export async function logout() {
   const { error } = await apiClient.auth.logout();
   if (error) throw error;
 }
+
+export async function changeOwnPassword(currentPassword: string, password: string) {
+  const { error } = await apiClient.auth.updateCurrentUserPassword(currentPassword, password);
+  if (error) throw error;
+}

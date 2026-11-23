@@ -1,6 +1,8 @@
 import { Presence } from "../../shared/ui/Presence";
 import { Icon } from "../../shared/ui/Icon";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { routes } from "../../app/routes";
 import { getAllUsers } from "../../features/users/api";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { USERS_QUERY_ROOT } from "../../entities/survey/model/queryKeys";
@@ -46,7 +48,7 @@ export default function UsersPage() {
           <h1 className="users-page-title">Пользователи</h1>
           <div className="users-page-toolbar">
             <button type="button" className="app-button button-primary" aria-label="+ Добавить пользователя" disabled={!user} onClick={() => actions.setIsCreateUserOpen(true)}><Icon name="add" /> Добавить пользователя</button>
-            <button type="button" className="users-neutral-button" disabled={!user} onClick={() => actions.openPasswordModal(user?.id ?? "", "Смена моего пароля", true)}>Сменить мой пароль</button>
+            {user && <Link className="app-button users-neutral-button" to={routes.settingsSecurity}>Сменить мой пароль</Link>}
           </div>
         </div>
 

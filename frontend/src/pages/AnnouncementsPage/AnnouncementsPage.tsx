@@ -80,7 +80,7 @@ function AdminAnnouncements({ userId }: { userId: string }) {
   });
   const rows = list.data?.pages.flatMap(page => page.items) ?? [];
   return <div className="dashboard-page">
-    <section className="card activity-page announcement-admin">
+    <section className="activity-page announcement-admin">
       <header className="activity-heading">
         <div><h1>Объявления</h1><p>Сообщения администрации для пользователей приложения.</p></div>
         <button className="button-primary" type="button" disabled={change.isPending} onClick={() => setEditor("new")}>

@@ -611,6 +611,8 @@ test("review migrations and the bootstrap install identical function definitions
     "202611221400_automation_review_fixes.sql",
     "202611221410_announcement_review_fixes.sql",
     "202611231200_review_followup.sql",
+    "202611231300_notification_center_delivery_events.sql",
+    "202611231400_default_response_notification_opt_in.sql",
   ];
   const latest = new Map();
   for (const file of migrations) {

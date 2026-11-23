@@ -32,9 +32,20 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
 - задайте сложные `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD`, постоянный `MAIL_SETTINGS_ENCRYPTION_KEY` и точный `PUBLIC_APP_URL`;
 - публикуйте наружу только Nginx на портах 80/443; Kong, PostgreSQL, pooler, Studio и mail-worker не должны слушать публичный интерфейс.
 
+## Смена своего пароля
+
+Пользователь меняет пароль во вкладке «Безопасность» личных настроек. До обновления
+фронтенда включите проверку текущего пароля в Supabase Auth.
+
+В self-hosted Supabase (проверено на GoTrue v2.189.0) передайте
+`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD: "true"` в окружение сервиса
+`auth` в Docker Compose и пересоздайте этот контейнер. В управляемом Supabase включите
+«Require current password when changing password» в настройках провайдера Email.
+Подробности в [документации Supabase Auth](https://supabase.com/docs/guides/auth/password-security).
+
 ## Edge Function для админ-операций пользователей
 
-Создание пользователя, удаление, смена пароля пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
+Создание пользователя, удаление, сброс пароля другого пользователя и отключение/включение выполняются через Edge Function `user-admin` (а не через `auth.signUp` из frontend).
 
 Цепочка:
 
@@ -204,10 +215,13 @@ Worker атомарно забирает задания через `FOR UPDATE S
 3. `202611221400_automation_review_fixes.sql`
 4. `202611221410_announcement_review_fixes.sql`
 5. `202611231200_review_followup.sql`
+6. `202611231300_notification_center_delivery_events.sql`
+7. `202611231400_default_response_notification_opt_in.sql`
 
 Затем пересоберите `mail-worker` и frontend. Воркера запускайте с `PUBLIC_APP_URL` и включённым
 SMTP-коннектором в «Администрировании». Воркер обрабатывает даты и сроки форм даже при
-выключенной отправке. Если почтовый сервер вернул ошибку или подтвердить приёмку не удалось,
+выключенной отправке. Срабатывания правил и успешные отправки видны в истории правил.
+Если почтовый сервер вернул ошибку или подтвердить приёмку не удалось,
 событие отображается в истории правила и в уведомлениях. Воркер не повторяет автоматическое
 письмо после попытки SMTP с неопределённым результатом. Полное письмо содержит текст ответов,
 а вложения и подписи доступны по ссылке в приложении.

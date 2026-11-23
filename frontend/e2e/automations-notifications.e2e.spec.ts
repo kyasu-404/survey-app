@@ -12,7 +12,8 @@ test("keeps global and form-specific rules separate and builds an email with con
   let scopedFormId = "";
   const formTitle = "Карточка 1";
   const history: AutomationRun[] = [{
-    id: "run", form_id: app.formId, form_title: app.form.title, response_id: null, status: "failed",
+    id: "run", form_id: app.formId, form_title: app.form.title, response_id: app.responses[0].id,
+    event_key: "received:" + app.responses[0].id, status: "failed",
     recipient_count: 1, sent_count: 0, failed_count: 1, cancelled_count: 0, last_error: "Сервер отклонил получателя",
     created_at: "2026-11-22T09:00:00Z",
   }];
@@ -34,7 +35,7 @@ test("keeps global and form-specific rules separate and builds an email with con
     if (route.request().method() === "HEAD") return route.fulfill({
       status: 200, headers: { "access-control-expose-headers": "Content-Range", "content-range": "*/" + matches.length },
     });
-    return route.fulfill({ json: matches });
+    return route.fulfill({ json: matches.map(rule => ({ ...rule, successful_runs: [{ count: 0 }] })) });
   });
   await page.route("**/rest/v1/automation_runs?*", (route) => route.fulfill({ json: history }));
   await page.route("**/rest/v1/rpc/save_automation_rule", (route) => {
@@ -67,6 +68,7 @@ test("keeps global and form-specific rules separate and builds an email with con
   await expect.poll(() => editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("automation-mobile.png") });
   await page.setViewportSize({ width: 1280, height: 800 });
+  await editor.getByRole("button", { name: "Сообщать о новых ответах" }).click();
   await editor.getByLabel("Название", { exact: true }).fill(globalTitle);
   const next = editor.getByRole("button", { name: "Далее", exact: true });
   await next.click();
@@ -102,17 +104,19 @@ test("keeps global and form-specific rules separate and builds an email with con
   await expect(scopedLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp("/dashboard/forms/" + scopedFormId + "/automations$"));
-  await expect(page.getByRole("heading", { name: formTitle })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Автоматизации формы" })).toBeVisible();
+  await expect(page.getByText(`«${formTitle}»`, { exact: true })).toBeVisible();
   await expect(page.getByText(globalTitle, { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Создать правило" }).click();
+  await editor.getByRole("button", { name: "Настроить своё правило" }).click();
   await editor.getByLabel("Название", { exact: true }).fill(scopedTitle);
   await next.click();
   await editor.getByText("Дополнительные условия", { exact: true }).click();
   await editor.getByRole("button", { name: "Добавить условие" }).click();
   await editor.getByText(/^Дополнительные условия/).click();
   await next.click();
-  await expect(editor.getByRole("alert")).toContainText("Проверьте вопрос и значение каждого условия.");
+  await expect(editor.getByRole("alert")).toContainText("Выберите вопрос для условия.");
   const question = editor.getByRole("combobox", { name: "Вопрос", exact: true });
   await expect(question).toBeVisible();
   await question.selectOption('["topics"]');
@@ -129,9 +133,10 @@ test("keeps global and form-specific rules separate and builds an email with con
     p_conditions: [{ path: ["topics"], op: "all_of", value: ["Первая", "Вторая"] }],
     p_action: { recipientPath: ["school"], mode: "summary" },
   });
+  await expect(page.getByRole("heading", { name: `Новый ответ на форму «${app.form.title}»` })).toBeVisible();
   await expect(page.getByText("Сервер отклонил получателя", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Выключить", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Включить", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Статус правила «" + scopedTitle + "»: Включено", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Статус правила «" + scopedTitle + "»: Выключено", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Автоматизации формы", exact: true }).click();
   await expect(page.getByRole("link", { name: scopedTitle })).toBeVisible();
   await page.getByRole("link", { name: "Автоматизации", exact: true }).click();
@@ -214,11 +219,17 @@ test("receives notifications live, marks them read, opens a specific answer and 
   await page.getByRole("button", { name: "Настроить", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Настройки уведомлений" });
   await expect(page).toHaveURL(/\/notifications$/);
-  await settings.getByRole("checkbox", { name: "Новые ответы" }).uncheck();
+  const newResponses = settings.getByRole("checkbox", { name: "Новые ответы" });
+  await expect(newResponses).not.toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: "Изменения ответов" })).toBeChecked();
+  await expect(settings.getByRole("checkbox", { name: "Ошибки автоматизации" })).toBeChecked();
+  await newResponses.check();
   await settings.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(settings).toHaveCount(0);
-  await expect.poll(() => muted).toEqual(["response_received"]);
-  await page.getByRole("link", { name: "Настройки", exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Новые ответы" })).not.toBeChecked();
+  await expect.poll(() => muted).toEqual([]);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Настроить", exact: true }).click();
+  await expect(newResponses).toBeChecked();
   expect(app.pageErrors).toEqual([]);
 });

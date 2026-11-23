@@ -67,10 +67,32 @@ select * from public.submit_form_response(
 select * from public.submit_form_response(
   'b0000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001',
   '{"total":4,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first"]}');
+reset role;
+do $$
+begin
+  if exists(select from public.notifications where category='response_received') then
+    raise exception 'A new user received a response notification without opting in';
+  end if;
+end;
+$$;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','a0000000-0000-4000-8000-000000000001',true);
+select public.save_notification_preferences('{}'::text[]);
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+
+set local role anon;
 select * from public.submit_form_response(
   'b0000000-0000-4000-8000-000000000001','c0000000-0000-4000-8000-000000000002','d0000000-0000-4000-8000-000000000002',
   '{"total":10,"contact":"e0000000-0000-4000-8000-000000000002","topics":["first","second"]}');
 reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','a0000000-0000-4000-8000-000000000001',true);
+select public.save_notification_preferences(array['response_received']);
+reset role;
+select set_config('request.jwt.claim.sub','',true);
 
 update public.responses set data='{"total":12,"contact":"e0000000-0000-4000-8000-000000000001","topics":["first","second"]}'
   where submission_id='d0000000-0000-4000-8000-000000000001';
@@ -104,6 +126,14 @@ begin
      (select count(*) from public.automation_runs where status='succeeded')<>10 then
     raise exception 'Terminal delivery results were not recorded';
   end if;
+  if exists (select from public.notifications where category in ('automation_triggered', 'automation_succeeded')) then
+    raise exception 'Internal automation events reached the personal notification table';
+  end if;
+  if (select count(*) from public.notifications where category='response_received')<>1 or
+     not exists(select from public.notifications n join public.responses r on r.id=n.response_id
+       where n.category='response_received' and r.submission_id='d0000000-0000-4000-8000-000000000002') then
+    raise exception 'The next response after enabling notifications did not reach the owner';
+  end if;
 end;
 $$;
 
@@ -121,9 +151,8 @@ select set_config('request.jwt.claim.sub','a0000000-0000-4000-8000-000000000001'
 do $$
 declare entry uuid;
 begin
-  if (select count(*) from public.notifications where category='response_received')<>2 or
+  if (select count(*) from public.notifications where category='response_received')<>1 or
      (select count(*) from public.notifications where category='response_updated')<>1 or
-     (select count(*) from public.notifications where category='automation_succeeded')<>10 or
      (select count(*) from public.notifications where category='automation_failed')<>1 then
     raise exception 'Unexpected personal notification history';
   end if;

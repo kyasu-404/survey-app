@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getAutomationFields, saveAutomationRule, type AutomationForm } from "../../entities/automation/api";
 import { automationEvents, type AutomationEvent, type AutomationRule, type Condition, type EmailAction, type RuleConfig } from "../../entities/automation/model";
@@ -7,8 +7,10 @@ import { getErrorMessage } from "../../shared/lib/error";
 import { Icon } from "../../shared/ui/Icon";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { RuleEmailPreview, RuleEmailTemplate } from "./RuleEmail";
+import { nextFridayMorning, RuleScenarios, type RuleScenario } from "./RuleScenarios";
+import { RuleFieldErrorMessage, ruleErrorAttributes } from "./RuleValidation";
 import "./ruleEditor.css";
-import { conditionError, fieldKey, RuleConditions, trimConditionValue } from "./RuleConditions";
+import { conditionError, fieldKey, RuleConditions, trimConditionValue, type RuleConditionField } from "./RuleConditions";
 
 const periods = { 1: "минуты", 60: "часы", 1440: "дни" };
 
@@ -29,6 +31,8 @@ function displayPeriod(minutes?: number | null) {
 
 type Props = { userId: string; form: AutomationForm | null; rule: AutomationRule | null; onClose: () => void; onSaved: (id: string) => void };
 
+type RuleField = "name" | "threshold" | "period" | "schedule" | "recipients" | "recipientPath" | "subject" | "body" | "mode" | RuleConditionField;
+
 export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const dialog = useModalSurface();
   const [name, setName] = useState(rule?.name ?? "");
@@ -36,7 +40,9 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [event, setEvent] = useState<AutomationEvent>(rule?.event_type ?? "response_received");
   const formId = form?.id ?? null;
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(rule ? 0 : -1);
+  const choosingScenario = step < 0;
+  const errorId = useId();
   const stepHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { stepHeading.current?.focus(); }, [step]);
   const [threshold, setThreshold] = useState(String(rule?.threshold ?? 10));
@@ -54,7 +60,34 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const [subject, setSubject] = useState(rule?.action_config.subject ?? "{{form_title}} — уведомление");
   const [body, setBody] = useState(rule?.action_config.body ?? "Событие по форме «{{form_title}}».\nВсего ответов: {{answer_count}}.");
   const [mode, setMode] = useState<EmailAction["mode"]>(rule?.action_config.mode ?? "summary");
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<{ field: RuleField; message: string } | null>(null);
+  useEffect(() => {
+    if (validationError) dialog.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [dialog, validationError]);
+
+  function errorFor(field: RuleField) {
+    return validationError?.field === field ? { id: errorId, message: validationError.message } : undefined;
+  }
+
+  function invalid(field: RuleField, message: string) {
+    setValidationError({ field, message });
+  }
+
+  function chooseScenario(draft: RuleScenario | null) {
+    if (draft) {
+      setName(draft.name);
+      setEvent(draft.event);
+      setSubject(draft.subject);
+      setBody(draft.body);
+      if (draft.threshold !== undefined) setThreshold(String(draft.threshold));
+      if (draft.periodDays !== undefined) {
+        setPeriod(String(draft.periodDays));
+        setPeriodUnit(1440);
+        setScheduledAt(nextFridayMorning());
+      }
+    }
+    changeStep(0);
+  }
 
   const questions = useQuery({
     queryKey: ["automation-fields", userId, formId],
@@ -75,6 +108,8 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   const addresses = [...new Set(recipients.toLowerCase().split(/[\s,;]+/).filter(Boolean))];
   const recipientLimit = recipientPath.length ? 49 : 50;
   const minimumMinutes = event === "recurring" ? 15 : 1;
+  const minimumPeriod = Math.ceil(minimumMinutes / periodUnit);
+  const maximumPeriod = Math.floor(525600 / periodUnit);
   const schedule = scheduledAt === originalSchedule && rule?.scheduled_at ? rule.scheduled_at : scheduledAt;
   const cleanConditions = conditions.map((condition) => ({
     ...condition,
@@ -91,55 +126,72 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
 
   function onSubmit(submission: FormEvent<HTMLFormElement>) {
     submission.preventDefault();
-    if (save.isPending || requiredFieldsUnavailable) return;
+    if (choosingScenario || save.isPending || requiredFieldsUnavailable) return;
     if (step === 0 && !name.trim()) {
-      setValidationError("Укажите название правила.");
+      invalid("name", "Укажите название правила.");
       return;
     }
     if (step === 1) {
       const count = Number(threshold);
       if (needsThreshold && (!Number.isFinite(count) || (event === "matching_share"
         ? count < 0.01 || count > 100 : !Number.isInteger(count) || count < 1 || count > 100000))) {
-        setValidationError("Проверьте порог срабатывания правила.");
+        invalid("threshold", event === "matching_share"
+          ? "Укажите долю ответов от 0,01 до 100 %."
+          : "Укажите целое число ответов от 1 до 100 000.");
         return;
       }
       const minutes = Number(period) * periodUnit;
       if (needsInterval && (!Number.isInteger(Number(period)) || minutes < minimumMinutes || minutes > 525600)) {
-        setValidationError(`Укажите целый период от ${minimumMinutes} до 525600 минут.`);
+        invalid("period", `Введите целое число от ${minimumPeriod} до ${maximumPeriod} в выбранных единицах времени.`);
         return;
       }
       const time = Date.parse(schedule);
       if (needsDate && !(time >= Date.parse(earliestSchedule) && time <= Date.parse(latestSchedule))) {
-        setValidationError("Проверьте дату и время запуска (2000–2200 гг.).");
+        invalid("schedule", "Укажите дату и время запуска с 2000 по 2200 год.");
         return;
       }
-      const error = questions.isError && conditions.length ? "Не удалось загрузить вопросы."
-        : cleanConditions.map(condition => conditionError(condition, fields)).find(Boolean);
-      if (error) {
+      if (questions.isError && conditions.length) {
         setConditionsOpen(true);
-        setValidationError(error);
         return;
+      }
+      for (const [index, condition] of cleanConditions.entries()) {
+        const error = conditionError(condition, fields);
+        if (error) {
+          setConditionsOpen(true);
+          invalid(`condition-${index}-${error.field}`, error.message);
+          return;
+        }
       }
     }
     if (step === 2) {
       if (!addresses.length && !recipientPath.length) {
-        setValidationError("Укажите получателя письма.");
+        invalid("recipients", recipientFields.length
+          ? "Укажите получателя письма: введите адрес или выберите получателя из ответа."
+          : "Укажите получателя письма. Введите хотя бы один адрес электронной почты.");
         return;
       }
-      if (addresses.length > recipientLimit || addresses.some(address => !validAddress(address))) {
-        setValidationError(`Укажите до ${recipientLimit} корректных адресов электронной почты.`);
+      if (addresses.length > recipientLimit) {
+        invalid("recipients", `Укажите не более ${recipientLimit} адресов электронной почты.`);
+        return;
+      }
+      if (addresses.some(address => !validAddress(address))) {
+        invalid("recipients", "Проверьте формат адресов. Пример: name@example.ru.");
         return;
       }
       if (recipientPath.length && !recipientFields.some((field) => fieldKey(field.path) === fieldKey(recipientPath))) {
-        setValidationError("Выберите вопрос со справочником организаций вне повторяющихся панелей или удалите получателя из ответа.");
+        invalid("recipientPath", "Выберите вопрос со справочником организаций вне повторяющихся панелей или уберите получателя из ответа.");
         return;
       }
       if (recipientPath.length && mode !== "summary") {
-        setValidationError("Для получателя из ответа выберите краткое письмо.");
+        invalid("mode", "Для получателя из ответа выберите краткое письмо.");
         return;
       }
-      if (!subject.trim() || !body.trim()) {
-        setValidationError("Введите тему и текст письма.");
+      if (!subject.trim()) {
+        invalid("subject", "Введите тему письма.");
+        return;
+      }
+      if (!body.trim()) {
+        invalid("body", "Введите текст письма.");
         return;
       }
     }
@@ -156,6 +208,9 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
     });
   }
 
+  const saveError = getErrorMessage(save.error, "Не удалось сохранить правило");
+  const genericSaveError = saveError === "Не удалось сохранить правило";
+
   return (
     <dialog ref={dialog} className="card modal-card activity-rule-dialog" aria-labelledby="rule-editor-heading"
       onCancel={(cancel) => { cancel.preventDefault(); if (!save.isPending) onClose(); }}
@@ -169,24 +224,29 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
         const rect = click.currentTarget.getBoundingClientRect();
         if (click.clientX < rect.left || click.clientX > rect.right || click.clientY < rect.top || click.clientY > rect.bottom) onClose();
       }}>
-      <form noValidate onSubmit={onSubmit} onChange={() => { setValidationError(null); if (save.isError) save.reset(); }} className="activity-rule-editor">
+      <form noValidate onSubmit={onSubmit} onChange={() => { setValidationError(null); if (save.isError) save.reset(); }} className={"activity-rule-editor" + (choosingScenario ? " rule-editor-scenario" : "")}>
         <header className="activity-heading">
           <h2 id="rule-editor-heading">{rule ? "Редактировать правило" : "Новое правило"}</h2>
           <button type="button" className="app-button icon-button" aria-label="Закрыть" onClick={onClose} disabled={save.isPending}><Icon name="close" /></button>
         </header>
 
-        <ol className="rule-steps" aria-label="Этапы настройки">
+        {!choosingScenario && <ol className="rule-steps" aria-label="Этапы настройки">
           {steps.map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined}>
             <span>{index + 1}</span> {label}
           </li>)}
-        </ol>
+        </ol>}
 
         <div className="activity-editor-body" key={step}>
-          <h3 className="rule-step-heading" tabIndex={-1} ref={stepHeading}>{steps[step]}</h3>
+          <h3 className="rule-step-heading" tabIndex={-1} ref={stepHeading}>{choosingScenario ? "Что вы хотите автоматизировать?" : steps[step]}</h3>
+          {choosingScenario && <RuleScenarios onChoose={chooseScenario} />}
           {step === 0 && <div className="rule-step-fields">
-            <label className="activity-field">Название
-              <input required maxLength={120} value={name} placeholder="Оповещение о новом ответе" onChange={(change) => setName(change.target.value)} />
-            </label>
+            <div>
+              <label className="activity-field">Название
+                <input required maxLength={120} value={name} placeholder="Оповещение о новом ответе"
+                  {...ruleErrorAttributes(errorFor("name"))} onChange={(change) => setName(change.target.value)} />
+              </label>
+              <RuleFieldErrorMessage error={errorFor("name")} />
+            </div>
             <label className="activity-field">Описание <small>Необязательно</small>
               <textarea maxLength={1000} rows={2} value={description} onChange={(change) => setDescription(change.target.value)} />
             </label>
@@ -206,28 +266,38 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
               </select>
             </label>
             {needsThreshold && <>
-              <label className="activity-field">{event === "matching_share" ? "Доля ответов, %" : "Количество ответов"}
-                <input type="number" required value={threshold} min={event === "matching_share" ? "0.01" : "1"}
-                  max={event === "matching_share" ? "100" : "100000"} step={event === "matching_share" ? "0.01" : "1"}
-                  onChange={(change) => setThreshold(change.target.value)} />
-              </label>
+              <div>
+                <label className="activity-field">{event === "matching_share" ? "Доля ответов, %" : "Количество ответов"}
+                  <input type="number" required value={threshold} min={event === "matching_share" ? "0.01" : "1"}
+                    max={event === "matching_share" ? "100" : "100000"} step={event === "matching_share" ? "0.01" : "1"}
+                    {...ruleErrorAttributes(errorFor("threshold"))} onChange={(change) => setThreshold(change.target.value)} />
+                </label>
+                <RuleFieldErrorMessage error={errorFor("threshold")} />
+              </div>
               <p className="activity-muted">Порог проверяется при изменении ответов и учитывает уже собранные ответы. Срабатывает один раз для каждой формы.</p>
               {conditions.length > 0 && <p className="activity-muted">Первый подсчёт ответов по условиям выполняется в фоне.</p>}
             </>}
             {needsInterval && <div className="activity-editor-grid">
-              <label className="activity-field">{event === "inactivity" ? "Период тишины" : "Повторять каждые"}
-                <input type="number" min={Math.ceil(minimumMinutes / periodUnit)} max={Math.floor(525600 / periodUnit)} required value={period} onChange={(change) => setPeriod(change.target.value)} />
-              </label>
+              <div>
+                <label className="activity-field">{event === "inactivity" ? "Период тишины" : "Повторять каждые"}
+                  <input type="number" min={minimumPeriod} max={maximumPeriod} required value={period}
+                    {...ruleErrorAttributes(errorFor("period"))} onChange={(change) => setPeriod(change.target.value)} />
+                </label>
+                <RuleFieldErrorMessage error={errorFor("period")} />
+              </div>
               <label className="activity-field">Единица времени
                 <select value={periodUnit} onChange={(change) => setPeriodUnit(Number(change.target.value))}>
                   {Object.entries(periods).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </label>
             </div>}
-            {needsDate && <label className="activity-field">{event === "recurring" ? "Первый запуск по местному времени" : "Дата и время запуска по местному времени"}
-              <input type="datetime-local" min={formatDateTimeLocalValue(earliestSchedule)} max={formatDateTimeLocalValue(latestSchedule)}
-                required value={scheduledAt} onChange={(change) => setScheduledAt(change.target.value)} />
-            </label>}
+            {needsDate && <div>
+              <label className="activity-field">{event === "recurring" ? "Первый запуск по местному времени" : "Дата и время запуска по местному времени"}
+                <input type="datetime-local" min={formatDateTimeLocalValue(earliestSchedule)} max={formatDateTimeLocalValue(latestSchedule)}
+                  required value={scheduledAt} {...ruleErrorAttributes(errorFor("schedule"))} onChange={(change) => setScheduledAt(change.target.value)} />
+              </label>
+              <RuleFieldErrorMessage error={errorFor("schedule")} />
+            </div>}
             {event === "inactivity" && <p className="activity-muted">Период отсчитывается с включения правила или поступления последнего нового ответа.</p>}
             {formId && <details className="activity-variables rule-conditions" open={conditionsOpen}
               onToggle={event => setConditionsOpen(event.currentTarget.open)}>
@@ -239,7 +309,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                   Не удалось загрузить вопросы. <button type="button" className="app-button" onClick={() => void questions.refetch()}>Повторить</button>
                 </div>}
                 {questions.isSuccess && (fields.length || conditions.length ? <RuleConditions fields={fields} conditions={conditions} mode={matchMode}
-                  onMode={setMatchMode} onConditions={next => { setConditions(next); setValidationError(null); }} /> : <p className="activity-muted">В форме пока нет вопросов для условий.</p>)}
+                  errorFor={errorFor} onMode={setMatchMode} onConditions={next => { setConditions(next); setValidationError(null); }} /> : <p className="activity-muted">В форме пока нет вопросов для условий.</p>)}
                 {["date", "recurring", "inactivity"].includes(event) && conditions.length > 0 &&
                   <p className="activity-muted">Для письма используется последний ответ, который подходит под условия.</p>}
               </div>
@@ -247,13 +317,17 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
           </div>}
           {step === 2 && <div className="rule-step-fields">
             <p className="rule-action"><strong>Действие</strong> Отправить письмо</p>
-            <label className="activity-field">Адреса получателей
-              <textarea rows={2} placeholder="name@example.ru, office@example.ru" value={recipients}
-                onChange={(change) => setRecipients(change.target.value)} />
-              <small>Перечислите адреса через запятую или с новой строки.</small>
-            </label>
+            <div>
+              <label className="activity-field">Адреса получателей
+                <textarea rows={2} placeholder="name@example.ru, office@example.ru" value={recipients}
+                  {...ruleErrorAttributes(errorFor("recipients"))} onChange={(change) => setRecipients(change.target.value)} />
+                <small>Перечислите адреса через запятую или с новой строки.</small>
+              </label>
+              <RuleFieldErrorMessage error={errorFor("recipients")} />
+            </div>
             {formId && (recipientFields.length > 0 || recipientPath.length > 0) && <label className="activity-field">Получатель из ответа
-              <select value={fieldKey(recipientPath)} disabled={!questions.isSuccess} onChange={change => {
+              <select value={fieldKey(recipientPath)} disabled={!questions.isSuccess}
+                {...ruleErrorAttributes(errorFor("recipientPath"))} onChange={change => {
                 const path = recipientFields.find(field => fieldKey(field.path) === change.target.value)?.path ?? [];
                 setRecipientPath(path);
                 if (path.length) setMode("summary");
@@ -266,33 +340,39 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                 {recipientFields.map((field) => <option key={fieldKey(field.path)} value={fieldKey(field.path)}>{field.label}</option>)}
               </select>
             </label>}
+            <RuleFieldErrorMessage error={errorFor("recipientPath")} />
             {formId && questions.isPending && <p className="activity-muted" role="status">Загрузка вопросов для выбора получателя…</p>}
             {formId && questions.isError && <p className="activity-muted" role="alert">
               Не удалось загрузить вопросы для выбора получателя. <button type="button" className="app-button"
                 onClick={() => void questions.refetch()}>Повторить</button>
             </p>}
             {recipientPath.length > 0 && <p className="activity-muted">Организации из ответа можно отправить только краткое письмо.</p>}
-            <RuleEmailTemplate subject={subject} body={body} hasThreshold={needsThreshold} onSubject={setSubject} onBody={setBody} />
+            <RuleEmailTemplate subject={subject} body={body} hasThreshold={needsThreshold}
+              subjectError={errorFor("subject")} bodyError={errorFor("body")}
+              onSubject={next => { setSubject(next); setValidationError(null); }}
+              onBody={next => { setBody(next); setValidationError(null); }} />
             <label className="activity-field">Содержание
-              <select value={mode} onChange={(change) => setMode(change.target.value as EmailAction["mode"])}>
+              <select value={mode} {...ruleErrorAttributes(errorFor("mode"))}
+                onChange={(change) => setMode(change.target.value as EmailAction["mode"])}>
                 <option value="summary">Краткое письмо со ссылкой</option>
                 <option value="full" disabled={Boolean(recipientPath.length)}>Полный ответ со ссылкой</option>
               </select>
             </label>
+            <RuleFieldErrorMessage error={errorFor("mode")} />
           </div>}
           {step === 3 && <RuleEmailPreview subject={subject} body={body} mode={mode} formTitle={form?.title} recipients={addresses}
             recipientField={recipientFields.find((field) => fieldKey(field.path) === fieldKey(recipientPath))?.label}
             hasThreshold={needsThreshold} />}
         </div>
-        {(validationError || save.isError) && <p className="activity-error activity-dialog-error" role="alert">
-          {validationError ?? getErrorMessage(save.error, "Не удалось сохранить правило.")}
+        {save.isError && <p className="activity-error activity-dialog-error" role="alert">
+          {genericSaveError ? saveError + ". Повторите попытку. Введённые данные остались в редакторе." : saveError}
         </p>}
         <footer className="activity-actions activity-dialog-actions">
           <button type="button" className="app-button" onClick={onClose} disabled={save.isPending}>Отмена</button>
           {step > 0 && <button type="button" className="app-button" disabled={save.isPending} onClick={() => changeStep(step - 1)}>Назад</button>}
-          <button type="submit" className="button-primary" disabled={save.isPending || requiredFieldsUnavailable}>
+          {!choosingScenario && <button type="submit" className="button-primary" disabled={save.isPending || requiredFieldsUnavailable}>
             {step < steps.length - 1 ? "Далее" : save.isPending ? "Сохранение…" : "Сохранить правило"}
-          </button>
+          </button>}
         </footer>
       </form>
     </dialog>

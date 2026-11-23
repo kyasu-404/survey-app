@@ -35,7 +35,8 @@ export async function createSurveyForCurrentUser({
   organizationTypes,
   isPublic,
 }: CreateSurveyForCurrentUserParams) {
-  const { data } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
+  const { data, error } = await runRequest("auth.getCurrentUser", () => apiClient.auth.getCurrentUser());
+  if (error) throw error;
   const userId = data.user?.id;
 
   if (!userId) {
@@ -70,6 +71,7 @@ export async function createSurveyForCurrentUser({
 
 export function useCreateSurveyMutation() {
   return useMutation({
+    networkMode: "always",
     mutationFn: ({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, allowResponseEditing, organizationTypes, isPublic }: CreateSurveyForCurrentUserParams) =>
       createSurveyForCurrentUser({ id, schema, theme, title, formType, formReason, deadlineAt, maxResponses, allowResponseEditing, organizationTypes, isPublic }),
   });

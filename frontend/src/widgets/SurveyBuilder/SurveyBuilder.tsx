@@ -58,6 +58,7 @@ import { validateSurveySchema } from "../../entities/survey/model/validateSchema
 import type { SurveySchema } from "../../entities/survey/types";
 import type { FormSaveSettings } from "../../entities/survey/api/surveysApi";
 import { useCreateSurveyMutation } from "../../features/create-survey/useCreateSurvey";
+import { RequestTimeoutError } from "../../shared/api/request";
 import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { scheduleQueryInvalidation } from "../../shared/lib/queryRefresh";
 import { createPendingStateLogger } from "../../shared/lib/reactQueryDebug";
@@ -76,6 +77,33 @@ type SurveyBuilderProps = {
   safeEditingResponseCount?: number;
   userId: string;
 };
+
+function getBuilderSaveError(error: unknown, isTemplate = false) {
+  const details = typeof error === "object" && error !== null ? error : {};
+  const message = "message" in details && typeof details.message === "string" ? details.message.trim() : "";
+  const name = "name" in details ? details.name : undefined;
+  const code = "code" in details ? details.code : undefined;
+  const retryable = error instanceof RequestTimeoutError
+    || name === "AuthRetryableFetchError"
+    || name === "FunctionsFetchError"
+    || (!code && /^(?:typeerror: )?(?:failed to fetch|fetch failed|load failed|networkerror when attempting to fetch resource\.?|failed to send a request to the edge function)$/i.test(message));
+
+  const fallback = isTemplate ? "Не удалось сохранить шаблон." : "Не удалось сохранить форму.";
+  const editorNotice = "Несохранённые изменения остались в редакторе.";
+  if (retryable) return { message: `${fallback} Проверьте соединение и повторите попытку. ${editorNotice}`, retryable };
+
+  if (name === "AuthSessionMissingError" || code === "PGRST301"
+    || /^(?:пользователь не авторизован|unauthorized|(?:missing|invalid) authorization header)$/i.test(message)) {
+    return { message: "Вы не авторизованы. Войдите в систему и повторите попытку.", retryable };
+  }
+  if (message === "Forbidden" || (code === "42501" && !/^[А-ЯЁ]/i.test(message))) {
+    return { message: "У вас нет прав на сохранение этой формы.", retryable };
+  }
+  if (message === "Form not found") {
+    return { message: "Форма не найдена. Откройте список форм.", retryable };
+  }
+  return { message: message || `${fallback} ${editorNotice}`, retryable };
+}
 
 const BUILDER_RUNTIME_PREVIEW_SYNC_DELAY_MS = 75;
 export function SurveyBuilder({
@@ -110,6 +138,7 @@ export function SurveyBuilder({
   const { theme: applicationTheme } = useTheme();
   const createSurveyMutation = useCreateSurveyMutation();
   const saveSurveyMutation = useMutation({
+    networkMode: "always",
     mutationFn: ({
       id,
       schema,
@@ -483,7 +512,7 @@ export function SurveyBuilder({
       navigateToSavedList("templates");
     } catch (error) {
       console.error(error);
-      showToast(getErrorMessage(error, "Не удалось сохранить шаблон"), "error");
+      showToast(getBuilderSaveError(error, true).message, "error");
     } finally {
       stopPendingLogger();
       setIsTemplateActionLoading(null);
@@ -667,40 +696,8 @@ export function SurveyBuilder({
     });
   };
 
-  const handleSavePostSaveSettings = async () => {
-    if (!postSaveSettings) {
-      return;
-    }
-
-    const normalizedFormType = postSaveSettings.formTypeValue.trim();
-    const normalizedFormReason = postSaveSettings.formReasonValue.trim();
-    const normalizedDeadline = postSaveSettings.deadlineValue.trim();
-    const normalizedLimit = postSaveSettings.responseLimitValue.trim();
-    let deadlineAt: string | null = null;
-    let maxResponses: number | null = null;
-
-    if (!normalizedFormType || !normalizedFormReason) {
-      showToast("Выберите тип формы и основание формы", "error");
-      return;
-    }
-
-    if (normalizedDeadline) {
-      const parsedDate = new Date(normalizedDeadline);
-      if (Number.isNaN(parsedDate.getTime())) {
-        showToast("Некорректный формат даты дедлайна", "error");
-        return;
-      }
-      deadlineAt = parsedDate.toISOString();
-    }
-
-    if (normalizedLimit) {
-      const parsedLimit = Number(normalizedLimit);
-      if (!Number.isInteger(parsedLimit) || parsedLimit <= 0 || parsedLimit > 100_000) {
-        showToast("Укажите целое число ответов от 1 до 100000", "error");
-        return;
-      }
-      maxResponses = parsedLimit;
-    }
+  const handleSavePostSaveSettings = async ({ formType, formReason, deadlineAt, maxResponses }: Required<FormSaveSettings>) => {
+    if (!postSaveSettings) return;
 
     setIsPostSaveSettingsSaving(true);
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder post-save settings");
@@ -718,8 +715,8 @@ export function SurveyBuilder({
           allowResponseEditing: postSaveSettings.allowResponseEditing,
           selectedOrganizationTypes: postSaveSettings.organizationTypes,
           settings: {
-            formType: normalizedFormType,
-            formReason: normalizedFormReason,
+            formType,
+            formReason,
             ...(postSaveSettings.deadlineChanged ? { deadlineAt } : {}),
             ...(postSaveSettings.responseLimitChanged ? { maxResponses } : {}),
           },
@@ -728,11 +725,11 @@ export function SurveyBuilder({
           callback: () => undefined,
         };
         const result = await saveSurveyMutation.mutateAsync(request);
-        setPostSaveSettings(null);
         if (result?.status === "confirmation_required" || result?.status === "blocked") {
           setCompatibilityDialog({ request, result });
           return;
         }
+        setPostSaveSettings(null);
         clearSurveyBuilderDraft(userId, formId);
         scheduleBuilderQueryRefresh(formId);
         showToast("Форма обновлена", "success");
@@ -744,8 +741,8 @@ export function SurveyBuilder({
         schema: postSaveSettings.schema,
         theme: postSaveSettings.theme,
         title: postSaveSettings.title,
-        formType: normalizedFormType,
-        formReason: normalizedFormReason,
+        formType,
+        formReason,
         deadlineAt,
         maxResponses,
         allowResponseEditing: postSaveSettings.allowResponseEditing,
@@ -760,7 +757,7 @@ export function SurveyBuilder({
       navigateToSavedList("forms");
     } catch (error) {
       console.error(error);
-      showToast(getErrorMessage(error, "Не удалось сохранить настройки формы"), "error");
+      showToast(getBuilderSaveError(error).message, "error");
     } finally {
       stopPendingLogger();
       setIsPostSaveSettingsSaving(false);
@@ -846,13 +843,7 @@ export function SurveyBuilder({
         callback(saveNo, true);
       } catch (error) {
         console.error(error);
-        const errorMessage = error instanceof Error ? error.message : "Не удалось сохранить форму";
-        showToast(
-          errorMessage === "Пользователь не авторизован"
-            ? "Вы не авторизованы. Войдите в систему и повторите попытку"
-            : errorMessage,
-          "error",
-        );
+        showToast(getBuilderSaveError(error, Boolean(editableForm && isTemplateForm(editableForm))).message, "error");
         callback(saveNo, false);
       } finally {
         stopPendingLogger();
@@ -896,6 +887,7 @@ export function SurveyBuilder({
       }
 
       setCompatibilityDialog(null);
+      setPostSaveSettings(null);
       scheduleBuilderQueryRefresh(request.id);
       showToast(request.isTemplate ? "Шаблон обновлён" : "Форма обновлена", "success");
       clearSurveyBuilderDraft(userId, formId);
@@ -909,7 +901,9 @@ export function SurveyBuilder({
       request.callback(request.saveNo, true);
     } catch (error) {
       console.error(error);
-      showToast(getErrorMessage(error, "Не удалось сохранить форму"), "error");
+      const failure = getBuilderSaveError(error, request.isTemplate);
+      showToast(failure.message, "error");
+      if (failure.retryable) return;
       request.callback(request.saveNo, false);
       setCompatibilityDialog(null);
     } finally {
@@ -942,6 +936,7 @@ export function SurveyBuilder({
       clearSurveyBuilderDraft(userId, formId);
       scheduleBuilderQueryRefresh(copy.id);
       setCompatibilityDialog(null);
+      setPostSaveSettings(null);
       showToast("Копия формы создана с внесёнными изменениями", "success");
       navigate(routes.builderEdit(copy.id), { replace: true });
     } catch (error) {
@@ -1047,7 +1042,7 @@ export function SurveyBuilder({
         />
       )}</Presence>
 
-      <Presence kind="modal">{postSaveSettings && (
+      <Presence kind="modal">{postSaveSettings && !compatibilityDialog && (
         <BuilderFormSettingsDialog
             postSaveSettings={postSaveSettings}
             setPostSaveSettings={setPostSaveSettings}

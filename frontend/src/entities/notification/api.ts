@@ -40,7 +40,7 @@ export async function getNotificationPreferences(userId: string, signal?: AbortS
   const { data, error } = await runRequest("notifications.preferences", (requestSignal) => apiClient.from("notification_preferences")
     .select("muted_categories").eq("user_id", userId).abortSignal(requestSignal).maybeSingle(), { signal });
   if (error) throw new Error("Не удалось загрузить настройки уведомлений");
-  return (data?.muted_categories ?? []) as PreferenceCategory[];
+  return (data?.muted_categories ?? ["response_received"]) as PreferenceCategory[];
 }
 
 export async function saveNotificationPreferences(muted: PreferenceCategory[]) {

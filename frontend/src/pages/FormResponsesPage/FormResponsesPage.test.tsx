@@ -3,9 +3,11 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { prepareFormMail, queueFormInvitations } from "../../entities/mail/api";
 import * as responseApi from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormQueryKey, getFormResponsesQueryKey } from "../../entities/survey/model/queryKeys";
+import type { SurveyForm } from "../../entities/survey/types";
 import { readAppCss } from "../../test/readAppCss";
 import FormResponsesPage from "./FormResponsesPage";
 
@@ -78,6 +80,16 @@ vi.mock("../../entities/response/api", () => {
 });
 
 vi.mock("../../entities/organization/api", () => ({ getOrganizations }));
+
+vi.mock("../../entities/mail/api", () => ({
+  prepareFormMail: vi.fn(),
+  queueFormInvitations: vi.fn(),
+}));
+
+vi.mock("../../entities/personal-link/api", () => ({
+  getPersonalLinks: vi.fn().mockResolvedValue({ available: true, canManage: true, enabled: true, links: [] }),
+  setPersonalLinks: vi.fn(),
+}));
 
 vi.mock("../../shared/lib/export", () => ({
   exportToExcel,
@@ -172,13 +184,123 @@ function createFullResponsePage(page: number, pageSize = 100) {
   );
 }
 
+const invitationForm = {
+  id: "form-1",
+  title: "Опрос",
+  author_id: "user-1",
+  form_type: "anketa",
+  form_reason: "plan",
+  is_public: true,
+  deadline_at: null,
+  created_at: "2026-04-08T10:00:00.000Z",
+  personal_links_enabled: true,
+  organization_types: ["school"],
+  schema: { pages: [{ elements: [{ type: "organization", name: "organization" }] }] },
+  theme: {},
+} satisfies SurveyForm;
 
+function renderEmptyResponses(form: SurveyForm | null = invitationForm) {
+  getFormById.mockResolvedValue(form);
+  loadResponseRows.mockResolvedValue([]);
+  getOrganizations.mockResolvedValue([]);
+  render(
+    <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}>
+        <Routes>
+          <Route path="/dashboard/forms/:id/responses" element={<FormResponsesPage />} />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
 
 describe("FormResponsesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     deleteResponses.mockResolvedValue(undefined);
     resetRealtimeChannel();
+  });
+
+  it("copies the public URL from the empty response state", async () => {
+    const user = userEvent.setup();
+    const clipboard = vi.spyOn(navigator.clipboard, "writeText");
+    renderEmptyResponses();
+
+    await user.click(await screen.findByRole("button", { name: "Скопировать ссылку" }));
+
+    expect(clipboard).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}/form/form-1`);
+    expect(showToast).toHaveBeenCalledWith("Ссылка скопирована", "success");
+    clipboard.mockRestore();
+  });
+
+  it("shows a selectable public URL when clipboard access fails", async () => {
+    const user = userEvent.setup();
+    const clipboard = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Clipboard access denied"));
+    renderEmptyResponses();
+
+    await user.click(await screen.findByRole("button", { name: "Скопировать ссылку" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Поделиться формой Опрос" });
+    const url = within(dialog).getByRole("textbox", { name: "Ссылка на форму" });
+    expect(url).toHaveValue(`${window.location.origin}/form/form-1`);
+    expect(url).toHaveAttribute("readonly");
+    clipboard.mockRestore();
+  });
+
+  it("opens invitation recipient selection without sending any mail", async () => {
+    vi.mocked(prepareFormMail).mockResolvedValue({
+      personal: true,
+      smtpEnabled: true,
+      template: { subject: "Опрос", bodyText: "Заполните {Ссылка}" },
+      recipients: [{ id: "school-1", name: "Школа 1", email: "school@example.org", organizationType: "school", canSend: true }],
+    });
+    const user = userEvent.setup();
+    renderEmptyResponses();
+
+    expect(prepareFormMail).not.toHaveBeenCalled();
+    const invite = await screen.findByRole("button", { name: "Отправить приглашения" });
+    expect(screen.getByText("Скопируйте ссылку на форму или отправьте приглашения.")).toBeVisible();
+    await user.click(invite);
+
+    const dialog = await screen.findByRole("dialog", { name: "Поделиться формой Опрос" });
+    expect(await within(dialog).findByRole("checkbox", { name: /Школа 1/ })).toBeVisible();
+    expect(prepareFormMail).toHaveBeenCalledExactlyOnceWith("form-1", "invitation");
+    expect(queueFormInvitations).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Закрыть окно поделиться" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(invite).toHaveFocus();
+  });
+
+  it.each([
+    ["another author", { author_id: "another-author" }],
+    ["personal links disabled", { personal_links_enabled: false }],
+    ["no organization question", { schema: { pages: [] } }],
+  ] satisfies Array<[string, Partial<SurveyForm>]>)("offers only the public link with %s", async (_label, settings) => {
+    renderEmptyResponses({ ...invitationForm, ...settings });
+
+    expect(await screen.findByRole("button", { name: "Скопировать ссылку" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Отправить приглашения" })).not.toBeInTheDocument();
+    expect(screen.getByText("Скопируйте ссылку на форму.")).toBeVisible();
+  });
+
+  it.each([
+    ["closed form", { is_public: false }],
+    ["expired form", { deadline_at: "2020-01-01T00:00:00.000Z" }],
+    ["template", { form_type: "template" }],
+  ] satisfies Array<[string, Partial<SurveyForm>]>)("omits sharing actions for a %s", async (_label, settings) => {
+    renderEmptyResponses({ ...invitationForm, ...settings });
+
+    await screen.findByRole("heading", { name: "Ответов пока нет" });
+    expect(screen.queryByRole("button", { name: "Скопировать ссылку" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить приглашения" })).not.toBeInTheDocument();
+  });
+
+  it("shows that the form is unavailable instead of sharing an unknown form", async () => {
+    renderEmptyResponses(null);
+
+    expect(await screen.findByText("Форма не найдена или недоступна.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Скопировать ссылку" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить приглашения" })).not.toBeInTheDocument();
   });
 
   it.each(["user-1", "another-author"])("exports selected answers to ZIP and XLSX for author %s", async (authorId) => {

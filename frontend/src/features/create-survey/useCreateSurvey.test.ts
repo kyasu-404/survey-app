@@ -47,6 +47,14 @@ describe("createSurveyForCurrentUser", () => {
     );
   });
 
+  it("propagates a network failure when checking the current user", async () => {
+    const error = Object.assign(new Error("Failed to fetch"), { name: "AuthRetryableFetchError", status: 0 });
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: null }, error } as never);
+
+    await expect(createSurveyForCurrentUser({ schema: { pages: [] }, title: "Test form" })).rejects.toBe(error);
+    expect(createSurvey).not.toHaveBeenCalled();
+  });
+
   it("creates template drafts unpublished by default", async () => {
     vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } } } as never);
     vi.mocked(createSurvey).mockResolvedValue({ id: "template-1" } as never);

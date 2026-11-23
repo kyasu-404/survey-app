@@ -471,3 +471,8 @@
   }
 }
 
+
+.builder-settings-field-error {
+  color: var(--theme-danger-text, #b91c1c);
+  font-weight: 500;
+}

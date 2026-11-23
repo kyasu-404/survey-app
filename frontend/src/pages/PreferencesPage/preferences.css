@@ -1,0 +1,30 @@
+.password-settings {
+  max-width: 570px;
+  padding: clamp(14px, 3vw, 20px);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-card-background);
+}
+
+.password-settings h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+.password-settings-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.password-settings-form [aria-invalid="true"] {
+  border-color: var(--theme-danger-border);
+}
+
+.password-settings-form p {
+  margin: 4px 0 0;
+}
+
+.password-settings-form button {
+  justify-self: start;
+}
