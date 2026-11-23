@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "../../app/routes";
+import { ToastProvider } from "../../app/providers/ToastProvider";
 import { logout } from "../../features/auth/api";
 import { ThemeProvider } from "../../shared/theme/ThemeProvider";
 import { readAppCss } from "../../test/readAppCss";
@@ -41,7 +42,9 @@ function renderSidebar() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+        <ToastProvider>
+          <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -69,7 +72,9 @@ describe("Sidebar", () => {
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+          <ToastProvider>
+            <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+          </ToastProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -83,7 +88,9 @@ describe("Sidebar", () => {
     rerender(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+          <ToastProvider>
+            <ThemeProvider><Sidebar onToggle={vi.fn()} /></ThemeProvider>
+          </ToastProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     );

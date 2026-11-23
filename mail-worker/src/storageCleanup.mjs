@@ -1,6 +1,7 @@
 export const DEFAULT_STORAGE_CLEANUP_RETENTION_HOURS = 7 * 24;
 export const DEFAULT_STORAGE_CLEANUP_INTERVAL_HOURS = 24;
 export const STORAGE_CLEANUP_BATCH_LIMIT = 500;
+const STORAGE_REMOVE_BATCH_SIZE = 100;
 
 const cleanupBuckets = [
   {bucket: "survey-documents", listFunction: "list_orphan_office_documents", confirmFunction: "confirm_orphan_office_documents", resultKey: "removedDocuments"},
@@ -14,6 +15,12 @@ const cleanupBuckets = [
     bucket: "survey-assets",
     listFunction: "list_orphan_survey_assets",
     confirmFunction: "confirm_orphan_survey_assets",
+    resultKey: "removedAssets",
+  },
+  {
+    bucket: "app-favicons",
+    listFunction: "list_orphan_app_favicons",
+    confirmFunction: "confirm_orphan_app_favicons",
     resultKey: "removedAssets",
   },
 ];
@@ -82,8 +89,11 @@ export async function runScheduledStorageCleanup({
         }));
         if (confirmed.length === 0) break;
 
-        await removeObjects(cleanupBucket.bucket, confirmed);
-        result[cleanupBucket.resultKey] += confirmed.length;
+        for (let offset = 0; offset < confirmed.length; offset += STORAGE_REMOVE_BATCH_SIZE) {
+          const chunk = confirmed.slice(offset, offset + STORAGE_REMOVE_BATCH_SIZE);
+          await removeObjects(cleanupBucket.bucket, chunk);
+          result[cleanupBucket.resultKey] += chunk.length;
+        }
 
         if (candidates.length < STORAGE_CLEANUP_BATCH_LIMIT) break;
       }

@@ -140,5 +140,6 @@ test('unbound worksheets retain original XML bytes, while cached formulas are cl
   if(!value.includes('\n'))assert.deepEqual(output['xl/_rels/workbook.xml.rels'],files['xl/_rels/workbook.xml.rels']);
  }
  assert.deepEqual(template.parts,originalParts);
- assert.deepEqual(template.files,files);
+ assert.deepEqual({...template.files},files);
+ assert.equal(Object.getPrototypeOf(template.files),null);
 });

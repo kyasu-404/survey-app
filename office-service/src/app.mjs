@@ -11,12 +11,36 @@ const BUCKET = 'survey-documents';
 const now = () => Math.floor(Date.now()/1000);
 const bearer = req => (req.headers.authorization || '').replace(/^Bearer /, '');
 
+const PLUGIN_MIMES = new Map([
+  ['config.json', 'application/json'],
+  ['index.html', 'text/html; charset=utf-8'],
+  ['plugin.js', 'text/javascript'],
+  ['plugin.css', 'text/css'],
+  ['plugins.js', 'text/javascript'],
+  ['icon.svg', 'image/svg+xml'],
+]);
+function contentDisposition(name, fallbackName) {
+  const encoded = encodeURIComponent(name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  const ascii = String(fallbackName || 'document').replace(/[^A-Za-z0-9._-]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+function sanitizeLogMessage(error) {
+  return String(error?.message || '').replace(/https?:\/\/\S+/gi, '[url]').replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]').slice(0, 200);
+}
+
 export function createApp({pool, supabase, env = process.env}) {
   const key = encryptionKey(env.ONLYOFFICE_SETTINGS_ENCRYPTION_KEY);
   const tokenKey = Buffer.from(key).toString('hex') + ':survey-office-capability-v1';
   const appUrl = baseUrl(env.PUBLIC_APP_URL);
   const appAddress = new URL(appUrl);
   const allowedOrigins = new Set([appAddress.origin]);
+  let embedOrigin = appAddress.origin;
+  if (env.OFFICE_EMBED_ORIGIN?.trim()) {
+    const embedAddress = new URL(baseUrl(env.OFFICE_EMBED_ORIGIN.trim()));
+    requireValue(embedAddress.pathname === '/', 'OFFICE_EMBED_ORIGIN принимает только адрес без пути');
+    embedOrigin = embedAddress.origin;
+    allowedOrigins.add(embedOrigin);
+  }
   for (const value of (env.OFFICE_ALLOWED_ORIGINS ?? '').split(',')) {
     const origin = value.trim();
     if (!origin) continue;
@@ -50,7 +74,11 @@ export function createApp({pool, supabase, env = process.env}) {
   const employeeOnly = auth => requireValue(!auth.claims,'Токен плагина не разрешает эту операцию',403);
   const archives = createResponseArchiveRoutes({
     env, send, secureCookies: appAddress.protocol === 'https:',
-    authenticateEmployee: async token => employeeOnly(await authenticate(token)),
+    authenticateEmployee: async token => {
+      const auth = await authenticate(token);
+      employeeOnly(auth);
+      return auth.profile;
+    },
   });
   function adminOnly(auth) { employeeOnly(auth); requireValue(auth.profile.role==='admin','Требуются права администратора',403); }
   async function formFor(id,auth) {
@@ -168,7 +196,8 @@ export function createApp({pool, supabase, env = process.env}) {
     }
   }
   function send(res,status,body,headers={}) {
-    res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',...headers});
+    const cors = res._corsHeaders || {};
+    res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',...cors,...headers});
     res.end(Buffer.isBuffer(body) || typeof body==='string' ? body : JSON.stringify(body));
   }
   async function command(s,payload) {
@@ -184,7 +213,7 @@ export function createApp({pool, supabase, env = process.env}) {
     await check('Survey-app → ONLYOFFICE',async()=>{requireValue((await fetchLimited(`${s.internal_url || s.public_url}/healthcheck`)).toString().trim()==='true','Document Server не готов');});
     await check('API редактора',async()=>{await fetchLimited(`${s.public_url}/web-apps/apps/api/documents/api.js`,{},4*1024*1024);});
     await check('JWT принят',async()=>{const r=await command(s,{c:'version'});requireValue(!r.error && r.version,'Document Server отклонил JWT',502);return r.version;});
-    await check('Конфигурация плагина',async()=>{const c=JSON.parse(await fetchLimited(`${appUrl}/api/office/plugin/config.json`));requireValue(c.guid===PLUGIN_GUID,'Не совпадает плагин');});
+    await check('Конфигурация плагина',async()=>{const c=JSON.parse(await fetchLimited(`${embedOrigin}/api/office/plugin/config.json`));requireValue(c.guid===PLUGIN_GUID,'Не совпадает плагин');});
     await check('ONLYOFFICE → Survey-app: загрузка DOCX',async()=>{
       const token=issue('probe',{},180),secret=decrypt(s.jwt_secret_encrypted,key);
       const payload={async:false,filetype:'docx',outputtype:'pdf',key:`survey_probe_${randomUUID().replaceAll('-','')}`,url:`${s.storage_url_override || appUrl}/api/office/probe?token=${token}`};
@@ -198,7 +227,19 @@ export function createApp({pool, supabase, env = process.env}) {
   async function handle(req,res) {
     const url=new URL(req.url,'http://office.local'),path=url.pathname.replace(/^\/api\/office/,'');
     const origin=req.headers.origin;
-    requireValue(!origin || allowedOrigins.has(origin) || (path.startsWith('/plugin/') && req.method==='GET'),'Недопустимый origin',403);
+    const isPublicPluginGet = path.startsWith('/plugin/') && req.method==='GET';
+    requireValue(!origin || allowedOrigins.has(origin) || isPublicPluginGet,'Недопустимый origin',403);
+    if (origin && allowedOrigins.has(origin) && !isPublicPluginGet) {
+      res._corsHeaders = {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        'Vary': 'Origin',
+      };
+    } else if (!isPublicPluginGet) {
+      res._corsHeaders = { 'Vary': 'Origin' };
+    }
     if(req.method==='OPTIONS') return send(res,204,'');
     if(path==='/health') {await query('select 1'); return send(res,200,{ok:true});}
     const prepareArchive = path.match(/^\/forms\/([^/]+)\/response-archive$/);
@@ -209,13 +250,18 @@ export function createApp({pool, supabase, env = process.env}) {
     requireValue(s,'Office API не настроен',503);
     const dsOrigin=s.public_url ? new URL(s.public_url).origin : "'none'";
     if(path==='/editor-frame' && req.method==='GET') {
-      const csp=`default-src 'none'; script-src 'self' ${dsOrigin}; style-src 'self' 'unsafe-inline'; frame-src ${dsOrigin}; connect-src 'self' ${dsOrigin}; img-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`;
+      const frameAncestors = [...allowedOrigins].join(' ');
+      const csp=`default-src 'none'; script-src 'self' ${dsOrigin}; style-src 'self' 'unsafe-inline'; frame-src ${dsOrigin}; connect-src 'self' ${dsOrigin}; img-src 'self' data:; frame-ancestors 'self' ${frameAncestors}; base-uri 'none'; form-action 'none'`;
       return send(res,200,await readFile(new URL('editor.html',staticRoot)),{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':csp});
     }
-    if(path==='/editor-bridge.js' && req.method==='GET') return send(res,200,await readFile(new URL('editor-bridge.js',staticRoot)),{'Content-Type':'text/javascript'});
+    if(path==='/editor-bridge.js' && req.method==='GET') {
+      const source=await readFile(new URL('editor-bridge.js',staticRoot));
+      const content=`const SURVEY_APP_ORIGIN=${JSON.stringify(appAddress.origin)};\n${source}`;
+      return send(res,200,content,{'Content-Type':'text/javascript; charset=utf-8'});
+    }
     if(path.startsWith('/plugin/') && req.method==='GET') {
       const name=path.slice('/plugin/'.length);
-      const mime={'config.json':'application/json','index.html':'text/html; charset=utf-8','plugin.js':'text/javascript','plugin.css':'text/css','plugins.js':'text/javascript','icon.svg':'image/svg+xml'}[name];
+      const mime=PLUGIN_MIMES.get(name);
       requireValue(mime,'Файл не найден',404);
       const source=await readFile(new URL(`plugin/${name}`,staticRoot));
       const content=name==='plugins.js' ? `const SURVEY_DOCUMENT_SERVER_ORIGIN=${JSON.stringify(s.public_url ? new URL(s.public_url).origin : null)};\n${source}` : source;
@@ -232,16 +278,19 @@ export function createApp({pool, supabase, env = process.env}) {
       return send(res,200,await download(claims.storagePath),{'Content-Type':mimeFor(doc.file_type)});
     }
     if(path.startsWith('/callback/') && req.method==='POST') {
-      const body=JSON.parse(await readLimited(req,1024*1024));
-      return callback(req,res,path.slice(10),s,body);
+      let callbackBody;
+      try { callbackBody=JSON.parse(await readLimited(req,1024*1024)); } catch { throw new HttpError(400,'Некорректный JSON'); }
+      requireValue(callbackBody && typeof callbackBody==='object' && !Array.isArray(callbackBody),'Некорректный JSON');
+      return callback(req,res,path.slice(10),s,callbackBody);
     }
     const auth=await authenticate(bearer(req));
     if(path==='/status' && req.method==='GET') {employeeOnly(auth);return send(res,200,{enabled:Boolean(s.enabled)});}
     let body={};
-    const contentType=req.headers['content-type']?.split(';')[0];
+    const contentType=req.headers['content-type']?.split(';')[0]?.trim().toLowerCase();
     if(['POST','PATCH','PUT'].includes(req.method) && contentType==='application/json') {
       const bytes=await readLimited(req,128*1024);
       try {body=bytes.length ? JSON.parse(bytes) : {};} catch {throw new HttpError(400,'Некорректный JSON');}
+      requireValue(body && typeof body==='object' && !Array.isArray(body),'Некорректный JSON');
     }
     if(path==='/settings') {
       adminOnly(auth);
@@ -253,6 +302,10 @@ export function createApp({pool, supabase, env = process.env}) {
       requireValue(typeof body.jwt_prefix==='string' && /^[\x20-\x7e]{0,32}$/.test(body.jwt_prefix),'Некорректный JWT Prefix');
       requireValue(Number.isInteger(body.max_file_mb) && body.max_file_mb>=1 && body.max_file_mb<=100,'Размер файла: от 1 до 100 МБ');
       requireValue(Number.isInteger(body.max_table_rows) && body.max_table_rows>=1 && body.max_table_rows<=5000,'Строк в таблице: от 1 до 5000');
+      const urlsChanged = (s.public_url || '') !== public_url || (s.internal_url || '') !== internal_url;
+      if (urlsChanged && !body.jwt_secret && s.jwt_secret_encrypted) {
+        throw new HttpError(400, 'При изменении адреса ONLYOFFICE введите JWT Secret заново');
+      }
       const secret=body.jwt_secret ? encrypt(String(body.jwt_secret),key) : s.jwt_secret_encrypted;
       requireValue(!body.enabled || secret,'Укажите JWT Secret');
       const saved=(await query(`update public.onlyoffice_settings set enabled=$1,public_url=$2,internal_url=$3,storage_url_override=$4,jwt_header=$5,jwt_prefix=$6,
@@ -310,8 +363,8 @@ export function createApp({pool, supabase, env = process.env}) {
       requireValue(req.method==='GET' && resultMatch[2],'Метод не поддерживается',405);
       const archive=await download(result.storage_path);
       let bytes=archive,name=result.name,contentType='application/zip';
-      if(resultMatch[3]!==undefined){const index=Number(resultMatch[3]);requireValue(Number.isSafeInteger(index)&&index>=0&&index<result.files.length,'Файл не найден',404);name=result.files[index];bytes=Buffer.from((await runOfficeTask({task:'extract',bytes:archive,filename:name})).bytes);contentType=mimeFor(result.file_type);}
-      return send(res,200,bytes,{'Content-Type':contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`});
+      if(resultMatch[3]!==undefined){const index=Number(resultMatch[3]);requireValue(Number.isSafeInteger(index)&&index>=0&&index<result.files.length,'Файл не найден',404);name=result.files[index];const extracted=(await runOfficeTask({task:'extract',bytes:archive,filename:name})).bytes;bytes=Buffer.from(extracted.buffer,extracted.byteOffset,extracted.byteLength);contentType=mimeFor(result.file_type);}
+      return send(res,200,bytes,{'Content-Type':contentType,'Content-Disposition':contentDisposition(name,resultMatch[3]!==undefined ? `document.${result.file_type || 'docx'}` : 'result.zip')});
     }
     const match=path.match(/^\/documents\/([^/]+)(?:\/(.*))?$/);
     if(match) {
@@ -324,7 +377,7 @@ export function createApp({pool, supabase, env = process.env}) {
         employeeOnly(auth);requireValue(doc.created_by===auth.profile.id || auth.profile.role==='admin','Удалить документ может его создатель или администратор',403);
         await query('delete from public.office_documents where id=$1',[doc.id]);return send(res,200,{ok:true});
       }
-      if(action==='download' && req.method==='GET') {employeeOnly(auth);return send(res,200,await download(doc.storage_path),{'Content-Type':mimeFor(doc.file_type),'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(doc.name)}`});}
+      if(action==='download' && req.method==='GET') {employeeOnly(auth);return send(res,200,await download(doc.storage_path),{'Content-Type':mimeFor(doc.file_type),'Content-Disposition':contentDisposition(doc.name,`template.${doc.file_type || 'docx'}`)});}
       if(action==='copy' && req.method==='POST') {
         employeeOnly(auth);const form=await formFor(doc.form_id,auth);
         return send(res,201,await createDocument(form,auth,documentName(doc.name.replace(/\.(docx|xlsx)$/i,'')+' (копия)',doc.file_type),await download(doc.storage_path),doc.file_type));
@@ -338,11 +391,11 @@ export function createApp({pool, supabase, env = process.env}) {
             url:`${callbackBase}/api/office/file/${doc.id}?token=${issue('file',{documentId:doc.id,storagePath:current.storage_path},3600)}`,
             permissions:{edit:true,download:true,print:true,review:true,comment:true}},editorConfig:{lang:'ru',mode:'edit',callbackUrl:`${callbackBase}/api/office/callback/${doc.id}`,
             user:{id:auth.profile.id,name:auth.profile.name || 'Сотрудник'},customization:{forcesave:true,autosave:true},
-            plugins:{pluginsData:[`${appUrl}/api/office/plugin/config.json`],autostart:[PLUGIN_GUID],options:{[PLUGIN_GUID]:{
-              formId:doc.form_id,documentId:doc.id,fileType:doc.file_type || 'docx',apiBaseUrl:`${appUrl}/api/office`,token:issue('plugin',{formId:doc.form_id,documentId:doc.id,sub:auth.profile.id,sessionEnd:now()+8*3600}),
+            plugins:{pluginsData:[`${embedOrigin}/api/office/plugin/config.json`],autostart:[PLUGIN_GUID],options:{[PLUGIN_GUID]:{
+              formId:doc.form_id,documentId:doc.id,fileType:doc.file_type || 'docx',apiBaseUrl:`${embedOrigin}/api/office`,token:issue('plugin',{formId:doc.form_id,documentId:doc.id,sub:auth.profile.id,sessionEnd:now()+8*3600}),
             }}}}};
           await db.query('update public.office_documents set last_opened_at=now() where id=$1',[doc.id]);
-          return {config:{...config,token:sign(config,decrypt(s.jwt_secret_encrypted,key))},apiJsUrl:`${s.public_url}/web-apps/apps/api/documents/api.js`,name:doc.name};
+          return {config:{...config,token:sign(config,decrypt(s.jwt_secret_encrypted,key))},apiJsUrl:`${s.public_url}/web-apps/apps/api/documents/api.js`,name:doc.name,embedOrigin};
         });
         return send(res,200,result);
       }
@@ -400,7 +453,7 @@ export function createApp({pool, supabase, env = process.env}) {
     catch(error) {
       const id=randomUUID();
       // Do not log request bodies, URLs, tokens or Document Server download URLs.
-      console.error(JSON.stringify({event:'office-request-error',requestId:id,status:error.status || 500,code:error.code || error.name}));
+      console.error(JSON.stringify({event:'office-request-error',requestId:id,status:error.status || 500,code:error.code || error.name,message:sanitizeLogMessage(error)}));
       if (res.destroyed) return;
       if(!res.headersSent) send(res,error.status || 500,{error:1,message:error instanceof HttpError ? error.message : `Не удалось выполнить операцию (${id.slice(0,8)})`});
       else res.end();

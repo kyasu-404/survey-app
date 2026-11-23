@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { getFormQueryKey, getSurveyFormQueryKey } from "../../../entities/survey/model/queryKeys";
@@ -16,6 +16,7 @@ export function useDashboardActionRunner({ formsQueryKey, formsStatsQueryKey }: 
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
+  const inFlightKeysRef = useRef(new Set<string>());
 
   const setActionPending = (actionKey: string, isPending: boolean) => {
     setPendingActionKeys((current) => {
@@ -50,6 +51,10 @@ export function useDashboardActionRunner({ formsQueryKey, formsStatsQueryKey }: 
   };
 
   const runAction = async (action: () => Promise<unknown>, options: DashboardActionOptions) => {
+    if (inFlightKeysRef.current.has(options.actionKey)) {
+      return false;
+    }
+    inFlightKeysRef.current.add(options.actionKey);
     setActionPending(options.actionKey, true);
     const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
 
@@ -62,11 +67,14 @@ export function useDashboardActionRunner({ formsQueryKey, formsStatsQueryKey }: 
         scheduleFormsRefresh();
       }
       showToast(options.successMessage, "success");
+      return true;
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, options.errorMessage), "error");
+      return false;
     } finally {
       stopPendingLogger();
+      inFlightKeysRef.current.delete(options.actionKey);
       setActionPending(options.actionKey, false);
     }
   };

@@ -14,7 +14,9 @@ export function FaviconSettingsSection() {
     try{await validateFaviconFile(next);if(version===selection.current)setFile(next);}catch(cause){if(version===selection.current)setError(getErrorMessage(cause,"Не удалось выбрать favicon"));}
   };
   const save=async(reset=false)=>{
-    if(busy||!reset&&!file)return;setBusy(true);setError(null);
+    if(busy||!reset&&!file)return;
+    if(reset && !query.data?.path){setFile(null);setPreview(null);setError(null);return;}
+    setBusy(true);setError(null);
     try{const value=reset?await resetAppFavicon():await uploadAppFavicon(file!);cache.setQueryData(FAVICON_QUERY_KEY,value);setFile(null);setPreview(null);showToast(reset?"Восстановлен стандартный favicon":"Favicon обновлён","success");}
     catch(cause){setError(getErrorMessage(cause,"Не удалось сохранить favicon"));}finally{setBusy(false);}
   };

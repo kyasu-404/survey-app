@@ -221,7 +221,9 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/Минимальный возраст — 7 дней/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Запустить очистку сейчас" }));
-    expect(screen.getByRole("alertdialog", { name: "Запустить очистку файлов?" })).toBeInTheDocument();
+    const confirmDialog = screen.getByRole("alertdialog", { name: "Запустить очистку файлов?" });
+    expect(confirmDialog).toBeInTheDocument();
+    expect(confirmDialog).not.toHaveAttribute("aria-modal");
     await userEvent.click(screen.getByRole("button", { name: "Очистить" }));
 
     await waitFor(() => expect(runStorageCleanup).toHaveBeenCalledTimes(1));
@@ -229,6 +231,29 @@ describe("SettingsPage", () => {
       "Очистка завершена: файлов ответов — 2, изображений форм — 1, документов ONLYOFFICE — 3",
       "success",
     );
+  });
+
+  it("keeps the test email recipient empty after the administrator clears it", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "SMTP" }));
+    const recipientInput = await screen.findByRole("textbox", { name: "Получатель тестового письма" });
+    expect(recipientInput).toHaveValue("admin@example.ru");
+
+    await userEvent.clear(recipientInput);
+    expect(recipientInput).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Отправить тестовое письмо" })).toBeDisabled();
+  });
+
+  it("clears an unsaved local logo selection on reset without calling resetAppLogo", async () => {
+    renderPage();
+    const fileInput = await screen.findByLabelText("Выбрать изображение");
+    const file = new File(["logo"], "draft-logo.png", { type: "image/png" });
+    await userEvent.upload(fileInput, file);
+    expect(screen.getByText("draft-logo.png")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Вернуть стандартный" }));
+    expect(resetAppLogo).not.toHaveBeenCalled();
+    expect(screen.queryByText("draft-logo.png")).not.toBeInTheDocument();
   });
 
   it("separates settings areas, nested sections, and editable fields", () => {

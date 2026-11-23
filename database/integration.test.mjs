@@ -114,6 +114,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const responseNotificationOptInMigration = await source("./migrations/202611231400_default_response_notification_opt_in.sql");
     const reviewRegressionsMigration = await source("./migrations/202611231500_review_regressions.sql");
     const formClosedMigration = await source("./migrations/202611231600_form_closed_automation.sql");
+    const fullReviewFixesMigration = await source("./migrations/202611232200_full_code_review_fixes.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -195,6 +196,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         await db.query("delete from auth.users where id=$1", [administrator]);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
         await db.query(formClosedMigration);
+        await db.query(fullReviewFixesMigration);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
@@ -209,6 +211,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/form_closed_automation.sql");
       await runPsql(database, "./tests/announcements.sql");
       await runPsql(database, "./tests/review_regressions.sql");
+      await runPsql(database, "./tests/full_code_review_fixes.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }
@@ -262,6 +265,25 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       const deletion = await pending;
       assert.ifError(deletion.error);
       assert.deepEqual(deletion.result.rows[0].result.objectPaths, [editedPath]);
+
+      // Selected response deletion also waits for an in-flight edit before capturing paths (F-06).
+      const respForm = randomUUID(), respBrowser = randomUUID();
+      await db.query("insert into public.forms(id,title,author_id,form_type,form_reason,allow_response_editing,schema) values($1,'Response delete race',$2,'anketa','plan',true,'{\"pages\":[{\"elements\":[{\"type\":\"file\",\"name\":\"file\"}]}]}')", [respForm, owner]);
+      const reserveFor = async (fId, bId) => {
+        const p = (await db.query("select public.reserve_survey_upload($1,$2,$3,1,'.txt') path", [fId, bId, "d".repeat(64)])).rows[0].path;
+        await db.query("insert into storage.objects(bucket_id,name,metadata) values('survey-files',$1,'{\"size\":1}')", [p]);
+        return p;
+      };
+      const initialPath = await reserveFor(respForm, respBrowser);
+      const { rows: [submittedResp] } = await db.query("select * from public.submit_form_response($1,$2,$3,$4)", [respForm, respBrowser, randomUUID(), { file: [{ content: initialPath }] }]);
+      const addedPath = await reserveFor(respForm, respBrowser);
+      await a.query("begin");
+      await a.query("select * from public.update_form_response($1,$2,$3,$4)", [respForm, respBrowser, submittedResp.response_id, { file: [{ content: initialPath }, { content: addedPath }] }]);
+      pending = b.query("select public.delete_form_responses_with_files($1,$2,$3) result", [respForm, [submittedResp.response_id], owner]).then(result => ({result}), error => ({error}));
+      await waitForRowLock(); await a.query("commit");
+      const respDeletion = await pending;
+      assert.ifError(respDeletion.error);
+      assert.deepEqual([...respDeletion.result.rows[0].result.objectPaths].sort(), [initialPath, addedPath].sort());
 
       // A writer waits for form deletion before it holds the rule needed by the cascade.
       const mailAction = { recipients: ["owner@example.invalid"], subject: "Test", body: "Test", mode: "summary" };
@@ -329,6 +351,18 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         assert.ifError((await pending).error);
         const state = (await db.query("select p.is_disabled,coalesce(u.banned_until>clock_timestamp(),false) banned from public.profiles p join auth.users u on u.id=p.id where p.id=$1", [target])).rows[0];
         assert.deepEqual(state, { is_disabled: second, banned: second });
+      }
+      // Verify previously unwired standalone SQL suites against fresh schema (L-01).
+      for (const [prefix, file] of [
+        ["survey_access_check_", "./employee_access.test.sql"],
+        ["survey_sort_check_", "./forms_table_sort.test.sql"],
+        ["survey_archive_check_", "./organization_archive.test.sql"],
+      ]) {
+        const auxDb = prefix + randomUUID().replaceAll("-", "");
+        await admin.query("create database " + auxDb + " template template0"); databases.push(auxDb);
+        const auxClient = await connect(auxDb);
+        await auxClient.query(infra + schema);
+        await runPsql(auxDb, file);
       }
     }
   } finally {

@@ -1,9 +1,13 @@
 (function () {
   'use strict';
   let started = false;
-  const notify = (type, data) => parent.postMessage({ type, data }, location.origin);
+  const configuredOrigin = typeof SURVEY_APP_ORIGIN === 'string' && SURVEY_APP_ORIGIN ? SURVEY_APP_ORIGIN : location.origin;
+  const allowedParentOrigins = new Set([configuredOrigin, location.origin]);
+  let targetParentOrigin = configuredOrigin;
+  const notify = (type, data) => parent.postMessage({ type, data }, targetParentOrigin);
   window.addEventListener('message', function (event) {
-    if (event.origin !== location.origin || event.source !== parent || event.data?.type !== 'office-config' || started) return;
+    if (!allowedParentOrigins.has(event.origin) || event.source !== parent || event.data?.type !== 'office-config' || started) return;
+    targetParentOrigin = event.origin;
     started = true;
     const {config, apiJsUrl} = event.data.data;
     const script = document.createElement('script');
@@ -22,5 +26,7 @@
     };
     document.head.appendChild(script);
   });
-  notify('office-frame-ready');
+  for (const origin of allowedParentOrigins) {
+    parent.postMessage({ type: 'office-frame-ready', data: undefined }, origin);
+  }
 })();

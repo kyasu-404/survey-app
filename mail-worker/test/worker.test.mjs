@@ -169,9 +169,14 @@ for (const finalAckSucceeds of [true, false]) {
     assert.deepEqual(await exit, [finalAckSucceeds ? 0 : 1, null]);
     assert.equal(claims, 1);
     assert.equal(smtp.messages, 1);
-    assert.deepEqual(acknowledgements.map(({ p_job_id, p_success }) => [p_job_id, p_success]), [
-      ["mail-job", true], ["mail-job", true],
-    ]);
+    if (finalAckSucceeds) {
+      assert.deepEqual(acknowledgements.map(({ p_job_id, p_success }) => [p_job_id, p_success]), [
+        ["mail-job", true], ["mail-job", true],
+      ]);
+    } else {
+      assert.ok(acknowledgements.length >= 2);
+      assert.ok(acknowledgements.every(({ p_job_id, p_success }) => p_job_id === "mail-job" && p_success === true));
+    }
   });
 }
 

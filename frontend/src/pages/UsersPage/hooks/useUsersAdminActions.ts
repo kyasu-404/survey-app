@@ -1,4 +1,4 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createUser,
@@ -18,24 +18,17 @@ import { EMPTY_NEW_USER, getUsersPageSessionState, updateUsersPageSessionState }
 export function useUsersAdminActions() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [newUser, setNewUserState] = useState<NewUserForm>(() => getUsersPageSessionState(queryClient).newUser);
+  const [newUser, setNewUser] = useState<NewUserForm>(() => getUsersPageSessionState(queryClient).newUser);
   const [pendingStatusUserId, setPendingStatusUserId] = useState<string | null>(null);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<DeleteUserModalState | null>(null);
   const [roleChangeModal, setRoleChangeModal] = useState<RoleChangeModalState | null>(null);
+  const inFlightOpsRef = useRef<Set<string>>(new Set());
 
-  const setNewUser = useCallback<Dispatch<SetStateAction<NewUserForm>>>(
-    (value) => {
-      setNewUserState((currentValue) => {
-        const nextValue = typeof value === "function" ? value(currentValue) : value;
-        updateUsersPageSessionState(queryClient, { newUser: nextValue });
-
-        return nextValue;
-      });
-    },
-    [queryClient],
-  );
+  useEffect(() => {
+    updateUsersPageSessionState(queryClient, { newUser });
+  }, [newUser, queryClient]);
 
   const createUserMutation = useMutation({
     mutationFn: createUser,
@@ -106,6 +99,10 @@ export function useUsersAdminActions() {
   const modalPasswordError = passwordModal ? getNewPasswordError(passwordModal.password) : null;
 
   const onCreateUser = async () => {
+    if (inFlightOpsRef.current.has("create")) {
+      return;
+    }
+
     if (!newUser.name.trim()) {
       showToast("Укажите имя", "error");
       return;
@@ -116,6 +113,7 @@ export function useUsersAdminActions() {
       return;
     }
 
+    inFlightOpsRef.current.add("create");
     try {
       await createUserMutation.mutateAsync({
         ...newUser,
@@ -124,6 +122,8 @@ export function useUsersAdminActions() {
       });
     } catch {
       // onError reports the error; retain the dialog and draft for correction.
+    } finally {
+      inFlightOpsRef.current.delete("create");
     }
   };
 
@@ -139,8 +139,8 @@ export function useUsersAdminActions() {
     setPasswordModal((current) => (current ? { ...current, password } : current));
   };
 
-  const onChangePassword = () => {
-    if (!passwordModal) {
+  const onChangePassword = async () => {
+    if (!passwordModal || inFlightOpsRef.current.has("password")) {
       return;
     }
 
@@ -149,34 +149,67 @@ export function useUsersAdminActions() {
       return;
     }
 
-    updateUserPasswordMutation.mutate({
-      userId: passwordModal.userId,
-      password: passwordModal.password,
-    });
+    inFlightOpsRef.current.add("password");
+    try {
+      await updateUserPasswordMutation.mutateAsync({
+        userId: passwordModal.userId,
+        password: passwordModal.password,
+      });
+    } catch {
+      // onError reports the error; retain the modal for retry.
+    } finally {
+      inFlightOpsRef.current.delete("password");
+    }
   };
 
   const onDeleteUser = async () => {
-    if (!deleteUserModal) {
+    if (!deleteUserModal || inFlightOpsRef.current.has("delete")) {
       return;
     }
 
-    await deleteUserMutation.mutateAsync(deleteUserModal.userId);
-    setDeleteUserModal(null);
+    inFlightOpsRef.current.add("delete");
+    try {
+      await deleteUserMutation.mutateAsync(deleteUserModal.userId);
+      setDeleteUserModal(null);
+    } catch {
+      // onError reports the error; retain the confirmation modal.
+    } finally {
+      inFlightOpsRef.current.delete("delete");
+    }
   };
 
   const onToggleUserDisabled = async (userId: string, disabled: boolean) => {
-    await setUserDisabledMutation.mutateAsync({ userId, disabled });
-  };
-
-  const onChangeRole = async () => {
-    if (!roleChangeModal) {
+    const key = `status:${userId}`;
+    if (inFlightOpsRef.current.has(key)) {
       return;
     }
 
-    await updateUserRoleMutation.mutateAsync({
-      userId: roleChangeModal.userId,
-      role: roleChangeModal.nextRole,
-    });
+    inFlightOpsRef.current.add(key);
+    try {
+      await setUserDisabledMutation.mutateAsync({ userId, disabled });
+    } catch {
+      // onError reports the error.
+    } finally {
+      inFlightOpsRef.current.delete(key);
+    }
+  };
+
+  const onChangeRole = async () => {
+    if (!roleChangeModal || inFlightOpsRef.current.has("role")) {
+      return;
+    }
+
+    inFlightOpsRef.current.add("role");
+    try {
+      await updateUserRoleMutation.mutateAsync({
+        userId: roleChangeModal.userId,
+        role: roleChangeModal.nextRole,
+      });
+    } catch {
+      // onError reports the error; retain the modal.
+    } finally {
+      inFlightOpsRef.current.delete("role");
+    }
   };
 
   return {

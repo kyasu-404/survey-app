@@ -641,5 +641,16 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.templates-page-actions\s*\{[^}]*align-items:\s*flex-end;/);
   });
 
+  it("does not open template preview when pressing Space or Enter on a nested card action button", async () => {
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1, { title: "Шаблон с кнопками" })]));
+
+    renderPage();
+
+    const pinButton = await screen.findByRole("button", { name: "Закрепить шаблон Шаблон с кнопками" });
+    pinButton.focus();
+    await userEvent.keyboard(" ");
+
+    expect(screen.queryByRole("dialog", { name: "Превью шаблона Шаблон с кнопками" })).not.toBeInTheDocument();
+  });
 
 });

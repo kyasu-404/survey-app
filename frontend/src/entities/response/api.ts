@@ -14,8 +14,11 @@ export async function getExistingResponse(
   browserId: string,
   signal?: AbortSignal,
   personalToken?: string,
+  usePublicClient = false,
 ) {
-  return personalToken ? fetchExistingResponse(formId, browserId, signal, personalToken) : fetchExistingResponse(formId, browserId, signal);
+  return personalToken || usePublicClient
+    ? fetchExistingResponse(formId, browserId, signal, personalToken, usePublicClient)
+    : fetchExistingResponse(formId, browserId, signal);
 }
 
 export async function createResponse(
@@ -24,8 +27,11 @@ export async function createResponse(
   submissionId: string,
   browserId: string,
   personalToken?: string,
+  usePublicClient = false,
 ) {
-  return personalToken ? insertResponse(formId, data, submissionId, browserId, undefined, personalToken) : insertResponse(formId, data, submissionId, browserId);
+  return personalToken || usePublicClient
+    ? insertResponse(formId, data, submissionId, browserId, undefined, personalToken, usePublicClient)
+    : insertResponse(formId, data, submissionId, browserId);
 }
 
 export async function editResponse(
@@ -34,8 +40,11 @@ export async function editResponse(
   data: Record<string, unknown>,
   browserId: string,
   personalToken?: string,
+  usePublicClient = false,
 ) {
-  return personalToken ? updateResponse(formId, responseId, data, browserId, undefined, personalToken) : updateResponse(formId, responseId, data, browserId);
+  return personalToken || usePublicClient
+    ? updateResponse(formId, responseId, data, browserId, undefined, personalToken, usePublicClient)
+    : updateResponse(formId, responseId, data, browserId);
 }
 
 export async function deleteResponses(formId: string, responseIds: string[]) {

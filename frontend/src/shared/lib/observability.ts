@@ -97,6 +97,10 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
     return sanitizeAttributes(value as LogAttributes, depth + 1);
   }
 
+  if (typeof value === "string") {
+    return sanitizeText(value);
+  }
+
   if (typeof value === "bigint") {
     return value.toString();
   }
@@ -187,11 +191,19 @@ function toError(error: unknown) {
   if (error instanceof Error) {
     const safeError = new Error(sanitizeText(error.message));
     safeError.name = error.name;
+    if (error.stack) {
+      safeError.stack = sanitizeText(error.stack);
+    }
     return safeError;
   }
 
   if (typeof error === "string") {
     return new Error(sanitizeText(error));
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    const code = "code" in error && typeof error.code === "string" ? `[${error.code}] ` : "";
+    return new Error(sanitizeText(`${code}${error.message}`));
   }
 
   return new Error("Non-error exception captured");

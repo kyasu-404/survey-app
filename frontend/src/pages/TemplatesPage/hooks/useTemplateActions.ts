@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { routes } from "../../../app/routes";
@@ -13,7 +13,7 @@ import type { SurveyFormSummary } from "../../../entities/survey/types";
 import { getErrorMessage } from "../../../shared/lib/error";
 import { createPendingStateLogger } from "../../../shared/lib/reactQueryDebug";
 import { scheduleQueryInvalidation } from "../../../shared/lib/queryRefresh";
-import { saveSurveyBuilderDraft } from "../../../widgets/SurveyBuilder/builderDraft";
+import { loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "../../../widgets/SurveyBuilder/builderDraft";
 import type { TemplateActionOptions } from "../types";
 
 export function useTemplateActions(userId: string | undefined) {
@@ -21,6 +21,7 @@ export function useTemplateActions(userId: string | undefined) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
+  const inFlightKeysRef = useRef(new Set<string>());
 
   const renameMutation = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => renameForm(id, title),
@@ -65,6 +66,10 @@ export function useTemplateActions(userId: string | undefined) {
   };
 
   const runAction = async (action: () => Promise<unknown>, options: TemplateActionOptions) => {
+    if (inFlightKeysRef.current.has(options.actionKey)) {
+      return false;
+    }
+    inFlightKeysRef.current.add(options.actionKey);
     setActionPending(options.actionKey, true);
     const stopPendingLogger = createPendingStateLogger(queryClient, options.logLabel);
 
@@ -77,11 +82,14 @@ export function useTemplateActions(userId: string | undefined) {
         scheduleTemplatesRefresh();
       }
       showToast(options.successMessage, "success");
+      return true;
     } catch (error) {
       console.error(error);
       showToast(getErrorMessage(error, options.errorMessage), "error");
+      return false;
     } finally {
       stopPendingLogger();
+      inFlightKeysRef.current.delete(options.actionKey);
       setActionPending(options.actionKey, false);
     }
   };
@@ -115,7 +123,19 @@ export function useTemplateActions(userId: string | undefined) {
       return;
     }
 
+    const existingDraft = loadSurveyBuilderDraft(userId, undefined);
+    const hasDraftElements = Boolean(
+      existingDraft?.schema.pages?.some((page) => Array.isArray(page.elements) && page.elements.length > 0),
+    );
+    if (hasDraftElements && !window.confirm("В конструкторе есть несохранённый черновик новой формы. Заменить его выбранным шаблоном?")) {
+      return;
+    }
+
     const actionKey = getTemplateActionKey(template.id);
+    if (inFlightKeysRef.current.has(actionKey)) {
+      return;
+    }
+    inFlightKeysRef.current.add(actionKey);
     setActionPending(actionKey, true);
 
     try {
@@ -136,6 +156,7 @@ export function useTemplateActions(userId: string | undefined) {
       console.error(error);
       showToast(getErrorMessage(error, "Не удалось загрузить шаблон в конструктор"), "error");
     } finally {
+      inFlightKeysRef.current.delete(actionKey);
       setActionPending(actionKey, false);
     }
   };
@@ -153,7 +174,7 @@ export function useTemplateActions(userId: string | undefined) {
   };
 
   const confirmDelete = async (deletingTemplate: SurveyFormSummary) => {
-    await runAction(() => removeMutation.mutateAsync({ id: deletingTemplate.id }), {
+    return runAction(() => removeMutation.mutateAsync({ id: deletingTemplate.id }), {
       actionKey: getTemplateActionKey(deletingTemplate.id),
       successMessage: "Шаблон удалён",
       errorMessage: "Не удалось удалить шаблон",

@@ -36,18 +36,27 @@ select ('b1000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
   n <> 3, case when n = 4 then now() - interval '1 day' else null end, n = 5
 from generate_series(1,5) n;
 
-insert into public.responses (id, form_id, data)
-select ('c1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
-  ('b1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
-  jsonb_build_object('q1','original','attachment',jsonb_build_array(jsonb_build_object(
-    'name','submitted.txt','content','public/b1000000-0000-4000-8000-' || lpad(n::text,12,'0') || '/submitted.txt')))
-from generate_series(1,5) n;
-
 insert into storage.objects (bucket_id,name)
 select 'survey-files', 'public/b1000000-0000-4000-8000-' || lpad(n::text,12,'0') || '/submitted.txt'
 from generate_series(1,5) n;
 insert into storage.objects (bucket_id,name)
 values ('survey-files','public/b1000000-0000-4000-8000-000000000003/draft.txt');
+
+insert into public.survey_upload_reservations (object_path, form_id, browser_hash, client_hash, size_bytes)
+select 'public/b1000000-0000-4000-8000-' || lpad(n::text,12,'0') || '/submitted.txt',
+  ('b1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
+  ('f1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
+  repeat('f', 64),
+  10
+from generate_series(1,5) n;
+
+insert into public.responses (id, form_id, browser_id, data)
+select ('c1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
+  ('b1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
+  ('f1000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
+  jsonb_build_object('q1','original','attachment',jsonb_build_array(jsonb_build_object(
+    'name','submitted.txt','content','public/b1000000-0000-4000-8000-' || lpad(n::text,12,'0') || '/submitted.txt')))
+from generate_series(1,5) n;
 
 -- An ordinary colleague sees all response states and submitted attachments.
 select set_config('request.jwt.claim.sub','a1000000-0000-4000-8000-000000000002',true);
@@ -94,10 +103,17 @@ end $$;
 reset role;
 
 -- Anonymous respondents can still use published forms from the disabled author.
+-- Prepare a server-side upload reservation before switching to anon.
+do $$ declare reserved text; begin
+  reserved := public.reserve_survey_upload('b1000000-0000-4000-8000-000000000001', 'd1000000-0000-4000-8000-000000000001', repeat('a', 64), 10, '.txt');
+  perform set_config('app.test_reserved_path', reserved, true);
+end $$;
 select set_config('request.jwt.claim.sub','',true);
 set local role anon;
-select pg_temp.assert_true((select count(id) = 3 from public.forms where id::text like 'b1000000-%'), 'anon sees only active public forms regardless of author status');
-select pg_temp.assert_true(public.can_upload_survey_file('public/b1000000-0000-4000-8000-000000000001/new.txt',true,10), 'anon uploads to disabled-author form');
+select pg_temp.assert_true(public.get_public_form('b1000000-0000-4000-8000-000000000001') is not null, 'anon reads active disabled-author form via get_public_form');
+select pg_temp.assert_true(public.get_public_form('b1000000-0000-4000-8000-000000000003') is null, 'anon cannot read closed form via get_public_form');
+select pg_temp.assert_true(public.get_public_form('b1000000-0000-4000-8000-000000000004') is null, 'anon cannot read expired form via get_public_form');
+select pg_temp.assert_true(public.can_upload_survey_file(current_setting('app.test_reserved_path'),true,10), 'anon uploads with server reservation to disabled-author form');
 select pg_temp.assert_true(not public.can_upload_survey_file('public/b1000000-0000-4000-8000-000000000003/new.txt',true,10), 'closed form still rejects uploads');
 select pg_temp.assert_true((select count(*) = 1 from public.list_form_organizations('b1000000-0000-4000-8000-000000000001') where id = 'e1000000-0000-4000-8000-000000000001'), 'public organization choices survive author suspension');
 select pg_temp.assert_true((select status = 'submitted' from public.submit_form_response('b1000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','{"q1":"first"}')), 'anonymous submission accepted');

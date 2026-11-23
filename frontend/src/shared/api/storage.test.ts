@@ -295,9 +295,10 @@ describe("storage api", () => {
       allowAnonymous: true,
       formId: "form-1",
     });
-    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", {
+    expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({
       body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt", browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
-    });
+      signal: expect.any(AbortSignal),
+    }));
     expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
 
     await expect(

@@ -79,3 +79,28 @@ test('OOXML streaming inflation preserves binary members spanning compressed chu
  const archive=Buffer.from(zipSync(files,{level:6}));
  assert.deepEqual(Buffer.from(validateDocx(archive,1024*1024)['word/media/image.bin']),binary);
 });
+test('OOXML rejects external non-hyperlink relationships, activeX, embeddings, XML entities and CRC tampering',()=>{
+ const base=unzipSync(blankDocx());
+ const extRels={...base,'word/_rels/document.xml.rels':Buffer.from('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file://evil/share.dotm" TargetMode="External"/></Relationships>')};
+ assert.throws(()=>validateDocx(Buffer.from(zipSync(extRels)),1024*1024));
+ const okLink={...base,'word/_rels/document.xml.rels':Buffer.from('<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org" TargetMode="External"/></Relationships>')};
+ assert.ok(validateDocx(Buffer.from(zipSync(okLink)),1024*1024)['word/document.xml']);
+ const activeX={...base,'word/activeX/activeX1.xml':Buffer.from('<a/>')};
+ assert.throws(()=>validateDocx(Buffer.from(zipSync(activeX)),1024*1024));
+ const embedded={...base,'word/embeddings/obj.ole':new Uint8Array([1,2])};
+ assert.throws(()=>validateDocx(Buffer.from(zipSync(embedded)),1024*1024));
+ const dtd={...base,'word/header1.xml':Buffer.from('<!DOCTYPE x><w:hdr/>')};
+ assert.throws(()=>validateDocx(Buffer.from(zipSync(dtd)),1024*1024));
+ const badCrc=Buffer.from(blankDocx());
+ const cdOffset=badCrc.readUInt32LE(badCrc.length-22+16);
+ badCrc.writeUInt32LE((badCrc.readUInt32LE(cdOffset+16)^1)>>>0,cdOffset+16);
+ assert.throws(()=>validateDocx(badCrc,1024*1024));
+});
+test('saveUrl rejects encoded path traversal and decrypt rejects truncated auth tags',()=>{
+ const settings={public_url:'https://docs.example.test',internal_url:'http://onlyoffice'};
+ assert.throws(()=>saveUrl('https://docs.example.test/cache/files/%2e%2e/secret',settings));
+ const key=randomBytes(32);
+ const [iv,tag,data]=encrypt('secret',key).split('.');
+ const shortTag=Buffer.from(tag,'base64').subarray(0,12).toString('base64');
+ assert.throws(()=>decrypt(`${iv}.${shortTag}.${data}`,key));
+});

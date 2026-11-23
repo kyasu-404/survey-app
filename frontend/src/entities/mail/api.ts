@@ -43,9 +43,10 @@ async function callMailAdmin<T>(payload: MailAdminAction) {
 
   const { data, error, response } = await runRequest(
     `functions.mail-admin.${payload.action}`,
-    (_signal, traceContext) => supabaseClient.functions.invoke<T>("mail-admin", {
+    (signal, traceContext) => supabaseClient.functions.invoke<T>("mail-admin", {
       body: payload,
       headers: { ...traceContext.headers, Authorization: `Bearer ${session.access_token}` },
+      signal,
     }),
     { context: { action: payload.action }, timeoutMs: 30_000 },
   );

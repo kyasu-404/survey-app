@@ -1,5 +1,8 @@
 {
   "name": "survey-app",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npm run icons:check && npm run fonts:check && vite build",

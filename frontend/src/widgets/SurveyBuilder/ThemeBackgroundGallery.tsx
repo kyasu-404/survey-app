@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   SURVEY_BACKGROUND_ACCEPT,
   listCommonSurveyBackgrounds,
@@ -9,6 +9,7 @@ import {
 } from "../../entities/survey/api/themeAssets";
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { useLegacyModalDialog } from "../../shared/ui/useLegacyModalDialog";
 
 type ThemeBackgroundGalleryProps = {
   currentBackground?: string;
@@ -72,9 +73,20 @@ export function ThemeBackgroundGallery({
   const [isUploading, setIsUploading] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  const titleId = useId();
+  const dialogRef = useLegacyModalDialog({ onClose });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const refreshCustomBackgrounds = async () => {
-    setCustomBackgrounds(await listCustomSurveyBackgrounds(formId, ownerId));
+    const custom = await listCustomSurveyBackgrounds(formId, ownerId);
+    if (mountedRef.current) setCustomBackgrounds(custom);
   };
 
   useEffect(() => {
@@ -100,39 +112,51 @@ export function ThemeBackgroundGallery({
   }, [formId, onError, ownerId]);
 
   const handleUpload = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || isUploading) return;
     setIsUploading(true);
     try {
       const uploaded = await uploadSurveyBackground(formId, ownerId, file);
+      if (!mountedRef.current) return;
       onApply(uploaded.url);
       await refreshCustomBackgrounds();
     } catch (error) {
-      onError(getErrorMessage(error, "Не удалось загрузить фон"));
+      if (mountedRef.current) onError(getErrorMessage(error, "Не удалось загрузить фон"));
     } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (mountedRef.current) {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
   };
 
   const handleDelete = async (asset: SurveyBackgroundAsset) => {
+    if (deletingAssetId) return;
     setDeletingAssetId(asset.id);
     try {
       await removeSurveyBackground(asset);
+      if (!mountedRef.current) return;
       if (currentBackground === asset.url) onApply("");
       await refreshCustomBackgrounds();
     } catch (error) {
-      onError(getErrorMessage(error, "Не удалось удалить фон"));
+      if (mountedRef.current) onError(getErrorMessage(error, "Не удалось удалить фон"));
     } finally {
-      setDeletingAssetId(null);
+      if (mountedRef.current) setDeletingAssetId(null);
     }
   };
 
   return (
     <div className="modal-backdrop theme-background-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="modal-card card theme-background-modal" role="dialog" aria-modal="true" aria-label="Галерея фонов">
+      <div
+        ref={dialogRef}
+        className="modal-card card theme-background-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <div className="theme-background-modal-header">
           <div>
-            <h3>Галерея фонов</h3>
+            <h3 id={titleId}>Галерея фонов</h3>
             <p>Общие фоны доступны всем. Пользовательские принадлежат этой форме.</p>
           </div>
           <button type="button" className="theme-background-close" onClick={onClose}>Закрыть</button>

@@ -20,6 +20,7 @@ export function MobileBuilderToolbar({ creator, busy, safeEditing, onSaveTemplat
 
   useEffect(() => {
     const sync = () => setActiveTab(creator.activeTab);
+    sync();
     creator.onActiveTabChanged.add(sync);
     return () => creator.onActiveTabChanged.remove(sync);
   }, [creator]);

@@ -4,7 +4,7 @@ import { openSurveyApp } from './fixtures/surveyApp';
 for (const width of [1440, 390]) {
   test(`foreign form copies directly and list pages fill the viewport at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 950 });
-    const { form, pageErrors } = await openSurveyApp(page);
+    const { form, pageErrors } = await openSurveyApp(page, { profileRole: 'user' });
     form.author_id = '10000000-0000-4000-8000-000000000002';
     await page.route('**/rest/v1/rpc/list_forms_keyset?*', route => route.fulfill({ json: [form] }));
     const copies: Array<Record<string, unknown>> = [];

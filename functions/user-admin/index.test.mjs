@@ -46,14 +46,14 @@ test("rejects administrators whose profile is disabled", () => {
   assert.match(source, /requesterProfile\?\.is_disabled/);
 });
 
-test("changes roles through the server-side admin client and rejects self changes", () => {
+test("changes roles through the atomic SQL RPC and rejects self changes", () => {
   const updateRoleCase = source.match(/case "updateRole":[\s\S]*?default:/);
 
   assert.ok(updateRoleCase, "updateRole action should exist");
   assert.match(updateRoleCase[0], /if \(isSelfRequest\)/);
   assert.match(updateRoleCase[0], /You cannot change your own role/);
-  assert.match(updateRoleCase[0], /adminClient[\s\S]*?\.from\("profiles"\)[\s\S]*?\.update\(\{ role: payload\.role \}\)/);
-  assert.match(updateRoleCase[0], /\.select\("id"\)[\s\S]*?\.maybeSingle\(\)/);
+  assert.match(updateRoleCase[0], /adminClient\.rpc\("set_employee_role"/);
+  assert.match(updateRoleCase[0], /p_actor_id: requester\.id/);
 });
 
 test("rolls back a newly created auth user when profile persistence fails", () => {

@@ -31,3 +31,26 @@ sys.exit(1 if '-C' in sys.argv else 0)
                     allowed = [rule for rule in rules if rule[-1] == 'RETURN']
                     self.assertEqual([rule[rule.index(selector) + 1] for rule in allowed], ['8000', '8443', '8095'] if family == 'iptables' else [])
                     self.assertTrue(all(rule[rule.index('-s') + 1] == '192.168.6.99' for rule in allowed))
+
+    def test_missing_ip6tables_docker_user_does_not_abort_ipv4_or_input_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mock = root / 'iptables'
+            mock.write_text('''#!/usr/bin/env python3
+import json, os, sys
+name = os.path.basename(sys.argv[0])
+with open(os.environ['INGRESS_TEST_LOG'], 'a') as out:
+    out.write(json.dumps([name, *sys.argv[1:]]) + '\\n')
+if name == 'ip6tables' and '-L' in sys.argv and 'DOCKER-USER' in sys.argv:
+    sys.exit(1)
+sys.exit(1 if '-C' in sys.argv else 0)
+''')
+            mock.chmod(0o755)
+            (root / 'ip6tables').symlink_to(mock)
+            log = root / 'calls.jsonl'
+            subprocess.run(['sh', str(Path(__file__).with_name('forms-ingress.sh'))], check=True,
+                           env={**os.environ, 'PATH': str(root) + ':' + os.environ['PATH'], 'INGRESS_TEST_LOG': str(log)})
+            calls = [json.loads(line) for line in log.read_text().splitlines()]
+            self.assertTrue(any(c[0] == 'iptables' and '-I' in c and 'DOCKER-USER' in c for c in calls))
+            self.assertTrue(any(c[0] == 'ip6tables' and '-I' in c and 'INPUT' in c for c in calls))
+            self.assertFalse(any(c[0] == 'ip6tables' and '-I' in c and 'DOCKER-USER' in c for c in calls))

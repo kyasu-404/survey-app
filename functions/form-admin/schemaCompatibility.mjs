@@ -216,10 +216,11 @@ function collectQuestions(schema) {
     const { element, path, scope, rules } = current;
     if (typeof element.name === "string" && element.name.trim() && typeof element.type === "string") {
       const name = element.name;
-      if (questions.has(name)) {
+      const questionKey = stableValue([scope, name]);
+      if (questions.has(questionKey)) {
         duplicates.add(name);
       } else {
-        questions.set(name, { question: element, path, scope, rules });
+        questions.set(questionKey, { name, question: element, path, scope, rules });
         if (!["panel", "html", "image", "sectiontitle"].includes(element.type)) {
           const key = element.valueName || name;
           registerAnswer(scope, key, `вопрос «${name}»`);
@@ -235,12 +236,15 @@ function collectQuestions(schema) {
         stack.push({ element: elements[index], path: `${path}/${propertyName}:${index}`, rules: childRules, scope: childScope });
       }
     };
+    const nextRules = rules.concat(containerRules(element));
+    const containerScopeSegment = element.valueName || element.name || "";
+    const nestedScope = scope ? `${scope}/${containerScopeSegment}` : containerScopeSegment;
     if (element.type === "panel") {
-      pushElements(elementList(element, "elements", ["questions"]), "elements", scope, rules.concat(containerRules(element)));
+      pushElements(elementList(element, "elements", ["questions"]), "elements", scope, nextRules);
     } else if (element.type === "paneldynamic") {
-      pushElements(elementList(element, "templateElements", ["questions"]), "templateElements", element.name, rules);
+      pushElements(elementList(element, "templateElements", ["questions"]), "templateElements", nestedScope, nextRules);
     } else if (["matrixdropdown", "matrixdynamic"].includes(element.type)) {
-      pushElements(elementList(element, "detailElements"), "detailElements", element.name, rules);
+      pushElements(elementList(element, "detailElements"), "detailElements", nestedScope, nextRules);
     } else if (["radiogroup", "checkbox"].includes(element.type) && Array.isArray(element.choices)) {
       for (const choice of element.choices) {
         if (Array.isArray(choice?.elements)) {
@@ -316,7 +320,7 @@ function compareFieldSettings(before, after, label, warnings, breakingChanges) {
     multiSelect: false, storeOthersAsComment: "default", dataFormat: "png",
     otherItemValue: "other", noneItemValue: "none",
   };
-  if (before.type === "signaturepad") storageDefaults.storeDataAsText = true;
+  if (before.type === "signaturepad" || before.type === "file") storageDefaults.storeDataAsText = true;
   if (before.type === "matrix") storageDefaults.cellType = "radio";
   for (const [key, fallback] of Object.entries(storageDefaults)) {
     if (!valuesEqual(before[key] ?? fallback, after[key] ?? fallback)) {
@@ -430,18 +434,24 @@ export function analyzeSchemaCompatibility(
     }
   }
 
-  for (const [name, oldEntry] of previous.questions) {
-    const nextEntry = next.questions.get(name);
+  const nextNames = new Set([...next.questions.values()].map(entry => entry.name));
+
+  for (const [questionKey, oldEntry] of previous.questions) {
+    const nextEntry = next.questions.get(questionKey);
     const oldQuestion = oldEntry.question;
-    const oldLabel = questionLabel(oldQuestion, name);
+    const oldLabel = questionLabel(oldQuestion, oldEntry.name);
 
     if (!nextEntry) {
-      breakingChanges.push(`Удалён вопрос «${oldLabel}»`);
+      if (nextNames.has(oldEntry.name)) {
+        breakingChanges.push(`Изменилось место хранения ответа на вопрос «${oldLabel}»`);
+      } else {
+        breakingChanges.push(`Удалён вопрос «${oldLabel}»`);
+      }
       continue;
     }
 
     const nextQuestion = nextEntry.question;
-    const nextLabel = questionLabel(nextQuestion, name);
+    const nextLabel = questionLabel(nextQuestion, nextEntry.name);
 
     compareCollections(oldQuestion, nextQuestion, nextLabel, safeChanges, warnings, breakingChanges);
     compareFieldSettings(oldQuestion, nextQuestion, nextLabel, warnings, breakingChanges);
@@ -461,10 +471,10 @@ export function analyzeSchemaCompatibility(
     }
   }
 
-  for (const [name, nextEntry] of next.questions) {
-    if (previous.questions.has(name)) continue;
+  for (const [questionKey, nextEntry] of next.questions) {
+    if (previous.questions.has(questionKey)) continue;
     const nextQuestion = nextEntry.question;
-    const label = questionLabel(nextQuestion, name);
+    const label = questionLabel(nextQuestion, nextEntry.name);
 
     if (nextQuestion.isRequired) {
       breakingChanges.push(`Добавлен обязательный вопрос «${label}». Сначала добавьте его как необязательный`);

@@ -182,8 +182,12 @@ export function DashboardToolbar({
             <option value="responses_count:asc">Меньше ответов</option>
             <option value="classification:asc">Тип и основание: А–Я</option>
             <option value="classification:desc">Тип и основание: Я–А</option>
-            <option value="author_name:asc">Автор: А–Я</option>
-            <option value="author_name:desc">Автор: Я–А</option>
+            {viewMode !== "mine" && (
+              <>
+                <option value="author_name:asc">Автор: А–Я</option>
+                <option value="author_name:desc">Автор: Я–А</option>
+              </>
+            )}
           </select>
         </label>
         <button type="button" className="app-button dashboard-filters-reset" disabled={!search && activeFilterCount === 0} onClick={resetFilters}>Сбросить</button>

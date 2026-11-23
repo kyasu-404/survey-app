@@ -81,3 +81,32 @@ test("SMTP certificate exceptions reject malformed values and remain administrat
   assert.equal((await app.request({ action: "get-settings" })).status, 403);
   assert.equal(app.writes.length, 0);
 });
+
+test("requires SMTP password re-entry on connection target change and rejects internal/loopback hosts", async () => {
+  const app = setup();
+  for (const mutation of [{ host: "attacker.example.test" }, { port: 587 }, { username: "other" }, { sslMode: "starttls" }]) {
+    const res = await app.request({ ...draft, ...mutation, password: "" });
+    assert.equal(res.status, 400, JSON.stringify(mutation));
+  }
+  for (const host of ["localhost", "sub.localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "kong", "office-service", "db"]) {
+    const res = await app.request({ ...draft, host, password: "secret" });
+    assert.equal(res.status, 400, host);
+  }
+  assert.equal((await app.request({ ...draft, enabled: "yes" })).status, 400);
+  assert.equal(app.writes.length, 0);
+});
+
+test("mailContent strips control chars, clamps long subjects, and ignores prototype keys", () => {
+  const longTitle = "Форма\x00\x07 " + "А".repeat(600);
+  const reminder = content.buildReminderMail({ organizationName: "Школа\x01 №1", formTitle: longTitle, deadlineAt: null, formUrl: "https://forms.test/form/1" });
+  const invitation = content.buildInvitationMail({ organizationName: "Школа\x01 №1", formTitle: longTitle, deadlineAt: null, formUrl: "https://forms.test/form/1" });
+  assert.ok(reminder.subject.length <= 500);
+  assert.ok(invitation.subject.length <= 500);
+  assert.doesNotMatch(reminder.subject, /[\x00-\x1f\x7f]/);
+  const rendered = content.renderMailTemplate(
+    { subject: "{toString} {Название формы}", bodyText: "{constructor}\n{Ссылка}" },
+    { organizationName: "Школа", formTitle: "Тест", deadlineAt: null, formUrl: "https://forms.test/form/1" },
+  );
+  assert.equal(rendered.subject, "{toString} Тест");
+  assert.equal(rendered.bodyText, "{constructor}\nhttps://forms.test/form/1");
+});

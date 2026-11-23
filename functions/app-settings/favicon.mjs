@@ -79,14 +79,29 @@ function svg(bytes, xml) {
         visit(children, depth + 1);
       }
       for (const [name, value] of Object.entries(node[':@'] ?? {})) {
-        if (!attributes.has(name.slice(2)) || typeof value !== 'string' || /[<>\\]/.test(value)) fail(`Атрибут ${name.slice(2)} не поддерживается в favicon SVG`);
-        if (/url\s*\(/i.test(value) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(value)) fail("Внешние ссылки в SVG запрещены");
-        if (name === '@_xmlns' && value !== 'http://www.w3.org/2000/svg') fail("Недопустимое пространство имён SVG");
+        const attrName = name.slice(2);
+        if (!attributes.has(attrName) || typeof value !== 'string' || /[<>\\]/.test(value)) fail(`Атрибут ${attrName} не поддерживается в favicon SVG`);
+        const trimmedValue = value.trim();
+        if (name === '@_xmlns') {
+          if (trimmedValue !== 'http://www.w3.org/2000/svg') fail("Недопустимое пространство имён SVG");
+          continue;
+        }
+        if ((attrName === 'mask' || attrName === 'clip-path') && !/^(?:none|url\(#[a-zA-Z0-9_-]+\))$/i.test(trimmedValue)) {
+          fail("Внешние ссылки в SVG запрещены");
+        }
+        if (/(?:url|image-set|image|cross-fade)\s*\(/i.test(trimmedValue) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(trimmedValue)) {
+          fail("Внешние ссылки в SVG запрещены");
+        }
+        if (/(?:https?:|data:|javascript:|vbscript:)/i.test(trimmedValue)) {
+          fail("Внешние ссылки в SVG запрещены");
+        }
       }
     }
   }
   visit(tree);
-  return new TextEncoder().encode(new xml.XMLBuilder(options).build(tree));
+  const encoded = new TextEncoder().encode(new xml.XMLBuilder(options).build(tree));
+  if (!encoded.length || encoded.length > MAX_FAVICON_BYTES) fail("Размер favicon должен быть от 1 байта до 1 МБ");
+  return encoded;
 }
 export function validateFavicon(bytes, fileName, xml) {
   if (!(bytes instanceof Uint8Array) || !bytes.length || bytes.length > MAX_FAVICON_BYTES) fail("Размер favicon должен быть от 1 байта до 1 МБ");

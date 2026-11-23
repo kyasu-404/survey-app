@@ -54,13 +54,14 @@ export function useDashboardSettingsActions({
       return;
     }
 
-    await runAction(() => clearDeadlineAction(deadlineEditor.form.id), {
+    const ok = await runAction(() => clearDeadlineAction(deadlineEditor.form.id), {
       actionKey: getFormActionKey(deadlineEditor.form.id),
       successMessage: "Дедлайн снят",
       errorMessage: "Не удалось обновить дедлайн",
       affectedFormId: deadlineEditor.form.id,
       logLabel: `dashboard deadline clear ${deadlineEditor.form.id}`,
-    }).finally(() => setDeadlineEditor(null));
+    });
+    if (ok) setDeadlineEditor(null);
   };
 
   const saveDeadline = async () => {
@@ -80,13 +81,14 @@ export function useDashboardSettingsActions({
       return;
     }
 
-    await runAction(() => saveDeadlineAction(deadlineEditor.form.id, parsedDate.toISOString()), {
+    const ok = await runAction(() => saveDeadlineAction(deadlineEditor.form.id, parsedDate.toISOString()), {
       actionKey: getFormActionKey(deadlineEditor.form.id),
       successMessage: "Дедлайн установлен",
       errorMessage: "Не удалось обновить дедлайн",
       affectedFormId: deadlineEditor.form.id,
       logLabel: `dashboard deadline save ${deadlineEditor.form.id}`,
-    }).finally(() => setDeadlineEditor(null));
+    });
+    if (ok) setDeadlineEditor(null);
   };
 
   const clearResponseLimit = async () => {
@@ -94,13 +96,14 @@ export function useDashboardSettingsActions({
       return;
     }
 
-    await runAction(() => clearResponseLimitAction(responseLimitEditor.form.id), {
+    const ok = await runAction(() => clearResponseLimitAction(responseLimitEditor.form.id), {
       actionKey: getFormActionKey(responseLimitEditor.form.id),
       successMessage: "Ограничение снято",
       errorMessage: "Не удалось обновить ограничение",
       affectedFormId: responseLimitEditor.form.id,
       logLabel: `dashboard response limit clear ${responseLimitEditor.form.id}`,
-    }).finally(() => setResponseLimitEditor(null));
+    });
+    if (ok) setResponseLimitEditor(null);
   };
 
   const saveResponseLimit = async () => {
@@ -111,8 +114,8 @@ export function useDashboardSettingsActions({
     const normalizedInput = responseLimitEditor.value.trim();
     const parsedLimit = Number(normalizedInput);
 
-    if (!normalizedInput || !Number.isInteger(parsedLimit) || parsedLimit <= 0) {
-      showToast("Укажите положительное целое число ответов", "error");
+    if (!normalizedInput || !Number.isInteger(parsedLimit) || parsedLimit <= 0 || parsedLimit > 100_000) {
+      showToast("Укажите положительное целое число ответов (не более 100 000)", "error");
       return;
     }
 
@@ -121,13 +124,14 @@ export function useDashboardSettingsActions({
       return;
     }
 
-    await runAction(() => saveResponseLimitAction(responseLimitEditor.form.id, parsedLimit), {
+    const ok = await runAction(() => saveResponseLimitAction(responseLimitEditor.form.id, parsedLimit), {
       actionKey: getFormActionKey(responseLimitEditor.form.id),
       successMessage: "Ограничение сохранено",
       errorMessage: "Не удалось обновить ограничение",
       affectedFormId: responseLimitEditor.form.id,
       logLabel: `dashboard response limit save ${responseLimitEditor.form.id}`,
-    }).finally(() => setResponseLimitEditor(null));
+    });
+    if (ok) setResponseLimitEditor(null);
   };
 
   return {

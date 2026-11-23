@@ -47,10 +47,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setProfileLoading(false);
   }, []);
 
-  const loadProfile = useCallback(async (userId: string) => {
+  const loadProfile = useCallback(async (userId: string, preserveOnTransientError = false) => {
     const requestId = profileRequestIdRef.current + 1;
     profileRequestIdRef.current = requestId;
-    setProfileLoading(true);
+    if (!preserveOnTransientError) {
+      setProfileLoading(true);
+    }
 
     try {
       const { data, error } = await runRequest(
@@ -69,12 +71,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       if (error) {
-        setProfile(null);
         if ((error as { code?: string }).code === "PGRST116") {
+          setProfile(null);
           const { error: logoutError } = await apiClient.auth.logout();
           if (logoutError) {
             console.error(logoutError);
           }
+        } else if (!preserveOnTransientError) {
+          setProfile(null);
         }
         return;
       }
@@ -93,7 +97,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch (error) {
       if (profileRequestIdRef.current === requestId) {
         console.error(error);
-        setProfile(null);
+        if (!preserveOnTransientError) {
+          setProfile(null);
+        }
       }
     } finally {
       if (profileRequestIdRef.current === requestId) {
@@ -108,7 +114,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    await loadProfile(user.id);
+    await loadProfile(user.id, true);
   }, [clearProfile, loadProfile, user?.id]);
 
   useEffect(() => {
@@ -129,10 +135,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(sessionUser);
       setLoading(false);
       // INITIAL_SESSION and getSession can describe the same restoration.
+      const isBackgroundRefresh = initialized && !changed && !initial;
       const shouldLoad = !initialized || changed || !initial;
       initialized = true;
       if (sessionUser?.id) {
-        if (shouldLoad) void loadProfile(sessionUser.id);
+        if (shouldLoad) void loadProfile(sessionUser.id, isBackgroundRefresh);
       } else {
         clearProfile();
       }

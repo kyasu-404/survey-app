@@ -3,6 +3,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   SetStateAction,
 } from "react";
+import { canManageSurveyForm } from "../../../entities/survey/model/formAccess";
 import { getFormReasonLabel, getFormTypeLabel } from "../../../entities/survey/model/formOptions";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
@@ -16,6 +17,7 @@ import { DashboardDeadlineTooltip } from "./DashboardDeadlineTooltip";
 
 type DashboardFormCardProps = {
   layout?: DashboardLayout;
+  canAdministerAllForms?: boolean;
   currentUserId?: string;
   form: SurveyFormSummary;
   formIndex: number;
@@ -37,6 +39,7 @@ type DashboardFormCardProps = {
 
 export function DashboardFormCard({
   layout = "cards",
+  canAdministerAllForms = false,
   currentUserId,
   form,
   formIndex,
@@ -56,7 +59,7 @@ export function DashboardFormCard({
   viewMode,
 }: DashboardFormCardProps) {
   const title = getSurveyDisplayTitle(form);
-  const isOwnForm = form.author_id === currentUserId;
+  const canManageForm = canManageSurveyForm(form, currentUserId ?? "", canAdministerAllForms);
   const isTemplate = isTemplateForm(form);
   const actionMenuOpen = openedMenu?.kind === "actions" && openedMenu.formId === form.id;
   const statusMenuOpen = openedMenu?.kind === "status" && openedMenu.formId === form.id;
@@ -77,7 +80,7 @@ export function DashboardFormCard({
     <DashboardFormStatusControl
       portal={layout === "table"}
       form={form}
-      isOwnForm={isOwnForm}
+      isOwnForm={canManageForm}
       isPending={isPending}
       onOpenDeadlineEditor={onOpenDeadlineEditor}
       onOpenResponseLimitEditor={onOpenResponseLimitEditor}
@@ -104,6 +107,7 @@ export function DashboardFormCard({
     <DashboardFormActionMenu
       portal={layout === "table"}
       actionMenuOpen={actionMenuOpen}
+      canAdministerAllForms={canAdministerAllForms}
       currentUserId={currentUserId}
       form={form}
       isFirstVisibleForm={formIndex === 0}

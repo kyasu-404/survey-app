@@ -224,6 +224,7 @@ export default function FormResponsesPage() {
   const [isHeaderPinned, setIsHeaderPinned] = useState(false);
   const [isPreparingZip, setIsPreparingZip] = useState(false);
   const zipControllerRef = useRef<AbortController | null>(null);
+  const reportControllerRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const pageSize = 50;
@@ -256,12 +257,16 @@ export default function FormResponsesPage() {
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
     setResponseReport(null);
+    setDocumentsOpen(false);
     setShareDialog(null);
     setIsHeaderPinned(false);
     setIsPreparingZip(false);
+    setIsGeneratingReport(false);
     return () => {
       zipControllerRef.current?.abort();
       zipControllerRef.current = null;
+      reportControllerRef.current?.abort();
+      reportControllerRef.current = null;
     };
   }, [id]);
 
@@ -504,22 +509,31 @@ export default function FormResponsesPage() {
   };
 
   const handleOpenReport = async () => {
-    if (!id || !formQuery.data || !responsesQuery.data) {
+    if (!id || !formQuery.data || !responsesQuery.data || reportControllerRef.current) {
       return;
     }
 
+    const controller = new AbortController();
+    reportControllerRef.current = controller;
     setIsGeneratingReport(true);
     try {
-      const reportResponses = await getAllResponsesByForm(id);
+      const reportResponses = await getAllResponsesByForm(id, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const reportOrganizations = usesOrganizationDirectory
-        ? (organizationsQuery.data ?? await getOrganizations(undefined, undefined, true))
+        ? (organizationsQuery.data ?? await getOrganizations(undefined, controller.signal, true))
           .filter((organization) => !organization.is_archived && formOrganizationTypes.includes(organization.organization_type))
         : [];
+      if (controller.signal.aborted) return;
       setResponseReport(createResponseReport(reportResponses, formQuery.data.schema, reportOrganizations));
     } catch (error) {
-      showToast(getErrorMessage(error, "Не удалось сформировать отчёт"), "error");
+      if (!controller.signal.aborted && !isAbortError(error)) {
+        showToast(getErrorMessage(error, "Не удалось сформировать отчёт"), "error");
+      }
     } finally {
-      setIsGeneratingReport(false);
+      if (reportControllerRef.current === controller) {
+        reportControllerRef.current = null;
+        setIsGeneratingReport(false);
+      }
     }
   };
 

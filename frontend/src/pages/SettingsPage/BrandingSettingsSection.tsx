@@ -75,6 +75,11 @@ export function BrandingSettingsSection() {
   };
 
   const handleReset = async () => {
+    if (!brandingQuery.data?.sidebarLogoPath) {
+      setSelectedFile(null);
+      setError(null);
+      return;
+    }
     setIsResetting(true);
     setError(null);
     try {

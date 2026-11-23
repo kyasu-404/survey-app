@@ -48,7 +48,7 @@ function RunCard({ run }: { run: AutomationRun }) {
   </li>;
 }
 
-export function RuleHistory({ ruleId, userId }: { ruleId: string; userId: string }) {
+export function RuleHistory({ ruleId, userId, isRuleActive = true }: { ruleId: string; userId: string; isRuleActive?: boolean }) {
   const history = useInfiniteQuery({
     queryKey: [...automationKey(userId), "runs", ruleId],
     initialPageParam: undefined as TimelineCursor | undefined,
@@ -58,9 +58,11 @@ export function RuleHistory({ ruleId, userId }: { ruleId: string; userId: string
     refetchInterval: ({ state }) => {
       if (state.status !== "success" || !state.data) return false;
       const pages = state.data.pages;
-      return !pages[0]?.items.length || pages.some(page => page.items.some(
+      const hasInFlightRuns = pages.some(page => page.items.some(
         run => run.status === "pending" || run.status === "queued",
-      )) ? 10_000 : false;
+      ));
+      const shouldPollEmpty = isRuleActive && !pages[0]?.items.length;
+      return shouldPollEmpty || hasInFlightRuns ? 10_000 : false;
     },
   });
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];

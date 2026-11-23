@@ -34,7 +34,11 @@ export type AnnouncementAction = "withdraw" | "duplicate" | "archive";
 
 function rpcError(error: { code: string; message: string }, fallback: string) {
   const localized = ["22023", "42501", "40001"].includes(error.code) && /^[А-ЯЁ]/.test(error.message);
-  return new Error(localized ? error.message : fallback);
+  if (localized) return new Error(error.message);
+  if (error.code === "40001") {
+    return new Error("Объявление было изменено в другой вкладке. Обновите список и повторите действие.");
+  }
+  return new Error(fallback);
 }
 
 export async function listAnnouncements(status: AnnouncementStatus, cursor?: TimelineCursor, signal?: AbortSignal) {

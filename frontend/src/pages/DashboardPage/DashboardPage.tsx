@@ -34,7 +34,8 @@ type DashboardViewSnapshot = {
 };
 
 export default function DashboardPage({ viewMode }: DashboardPageProps) {
-  const { user, loading: isAuthLoading } = useAuth();
+  const { user, profile, loading: isAuthLoading } = useAuth();
+  const canAdministerAllForms = profile?.role === "admin";
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -203,6 +204,7 @@ export default function DashboardPage({ viewMode }: DashboardPageProps) {
           layout={layout}
           sort={sort}
           onSort={changeSort}
+          canAdministerAllForms={canAdministerAllForms}
           currentUserId={user?.id}
           displayedForms={forms.displayedForms}
           filteredForms={forms.filteredForms}

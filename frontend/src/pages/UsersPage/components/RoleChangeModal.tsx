@@ -1,4 +1,5 @@
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
+import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
 import type { RoleChangeModalState } from "../types";
 
 type RoleChangeModalProps = {
@@ -9,19 +10,22 @@ type RoleChangeModalProps = {
 };
 
 export function RoleChangeModal({ isPending, modal, onCancel, onConfirm }: RoleChangeModalProps) {
+  const dialogRef = useLegacyModalDialog({ onClose: onCancel, disabled: isPending });
   const accessNotice =
     modal.nextRole === "admin"
       ? "Пользователь получит доступ к административным функциям."
       : "Пользователь потеряет доступ к административным функциям.";
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isPending && onCancel()}>
       <div
+        ref={dialogRef}
         className="modal-card card"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="users-role-change-title"
         aria-describedby="users-role-change-description"
+        tabIndex={-1}
       >
         <h3 id="users-role-change-title" className="users-modal-title">
           Смена роли пользователя

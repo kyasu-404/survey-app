@@ -73,13 +73,14 @@ async function callUserAdminAction<TData = null>(payload: UserAdminAction): Prom
 
   const { data, error, response } = await runRequest(
     "functions.user-admin",
-    (_signal, traceContext) =>
+    (signal, traceContext) =>
       supabase.functions.invoke<TData>("user-admin", {
         body: payload,
         headers: {
           ...traceContext.headers,
           Authorization: `Bearer ${accessToken}`,
         },
+        signal,
       }),
     { context: { action: payload.action } },
   );

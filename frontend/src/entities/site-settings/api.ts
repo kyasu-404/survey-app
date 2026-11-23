@@ -39,8 +39,8 @@ export async function getAppFavicon() {
 async function saveFavicon(payload: Record<string,unknown>) {
   const { data:{session} } = await apiClient.auth.getCurrentSession();
   if (!session?.access_token) throw new Error("Требуется авторизация");
-  const { data,error,response } = await runRequest("favicon.save", (_signal,trace) => supabaseClient.functions.invoke("app-settings",{
-    body:payload,headers:{...trace.headers,Authorization:`Bearer ${session.access_token}`},
+  const { data,error,response } = await runRequest("favicon.save", (signal,trace) => supabaseClient.functions.invoke("app-settings",{
+    body:payload,headers:{...trace.headers,Authorization:`Bearer ${session.access_token}`},signal,
   }),{timeoutMs:30_000});
   if (error) {
     const body=await response?.clone().json().catch(()=>null);
@@ -69,8 +69,13 @@ export async function validateFaviconFile(file: File) {
     if(bytes.length<22 || view.getUint16(0,true)!==0 || view.getUint16(2,true)!==1 || view.getUint16(4,true)<1) throw new Error("Повреждённый ICO-файл");
     width=bytes[6]||256;height=bytes[7]||256;max=256;
   } else {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
-      .replace(/^\uFEFF/, "").replace(/^\s*<\?xml\s[^?]*\?>/, "");
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+        .replace(/^\uFEFF/, "").replace(/^\s*<\?xml\s[^?]*\?>/, "");
+    } catch {
+      throw new Error("SVG-файл должен быть сохранён в кодировке UTF-8");
+    }
     const document = new DOMParser().parseFromString(text, "image/svg+xml");
     const root = document.documentElement;
     if (root.localName !== "svg" || document.querySelector("parsererror") || /<!|<\?|&/.test(text)) {
@@ -88,11 +93,16 @@ export async function validateFaviconFile(file: File) {
         throw new Error("SVG не должен содержать скрипты, стили, внешние ссылки и другие пространства имён");
       }
       for (const attribute of node.attributes) {
+        const trimmedValue = attribute.value.trim();
         const namespaceAllowed = attribute.name === "xmlns"
-          ? attribute.namespaceURI === "http://www.w3.org/2000/xmlns/" && attribute.value === "http://www.w3.org/2000/svg"
+          ? attribute.namespaceURI === "http://www.w3.org/2000/xmlns/" && trimmedValue === "http://www.w3.org/2000/svg"
           : attribute.namespaceURI === null;
-        if (!namespaceAllowed || !attributes.has(attribute.name) || /[<>\\]/.test(attribute.value)
-          || /url\s*\(/i.test(attribute.value) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(attribute.value)) {
+        const unsafeRef = attribute.name !== "xmlns" && (
+          ((attribute.name === "mask" || attribute.name === "clip-path") && !/^(?:none|url\(#[a-zA-Z0-9_-]+\))$/i.test(trimmedValue))
+          || (/(?:url|image-set|image|cross-fade)\s*\(/i.test(trimmedValue) && !/^url\(#[a-zA-Z0-9_-]+\)$/.test(trimmedValue))
+          || /(?:https?:|data:|javascript:|vbscript:)/i.test(trimmedValue)
+        );
+        if (!namespaceAllowed || !attributes.has(attribute.name) || /[<>\\]/.test(attribute.value) || unsafeRef) {
           throw new Error("SVG не должен содержать скрипты, стили и внешние ссылки; атрибут не поддерживается");
         }
       }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getFormMailActivity, getMailJobs } from "../../entities/mail/api";
 import { getMailProgress, MAIL_STATUS_LABELS } from "../../entities/mail/model";
@@ -47,11 +47,14 @@ export function MailDeliveryPanel({
   const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
   const progress = getMailProgress(jobs);
 
+  const effectiveBatchIdRef = useRef<string | null>(effectiveBatchId);
+  effectiveBatchIdRef.current = effectiveBatchId;
+
   useEffect(() => {
     setIsRealtimeConnected(false);
     const refresh = createQueryRefreshScheduler(queryClient, `mail activity ${formId}`, 500);
     const activityTarget = { queryKey: ["form-mail-activity", formId] };
-    const jobsTarget = effectiveBatchId ? { queryKey: ["mail-batch-jobs", effectiveBatchId] } : null;
+    const currentJobsTarget = () => (effectiveBatchIdRef.current ? { queryKey: ["mail-batch-jobs", effectiveBatchIdRef.current] } : null);
     const channel = supabaseClient
       .channel(`form-mail-activity:${formId}`)
       .on("postgres_changes", {
@@ -65,18 +68,20 @@ export function MailDeliveryPanel({
         // A delivery status change doesn't change the list of mail batches.
         // Inserts may introduce a new batch; incomplete DELETE payloads need reconciliation.
         const targets = payload.eventType === "UPDATE" && batchId ? [] : [activityTarget];
-        if (jobsTarget && (!batchId || batchId === effectiveBatchId)) targets.push(jobsTarget);
+        const jobsTarget = currentJobsTarget();
+        if (jobsTarget && (!batchId || batchId === effectiveBatchIdRef.current)) targets.push(jobsTarget);
         if (targets.length) refresh.schedule(targets);
       })
       .subscribe((status) => {
         setIsRealtimeConnected(status === "SUBSCRIBED");
+        const jobsTarget = currentJobsTarget();
         if (status === "SUBSCRIBED") refresh.schedule([activityTarget, ...(jobsTarget ? [jobsTarget] : [])]);
       });
     return () => {
       refresh.dispose();
       void supabaseClient.removeChannel(channel);
     };
-  }, [effectiveBatchId, formId, queryClient]);
+  }, [formId, queryClient]);
 
   return (
     <section className="mail-delivery-panel" aria-labelledby="mail-delivery-title">

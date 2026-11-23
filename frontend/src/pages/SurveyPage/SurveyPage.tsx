@@ -87,6 +87,8 @@ export default function SurveyPage() {
     enabled: Boolean(id) && hasPersonalLink,
     retry: false,
     staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   const responseBrowserId = useMemo(() => getOrCreateResponseBrowserId(), []);
   useEffect(() => {
@@ -96,6 +98,7 @@ export default function SurveyPage() {
   }, []);
 
   const isPrivatePreview = isPreview;
+  const usePublicClient = !isPrivatePreview && (!user?.id || Boolean(personalToken));
   const surveyQuery = useQuery({
     queryKey: isPrivatePreview ? getPrivateSurveyFormQueryKey(id) : getPublicSurveyFormQueryKey(id),
     queryFn: async ({ signal }) => {
@@ -114,7 +117,7 @@ export default function SurveyPage() {
     staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: isPrivatePreview,
   });
   const form = surveyQuery.data;
   useEffect(() => {
@@ -131,14 +134,16 @@ export default function SurveyPage() {
     queryKey: ["form-response-status", id, personalToken ?? responseBrowserId],
     queryFn: ({ signal }) => {
       if (!id) return null;
-      return personalToken ? getExistingResponse(id, responseBrowserId, signal, personalToken) : getExistingResponse(id, responseBrowserId, signal);
+      return personalToken
+        ? getExistingResponse(id, responseBrowserId, signal, personalToken, usePublicClient)
+        : getExistingResponse(id, responseBrowserId, signal, undefined, usePublicClient);
     },
     enabled: renderMode === "interactive" && Boolean(id) && (!hasPersonalLink || Boolean(personalToken)),
     retry: 1,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
   });
   const showInitialSkeleton = (
     (hasPersonalLink && personalQuery.isLoading)
@@ -147,7 +152,9 @@ export default function SurveyPage() {
   );
 
   const errorMessage = useMemo(() => {
-    if (personalQuery.error) return personalQuery.error instanceof Error ? personalQuery.error.message : "Персональная ссылка недействительна";
+    if (personalQuery.error && !isAbortError(personalQuery.error)) {
+      return personalQuery.error instanceof Error ? personalQuery.error.message : "Персональная ссылка недействительна";
+    }
     if (surveyQuery.error && !isAbortError(surveyQuery.error)) {
       return surveyQuery.error instanceof Error
         ? surveyQuery.error.message
@@ -209,6 +216,7 @@ export default function SurveyPage() {
             allowResponseEditing={form.allow_response_editing ?? false}
             existingResponse={existingResponseQuery.data ?? null}
             responseBrowserId={responseBrowserId}
+            usePublicClient={usePublicClient}
           />
         </Suspense>
       </SurveyRuntimeSurface>

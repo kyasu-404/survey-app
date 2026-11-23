@@ -25,12 +25,21 @@ subrequest=f'''location = /__form_embedding_policy {{
         proxy_pass {a.upstream.rstrip('/')}/rest/v1/rpc/get_form_embedding_policy;
         proxy_method GET;
         proxy_http_version 1.1;
+        proxy_ssl_server_name on;
         proxy_set_header Connection "";
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header Cookie "";
         proxy_set_header Authorization "Bearer {key}";
         proxy_set_header apikey "{key}";
+        proxy_cache survey_embed_policy;
+        proxy_cache_key "form_embedding_policy";
+        proxy_cache_valid 200 10s;
+        proxy_ignore_headers Cache-Control;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_intercept_errors on;
+        error_page 500 502 503 504 = @form_embedding_policy_fallback;
         proxy_connect_timeout 3s;
         proxy_read_timeout 5s;
         proxy_buffer_size 32k;
@@ -38,10 +47,21 @@ subrequest=f'''location = /__form_embedding_policy {{
         access_log off;
     }}
 
+    location @form_embedding_policy_fallback {{
+        return 200;
+    }}
+
     '''
 s=s.replace(marker,subrequest+marker+'\n        auth_request /__form_embedding_policy;\n        auth_request_set $survey_frame_ancestors $upstream_http_x_form_frame_ancestors;',1)
 start=s.index(marker)
 s=s[:start]+re.sub(r'frame-ancestors [^;]*;', 'frame-ancestors $survey_frame_sources;', s[start:], count=1)
-s='map $survey_frame_ancestors $survey_frame_sources {\n    default $survey_frame_ancestors;\n    "" "\'none\'";\n}\n\n'+s
+prefix=(
+    'proxy_cache_path /var/cache/nginx/survey_embed levels=1:2 keys_zone=survey_embed_policy:2m max_size=32m inactive=5m use_temp_path=off;\n'
+    'map $survey_frame_ancestors $survey_frame_sources {\n'
+    '    default $survey_frame_ancestors;\n'
+    '    "" "\'none\'";\n'
+    '}\n\n'
+)
+s=prefix+s
 a.output.write_text(s)
 print('Dynamic embedding CSP config rendered.')

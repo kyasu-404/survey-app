@@ -196,7 +196,7 @@ test("api roles receive the table grants required by PostgREST and RLS", () => {
     schema,
     /grant select, insert, delete on table public\.forms to authenticated;/i,
   );
-  assert.match(schema, /revoke insert on table public\.responses from anon;/i);
+  assert.match(schema, /revoke all on table public\.responses from anon;/i);
   assert.match(schema, /grant select \(id, form_id, data, created_at, updated_at\) on table public\.responses to authenticated;/i);
   assert.match(schema, /revoke insert on table public\.responses from authenticated;/i);
   assert.match(schema, /grant execute on function public\.get_form_response_status\(uuid, uuid\) to anon, authenticated, service_role;/i);
@@ -253,7 +253,7 @@ test("survey assets separate common gallery objects from per-form uploads", () =
   assert.match(schema, /values \(\s*'survey-assets',\s*'survey-assets',\s*true,\s*5242880/is);
   assert.match(schema, /name like 'gallery\/%' or public\.can_manage_survey_asset\(name\)/i);
   assert.match(schema, /path_parts\[1\] <> 'forms'/i);
-  assert.match(schema, /path_parts\[3\] <> auth\.uid\(\)::text/i);
+  assert.match(schema, /where f\.id = target_form_id and f\.author_id = auth\.uid\(\)/i);
   assert.match(schema, /\(jpg\|jpeg\|png\|webp\)/i);
   assert.match(formThemesMigration, /survey_assets_authenticated_upload/i);
   assert.match(formThemesMigration, /survey_assets_authenticated_delete/i);
@@ -356,8 +356,9 @@ test("response inserts are attributed to the current auth user", () => {
     /create or replace trigger responses_set_user_id\s+before insert on public\.responses\s+for each row execute procedure public\.set_response_user_id\(\);/i,
   );
 
-  const insertPolicy = getPolicyDefinition("responses_insert");
-  assert.match(insertPolicy, /user_id is null\s+or user_id = \(select auth\.uid\(\)\)/i);
+  assert.doesNotMatch(schema, /create policy "responses_insert"/i);
+  assert.doesNotMatch(schema, /function public\.is_existing_response_submission\(/i);
+  assert.doesNotMatch(schema, /function public\.is_public_active_admin_authored_form\(/i);
 });
 
 test("response reading is shared between enabled staff without granting writes", () => {
@@ -542,7 +543,8 @@ test("response listing does not disclose browser edit capabilities", () => {
 
   assert.match(capabilityHash, /select md5\(value::text\)::uuid/i);
   assert.match(submitFunction, /values \(p_form_id, public\.browser_capability_hash\(p_browser_id\), p_submission_id, p_data\)/i);
-  assert.match(schema, /revoke select on table public\.responses from authenticated;/i);
+  assert.match(schema, /revoke all on table public\.responses from anon;/i);
+  assert.match(schema, /revoke select, update, delete on table public\.responses from authenticated;/i);
   assert.match(
     schema,
     /grant select \(id, form_id, data, created_at, updated_at\) on table public\.responses to authenticated;/i,
@@ -615,6 +617,7 @@ test("review migrations and the bootstrap install identical function definitions
     "202611231400_default_response_notification_opt_in.sql",
     "202611231500_review_regressions.sql",
     "202611231600_form_closed_automation.sql",
+    "202611232200_full_code_review_fixes.sql",
   ];
   const latest = new Map();
   for (const file of migrations) {

@@ -44,7 +44,7 @@ export async function enqueueGeneration(pool, documentId, userId, ids, nameQuest
  * reclaimed after a crash; attempt tokens fence a worker whose DB session died. */
 export async function processGenerationJob({ pool, store, runTask = runOfficeTask }) {
   const db = await pool.connect();
-  let locked = false, job, path, uploaded = false, connectionError = null;
+  let locked = false, job, path, uploaded = false, connectionError = null, releaseError = null;
   const onError = error => { connectionError = error; };
   db.on?.('error', onError);
   try {
@@ -84,18 +84,25 @@ export async function processGenerationJob({ pool, store, runTask = runOfficeTas
     uploaded = false;
     return true;
   } catch (error) {
-    await db.query('rollback').catch(() => {});
+    await db.query('rollback').catch(rollbackError => { releaseError ||= rollbackError; });
+    const queryFallback = async (sql, params) => {
+      try { return await db.query(sql, params); }
+      catch (dbError) {
+        releaseError ||= dbError;
+        return pool.query(sql, params);
+      }
+    };
     // If COMMIT acknowledgement was lost, never delete a potentially committed
     // result. The orphan cleanup will remove abandoned immutable attempt files.
     if (uploaded && !connectionError) {
-      const { rows } = await db.query('select id from public.office_generation_results where storage_path=$1', [path]);
+      const { rows } = await queryFallback('select id from public.office_generation_results where storage_path=$1', [path]);
       if (!rows.length) await store.remove([path]);
     }
     if (job && !connectionError) {
       if ([429,502,504].includes(error.status) && job.attempts<3) {
-        await db.query(`update public.office_generation_jobs set state='queued',available_at=now()+interval '15 seconds'
+        await queryFallback(`update public.office_generation_jobs set state='queued',available_at=now()+interval '15 seconds'
           where id=$1 and attempt_token=$2 and state='running'`,[job.id,job.attempt_token]);
-      } else await db.query(`update public.office_generation_jobs
+      } else await queryFallback(`update public.office_generation_jobs
         set state='failed',payload=null,payload_bytes=0,finished_at=now(),error=$3
         where id=$1 and attempt_token=$2 and state='running'`, [job.id, job.attempt_token,
         error instanceof HttpError ? error.message : 'Не удалось обработать макет. Повторите выгрузку.']);
@@ -103,9 +110,9 @@ export async function processGenerationJob({ pool, store, runTask = runOfficeTas
     if (!job || connectionError) throw error;
     return true;
   } finally {
-    if (locked) await db.query(`select pg_advisory_unlock(${LOCK})`).catch(() => {});
+    if (locked) await db.query(`select pg_advisory_unlock(${LOCK})`).catch(unlockError => { releaseError ||= unlockError; });
     db.removeListener?.('error', onError);
-    db.release(connectionError || undefined);
+    db.release(connectionError || releaseError || undefined);
   }
 }
 
@@ -113,7 +120,9 @@ export function startGenerationWorker(dependencies) {
   let active = null;
   const tick = () => {
     if (active) return;
-    active = processGenerationJob(dependencies).catch(() => console.error('Office generation worker failed')).finally(() => { active = null; });
+    active = processGenerationJob(dependencies)
+      .catch(error => console.error(JSON.stringify({ event: 'office-generation-worker-error', code: error?.code || error?.name || 'ERROR' })))
+      .finally(() => { active = null; });
   };
   const timer = setInterval(tick, 1500).unref();
   tick();

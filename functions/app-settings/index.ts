@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { XMLParser, XMLValidator, XMLBuilder } from "npm:fast-xml-parser@5.11.1";
 import { validateFavicon, MAX_FAVICON_BYTES } from "./favicon.mjs";
 
-const defaultAllowedOrigins = new Set(["https://forms.imc-mosk.ru", "http://localhost:5173", "http://127.0.0.1:5173"]);
+const defaultAllowedOrigins = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
 
 function getAllowedOrigins() {
@@ -46,10 +46,15 @@ Deno.serve(async req => {
   if (origin && !isOriginAllowed(origin)) return json(403, { error: "Origin не разрешён" });
   if (req.method === "OPTIONS") return new Response("ok", { headers });
   if (req.method !== "POST") return json(405, { error: "Метод не поддерживается" });
-  const token = req.headers.get("Authorization")?.replace(/^Bearer /, "");
+  const authorization = req.headers.get("Authorization") ?? "";
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  const token = bearerMatch ? bearerMatch[1].trim() : "";
   if (!token) return json(401, { error: "Требуется авторизация" });
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "Функция настроек не настроена" });
   try {
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: auth, error: authError } = await admin.auth.getUser(token);
     if (authError || !auth.user) return json(401, { error: "Сессия недействительна" });
     const { data: profile, error: profileError } = await admin.from("profiles").select("role,is_disabled").eq("id",auth.user.id).single();

@@ -1,5 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { Icon } from "../../../shared/ui/Icon";
+import { canManageSurveyForm } from "../../../entities/survey/model/formAccess";
 import { getSurveyDisplayTitle } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import { formatCreatedAt, getAuthorLabel } from "../templatesPageUtils";
@@ -8,6 +9,7 @@ import { TemplateCardMenu } from "./TemplateCardMenu";
 
 type TemplateCardProps = {
   actionMenuOpen: boolean;
+  canAdministerAllForms?: boolean;
   currentUserId?: string;
   isPending: boolean;
   isPinned: boolean;
@@ -30,6 +32,7 @@ function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
 
 export function TemplateCard({
   actionMenuOpen,
+  canAdministerAllForms = false,
   currentUserId,
   isPending,
   isPinned,
@@ -46,11 +49,12 @@ export function TemplateCard({
   template,
 }: TemplateCardProps) {
   const title = getSurveyDisplayTitle(template);
-  const isOwnTemplate = template.author_id === currentUserId;
+  const canManageTemplate = canManageSurveyForm(template, currentUserId ?? "", canAdministerAllForms);
   const createdAtLabel = formatCreatedAt(template.created_at);
   const shareLabel = template.is_public ? "Не показывать другим" : "Поделиться";
 
   const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
@@ -117,7 +121,7 @@ export function TemplateCard({
             <Icon name="add" className="templates-action-icon" size={18} />
           </button>
 
-          {isOwnTemplate && (
+          {canManageTemplate && (
             <button
               type="button"
               className={`templates-share-button ${template.is_public ? "templates-share-button-muted" : ""}`.trim()}
@@ -134,7 +138,7 @@ export function TemplateCard({
           )}
         </div>
 
-        {isOwnTemplate && (
+        {canManageTemplate && (
           <TemplateCardMenu
             actionMenuOpen={actionMenuOpen}
             isPending={isPending}

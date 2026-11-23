@@ -1,4 +1,6 @@
+import { useId } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
+import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
 import type { DeleteUserModalState } from "../types";
 
 type DeleteUserModalProps = {
@@ -9,19 +11,29 @@ type DeleteUserModalProps = {
 };
 
 export function DeleteUserModal({ isPending, modal, onCancel, onConfirm }: DeleteUserModalProps) {
+  const titleId = useId();
+  const dialogRef = useLegacyModalDialog({ onClose: onCancel, disabled: isPending });
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal-card card">
-        <h3 className="users-modal-title">Удаление пользователя</h3>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isPending && onCancel()}>
+      <div
+        ref={dialogRef}
+        className="modal-card card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <h3 id={titleId} className="users-modal-title">Удаление пользователя</h3>
         <p className="users-modal-copy">Вы уверены, что хотите удалить пользователя {modal.userName}?</p>
         <p className="users-modal-copy users-modal-copy-danger">
           Внимание: вместе с пользователем удалятся все созданные им формы. Если формы нужны - лучше просто отключить пользователя.
         </p>
         <div className="deadline-modal-actions">
-          <button className="users-neutral-button" onClick={onCancel}>
+          <button type="button" className="users-neutral-button" onClick={onCancel} disabled={isPending}>
             Отмена
           </button>
-          <button className="users-danger-button" onClick={onConfirm} disabled={isPending}>
+          <button type="button" className="users-danger-button" onClick={onConfirm} disabled={isPending}>
             {isPending && <InlineSpinner />}
             Удалить пользователя
           </button>

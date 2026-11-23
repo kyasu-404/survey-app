@@ -1,7 +1,12 @@
 const MOSCOW_TIME_ZONE = "Europe/Moscow";
 
 function oneLine(value) {
-  return String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  return String(value ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+function clampSubject(value) {
+  const normalized = oneLine(value);
+  return normalized.length <= 500 ? normalized : `${normalized.slice(0, 499)}…`;
 }
 
 export function formatRussianDeadline(value) {
@@ -43,7 +48,7 @@ export function buildReminderMail({ organizationName, formTitle, deadlineAt, for
   const deadlineLine = deadline ? `\nСрок сдачи: ${deadline}.` : "";
 
   return {
-    subject: `Напоминание: заполните форму «${safeFormTitle}»`,
+    subject: clampSubject(`Напоминание: заполните форму «${safeFormTitle}»`),
     bodyText: [
       `Уважаемые представители ${safeOrganizationName}!`,
       "",
@@ -58,7 +63,7 @@ export function buildInvitationMail({ organizationName, formTitle, deadlineAt, f
   const title = oneLine(formTitle);
   const deadline = formatRussianDeadline(deadlineAt);
   return {
-    subject: `Просим заполнить форму «${title}»`,
+    subject: clampSubject(`Просим заполнить форму «${title}»`),
     bodyText: [
       "Добрый день!", "",
       `Просим ${oneLine(organizationName)} заполнить форму «${title}».`, "",
@@ -131,7 +136,7 @@ export function renderMailTemplate(template, { organizationName, formTitle, dead
   const values = { "Организация": oneLine(organizationName), "Название формы": oneLine(formTitle),
     "Дедлайн": deadline ?? "", "Ссылка": formUrl, "Персональная ссылка": formUrl };
   // Replace once: braces in directory values or titles are literal, not nested templates.
-  const render = value => value.replace(/\{([^{}]+)\}/g, (match, key) => values[key] ?? match);
+  const render = value => value.replace(/\{([^{}]+)\}/g, (match, key) => (Object.hasOwn(values, key) ? values[key] : match));
   const subject = render(template.subject);
   const bodyText = render(template.bodyText.split("\n").filter(line => deadline || !line.includes("{Дедлайн}")).join("\n")).replace(/\n{3,}/g, "\n\n").trim();
   if (subject.length > 500 || bodyText.length > 20000) throw new Error("После подстановки данных письмо слишком длинное: сократите тему или текст");

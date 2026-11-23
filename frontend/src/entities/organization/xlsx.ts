@@ -59,14 +59,14 @@ export async function parseOrganizationsXlsx(file: File): Promise<EducationOrgan
   }
 
   const inputs: EducationOrganizationInput[] = [];
-  for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex += 1) {
-    const row = worksheet.getRow(rowIndex);
+  worksheet.eachRow({ includeEmpty: false }, (row, rowIndex) => {
+    if (rowIndex < 2) return;
     const typeText = row.getCell(typeColumn).text.trim();
     const number = row.getCell(numberColumn).text.trim();
     const alias = row.getCell(aliasColumn).text.trim();
     const email = row.getCell(emailColumn).text.trim();
     if (!typeText && !number && !alias && !email) {
-      continue;
+      return;
     }
 
     const organizationType = parseOrganizationType(typeText);
@@ -91,7 +91,7 @@ export async function parseOrganizationsXlsx(file: File): Promise<EducationOrgan
     if (inputs.length > 5000) {
       throw new Error("За один раз можно импортировать не более 5000 организаций");
     }
-  }
+  });
 
   if (inputs.length === 0) {
     throw new Error("В XLSX нет организаций для импорта");

@@ -92,7 +92,7 @@ function AdminAnnouncements({ userId }: { userId: string }) {
         aria-labelledby={"admin-announcements-tab-" + value} className="announcement-admin-panel" hidden={status !== value}>
         {status === value && <>
           {list.isPending && <div role="status" aria-label="Загрузка объявлений"><Skeleton className="activity-skeleton" /></div>}
-          {list.isError && <div role="alert" className="activity-state">
+          {list.isError && !list.isFetchNextPageError && <div role="alert" className="activity-state">
             <p>{getErrorMessage(list.error, "Не удалось загрузить объявления.")}</p>
             <button type="button" className="app-button" onClick={() => void list.refetch()}>Повторить</button>
           </div>}
@@ -103,7 +103,11 @@ function AdminAnnouncements({ userId }: { userId: string }) {
               if (action === "archive") setArchive(row);
               else change.mutate({ row, action });
             }} />)}</ul>}
-          {list.hasNextPage && <button type="button" className="app-button activity-more" disabled={list.isFetching}
+          {list.isFetchNextPageError && <div role="alert" className="activity-state">
+            <p>{getErrorMessage(list.error, "Не удалось загрузить следующую страницу объявлений.")}</p>
+            <button type="button" className="app-button" disabled={list.isFetching} onClick={() => void list.fetchNextPage()}>Повторить</button>
+          </div>}
+          {list.hasNextPage && !list.isFetchNextPageError && <button type="button" className="app-button activity-more" disabled={list.isFetching}
             onClick={() => void list.fetchNextPage()}>{list.isFetchingNextPage ? "Загрузка…" : "Показать ещё"}</button>}
         </>}
       </div>)}

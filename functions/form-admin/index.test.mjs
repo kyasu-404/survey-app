@@ -393,3 +393,27 @@ test("adding the first commented checkbox choice changes the format of existing 
   const after = questionSchema({ type: "checkbox", choices: ["a", { value: "b", showCommentArea: true }] });
   assert.ok(analyzeSchemaCompatibility(before, after).breakingChanges.length);
 });
+
+test("tracks scoped names inside distinct or nested dynamic panels, container rules, and file storage mode", () => {
+  const twoPanels = {
+    pages: [{
+      elements: [
+        { type: "paneldynamic", name: "a", templateElements: [{ type: "text", name: "note" }] },
+        { type: "paneldynamic", name: "b", templateElements: [{ type: "text", name: "note" }] },
+      ],
+    }],
+  };
+  assert.deepEqual(analyzeSchemaCompatibility(twoPanels, twoPanels).breakingChanges, []);
+
+  const changedPanelB = structuredClone(twoPanels);
+  changedPanelB.pages[0].elements[1].templateElements[0].type = "boolean";
+  assert.ok(analyzeSchemaCompatibility(twoPanels, changedPanelB).breakingChanges.length > 0);
+
+  const visibleChanged = structuredClone(twoPanels);
+  visibleChanged.pages[0].elements[0].visibleIf = "{flag} = true";
+  assert.ok(analyzeSchemaCompatibility(twoPanels, visibleChanged).warnings.length > 0);
+
+  const fileBefore = questionSchema({ type: "file", storeDataAsText: false });
+  const fileAfter = questionSchema({ type: "file", storeDataAsText: true });
+  assert.ok(analyzeSchemaCompatibility(fileBefore, fileAfter).breakingChanges.length > 0);
+});

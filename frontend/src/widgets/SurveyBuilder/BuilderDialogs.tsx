@@ -3,6 +3,7 @@ import { hasOrganizationQuestion } from "../../entities/organization/model";
 import type { FormSaveSettings } from "../../entities/survey/api/surveysApi";
 import { FORM_REASON_OPTIONS, REGULAR_FORM_TYPE_OPTIONS } from "../../entities/survey/model/formOptions";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
+import { useLegacyModalDialog } from "../../shared/ui/useLegacyModalDialog";
 import { OrganizationTypeSettings } from "./OrganizationTypeSettings";
 import type { CompatibilityDialogState, PostSaveSettingsState } from "./builderTypes";
 
@@ -12,10 +13,21 @@ export function BuilderResetDialog({ isSurveyMutationBusy, isTemplateBusy, setIs
   setIsResetConfirmOpen: (open: boolean) => void;
   handleResetBuilder: () => void;
 }) {
+  const titleId = useId();
+  const isBusy = isSurveyMutationBusy || isTemplateBusy;
+  const dialogRef = useLegacyModalDialog({ onClose: () => setIsResetConfirmOpen(false), disabled: isBusy });
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal-card card builder-reset-modal">
-        <h3 className="builder-reset-title">Сбросить конструктор?</h3>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isBusy && setIsResetConfirmOpen(false)}>
+      <div
+        ref={dialogRef}
+        className="modal-card card builder-reset-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <h3 id={titleId} className="builder-reset-title">Сбросить конструктор?</h3>
         <p className="builder-template-subtitle">
           Все несохранённые вопросы и поля будут очищены. Это действие нельзя отменить.
         </p>
@@ -24,7 +36,7 @@ export function BuilderResetDialog({ isSurveyMutationBusy, isTemplateBusy, setIs
             type="button"
             className="deadline-action-cancel-button"
             onClick={() => setIsResetConfirmOpen(false)}
-            disabled={isSurveyMutationBusy || isTemplateBusy}
+            disabled={isBusy}
           >
             Отмена
           </button>
@@ -32,7 +44,7 @@ export function BuilderResetDialog({ isSurveyMutationBusy, isTemplateBusy, setIs
             type="button"
             className="deadline-clear-button"
             onClick={handleResetBuilder}
-            disabled={isSurveyMutationBusy || isTemplateBusy}
+            disabled={isBusy}
           >
             Сбросить
           </button>
@@ -50,17 +62,23 @@ export function BuilderCompatibilityDialog({ compatibilityDialog, isCompatibilit
   handleCloseCompatibilityDialog: () => void;
   handleConfirmCompatibilityWarnings: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const isBusy = isCompatibilityCopying || isSaving;
+  const dialogRef = useLegacyModalDialog({ onClose: handleCloseCompatibilityDialog, disabled: isBusy });
+
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isBusy && handleCloseCompatibilityDialog()}>
       <div
+        ref={dialogRef}
         className="modal-card card builder-compatibility-modal"
         role="dialog"
         aria-modal="true"
         aria-label={compatibilityDialog.result.status === "blocked"
           ? "Несовместимые изменения формы"
           : "Предупреждение об изменениях формы"}
+        tabIndex={-1}
       >
-        <h3 className="builder-reset-title">
+        <h3 id={titleId} className="builder-reset-title">
           {compatibilityDialog.result.status === "blocked"
             ? "Некоторые изменения несовместимы с полученными ответами"
             : "Подтвердите изменения формы"}
@@ -136,6 +154,8 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
 }) {
   const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
   const errorId = useId();
+  const titleId = useId();
+  const dialogRef = useLegacyModalDialog<HTMLFormElement>({ onClose: closePostSaveSettings, disabled: isPostSaveSettingsSaving });
   const deadlineInputRef = useRef<HTMLInputElement>(null);
   const limitInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,9 +199,18 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
   };
 
   return (
-    <div className="modal-backdrop">
-      <form noValidate onSubmit={handleSubmit} className="modal-card card deadline-modal" role="dialog" aria-modal="true" aria-label="Настройки формы">
-        <h3 className="deadline-modal-title">Настройки формы</h3>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isPostSaveSettingsSaving && closePostSaveSettings()}>
+      <form
+        ref={dialogRef}
+        noValidate
+        onSubmit={handleSubmit}
+        className="modal-card card deadline-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <h3 id={titleId} className="deadline-modal-title">Настройки формы</h3>
         <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
         <div className="deadline-modal-primary-grid">
           <label className="deadline-field">

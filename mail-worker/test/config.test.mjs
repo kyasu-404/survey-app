@@ -37,6 +37,23 @@ test("decrypts the AES-GCM password format produced by mail-admin", () => {
   assert.equal(decryptPassword(serialized, key.toString("base64")), "пароль-123");
 });
 
+test("decrypts v2 AAD-bound SMTP passwords only with matching host, port and username", () => {
+  const key = randomBytes(32);
+  const iv = randomBytes(12);
+  const context = { host: "smtp.example.ru", port: 465, username: "mailer" };
+  const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: 16 });
+  cipher.setAAD(Buffer.from("smtp:smtp.example.ru:465:mailer", "utf8"));
+  const encrypted = Buffer.concat([cipher.update("секрет-v2", "utf8"), cipher.final(), cipher.getAuthTag()]);
+  const serialized = `v2:${iv.toString("base64")}:${encrypted.toString("base64")}`;
+
+  assert.equal(decryptPassword(serialized, key.toString("base64"), context), "секрет-v2");
+  assert.equal(decryptPassword(serialized, key.toString("base64"), { ...context, host: "SMTP.EXAMPLE.RU" }), "секрет-v2");
+  assert.throws(() => decryptPassword(serialized, key.toString("base64")));
+  assert.throws(() => decryptPassword(serialized, key.toString("base64"), { ...context, host: "evil.example.ru" }));
+  assert.throws(() => decryptPassword(serialized, key.toString("base64"), { ...context, port: 587 }));
+  assert.throws(() => decryptPassword(serialized, key.toString("base64"), { ...context, username: "other" }));
+});
+
 test("maps SMTP encryption modes to nodemailer", () => {
   const base = { host: "smtp.example.ru", port: 465, username: "mail@example.ru" };
   assert.equal(createTransportOptions({ ...base, ssl_mode: "tls" }, "secret").secure, true);

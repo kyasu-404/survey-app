@@ -38,6 +38,17 @@ function sanitizeFileName(fileName: string) {
   return trimmed.replace(/[\\/:*?"<>|]/g, "-");
 }
 
+function sanitizeWorksheetName(name: string) {
+  const cleaned = name
+    .replace(/[*?:\\/[\]]/g, " ")
+    .replace(/^'+|'+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31)
+    .trim();
+  return cleaned || "Данные";
+}
+
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -46,7 +57,7 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.download = fileName;
   anchor.click();
 
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function createExcelWorkbook(
@@ -56,7 +67,7 @@ export async function createExcelWorkbook(
 ) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet(worksheetName.slice(0, 31) || "Данные");
+  const worksheet = workbook.addWorksheet(sanitizeWorksheetName(worksheetName));
   const exportColumns = getTableValueColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));
   const groupLevels = getTableHeaderLevels(exportColumns);
   worksheet.columns = exportColumns.map(({ key, answerType }) => ({ key, width: answerType === "paneldynamic" ? 44 : 28 }));
@@ -76,7 +87,7 @@ export async function createExcelWorkbook(
         row.getCell(index + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: level === "page" ? "FFDBEAFE" : "FFF1F5F9" } };
       }
       cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-      row.height = Math.max(row.height ?? 32, group.header.split("\n").reduce((lines, text) => lines + Math.max(1, Math.ceil(text.length / 26)), 0) * 16);
+      row.height = Math.min(409, Math.max(row.height ?? 32, group.header.split("\n").reduce((lines, text) => lines + Math.max(1, Math.ceil(text.length / 26)), 0) * 16));
       start = end;
     }
   });

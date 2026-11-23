@@ -257,6 +257,17 @@ function toNumbers(values: unknown[]) {
     .filter((value) => Number.isFinite(value));
 }
 
+function minMax(values: number[]) {
+  let min = values[0];
+  let max = values[0];
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return { min, max };
+}
+
 function buildNumericDistribution(values: number[]) {
   if (values.length === 0) return [];
   const sortedUnique = [...new Set(values)].sort((left, right) => left - right);
@@ -268,8 +279,7 @@ function buildNumericDistribution(values: number[]) {
     );
   }
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const { min, max } = minMax(values);
   const bucketCount = 5;
   const step = (max - min) / bucketCount || 1;
   const counts = new Map<string, number>();
@@ -292,13 +302,14 @@ function analyzeNumeric(responseValues: unknown[][], rating = false) {
   const answeredCount = getAnsweredCount(responseValues);
   const numbers = toNumbers(flattenAnswered(responseValues));
   const average = numbers.length > 0 ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : 0;
-  const metrics: ResponseReportMetric[] = numbers.length > 0
+  const bounds = numbers.length > 0 ? minMax(numbers) : null;
+  const metrics: ResponseReportMetric[] = bounds
     ? [
         { label: "Среднее", value: formatNumber(average) },
         { label: "Медиана", value: formatNumber(median(numbers)) },
         ...(!rating ? [
-          { label: "Минимум", value: formatNumber(Math.min(...numbers)) },
-          { label: "Максимум", value: formatNumber(Math.max(...numbers)) },
+          { label: "Минимум", value: formatNumber(bounds.min) },
+          { label: "Максимум", value: formatNumber(bounds.max) },
         ] : []),
       ]
     : [{ label: "Числовых ответов", value: "0" }];
@@ -327,8 +338,9 @@ function analyzeDate(responseValues: unknown[][]) {
     return { kind: "date" as const, answeredCount, metrics: [{ label: "Корректных дат", value: "0" }], values: [], groups: [] };
   }
   const timestamps = dates.map((date) => date.getTime());
-  const earliest = new Date(Math.min(...timestamps));
-  const latest = new Date(Math.max(...timestamps));
+  const { min: earliestTs, max: latestTs } = minMax(timestamps);
+  const earliest = new Date(earliestTs);
+  const latest = new Date(latestTs);
   const useMonths = latest.getTime() - earliest.getTime() > 62 * 24 * 60 * 60 * 1000;
   const counts = countValues(dates.map((date) => useMonths ? MONTH_FORMAT.format(date) : DATE_FORMAT.format(date)));
 
@@ -412,16 +424,29 @@ function analyzeRanking(question: SurveyQuestion, responseValues: unknown[][]) {
     value.forEach((item, index) => {
       const rawValue = stringifyAnswer(item);
       const label = labelMap.get(rawValue) ?? rawValue;
-      positions.set(label, [...(positions.get(label) ?? []), index + 1]);
+      let list = positions.get(label);
+      if (!list) {
+        list = [];
+        positions.set(label, list);
+      }
+      list.push(index + 1);
     });
   });
   const groups = [...positions.entries()]
-    .map(([label, values]) => ({
-      label,
-      metrics: [{ label: "Средняя позиция", value: formatNumber(values.reduce((sum, value) => sum + value, 0) / values.length) }],
-      values: toReportValues(countValues(values.map(String)), values.length),
-    }))
-    .sort((left, right) => Number(left.metrics[0].value.replace(",", ".")) - Number(right.metrics[0].value.replace(",", ".")));
+    .map(([label, values]) => {
+      const averageRank = values.reduce((sum, value) => sum + value, 0) / values.length;
+      const sortedPositions = [...new Set(values)].sort((left, right) => left - right).map(String);
+      return {
+        averageRank,
+        group: {
+          label,
+          metrics: [{ label: "Средняя позиция", value: formatNumber(averageRank) }],
+          values: toReportValues(countValues(values.map(String), new Map(), sortedPositions), values.length, true),
+        },
+      };
+    })
+    .sort((left, right) => left.averageRank - right.averageRank || left.group.label.localeCompare(right.group.label, "ru"))
+    .map((entry) => entry.group);
 
   return {
     kind: "ranking" as const,
@@ -440,7 +465,12 @@ function analyzeMatrix(question: SurveyQuestion, responseValues: unknown[][], su
   const grouped = new Map<string, Array<{ raw: unknown; display: unknown; numeric: boolean }>>();
   const addCell = (label: string, raw: unknown, display: unknown, withoutComment: unknown = display) => {
     const numeric = isAnswered(raw) && isAnswered(withoutComment) && toNumbers([withoutComment]).length === 1;
-    grouped.set(label, [...(grouped.get(label) ?? []), { raw, display, numeric }]);
+    let bucket = grouped.get(label);
+    if (!bucket) {
+      bucket = [];
+      grouped.set(label, bucket);
+    }
+    bucket.push({ raw, display, numeric });
   };
   const cells = (row: Record<string, unknown>) => Object.entries(row).filter(([name]) => !Object.keys(row).some(key => name === answerCommentKey(matrixCellDefinition(question, key), suffix) && hasAnswerComment(matrixCellDefinition(question, key))));
 

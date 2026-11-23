@@ -33,3 +33,12 @@ test('reset restores default and failed metadata save cleans up the new upload',
  const broken=setup({rpcError:true});assert.equal((await broken.request({action:'upload-favicon',fileName:'icon.png',base64:image})).status,500);
  assert.deepEqual(broken.removals,[[broken.uploads[0].path]]);
 });
+test('SVG favicon rejects external mask/clip-path, CSS image functions and external URI schemes',()=>{
+ for(const bad of [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" mask="url(https://evil.test/m)"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" clip-path="image-set(url(#a) 1x)"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="data:image/png;base64,AAAA"/></svg>',
+ ]) {
+  assert.throws(()=>favicon.validateFavicon(new TextEncoder().encode(bad),'icon.svg',xml));
+ }
+});

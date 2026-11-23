@@ -27,7 +27,7 @@ export type DashboardActionOptions = {
   logLabel: string;
 };
 
-export type DashboardRunAction = (action: () => Promise<unknown>, options: DashboardActionOptions) => Promise<void>;
+export type DashboardRunAction = (action: () => Promise<unknown>, options: DashboardActionOptions) => Promise<boolean>;
 
 export type DashboardShowToast = (message: string, type?: "success" | "error" | "warning") => void;
 

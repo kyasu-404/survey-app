@@ -4,24 +4,28 @@ services:
       context: /opt/survey-app/office-service
     container_name: survey-office
     restart: unless-stopped
+    stop_grace_period: 90s
     environment:
       SUPABASE_URL: ${OFFICE_SUPABASE_URL:-http://kong:8000}
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       PGHOST: db
-      PGUSER: postgres
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGUSER: ${OFFICE_PGUSER:-office_service}
+      PGPASSWORD: ${OFFICE_PGPASSWORD:-${POSTGRES_PASSWORD}}
       PGDATABASE: postgres
       PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      OFFICE_EMBED_ORIGIN: ${OFFICE_EMBED_ORIGIN:-}
       OFFICE_ALLOWED_ORIGINS: ${OFFICE_ALLOWED_ORIGINS:-}
       ONLYOFFICE_SETTINGS_ENCRYPTION_KEY: ${ONLYOFFICE_SETTINGS_ENCRYPTION_KEY}
     ports:
       - "${OFFICE_BIND_ADDRESS:-127.0.0.1}:8095:8095"
     mem_limit: 768m
     cpus: 2
+    pids_limit: 128
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m

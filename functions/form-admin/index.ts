@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.100.0";
+import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
 type FormAdminAction =
@@ -264,6 +264,17 @@ async function removeStorageObjectPaths(adminClient: SupabaseAdminClient, names:
   return { removedCount, error: null };
 }
 
+async function removeBucketObjectPaths(adminClient: SupabaseAdminClient, bucketName: string, names: string[]) {
+  let removedCount = 0;
+  for (let index = 0; index < names.length; index += 100) {
+    const batch = names.slice(index, index + 100);
+    const { error } = await adminClient.storage.from(bucketName).remove(batch);
+    if (error) return { removedCount, error };
+    removedCount += batch.length;
+  }
+  return { removedCount, error: null };
+}
+
 type StorageCleanupRunRow = {
   id: string;
   trigger_type: "scheduled" | "manual";
@@ -302,8 +313,8 @@ function getStorageObjectNames(rows: unknown) {
 
 async function listConfirmedOrphanPaths(
   adminClient: SupabaseAdminClient,
-  listFunction: "list_orphan_survey_files" | "list_orphan_survey_assets" | "list_orphan_office_documents",
-  confirmFunction: "confirm_orphan_survey_files" | "confirm_orphan_survey_assets" | "confirm_orphan_office_documents",
+  listFunction: "list_orphan_survey_files" | "list_orphan_survey_assets" | "list_orphan_office_documents" | "list_orphan_app_favicons",
+  confirmFunction: "confirm_orphan_survey_files" | "confirm_orphan_survey_assets" | "confirm_orphan_office_documents" | "confirm_orphan_app_favicons",
   cutoff: string,
 ) {
   const { data: candidateRows, error: listError } = await adminClient.rpc(listFunction, {
@@ -413,7 +424,19 @@ async function removeSurveyAssetsForForm(adminClient: SupabaseAdminClient, formI
 
 Deno.serve(async (req) => {
   const requestLogContext = createRequestLogContext(req);
+  try {
+    return await handleRequest(req, requestLogContext);
+  } catch (error) {
+    console.error("form-admin action failed", {
+      ...requestLogContext,
+      status: 500,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return errorResponse(req, 500, "Внутренняя ошибка сервера", requestLogContext);
+  }
+});
 
+async function handleRequest(req: Request, requestLogContext: RequestLogContext) {
   if (req.method === "OPTIONS") {
     if (!isOriginAllowed(req.headers.get("Origin"))) {
       return new Response("Origin not allowed", { status: 403, headers: buildCorsHeaders(req) });
@@ -436,7 +459,11 @@ Deno.serve(async (req) => {
 
   let payload: FormAdminAction;
   try {
-    payload = (await req.json()) as FormAdminAction;
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new TypeError("Expected JSON object");
+    }
+    payload = parsed as FormAdminAction;
   } catch {
     return errorResponse(req, 400, "Invalid JSON payload", requestLogContext);
   }
@@ -494,12 +521,14 @@ Deno.serve(async (req) => {
       const { data: bound, error: bindError } = await adminClient.rpc("bind_personal_survey_upload", {
         p_form_id: payload.formId, p_token: payload.personalToken, p_browser_id: payload.browserId, p_path: payload.path,
       });
-      if (bindError || bound !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
+      if (bindError) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", requestLogContext);
+      if (bound !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
     }
     if (!allowed && isUuid(payload.personalToken)) {
-      const { data: personalAllowed } = await adminClient.rpc("can_restore_personal_upload", {
+      const { data: personalAllowed, error: personalError } = await adminClient.rpc("can_restore_personal_upload", {
         p_form_id: payload.formId, p_token: payload.personalToken, p_path: payload.path,
       });
+      if (personalError) return errorResponse(req, 503, "Не удалось проверить файл. Повторите позже.", requestLogContext);
       allowed = personalAllowed === true;
     }
     if (allowed !== true) return errorResponse(req, 410, "Файл больше недоступен. Прикрепите его заново.", requestLogContext);
@@ -528,12 +557,15 @@ Deno.serve(async (req) => {
 
     const { data: activeForm, error: formError } = await adminClient
       .from("forms")
-      .select("id")
+      .select("id, max_responses, responses_count")
       .eq("id", payload.formId)
       .eq("is_public", true)
       .or(`deadline_at.is.null,deadline_at.gt.${new Date().toISOString()}`)
       .maybeSingle();
-    if (formError || !activeForm) {
+    const limitReached = activeForm?.max_responses !== null
+      && activeForm?.max_responses !== undefined
+      && Number(activeForm.responses_count ?? 0) >= Number(activeForm.max_responses);
+    if (formError || !activeForm || limitReached) {
       return errorResponse(req, 403, "Form is not active", actionLogContext);
     }
 
@@ -549,7 +581,13 @@ Deno.serve(async (req) => {
       return errorResponse(req, 400, removeError.message, actionLogContext);
     }
 
-    await adminClient.from("survey_upload_reservations").update({ expires_at: new Date().toISOString() }).eq("object_path", payload.path);
+    const { error: expireError } = await adminClient
+      .from("survey_upload_reservations")
+      .update({ expires_at: new Date().toISOString() })
+      .eq("object_path", payload.path);
+    if (expireError) {
+      console.warn("form-admin failed to expire upload reservation", { ...actionLogContext, error: expireError.message });
+    }
     console.info("form-admin action completed", { ...actionLogContext, removedFiles: 1 });
     return jsonResponse(req, 200, { success: true, removedFiles: 1 }, actionLogContext);
   }
@@ -741,44 +779,64 @@ Deno.serve(async (req) => {
     let removedDocuments = 0;
     let cleanupError: { message: string } | null = null;
 
-    const orphanFiles = await listConfirmedOrphanPaths(
-      adminClient,
-      "list_orphan_survey_files",
-      "confirm_orphan_survey_files",
-      cutoff,
-    );
-    if (orphanFiles.error) {
-      cleanupError = orphanFiles.error;
-    } else if (orphanFiles.names.length > 0) {
-      const result = await adminClient.storage.from(storageBucket).remove(orphanFiles.names);
-      if (result.error) cleanupError = result.error;
-      else removedFiles = orphanFiles.names.length;
-    }
-
-    if (!cleanupError) {
-      const orphanAssets = await listConfirmedOrphanPaths(
+    try {
+      const orphanFiles = await listConfirmedOrphanPaths(
         adminClient,
-        "list_orphan_survey_assets",
-        "confirm_orphan_survey_assets",
+        "list_orphan_survey_files",
+        "confirm_orphan_survey_files",
         cutoff,
       );
-      if (orphanAssets.error) {
-        cleanupError = orphanAssets.error;
-      } else if (orphanAssets.names.length > 0) {
-        const result = await adminClient.storage.from(surveyAssetsBucket).remove(orphanAssets.names);
+      if (orphanFiles.error) {
+        cleanupError = orphanFiles.error;
+      } else if (orphanFiles.names.length > 0) {
+        const result = await removeBucketObjectPaths(adminClient, storageBucket, orphanFiles.names);
+        removedFiles += result.removedCount;
         if (result.error) cleanupError = result.error;
-        else removedAssets = orphanAssets.names.length;
       }
-    }
 
-    if (!cleanupError) {
-      const orphanDocuments = await listConfirmedOrphanPaths(adminClient, "list_orphan_office_documents", "confirm_orphan_office_documents", cutoff);
-      if (orphanDocuments.error) cleanupError = orphanDocuments.error;
-      else if (orphanDocuments.names.length > 0) {
-        const result = await adminClient.storage.from("survey-documents").remove(orphanDocuments.names);
-        if (result.error) cleanupError = result.error;
-        else removedDocuments = orphanDocuments.names.length;
+      if (!cleanupError) {
+        const orphanAssets = await listConfirmedOrphanPaths(
+          adminClient,
+          "list_orphan_survey_assets",
+          "confirm_orphan_survey_assets",
+          cutoff,
+        );
+        if (orphanAssets.error) {
+          cleanupError = orphanAssets.error;
+        } else if (orphanAssets.names.length > 0) {
+          const result = await removeBucketObjectPaths(adminClient, surveyAssetsBucket, orphanAssets.names);
+          removedAssets += result.removedCount;
+          if (result.error) cleanupError = result.error;
+        }
       }
+
+      if (!cleanupError) {
+        const orphanFavicons = await listConfirmedOrphanPaths(
+          adminClient,
+          "list_orphan_app_favicons",
+          "confirm_orphan_app_favicons",
+          cutoff,
+        );
+        if (orphanFavicons.error) {
+          cleanupError = orphanFavicons.error;
+        } else if (orphanFavicons.names.length > 0) {
+          const result = await removeBucketObjectPaths(adminClient, "app-favicons", orphanFavicons.names);
+          removedAssets += result.removedCount;
+          if (result.error) cleanupError = result.error;
+        }
+      }
+
+      if (!cleanupError) {
+        const orphanDocuments = await listConfirmedOrphanPaths(adminClient, "list_orphan_office_documents", "confirm_orphan_office_documents", cutoff);
+        if (orphanDocuments.error) cleanupError = orphanDocuments.error;
+        else if (orphanDocuments.names.length > 0) {
+          const result = await removeBucketObjectPaths(adminClient, "survey-documents", orphanDocuments.names);
+          removedDocuments += result.removedCount;
+          if (result.error) cleanupError = result.error;
+        }
+      }
+    } catch (error) {
+      cleanupError = { message: error instanceof Error ? error.message : String(error) };
     }
 
     const { data: finishedRuns, error: finishError } = await adminClient.rpc("finish_storage_cleanup_run", {
@@ -802,6 +860,7 @@ Deno.serve(async (req) => {
       ...actionLogContext,
       removedFiles,
       removedAssets,
+      removedDocuments,
     });
     return jsonResponse(
       req,
@@ -899,4 +958,4 @@ Deno.serve(async (req) => {
     { success: true, removedFiles: removedCount, removedAssets: removedAssetCount, cleanupPending },
     actionLogContext,
   );
-});
+}

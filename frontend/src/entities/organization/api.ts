@@ -1,4 +1,4 @@
-import { apiClient } from "../../shared/api/client";
+import { apiClient, publicApiClient } from "../../shared/api/client";
 import { runRequest } from "../../shared/api/request";
 import { normalizeOrganizationInput } from "./model";
 import type {
@@ -40,13 +40,14 @@ export async function getOrganizations(types?: OrganizationType[], signal?: Abor
   }
 }
 
-export async function getFormOrganizations(formId: string, signal?: AbortSignal) {
+export async function getFormOrganizations(formId: string, signal?: AbortSignal, usePublicClient = false) {
+  const client = usePublicClient ? publicApiClient : apiClient;
   const organizations: SelectableOrganization[] = [];
   for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
     signal?.throwIfAborted();
     const { data, error } = await runRequest(
       "organizations.listForForm",
-      (requestSignal) => apiClient
+      (requestSignal) => client
         .rpc("list_form_organizations", { p_form_id: formId })
         .range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1)
         .abortSignal(requestSignal),
@@ -116,13 +117,14 @@ export async function importOrganizations(inputs: EducationOrganizationInput[]) 
 }
 
 // Returns only archived organizations referenced by saved responses the caller can read.
-export async function getSavedFormOrganizations(formId: string, browserId: string, signal?: AbortSignal) {
+export async function getSavedFormOrganizations(formId: string, browserId: string, signal?: AbortSignal, usePublicClient = false) {
+  const client = usePublicClient ? publicApiClient : apiClient;
   const organizations: SelectableOrganization[] = [];
   for (let offset = 0; ; offset += ORGANIZATIONS_PAGE_SIZE) {
     signal?.throwIfAborted();
     const { data, error } = await runRequest(
       "organizations.listSavedForForm",
-      (requestSignal) => apiClient
+      (requestSignal) => client
         .rpc("list_saved_form_organizations", { p_form_id: formId, p_browser_id: browserId })
         .range(offset, offset + ORGANIZATIONS_PAGE_SIZE - 1)
         .abortSignal(requestSignal),

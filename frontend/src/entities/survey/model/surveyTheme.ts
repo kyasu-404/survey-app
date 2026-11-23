@@ -1,3 +1,4 @@
+import { parse as parseCss, walk as walkCss } from "css-tree";
 import type { IHeader, ITheme } from "survey-core";
 import { getManagedSurveyAssetPath } from "../../../shared/api/surveyAssetUrls";
 
@@ -29,8 +30,54 @@ export const DEFAULT_SURVEY_THEME: ITheme = {
   },
 };
 
-const SAFE_CSS_VALUE = /^(?!.*(?:url\s*\(|expression\s*\(|@import|javascript:))[\u0020-\u007e\u00a0-\uffff]{1,512}$/i;
+const SAFE_CSS_PRINTABLE = /^[\u0020-\u007e\u00a0-\uffff]{1,512}$/;
+const ALLOWED_THEME_CSS_FUNCTIONS = new Set([
+  "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix", "light-dark",
+  "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+  "calc", "min", "max", "clamp", "var",
+]);
 const MANAGED_ASSET_TOKEN = /^__APP_SURVEY_ASSET__\/(?:gallery\/[a-z0-9._-]{1,255}|forms\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpe?g|png|webp))$/i;
+
+function isSafeCssVariableValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || !SAFE_CSS_PRINTABLE.test(trimmed)) return false;
+  if (/[\\;{}]|\/\*|\*\/|@import|javascript:|expression\s*\(|url\s*\(/i.test(trimmed)) return false;
+  try {
+    const ast = parseCss(trimmed, { context: "value" });
+    let safe = true;
+    let nodes = 0;
+    walkCss(ast, (node) => {
+      if (++nodes > 256) {
+        safe = false;
+        return;
+      }
+      if (node.type === "Url" || node.type === "Raw") {
+        safe = false;
+        return;
+      }
+      if (node.type === "String" && /[<>\\;{}]|https?:|data:|javascript:|url\s*\(/i.test(node.value)) {
+        safe = false;
+        return;
+      }
+      if (node.type === "Function") {
+        const fn = node.name.toLowerCase();
+        if (!ALLOWED_THEME_CSS_FUNCTIONS.has(fn)) {
+          safe = false;
+          return;
+        }
+        if (fn === "var") {
+          const first = node.children.first;
+          if (!first || first.type !== "Identifier" || !/^--[a-z0-9_-]{1,120}$/i.test(first.name)) {
+            safe = false;
+          }
+        }
+      }
+    });
+    return safe;
+  } catch {
+    return false;
+  }
+}
 const HEADER_STRING_PROPERTIES = {
   inheritWidthFrom: ["survey", "container"],
   backgroundImageFit: ["cover", "fill", "contain", "tile"],
@@ -50,8 +97,8 @@ function isSafeImageUrl(value: string) {
   const normalized = value.trim();
   if (normalized === "") return true;
   if (MANAGED_ASSET_TOKEN.test(normalized)) return true;
-  if (normalized.startsWith("/") && !normalized.startsWith("//") && !normalized.includes("\\")) return true;
-  if (/\s|\\/.test(normalized)) return false;
+  if (normalized.startsWith("/") && !normalized.startsWith("//") && !/[\\\s"'()<>]/.test(normalized)) return true;
+  if (/\s|\\|["'()<>]/.test(normalized)) return false;
 
   try {
     const url = new URL(normalized);
@@ -146,7 +193,7 @@ export function sanitizeSurveyTheme(value: unknown): ITheme {
         .filter(([key, cssValue]) => (
           /^--[a-z0-9_-]{1,120}$/i.test(key)
           && typeof cssValue === "string"
-          && SAFE_CSS_VALUE.test(cssValue)
+          && isSafeCssVariableValue(cssValue)
         ))
         .slice(0, 512),
     ) as Record<string, string>;

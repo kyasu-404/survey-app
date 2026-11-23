@@ -1,9 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { officeRequest, downloadOfficeDocument, type OfficeDocument, type EditorConfiguration } from '../../entities/office/api';
 import { getErrorMessage } from '../../shared/lib/error';
 import '../../entities/office/office.css';
+
+function resolveEditorOrigin(embedOrigin?: string): string {
+  if (!embedOrigin) return location.origin;
+  try {
+    const parsed = new URL(embedOrigin);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.origin;
+  } catch {
+    // Fall back to current origin when malformed.
+  }
+  return location.origin;
+}
+
 export default function OfficeEditorPage() {
   const {formId,documentId}=useParams();
   const navigate=useNavigate();
@@ -14,11 +26,18 @@ export default function OfficeEditorPage() {
   const [saved,setSaved]=useState(false),[saveError,setSaveError]=useState<{message:string;storagePath?:string;revision?:number}|null>(null);
   const frame=useRef<HTMLIFrameElement>(null);
   const [error,setError]=useState(''),[ready,setReady]=useState(false),[frameReady,setFrameReady]=useState(false);
-  const config=useQuery({queryKey:['office-editor-config',documentId],queryFn:()=>officeRequest<EditorConfiguration>(`/documents/${documentId}/editor-config`),staleTime:Infinity,refetchOnWindowFocus:false,retry:false,gcTime:0});
-  const doc=useQuery({queryKey:['office-document',documentId],queryFn:()=>officeRequest<OfficeDocument>(`/documents/${documentId}`),refetchInterval:15000,retry:false});
+  const config=useQuery({queryKey:['office-editor-config',documentId],queryFn:()=>officeRequest<EditorConfiguration>(`/documents/${documentId}/editor-config`),enabled:Boolean(documentId),staleTime:Infinity,refetchOnWindowFocus:false,retry:false,gcTime:0});
+  const doc=useQuery({queryKey:['office-document',documentId],queryFn:()=>officeRequest<OfficeDocument>(`/documents/${documentId}`),enabled:Boolean(documentId),refetchInterval:15000,retry:false});
+  const editorOrigin=useMemo(()=>resolveEditorOrigin(config.data?.embedOrigin),[config.data?.embedOrigin]);
+  const iframeSrc=editorOrigin===location.origin ? '/api/office/editor-frame' : `${editorOrigin}/api/office/editor-frame`;
+  const resultsPath=`/dashboard/forms/${formId}/responses`;
+  useEffect(()=>{
+    setDirty(false);setPendingChanges(false);setSaved(false);setSaveError(null);setError('');setReady(false);setFrameReady(false);
+    editRevision.current=0;
+  },[documentId]);
   useEffect(()=>{
     const receive=(event:MessageEvent)=>{
-      if(event.origin!==location.origin || event.source!==frame.current?.contentWindow)return;
+      if(event.origin!==editorOrigin || event.source!==frame.current?.contentWindow)return;
       if(event.data?.type==='office-frame-ready')setFrameReady(true);
       if(event.data?.type==='office-state'){setDirty(Boolean(event.data.data));if(event.data.data){editRevision.current++;setSaved(false);setPendingChanges(true);}}
       if(event.data?.type==='office-ready'){setReady(true);setError('');}
@@ -26,13 +45,13 @@ export default function OfficeEditorPage() {
     };
     window.addEventListener('message',receive);
     return ()=>window.removeEventListener('message',receive);
-  },[]);
+  },[editorOrigin]);
   useEffect(()=>{
     if(!config.data || !frameReady || ready)return;
-    frame.current?.contentWindow?.postMessage({type:'office-config',data:config.data},location.origin);
+    frame.current?.contentWindow?.postMessage({type:'office-config',data:config.data},editorOrigin);
     const timeout=setTimeout(()=>setError(current=>current || 'Редактор долго загружается. Проверьте доступность ONLYOFFICE.'),60000);
     return ()=>clearTimeout(timeout);
-  },[config.data,frameReady,ready]);
+  },[config.data,editorOrigin,frameReady,ready]);
   useEffect(()=>{if(ready)setError('');},[ready]);
   useEffect(()=>{
     const warn=(event:BeforeUnloadEvent)=>{if(dirty || pendingChanges){event.preventDefault();event.returnValue='';}};
@@ -47,7 +66,8 @@ export default function OfficeEditorPage() {
   },[doc.data?.storage_path,doc.data?.last_save_error,saveError,queryClient,formId]);
   const saveDocument=async(next:'stay'|'leave'|'download')=>{
     if(dirty){setSaveError({message:'Изменения передаются в ONLYOFFICE. Подождите несколько секунд и повторите.'});return;}
-    if(!ready){if(next==='leave')navigate(`/dashboard/forms/${formId}/responses`);return;}
+    if(!ready){if(next==='leave')navigate(resultsPath);return;}
+    if(next==='leave' && saved && !pendingChanges && !doc.data?.last_save_error){navigate(resultsPath);return;}
     setSaving(true);setSaveError(null);setError('');setSaved(false);
     const revision=editRevision.current;
     try {
@@ -55,8 +75,8 @@ export default function OfficeEditorPage() {
       await Promise.all([doc.refetch(),queryClient.invalidateQueries({queryKey:['office-documents',formId]})]);
       if(revision!==editRevision.current){setSaveError({message:'Во время сохранения появились новые изменения. Сохраните макет ещё раз.'});return;}
       setSaved(true);setPendingChanges(false);
-      if(next==='leave')navigate(`/dashboard/forms/${formId}/responses`);
-      if(next==='download')await downloadOfficeDocument({id:documentId!,name:doc.data?.name || 'Документ.docx'}).catch(e=>setError(getErrorMessage(e,'Не удалось скачать макет')));
+      if(next==='leave')navigate(resultsPath);
+      if(next==='download')await downloadOfficeDocument({id:documentId!,name:doc.data?.name || config.data?.name || 'Документ.docx'}).catch(e=>setError(getErrorMessage(e,'Не удалось скачать макет')));
     }
     catch(e){setSaveError({message:getErrorMessage(e,'Не удалось сохранить документ'),storagePath:doc.data?.storage_path,revision});}
     finally{setSaving(false);}
@@ -64,7 +84,7 @@ export default function OfficeEditorPage() {
   const message=error || saveError?.message || (config.error ? getErrorMessage(config.error,'Редактор недоступен') : '') || doc.data?.last_save_error;
   return <div className="office-editor-page">
     <header><button type="button" className="app-button" disabled={saving} onClick={()=>void saveDocument('leave')}>← К результатам</button><div><strong>{config.data?.name || doc.data?.name || 'Документ'}</strong><span role="status">{saving ? 'Сохранение в хранилище…' : !ready ? 'Загрузка редактора…' : dirty ? 'Изменения передаются в ONLYOFFICE…' : saved ? 'Сохранено в хранилище' : 'Сохраните макет перед скачиванием или возвратом к результатам'}</span></div><button type="button" className="app-button" disabled={saving || !ready || dirty} onClick={()=>void saveDocument('stay')}>Сохранить</button><button type="button" className="app-button" disabled={saving || !ready || dirty} onClick={()=>void saveDocument('download')}>Скачать макет</button></header>
-    {message && <div className="office-editor-error" role="alert">{message} <button type="button" className="app-button" onClick={()=>location.reload()}>Открыть заново</button></div>}
-    <iframe ref={frame} title="Редактор ONLYOFFICE" src="/api/office/editor-frame" allow="clipboard-read; clipboard-write; fullscreen"/>
+    {message && <div className="office-editor-error" role="alert">{message} <button type="button" className="app-button" onClick={()=>location.reload()}>Открыть заново</button> <button type="button" className="app-button" onClick={()=>navigate(resultsPath)}>Выйти без сохранения</button></div>}
+    {config.data && <iframe key={`${documentId ?? ''}:${iframeSrc}`} ref={frame} title="Редактор ONLYOFFICE" src={iframeSrc} allow="clipboard-read; clipboard-write; fullscreen"/>}
   </div>;
 }

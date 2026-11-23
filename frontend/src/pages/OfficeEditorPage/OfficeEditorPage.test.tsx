@@ -87,3 +87,28 @@ it('returns to results only after saving succeeds',async()=>{
   await waitFor(()=>expect(navigate).toHaveBeenCalledWith('/dashboard/forms/form/responses'));
   expect(officeRequest).toHaveBeenCalledWith('/documents/doc/save',{method:'POST'});
 });
+it('lets the user leave without saving when save fails',async()=>{
+  const {user}=await setup();
+  const request=vi.mocked(officeRequest).getMockImplementation()!;
+  vi.mocked(officeRequest).mockImplementation((path,options)=>path.endsWith('/save') ? Promise.reject(new Error('Сохранение не подтверждено')) : request(path,options));
+  await user.click(screen.getByRole('button',{name:'← К результатам'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Сохранение не подтверждено');
+  await user.click(screen.getByRole('button',{name:'Выйти без сохранения'}));
+  expect(navigate).toHaveBeenCalledWith('/dashboard/forms/form/responses');
+});
+it('loads the isolated embedOrigin iframe and enforces its postMessage origin',async()=>{
+  const request=vi.mocked(officeRequest).getMockImplementation()!;
+  vi.mocked(officeRequest).mockImplementation(async(path,options)=>{
+    if(path.endsWith('/editor-config')) return {config:{},apiJsUrl:'https://docs.example/api.js',name:initial.name,embedOrigin:'https://office-embed.example'};
+    return request(path,options);
+  });
+  const client=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:Infinity}}});
+  render(<QueryClientProvider client={client}><OfficeEditorPage/></QueryClientProvider>);
+  await screen.findByText(initial.name);
+  const frame=screen.getByTitle('Редактор ONLYOFFICE') as HTMLIFrameElement;
+  expect(frame).toHaveAttribute('src','https://office-embed.example/api/office/editor-frame');
+  fireEvent(window,new MessageEvent('message',{origin:location.origin,source:frame.contentWindow,data:{type:'office-ready'}}));
+  expect(screen.getByRole('status')).toHaveTextContent('Загрузка редактора…');
+  fireEvent(window,new MessageEvent('message',{origin:'https://office-embed.example',source:frame.contentWindow,data:{type:'office-ready'}}));
+  expect(screen.getByRole('status')).toHaveTextContent('Сохраните макет');
+});

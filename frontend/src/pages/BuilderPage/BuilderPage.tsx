@@ -1,5 +1,5 @@
 import { Presence } from "../../shared/ui/Presence";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -11,7 +11,69 @@ import { canManageSurveyForm, FORM_EDIT_PERMISSION_ERROR } from "../../entities/
 import { getErrorMessage } from "../../shared/lib/error";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { Skeleton } from "../../shared/ui/Skeleton";
+import { useLegacyModalDialog } from "../../shared/ui/useLegacyModalDialog";
 import { SurveyBuilder } from "../../widgets/SurveyBuilder/SurveyBuilder";
+
+function AnsweredFormWarningModal({
+  isCopying,
+  onCancel,
+  onConfirmSafeEdit,
+  onCreateCopy,
+}: {
+  isCopying: boolean;
+  onCancel: () => void;
+  onConfirmSafeEdit: () => void;
+  onCreateCopy: () => Promise<void>;
+}) {
+  const titleId = useId();
+  const dialogRef = useLegacyModalDialog({ onClose: onCancel, disabled: isCopying });
+
+  return (
+    <div className="modal-backdrop builder-answered-warning-backdrop">
+      <div
+        ref={dialogRef}
+        className="modal-card card builder-answered-warning"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <h3 id={titleId} className="builder-reset-title">У формы уже есть ответы</h3>
+        <p className="builder-template-subtitle">
+          Форму можно открыть в безопасном режиме. Изменение типов вопросов,
+          технических идентификаторов и удаление существующих полей будет недоступно.
+        </p>
+        <div className="deadline-modal-actions">
+          <button
+            type="button"
+            className="deadline-save-button"
+            onClick={onConfirmSafeEdit}
+            disabled={isCopying}
+          >
+            Редактировать безопасно
+          </button>
+          <button
+            type="button"
+            className="deadline-clear-button"
+            onClick={() => void onCreateCopy()}
+            disabled={isCopying}
+          >
+            {isCopying && <InlineSpinner />}
+            Создать копию
+          </button>
+          <button
+            type="button"
+            className="deadline-action-cancel-button"
+            onClick={onCancel}
+            disabled={isCopying}
+          >
+            Назад
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function BuilderPage() {
   const { id } = useParams();
@@ -20,6 +82,7 @@ export default function BuilderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isCopying, setIsCopying] = useState(false);
+  const isCopyingRef = useRef(false);
   const [confirmedFormId, setConfirmedFormId] = useState<string>();
   const [openedFormId, setOpenedFormId] = useState<string | undefined | null>(null);
   useEffect(() => {
@@ -46,10 +109,11 @@ export default function BuilderPage() {
   }
 
   const handleCreateCopy = async () => {
-    if (!formQuery.data || !canManageSurveyForm(formQuery.data, user.id, canAdministerAllForms)) {
+    if (!formQuery.data || !canManageSurveyForm(formQuery.data, user.id, canAdministerAllForms) || isCopyingRef.current) {
       return;
     }
 
+    isCopyingRef.current = true;
     setIsCopying(true);
     try {
       const copy = await cloneForm(formQuery.data, user.id);
@@ -59,6 +123,7 @@ export default function BuilderPage() {
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось создать копию формы"), "error");
     } finally {
+      isCopyingRef.current = false;
       setIsCopying(false);
     }
   };
@@ -87,42 +152,12 @@ export default function BuilderPage() {
   return (
     <div className="builder-page">
       <Presence>{showWarning && (
-        <div className="modal-backdrop builder-answered-warning-backdrop">
-          <div className="modal-card card builder-answered-warning" role="alertdialog" aria-modal="true">
-            <h3 className="builder-reset-title">У формы уже есть ответы</h3>
-            <p className="builder-template-subtitle">
-              Форму можно открыть в безопасном режиме. Изменение типов вопросов,
-              технических идентификаторов и удаление существующих полей будет недоступно.
-            </p>
-            <div className="deadline-modal-actions">
-              <button
-                type="button"
-                className="deadline-save-button"
-                onClick={() => setConfirmedFormId(id)}
-                disabled={isCopying}
-              >
-                Редактировать безопасно
-              </button>
-              <button
-                type="button"
-                className="deadline-clear-button"
-                onClick={() => void handleCreateCopy()}
-                disabled={isCopying}
-              >
-                {isCopying && <InlineSpinner />}
-                Создать копию
-              </button>
-              <button
-                type="button"
-                className="deadline-action-cancel-button"
-                onClick={() => navigate(routes.dashboardMy, { replace: true })}
-                disabled={isCopying}
-              >
-                Назад
-              </button>
-            </div>
-          </div>
-        </div>
+        <AnsweredFormWarningModal
+          isCopying={isCopying}
+          onConfirmSafeEdit={() => setConfirmedFormId(id)}
+          onCreateCopy={handleCreateCopy}
+          onCancel={() => navigate(routes.dashboardMy, { replace: true })}
+        />
       )}</Presence>
       {(!showWarning || openedFormId === id) && <div className="builder-container" hidden={showWarning}>
         <SurveyBuilder

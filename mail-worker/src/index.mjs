@@ -20,6 +20,7 @@ const pollIntervalMs = parseBoundedInteger(process.env.MAIL_WORKER_POLL_INTERVAL
 const concurrency = parseBoundedInteger(process.env.MAIL_WORKER_CONCURRENCY, 5, 1, 20);
 const smtpTransports = createSmtpTransportManager({ encryptionKey, concurrency });
 const healthPort = parseBoundedInteger(process.env.MAIL_WORKER_HEALTH_PORT, 8080, 1, 65535);
+const healthHost = process.env.MAIL_WORKER_HEALTH_HOST?.trim() || "127.0.0.1";
 // Allow a claimed batch to finish SMTP and retry its ACKs before Docker stops the container.
 const SHUTDOWN_TIMEOUT_MS = 140_000;
 const cleanupRetentionHours = Math.min(
@@ -150,6 +151,7 @@ async function cleanupStorage() {
       state.lastCleanupResult = {
         removedFiles: result.removedFiles,
         removedAssets: result.removedAssets,
+        removedDocuments: result.removedDocuments,
       };
       console.info("scheduled storage cleanup completed", {
         runId: result.run?.id ?? null,
@@ -180,7 +182,7 @@ const server = http.createServer((request, response) => {
   const healthy = isWorkerHealthy(state, Date.now(), pollIntervalMs);
   response.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
   response.end(JSON.stringify({ ok: healthy, ...state, workerId }));
-}).listen(healthPort, "0.0.0.0");
+}).listen(healthPort, healthHost);
 
 let activePoll = Promise.resolve();
 function schedulePoll() {
@@ -224,7 +226,10 @@ async function cleanupExpiredUploads() {
       await removeStorageObjects("survey-files", names);
     }
     // Keep recent reservations for the IP budget, including manually removed files.
-    await supabaseRequest(`/rest/v1/survey_upload_reservations?expires_at=lt.${encodeURIComponent(new Date(Date.now() - 8 * 86400000).toISOString())}`, { method: "DELETE" });
+    await supabaseRequest(`/rest/v1/survey_upload_reservations?expires_at=lt.${encodeURIComponent(new Date(Date.now() - 8 * 86400000).toISOString())}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
   } catch (error) {
     console.error("expired upload cleanup failed", { message: error instanceof Error ? error.message : String(error) });
   }
@@ -254,7 +259,15 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     clearInterval(cleanupTimer);
     clearInterval(expiredUploadsTimer);
     mailPoller.stop();
-    await Promise.all([activePoll.then(mailPoller.flushPending), activeCleanup, activeAutomations, activeExpiredUploads]);
+    const flushPendingWithRetries = async () => {
+      const delays = [0, 200, 500];
+      for (const delayMs of delays) {
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await mailPoller.flushPending();
+        if (!state.pendingAcknowledgements) break;
+      }
+    };
+    await Promise.all([activePoll.then(flushPendingWithRetries), activeCleanup, activeAutomations, activeExpiredUploads]);
     const { pendingAcknowledgements } = state;
     if (pendingAcknowledgements) {
       console.error("mail worker stopped with pending acknowledgements", { pendingAcknowledgements });

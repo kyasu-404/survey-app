@@ -29,9 +29,10 @@ async function callFormAdmin<T>(payload: StorageCleanupAction, timeoutMs = 30_00
 
   const { data, error, response } = await runRequest(
     `functions.form-admin.${payload.action}`,
-    (_signal, traceContext) => supabaseClient.functions.invoke<T>("form-admin", {
+    (signal, traceContext) => supabaseClient.functions.invoke<T>("form-admin", {
       body: payload,
       headers: { ...traceContext.headers, Authorization: `Bearer ${session.access_token}` },
+      signal,
     }),
     { context: { action: payload.action }, timeoutMs },
   );

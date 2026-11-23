@@ -3,9 +3,11 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { routes } from "../../app/routes";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { useToast } from "../../app/providers/ToastProvider";
 import { APP_BRANDING_QUERY_KEY, getAppBranding } from "../../entities/branding/api";
 import { getDefaultAppLogo } from "../../entities/branding/defaultLogo";
 import { logout } from "../../features/auth/api";
+import { getErrorMessage } from "../../shared/lib/error";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { useTheme } from "../../shared/theme/ThemeProvider";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -22,6 +24,7 @@ type SidebarProps = {
 
 export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = false }: SidebarProps) {
   const { user, profile, loading } = useAuth();
+  const { showToast } = useToast();
   useLiveNotifications(loading ? undefined : user?.id);
   const { themeId } = useTheme();
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = fa
       navigate(routes.login, { replace: true });
     } catch (error) {
       console.error(error);
+      showToast(getErrorMessage(error, "Не удалось выйти из системы"), "error");
     }
   }
 

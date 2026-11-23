@@ -19,7 +19,8 @@ import { useTemplatesMenuDismiss } from "./hooks/useTemplatesMenuDismiss";
 import type { TemplatesSection } from "./types";
 
 export default function TemplatesPage() {
-  const { user, loading: isAuthLoading } = useAuth();
+  const { user, profile, loading: isAuthLoading } = useAuth();
+  const canAdministerAllForms = profile?.role === "admin";
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [section, setSection] = useState<TemplatesSection>("mine");
@@ -78,8 +79,8 @@ export default function TemplatesPage() {
     }
 
     const deletingTemplate = templateToDelete;
-    setTemplateToDelete(null);
-    await templateActions.confirmDelete(deletingTemplate);
+    const ok = await templateActions.confirmDelete(deletingTemplate);
+    if (ok) setTemplateToDelete(null);
   };
 
   return (
@@ -115,6 +116,7 @@ export default function TemplatesPage() {
         )}
 
         <TemplatesGrid
+          canAdministerAllForms={canAdministerAllForms}
           currentUserId={user?.id}
           isTemplateActionPending={templateActions.isTemplateActionPending}
           onDeleteRequest={setTemplateToDelete}

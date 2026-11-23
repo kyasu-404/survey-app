@@ -4,7 +4,7 @@ import type {
   SurveyResponse,
   UpdateResponseResult,
 } from "./types";
-import { apiClient, supabaseClient } from "../../shared/api/client";
+import { apiClient, publicApiClient, supabaseClient } from "../../shared/api/client";
 import { runRequest } from "../../shared/api/request";
 
 export const RESPONSES_PAGE_SIZE = 50;
@@ -150,11 +150,13 @@ export async function insertResponse(
   browserId: string,
   signal?: AbortSignal,
   personalToken?: string,
+  usePublicClient = false,
 ): Promise<SubmitResponseResult> {
+  const client = usePublicClient || Boolean(personalToken) ? publicApiClient : apiClient;
   const { data: result, error } = await runRequest(
     "responses.submit",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc(personalToken ? "submit_personal_form_response" : "submit_form_response", {
+      client.rpc(personalToken ? "submit_personal_form_response" : "submit_form_response", {
         p_form_id: formId,
         ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
         p_submission_id: submissionId,
@@ -174,11 +176,13 @@ export async function fetchExistingResponse(
   browserId: string,
   signal?: AbortSignal,
   personalToken?: string,
+  usePublicClient = false,
 ): Promise<ExistingResponseResult | null> {
+  const client = usePublicClient || Boolean(personalToken) ? publicApiClient : apiClient;
   const { data: result, error } = await runRequest(
     "responses.fetchExisting",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc(personalToken ? "get_personal_form_response_status" : "get_form_response_status", {
+      client.rpc(personalToken ? "get_personal_form_response_status" : "get_form_response_status", {
         p_form_id: formId,
         ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
       }),
@@ -198,11 +202,13 @@ export async function updateResponse(
   browserId: string,
   signal?: AbortSignal,
   personalToken?: string,
+  usePublicClient = false,
 ): Promise<UpdateResponseResult> {
+  const client = usePublicClient || Boolean(personalToken) ? publicApiClient : apiClient;
   const { data: result, error } = await runRequest(
     "responses.update",
     (requestSignal) => applyAbortSignal(
-      apiClient.rpc(personalToken ? "update_personal_form_response" : "update_form_response", {
+      client.rpc(personalToken ? "update_personal_form_response" : "update_form_response", {
         p_form_id: formId,
         ...(personalToken ? { p_token: personalToken } : { p_browser_id: browserId }),
         p_response_id: responseId,
@@ -229,12 +235,13 @@ export async function deleteResponses(formId: string, responseIds: string[]) {
 
   const { error, response } = await runRequest(
     "functions.form-admin.deleteResponses",
-    (_signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
+    (signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
       body: { action: "delete-responses", formId, responseIds },
       headers: {
         ...traceContext.headers,
         Authorization: `Bearer ${accessToken}`,
       },
+      signal,
     }),
     { context: { formId, responseCount: responseIds.length } },
   );

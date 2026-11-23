@@ -24,7 +24,7 @@ export function createOfficeTaskRunner({ concurrency = 2, maxQueued = 4, timeout
         worker = new Worker(new URL('./office-task-worker.mjs', import.meta.url), {
           workerData: job.data, resourceLimits: { maxOldGenerationSizeMb: 192 },
         });
-        worker.once('message', ({ error, result }) => void finish(error ? new HttpError(422, error) : null, result));
+        worker.once('message', ({ error, status, result }) => void finish(error ? new HttpError(Number.isInteger(status) ? status : 422, error) : null, result));
         worker.once('error', () => void finish(new HttpError(422, 'Не удалось обработать документ. Попробуйте уменьшить его размер.')));
         worker.once('exit', code => { if (!job.done) void finish(new HttpError(422, `Обработка документа прервана (${code})`)); });
       } catch (error) { void finish(error); }

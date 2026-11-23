@@ -140,7 +140,7 @@ function AutomationDetail({ ruleId, userId }: { ruleId: string; userId: string }
           <button type="button" className="app-button" onClick={() => { archive.reset(); setArchiving(true); }}>Архивировать</button>
         </div>}
       </header>
-      <RuleHistory ruleId={rule.id} userId={userId} />
+      <RuleHistory ruleId={rule.id} userId={userId} isRuleActive={Boolean(rule.enabled && !rule.archived_at)} />
       {editing && !rule.archived_at && <RuleEditor userId={userId} rule={rule} form={rule.form_id ? { id: rule.form_id, title: rule.form?.title ?? "Выбранная форма" } : null} onClose={() => setEditing(false)} onSaved={() => {
         void queryClient.invalidateQueries({ queryKey: automationKey(userId) });
         showToast("Правило сохранено", "success");

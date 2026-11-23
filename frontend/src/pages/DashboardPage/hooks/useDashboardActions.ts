@@ -62,14 +62,14 @@ export function useDashboardActions({ formsQueryKey, formsStatsQueryKey, userId 
     }
 
     const deletingForm = formToDelete;
-    setFormToDelete(null);
-    await runAction(() => removeMutation.mutateAsync({ id: deletingForm.id }), {
+    const ok = await runAction(() => removeMutation.mutateAsync({ id: deletingForm.id }), {
       actionKey: getFormActionKey(deletingForm.id),
       successMessage: "Форма удалена",
       errorMessage: "Не удалось удалить форму",
       affectedFormId: deletingForm.id,
       logLabel: `dashboard delete ${deletingForm.id}`,
     });
+    if (ok) setFormToDelete(null);
   };
 
   const handleDuplicate = async (form: SurveyFormSummary) => {

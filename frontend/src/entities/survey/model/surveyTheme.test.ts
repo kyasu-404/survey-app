@@ -73,6 +73,27 @@ describe("survey theme", () => {
     });
   });
 
+  it("blocks obfuscated CSS functions, escapes, comments, and @-rules via AST validation", () => {
+    expect(sanitizeSurveyTheme({
+      cssVariables: {
+        "--safe-color": "rgb(18, 52, 86)",
+        "--safe-font": "'Inter', sans-serif",
+        "--comment-url": "u/**/rl(https://evil.example/a.png)",
+        "--escaped-url": "\\75rl(https://evil.example/b.png)",
+        "--image-set": "image-set(url(https://evil.example/c.png) 1x)",
+        "--expr": "expression(alert(1))",
+        "--import-rule": "@import 'https://evil.example/x.css'",
+        "--semicolon": "#fff; background: url(https://evil.example/d.png)",
+        "--braces": "#fff } body { color: red }",
+      },
+    })).toEqual({
+      cssVariables: {
+        "--safe-color": "rgb(18, 52, 86)",
+        "--safe-font": "'Inter', sans-serif",
+      },
+    });
+  });
+
   it("allows local Supabase development URLs without allowing arbitrary plain HTTP", () => {
     expect(sanitizeSurveyTheme({ backgroundImage: "http://localhost:8000/storage/background.webp" }))
       .toHaveProperty("backgroundImage");

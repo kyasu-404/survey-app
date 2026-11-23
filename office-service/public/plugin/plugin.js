@@ -20,7 +20,10 @@
  async function scan(){
   const items=await command(function(){try{
    if(Asc.scope.data==='xlsx')return Api.GetAllComments().filter(c=>c.GetText().indexOf('survey-')===0).map(c=>({tag:c.GetText(),commentId:c.GetId(),location:c.GetQuoteText()}));
-   return Api.GetDocument().GetAllContentControls().map(cc=>({tag:cc.GetTag(),label:cc.GetAlias()})).filter(cc=>cc.tag && cc.tag.indexOf('survey-')===0);
+   const counts={};
+   return Api.GetDocument().GetAllContentControls()
+    .filter(cc=>cc.GetTag && cc.GetTag() && cc.GetTag().indexOf('survey-')===0)
+    .map(cc=>{const tag=cc.GetTag();const tagIndex=counts[tag]||0;counts[tag]=tagIndex+1;return {tag,tagIndex,internalId:typeof cc.GetInternalId==='function'?cc.GetInternalId():null,label:cc.GetAlias()};});
   }catch(e){return {error:'Не удалось проверить поля: '+e.message};}},context.fileType);
   $('bindings').replaceChildren();$('binding-count').textContent='Связанных полей: '+items.length;
   for(const item of items){
@@ -32,7 +35,7 @@
    if(!source || source.unsupported || item.location?.includes('#REF!'))box.append(el('p','Источник или ячейка удалены. Удалите это поле и вставьте нужный вопрос.','warning'));
    else box.append(el('p',item.location || 'Вопрос связан с макетом'));
    const remove=el('button','Снять связь');remove.onclick=()=>action(async()=>{
-    await command(function(){try{if(Asc.scope.data.commentId){const c=Api.GetCommentById(Asc.scope.data.commentId);if(c)c.Delete();}else Api.GetDocument().GetContentControlsByTag(Asc.scope.data.tag).forEach(cc=>cc.SetTag(''));return true;}catch(e){return {error:e.message};}},item);await scan();
+    await command(function(){try{if(Asc.scope.data.commentId){const c=Api.GetCommentById(Asc.scope.data.commentId);if(c)c.Delete();}else{const list=Api.GetDocument().GetContentControlsByTag(Asc.scope.data.tag);const target=Asc.scope.data.internalId?list.find(cc=>typeof cc.GetInternalId==='function'&&cc.GetInternalId()===Asc.scope.data.internalId):list[Asc.scope.data.tagIndex||0];if(target)target.SetTag('');}return true;}catch(e){return {error:e.message};}},item);await scan();
    });box.append(remove);$('bindings').append(box);
   }
  }

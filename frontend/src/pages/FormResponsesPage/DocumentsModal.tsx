@@ -1,6 +1,7 @@
 import { Icon } from "../../shared/ui/Icon";
 import { MoreHorizontalIcon } from "../../shared/ui/MoreHorizontalIcon";
 import { ViewportMenu } from "../../shared/ui/ViewportMenu";
+import { useModalSurface } from "../../shared/ui/useModalSurface";
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useNavigate} from 'react-router-dom';
@@ -15,17 +16,16 @@ import {DocumentResults} from './DocumentResults';
 import '../../entities/office/office.css';
 export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:string;onClose:()=>void;selectedResponseIds?:string[]}){
  const navigate=useNavigate(),queryClient=useQueryClient(),{showToast}=useToast(),{user,profile}=useAuth();
- const dialog=useRef<HTMLDialogElement>(null),templatesPanel=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null);
- const menuAnchor=useRef<HTMLButtonElement>(null);
+ const dialog=useModalSurface(),templatesPanel=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null);
+ const menuAnchor=useRef<HTMLButtonElement>(null),busyRef=useRef(false);
  const [search,setSearch]=useState(''),[name,setName]=useState('Новый макет');
  const [focusResult,setFocusResult]=useState(()=>getActiveOfficeJob(queryClient,formId)?.id);
  const [tab,setTab]=useState<'templates'|'results'>(()=>focusResult?'results':'templates');
  const [mode,setMode]=useState<'create'|'rename'|null>(null),[selected,setSelected]=useState<OfficeDocument|null>(null),[menu,setMenu]=useState<string|null>(null);
  const [format,setFormat]=useState<'xlsx'|'docx'>('xlsx'),[generation,setGeneration]=useState<OfficeDocument|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const query=useQuery({queryKey:['office-documents',formId],queryFn:()=>officeRequest<{documents:OfficeDocument[];enabled:boolean;max_file_mb:number;response_count:number}>(`/forms/${formId}/documents`),staleTime:0,refetchOnMount:'always'});
- useEffect(()=>{dialog.current?.showModal();},[]);
  useEffect(()=>{const close=(e:MouseEvent)=>{if(!(e.target as Element).closest('.office-menu-shell'))setMenu(null);};document.addEventListener('click',close);return()=>document.removeEventListener('click',close);},[]);
- async function run(fn:()=>Promise<unknown>){setBusy(true);setError('');setMenu(null);try{await fn();setMode(null);await query.refetch();}catch(e){setError(getErrorMessage(e,'Не удалось выполнить операцию'));}finally{setBusy(false);}}
+ async function run(fn:()=>Promise<unknown>){if(busyRef.current)return;busyRef.current=true;setBusy(true);setError('');setMenu(null);try{await fn();setMode(null);await query.refetch();}catch(e){setError(getErrorMessage(e,'Не удалось выполнить операцию'));}finally{busyRef.current=false;setBusy(false);}}
  function generated(job:OfficeJob){
   rememberOfficeJob(queryClient,job);
   setGeneration(null);
@@ -62,7 +62,7 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
     {query.data?.documents.length===0 && <p className="office-empty">Макетов пока нет. Загрузите файл или создайте новый.</p>}
    </div>
    {selected && !mode && <div className="office-notice"><p>Удалить «{selected.name}»?</p><button type="button" className="app-button danger" disabled={busy} onClick={()=>void run(async()=>{await officeRequest(`/documents/${selected.id}`,{method:'DELETE'});setSelected(null);})}>Удалить документ</button><button type="button" className="app-button" onClick={()=>setSelected(null)}>Отмена</button></div>}
-   {mode && <form className="office-create" onSubmit={e=>{e.preventDefault();void run(async()=>{if(mode==='rename' && selected){await officeRequest(`/documents/${selected.id}`,{method:'PATCH',body:JSON.stringify({name})});setSelected(null);}else await officeRequest(`/forms/${formId}/documents`,{method:'POST',body:JSON.stringify({name,file_type:format})});});}}>
+   {mode && <form className="office-create" onSubmit={e=>{e.preventDefault();const trimmed=name.trim();if(!trimmed){setError('Введите название документа');return;}void run(async()=>{if(mode==='rename' && selected){await officeRequest(`/documents/${selected.id}`,{method:'PATCH',body:JSON.stringify({name:trimmed})});setSelected(null);}else await officeRequest(`/forms/${formId}/documents`,{method:'POST',body:JSON.stringify({name:trimmed,file_type:format})});});}}>
     <label>Название документа<input value={name} onChange={e=>setName(e.target.value)} maxLength={195} required autoFocus/></label>
     {mode==='create' && <label>Формат макета<select value={format} onChange={e=>setFormat(e.target.value as 'xlsx'|'docx')}><option value="xlsx">XLSX — таблица Excel</option><option value="docx">DOCX — текстовый документ</option></select></label>}
     <button type="submit" className="button-primary" disabled={busy}>{mode==='rename'?'Сохранить название':'Создать'}</button><button type="button" className="app-button" onClick={()=>{setMode(null);setSelected(null);}}>Отмена</button>

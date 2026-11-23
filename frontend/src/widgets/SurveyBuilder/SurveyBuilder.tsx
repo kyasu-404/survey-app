@@ -195,6 +195,10 @@ export function SurveyBuilder({
   const editorRevisionRef = useRef<number | undefined>(undefined);
   const editorDirtyRef = useRef(false);
   const hydratingEditorRef = useRef(false);
+  const isSavingRef = useRef(false);
+  const isTemplateSavingRef = useRef(false);
+  const isPostSaveSavingRef = useRef(false);
+  const isCompatibilityCopyingRef = useRef(false);
   const runtimePreviewSyncTimeoutRef = useRef<number | null>(null);
   const assetFormIdRef = useRef(formId ?? createSurveyAssetFormId());
   const creatorThemeRef = useRef(applicationTheme.creator);
@@ -462,6 +466,7 @@ export function SurveyBuilder({
 
   const clearCurrentBuilderState = () => {
     clearSurveyBuilderDraft(userId, formId);
+    editorDirtyRef.current = false;
 
     if (!creator) {
       return;
@@ -469,20 +474,26 @@ export function SurveyBuilder({
 
     const emptySchema = createEmptyBuilderSchema();
     if (!formId) assetFormIdRef.current = createSurveyAssetFormId();
-    creator.locale = emptySchema.locale ?? "ru";
-    creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
-    applyThemeToBuilderDesigners(creator);
-    creator.JSON = resolveDefaultSurveyLogo(emptySchema);
+    hydratingEditorRef.current = true;
+    try {
+      creator.locale = emptySchema.locale ?? "ru";
+      creator.theme = resolveSurveyTheme(DEFAULT_SURVEY_THEME);
+      applyThemeToBuilderDesigners(creator);
+      creator.JSON = resolveDefaultSurveyLogo(emptySchema);
+    } finally {
+      hydratingEditorRef.current = false;
+    }
     setOrganizationTypes([...DEFAULT_FORM_ORGANIZATION_TYPES]);
     draftHydrationStateRef.current = "empty";
     syncRuntimePreviewNow(creator);
   };
 
   const handleSaveAsTemplate = async () => {
-    if (!creator) {
+    if (!creator || isTemplateSavingRef.current || isSavingRef.current || isPostSaveSavingRef.current) {
       return;
     }
 
+    isTemplateSavingRef.current = true;
     setIsTemplateActionLoading("save");
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder save template");
 
@@ -515,6 +526,7 @@ export function SurveyBuilder({
       showToast(getBuilderSaveError(error, true).message, "error");
     } finally {
       stopPendingLogger();
+      isTemplateSavingRef.current = false;
       setIsTemplateActionLoading(null);
     }
   };
@@ -697,8 +709,9 @@ export function SurveyBuilder({
   };
 
   const handleSavePostSaveSettings = async ({ formType, formReason, deadlineAt, maxResponses }: Required<FormSaveSettings>) => {
-    if (!postSaveSettings) return;
+    if (!postSaveSettings || isPostSaveSavingRef.current) return;
 
+    isPostSaveSavingRef.current = true;
     setIsPostSaveSettingsSaving(true);
     const stopPendingLogger = createPendingStateLogger(queryClient, "builder post-save settings");
 
@@ -760,6 +773,7 @@ export function SurveyBuilder({
       showToast(getBuilderSaveError(error).message, "error");
     } finally {
       stopPendingLogger();
+      isPostSaveSavingRef.current = false;
       setIsPostSaveSettingsSaving(false);
     }
   };
@@ -770,6 +784,11 @@ export function SurveyBuilder({
     }
 
     const saveBuilder = async (saveNo: number, callback: (saveNo: number, isSuccess: boolean) => void) => {
+      if (isSavingRef.current || isTemplateSavingRef.current || isPostSaveSavingRef.current) {
+        callback(saveNo, false);
+        return;
+      }
+      isSavingRef.current = true;
       setIsSaving(true);
       const stopPendingLogger = createPendingStateLogger(queryClient, formId ? `builder save ${formId}` : "builder create");
 
@@ -847,6 +866,7 @@ export function SurveyBuilder({
         callback(saveNo, false);
       } finally {
         stopPendingLogger();
+        isSavingRef.current = false;
         setIsSaving(false);
       }
     };
@@ -868,11 +888,12 @@ export function SurveyBuilder({
   };
 
   const handleConfirmCompatibilityWarnings = async () => {
-    if (!compatibilityDialog || compatibilityDialog.result.status !== "confirmation_required") {
+    if (!compatibilityDialog || compatibilityDialog.result.status !== "confirmation_required" || isSavingRef.current) {
       return;
     }
 
     const { request } = compatibilityDialog;
+    isSavingRef.current = true;
     setIsSaving(true);
     const stopPendingLogger = createPendingStateLogger(queryClient, `builder safe save ${request.id}`);
 
@@ -908,16 +929,18 @@ export function SurveyBuilder({
       setCompatibilityDialog(null);
     } finally {
       stopPendingLogger();
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
 
   const handleCreateCompatibilityCopy = async () => {
-    if (!compatibilityDialog || !editableForm) {
+    if (!compatibilityDialog || !editableForm || isCompatibilityCopyingRef.current) {
       return;
     }
 
     const { request } = compatibilityDialog;
+    isCompatibilityCopyingRef.current = true;
     setIsCompatibilityCopying(true);
     try {
       const copy = await cloneForm({
@@ -943,6 +966,7 @@ export function SurveyBuilder({
       console.error(error);
       showToast(getErrorMessage(error, "Не удалось создать копию формы"), "error");
     } finally {
+      isCompatibilityCopyingRef.current = false;
       setIsCompatibilityCopying(false);
     }
   };
@@ -997,13 +1021,6 @@ export function SurveyBuilder({
           <p className="builder-safe-editing-banner" role="status">
             У формы есть {safeEditingResponseCount} ответов. Включён безопасный режим редактирования.
           </p>
-        )}
-        {isEditableFormLoading && (
-          <div className="builder-loading-skeleton" aria-hidden="true">
-            <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-title" />
-            <Skeleton className="builder-loading-skeleton-line" />
-            <Skeleton className="builder-loading-skeleton-line builder-loading-skeleton-line-short" />
-          </div>
         )}
       </div>
 

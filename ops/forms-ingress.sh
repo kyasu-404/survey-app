@@ -5,7 +5,9 @@ mode=${1:-apply}
 iface=${SURVEY_INGRESS_INTERFACE:-enp7s0}
 frontend=${SURVEY_FRONTEND_IP:-192.168.6.99}
 for ipt in iptables ip6tables; do
+  command -v "$ipt" >/dev/null 2>&1 || continue
   for parent in DOCKER-USER INPUT; do
+    "$ipt" -w -L "$parent" >/dev/null 2>&1 || continue
     chain=SURVEY_INGRESS
     [ "$parent" = INPUT ] && chain=SURVEY_HOST
     if [ "$mode" = --remove ]; then

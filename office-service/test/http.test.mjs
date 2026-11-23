@@ -229,3 +229,31 @@ test('force save notices document deletion while awaiting a callback',async t=>{
  const r=await request(`/documents/${documentId}/save`,{method:'POST',headers:{Authorization:'Bearer employee'}});
  assert.equal(r.status,404);
 });
+
+test('OFFICE_EMBED_ORIGIN isolates editor frame and plugin origin while permitting parent framing and CORS',async t=>{
+ const embed='https://office.forms.test';
+ const {request}=await setup(t,{env:{OFFICE_EMBED_ORIGIN:embed}});
+ const cfg=await request(`/documents/${documentId}/editor-config`,{headers:{Authorization:'Bearer employee',Origin:'https://forms.test'}});
+ assert.equal(cfg.status,200);
+ assert.equal(cfg.headers.get('access-control-allow-origin'),'https://forms.test');
+ const body=await cfg.json();
+ assert.equal(body.embedOrigin,embed);
+ assert.deepEqual(body.config.editorConfig.plugins.pluginsData,[`${embed}/api/office/plugin/config.json`]);
+ const frame=await request('/editor-frame');
+ assert.equal(frame.status,200);
+ assert.match(frame.headers.get('content-security-policy'),/frame-ancestors 'self' https:\/\/forms\.test https:\/\/office\.forms\.test/);
+ const bridge=await request('/editor-bridge.js');
+ assert.match(await bridge.text(),/^const SURVEY_APP_ORIGIN="https:\/\/forms\.test";/);
+ assert.equal((await request('/plugin/toString')).status,404);
+ const badCallback=await request(`/callback/${documentId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'not-json'});
+ assert.equal(badCallback.status,400);
+});
+
+test('PUT /settings requires re-entering JWT secret when ONLYOFFICE URLs change',async t=>{
+ const {request}=await setup(t,{role:'admin'});
+ const r=await request('/settings',{method:'PUT',headers:{Authorization:'Bearer employee','Content-Type':'application/json'},body:JSON.stringify({
+  enabled:true,public_url:'https://attacker.test',internal_url:'http://onlyoffice',storage_url_override:'',
+  jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000,
+ })});
+ assert.equal(r.status,400);
+});

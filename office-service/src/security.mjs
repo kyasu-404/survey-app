@@ -38,10 +38,24 @@ export function encrypt(value, key) {
   return [iv, cipher.getAuthTag(), ciphertext].map(b => b.toString('base64')).join('.');
 }
 export function decrypt(value, key) {
-  const [iv, tag, data] = value.split('.').map(v => Buffer.from(v, 'base64'));
-  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  const parts = String(value ?? '').split('.');
+  if (parts.length !== 3) throw new HttpError(500, 'Повреждён зашифрованный секрет');
+  const [iv, tag, data] = parts.map(v => Buffer.from(v, 'base64'));
+  if (iv.length !== 12 || tag.length !== 16) throw new HttpError(500, 'Повреждён зашифрованный секрет');
+  const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+}
+function isBlockedMetadataHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host) return true;
+  if (host.startsWith('fe80:') || host === '::') return true;
+  const octets = host.split('.');
+  if (octets.length === 4 && octets.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
+    const [first, second] = octets.map(Number);
+    if (first === 0 || (first === 169 && second === 254)) return true;
+  }
+  return false;
 }
 export function baseUrl(value, optional = false) {
   if (!value && optional) return '';
@@ -49,6 +63,7 @@ export function baseUrl(value, optional = false) {
   try { url = new URL(value); } catch { throw new HttpError(400, 'Некорректный адрес сервера'); }
   requireValue(['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash,
     'Адрес должен быть HTTP(S), без пароля, параметров и фрагмента');
+  requireValue(!isBlockedMetadataHost(url.hostname), 'Недопустимый адрес сервера');
   return url.href.replace(/\/+$/, '');
 }
 // Only the configured Document Server may supply a save result. No redirects,
@@ -60,12 +75,15 @@ export function saveUrl(value, settings) {
   const internalBase = new URL((settings.internal_url || settings.public_url) + '/');
   requireValue(!url.username && !url.password && !url.hash && [publicBase.origin, internalBase.origin].includes(url.origin),
     'Адрес сохранения не принадлежит ONLYOFFICE');
-  const sourceBase = url.origin === publicBase.origin ? publicBase : internalBase;
-  requireValue(url.pathname.startsWith(sourceBase.pathname + 'cache/files/'), 'Недопустимый путь файла ONLYOFFICE');
+  requireValue(!/%(?:2e|2f|5c)/i.test(url.pathname), 'Недопустимый путь файла ONLYOFFICE');
+  const matchingBases = [publicBase, internalBase].filter(base => base.origin === url.origin);
+  const sourceBase = matchingBases.find(base => url.pathname.startsWith(base.pathname + 'cache/files/'));
+  requireValue(sourceBase, 'Недопустимый путь файла ONLYOFFICE');
   // Keep the signed query verbatim when mapping the public address to the internal address.
   return internalBase.href.replace(/\/$/, '') + '/' + url.pathname.slice(sourceBase.pathname.length) + url.search;
 }
 export async function readLimited(stream, limit) {
+  requireValue(stream, 'Удалённый сервер вернул пустой ответ', 502);
   const chunks = []; let size = 0;
   for await (const chunk of stream) {
     size += chunk.length;
@@ -76,9 +94,15 @@ export async function readLimited(stream, limit) {
 }
 export async function fetchLimited(url, options = {}, limit = 1024 * 1024) {
   const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(60000) });
-  requireValue(response.ok, 'Удалённый сервер вернул ошибку', 502);
-  requireValue(Number(response.headers.get('content-length') || 0) <= limit, 'Превышен размер ответа', 413);
-  return readLimited(response.body, limit);
+  try {
+    requireValue(response.ok, 'Удалённый сервер вернул ошибку', 502);
+    requireValue(Number(response.headers.get('content-length') || 0) <= limit, 'Превышен размер ответа', 413);
+    requireValue(response.body, 'Удалённый сервер вернул пустой ответ', 502);
+    return await readLimited(response.body, limit);
+  } catch (error) {
+    await response.body?.cancel?.().catch(() => {});
+    throw error;
+  }
 }
 export function documentName(value, format = 'docx') {
   let name = String(value || '').trim().replace(/[\\/\x00-\x1f\x7f]/g, '');

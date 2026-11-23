@@ -8,6 +8,7 @@ type DashboardFormsListProps = {
   layout: DashboardLayout;
   sort: FormsSort;
   onSort: (field: FormsSort["field"]) => void;
+  canAdministerAllForms?: boolean;
   currentUserId?: string;
   displayedForms: SurveyFormSummary[];
   filteredForms: SurveyFormSummary[];
@@ -35,6 +36,7 @@ export function DashboardFormsList({
   layout,
   sort,
   onSort,
+  canAdministerAllForms = false,
   currentUserId,
   displayedForms,
   filteredForms,
@@ -61,6 +63,7 @@ export function DashboardFormsList({
           <DashboardFormCard
             key={form.id}
             layout={layout}
+            canAdministerAllForms={canAdministerAllForms}
             currentUserId={currentUserId}
             form={form}
             formIndex={formIndex}

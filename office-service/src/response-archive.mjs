@@ -3,9 +3,8 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
-import { createClient } from '@supabase/supabase-js';
 import yazl from 'yazl';
 import { collectResponseAttachments, getArchiveQuestions, safeArchiveName } from './response-archive-entries.mjs';
 import { HttpError, readLimited, requireValue, uuid } from './security.mjs';
@@ -15,10 +14,90 @@ const COOKIE_NAME = 'survey_response_zip';
 const TICKET_TTL_SECONDS = 30;
 // Each export stages one file in /tmp. Keep room for the editor and document worker.
 const MAX_CONCURRENT_EXPORTS = 2;
+const MAX_EXPORTS_PER_USER = 1;
+const MAX_STAGED_ATTACHMENT_BYTES = 55 * 1024 * 1024;
 const STORAGE_READ_TIMEOUT_MS = 60_000;
 // nginx allows 120 seconds between upstream reads. Close a valid partial ZIP
 // if consecutive stalled objects prevent the next entry from being sent.
 const STORAGE_SILENCE_TIMEOUT_MS = 90_000;
+
+function createSupabaseRestClient(supabaseUrl, anonKey, token) {
+  const baseUrl = String(supabaseUrl || '').replace(/\/+$/, '');
+  const baseHeaders = {
+    apikey: anonKey,
+    Authorization: `Bearer ${token}`,
+  };
+  async function requestJson(path, { method = 'GET', body, headers = {}, signal } = {}) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        ...baseHeaders,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      redirect: 'error',
+      signal,
+    });
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON error body */ }
+    if (!response.ok) {
+      return { data: null, error: data && typeof data === 'object' ? data : { status: response.status, message: 'Request failed' } };
+    }
+    return { data, error: null };
+  }
+  return {
+    async getForm(formId, signal) {
+      const result = await requestJson(`/rest/v1/forms?select=title,schema&id=eq.${encodeURIComponent(formId)}`, { signal });
+      if (result.error) return result;
+      return { data: Array.isArray(result.data) ? result.data[0] ?? null : result.data, error: null };
+    },
+    async exportResponses(formId, responseIds, signal) {
+      return requestJson('/rest/v1/rpc/export_form_responses', {
+        method: 'POST',
+        body: { p_form_id: formId, p_response_ids: responseIds },
+        signal,
+      });
+    },
+    async listOrganizations(offset, pageSize, signal) {
+      return requestJson('/rest/v1/education_organizations?select=id,alias,number&order=id.asc', {
+        headers: { Range: `${offset}-${offset + pageSize - 1}`, 'Range-Unit': 'items' },
+        signal,
+      });
+    },
+    async downloadStorageObject(path, signal) {
+      const response = await fetch(`${baseUrl}/storage/v1/object/authenticated/survey-files/${path}`, {
+        method: 'GET',
+        headers: baseHeaders,
+        cache: 'no-store',
+        redirect: 'error',
+        signal,
+      });
+      if (!response.ok || !response.body) {
+        await response.body?.cancel?.().catch(() => {});
+        return { data: null, error: new Error(`Storage ${response.status}`) };
+      }
+      const contentLength = Number(response.headers.get('content-length') || 0);
+      if (contentLength > MAX_STAGED_ATTACHMENT_BYTES) {
+        await response.body.cancel().catch(() => {});
+        return { data: null, error: new Error('Превышен допустимый размер вложения') };
+      }
+      return { data: response.body, error: null };
+    },
+  };
+}
+
+function createSizeLimitStream(limitBytes) {
+  let seen = 0;
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      seen += chunk.length;
+      if (seen > limitBytes) callback(new Error('Превышен допустимый размер вложения'));
+      else callback(null, chunk);
+    },
+  });
+}
 
 async function readSelection(req) {
   let body;
@@ -38,24 +117,24 @@ async function organizationLabels(client, signal) {
   const labels = new Map();
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
-    const result = await client.from('education_organizations').select('id,alias,number')
-      .order('id').range(offset, offset + pageSize - 1).abortSignal(signal);
-    requireValue(!result.error && result.data, 'Не удалось прочитать справочник организаций', 502);
+    const result = await client.listOrganizations(offset, pageSize, signal);
+    requireValue(!result.error && Array.isArray(result.data), 'Не удалось прочитать справочник организаций', 502);
     for (const { id, alias, number } of result.data) labels.set(id, [alias.trim(), number?.trim()].filter(Boolean).join(' '));
     if (result.data.length < pageSize) return labels;
   }
 }
 
 async function prepareArchive(client, formId, selected, signal) {
-  const form = await client.from('forms').select('title,schema').eq('id', formId).abortSignal(signal).maybeSingle();
+  const form = await client.getForm(formId, signal);
   requireValue(!form.error, 'Не удалось загрузить форму для выгрузки', 502);
   requireValue(form.data, 'Форма не найдена', 404);
   const questions = getArchiveQuestions(form.data.schema);
   if (!questions.fileQuestions.length) return null;
-  const { data: responses, error } = await client.rpc('export_form_responses', {
-    p_form_id: formId,
-    p_response_ids: selected ? [...selected.keys()] : null,
-  }).abortSignal(signal);
+  const { data: responses, error } = await client.exportResponses(
+    formId,
+    selected ? [...selected.keys()] : null,
+    signal,
+  );
   if (error?.code === '42501') throw new HttpError(403, 'Требуется действующая учётная запись');
   if (error?.code === '54000') throw new HttpError(413, 'Слишком много данных ответов. Выберите часть ответов для выгрузки.');
   requireValue(!error && Array.isArray(responses), 'Не удалось загрузить ответы для выгрузки', 502);
@@ -100,18 +179,25 @@ function inlineFile(value) {
 
 async function stageAttachment(value, { formId, origins, client }, stagedPath, streamSignal) {
   const path = objectPath(value, formId, origins);
-  if (!path) return pipeline(inlineFile(value), createWriteStream(stagedPath), { signal: streamSignal });
+  if (!path) {
+    return pipeline(inlineFile(value), createSizeLimitStream(MAX_STAGED_ATTACHMENT_BYTES), createWriteStream(stagedPath), { signal: streamSignal });
+  }
 
   const signal = AbortSignal.any([streamSignal, AbortSignal.timeout(STORAGE_READ_TIMEOUT_MS)]);
-  const { data, error } = await client.storage.from('survey-files').download(path, {}, { signal, cache: 'no-store' }).asStream();
+  const { data, error } = await client.downloadStorageObject(path, signal);
   if (error || !data) throw new Error('Файл недоступен в хранилище');
-  await pipeline(Readable.fromWeb(data), createWriteStream(stagedPath), { signal });
+  await pipeline(Readable.fromWeb(data), createSizeLimitStream(MAX_STAGED_ATTACHMENT_BYTES), createWriteStream(stagedPath), { signal });
 }
 
-async function streamArchive(res, job, clearedCookie) {
+async function streamArchive(res, job, clearedCookie, onDisconnect) {
   const controller = new AbortController();
   const { signal } = controller;
-  const disconnect = () => { if (!res.writableFinished) controller.abort(); };
+  const disconnect = () => {
+    if (!res.writableFinished) {
+      onDisconnect?.();
+      controller.abort();
+    }
+  };
   res.once('close', disconnect);
   if (res.destroyed) disconnect();
   let directory, delivery;
@@ -178,39 +264,53 @@ async function streamArchive(res, job, clearedCookie) {
 
 export function createResponseArchiveRoutes({ env, authenticateEmployee, send, secureCookies }) {
   const pending = new Map();
+  const inUseByUser = new Map();
   let inUse = 0;
+  const acquireSlot = userId => {
+    const userCount = inUseByUser.get(userId) ?? 0;
+    requireValue(userCount < MAX_EXPORTS_PER_USER, 'У вас уже выполняется выгрузка ZIP. Дождитесь её завершения.', 429);
+    requireValue(inUse < MAX_CONCURRENT_EXPORTS, 'На сервере уже идут выгрузки ZIP. Повторите позже.', 429);
+    inUse++;
+    inUseByUser.set(userId, userCount + 1);
+  };
+  const releaseUserSlot = userId => {
+    const next = (inUseByUser.get(userId) ?? 1) - 1;
+    if (next <= 0) inUseByUser.delete(userId);
+    else inUseByUser.set(userId, next);
+  };
+  const releaseSlot = userId => {
+    inUse = Math.max(0, inUse - 1);
+    releaseUserSlot(userId);
+  };
   const cookie = (ticket, value, ttl) => `${COOKIE_NAME}=${value}; Path=${DOWNLOAD_PATH}${ticket}; Max-Age=${ttl}; HttpOnly; SameSite=Strict${secureCookies ? '; Secure' : ''}`;
 
   return {
     async prepare(req, res, formId, token) {
       requireValue(uuid(formId), 'Неверный ID формы');
-      await authenticateEmployee(token);
+      const profile = await authenticateEmployee(token);
+      const userId = profile?.id ?? 'employee';
       requireValue(env.SUPABASE_ANON_KEY, 'Сервис выгрузки ZIP не настроен', 503);
       const selected = await readSelection(req);
       if (res.destroyed) return;
-      requireValue(inUse < MAX_CONCURRENT_EXPORTS, 'На сервере уже идут выгрузки ZIP. Повторите позже.', 429);
-      inUse++;
+      acquireSlot(userId);
       let ticket;
       const controller = new AbortController();
       const disconnect = () => controller.abort();
       res.once('close', disconnect);
       try {
-        const client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-          accessToken: async () => token,
-          global: { fetch: (url, options) => fetch(url, { ...options, redirect: 'error' }) },
-        });
+        const client = createSupabaseRestClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token);
         const archive = await prepareArchive(client, formId, selected, AbortSignal.any([controller.signal, AbortSignal.timeout(80_000)]));
         if (res.destroyed) return;
         if (!archive) return send(res, 200, { ticket: null });
         const origins = new Set([env.SUPABASE_URL, env.SUPABASE_PUBLIC_URL].filter(Boolean).map(url => new URL(url).origin));
         ticket = randomUUID();
         const secret = randomBytes(32).toString('base64url');
-        const timer = setTimeout(() => { pending.delete(ticket); inUse--; }, TICKET_TTL_SECONDS * 1000).unref();
-        pending.set(ticket, { ...archive, client, formId, origins, secret, token, timer });
+        const timer = setTimeout(() => { pending.delete(ticket); releaseSlot(userId); }, TICKET_TTL_SECONDS * 1000).unref();
+        pending.set(ticket, { ...archive, client, formId, origins, secret, token, userId, timer });
         send(res, 200, { ticket }, { 'Set-Cookie': cookie(ticket, secret, TICKET_TTL_SECONDS) });
       } finally {
         res.off('close', disconnect);
-        if (!ticket) inUse--;
+        if (!ticket) releaseSlot(userId);
       }
     },
 
@@ -220,11 +320,18 @@ export function createResponseArchiveRoutes({ env, authenticateEmployee, send, s
       requireValue(job && /^[A-Za-z0-9_-]{43}$/.test(value ?? '') && timingSafeEqual(Buffer.from(value), Buffer.from(job.secret)), 'Ссылка на ZIP истекла. Запустите выгрузку снова.', 404);
       pending.delete(ticket);
       clearTimeout(job.timer);
+      let userSlotReleased = false;
+      const releaseUserOnce = () => {
+        if (userSlotReleased) return;
+        userSlotReleased = true;
+        releaseUserSlot(job.userId);
+      };
       try {
         await authenticateEmployee(job.token);
-        await streamArchive(res, job, cookie(ticket, '', 0));
+        await streamArchive(res, job, cookie(ticket, '', 0), releaseUserOnce);
       } finally {
-        inUse--;
+        inUse = Math.max(0, inUse - 1);
+        releaseUserOnce();
       }
     },
   };

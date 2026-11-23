@@ -4,6 +4,7 @@ import type { TemplatesSection } from "../types";
 import { TemplateCard } from "./TemplateCard";
 
 type TemplatesGridProps = {
+  canAdministerAllForms?: boolean;
   currentUserId?: string;
   isTemplateActionPending: (templateId: string) => boolean;
   onDeleteRequest: (template: SurveyFormSummary) => void;
@@ -21,6 +22,7 @@ type TemplatesGridProps = {
 };
 
 export function TemplatesGrid({
+  canAdministerAllForms = false,
   currentUserId,
   isTemplateActionPending,
   onDeleteRequest,
@@ -46,6 +48,7 @@ export function TemplatesGrid({
         <TemplateCard
           key={template.id}
           actionMenuOpen={openedMenuTemplateId === template.id}
+          canAdministerAllForms={canAdministerAllForms}
           currentUserId={currentUserId}
           isPending={isTemplateActionPending(template.id)}
           isPinned={pinnedTemplateIds.includes(template.id)}

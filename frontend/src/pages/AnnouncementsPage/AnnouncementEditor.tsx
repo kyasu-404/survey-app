@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { safeAnnouncementUrl } from "../../entities/announcement/AnnouncementContent";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
@@ -34,6 +34,8 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
   row: AdminAnnouncement | null; onClose: () => void; onSaved: (status: AnnouncementStatus, message: string) => void; onSaveError: () => void;
 }) {
   const dialog = useModalSurface();
+  const publishDateInputRef = useRef<HTMLInputElement>(null);
+  const expiresInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [fields, setFields] = useState(() => originalFields(row));
   const [publication, setPublication] = useState<Publication>(row?.status === "scheduled" ? "schedule" : "keep");
@@ -58,6 +60,9 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       if ((inputUrl || actionLabel) && !actionUrl) {
         setLinkOpen(true);
         throw new Error("Для кнопки укажите ссылку с http://, https:// или путь приложения, начинающийся с /.");
+      }
+      if (publishDateInputRef.current?.validity.badInput || expiresInputRef.current?.validity.badInput) {
+        throw new Error("Проверьте дату и время.");
       }
       const mode = unchangedSchedule ? "keep" : publication;
       const publishAt = mode === "schedule" ? localDate(date, row?.publish_at ?? null) : null;
@@ -158,10 +163,10 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
               : "При сохранении изменений дата публикации и отметки об ознакомлении сохранятся."}</p>}
             <div className="activity-editor-grid">
               {publication === "schedule" && <label className="activity-field">Дата публикации
-                <input type="datetime-local" value={date} onChange={event => setDate(event.target.value)} />
+                <input ref={publishDateInputRef} type="datetime-local" value={date} onChange={event => setDate(event.target.value)} />
               </label>}
               {(status !== "archived" || expires) && <label className="activity-field">Окончание действия (необязательно)
-                <input type="datetime-local" value={expires} readOnly={status === "archived"} onChange={event => setExpires(event.target.value)} />
+                <input ref={expiresInputRef} type="datetime-local" value={expires} readOnly={status === "archived"} onChange={event => setExpires(event.target.value)} />
               </label>}
             </div>
             {(status !== "archived" || expires) && <small className="activity-muted">Время местное.</small>}

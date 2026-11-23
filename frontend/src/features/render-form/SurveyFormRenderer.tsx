@@ -81,6 +81,7 @@ type SurveyFormRendererProps = {
   responseBrowserId?: string;
   personalToken?: string;
   personalOrganization?: SelectableOrganization;
+  usePublicClient?: boolean;
 };
 
 type SavedResponseState = {
@@ -255,6 +256,7 @@ export function SurveyFormRenderer({
   responseBrowserId,
   personalToken,
   personalOrganization,
+  usePublicClient = false,
 }: SurveyFormRendererProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditingResponse, setIsEditingResponse] = useState(false);
@@ -266,10 +268,11 @@ export function SurveyFormRenderer({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const { showToast } = useToast();
-  const submitResponseMutation = useSubmitResponseMutation();
-  const updateResponseMutation = useUpdateResponseMutation();
+  const { mutateAsync: submitResponseAsync } = useSubmitResponseMutation();
+  const { mutateAsync: updateResponseAsync } = useUpdateResponseMutation();
   const submissionIdRef = useRef<string>(createSubmissionId());
   const browserIdRef = useRef<string>(responseBrowserId ?? getOrCreateResponseBrowserId());
+  const draftCompletedRef = useRef(false);
   const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
   const isInteractiveMode = resolvedRenderMode === "interactive";
   const usesOrganizationDirectory = useMemo(() => hasOrganizationQuestion(schema), [schema]);
@@ -329,6 +332,15 @@ export function SurveyFormRenderer({
   }, [allowAnonymousUploads, initialData, initialPageNo, isInteractiveMode, resolvedRenderMode, responseDraftStorageKey, schema, theme, personalOrganization, personalToken]);
 
   useEffect(() => {
+    draftCompletedRef.current = false;
+    return () => {
+      if (typeof model.dispose === "function") {
+        model.dispose();
+      }
+    };
+  }, [model]);
+
+  useEffect(() => {
     if (resolvedRenderMode !== "preview-interactive") return;
     const upload: Parameters<typeof model.onUploadFiles.add>[0] = (_sender, options) => {
       if (options.files.some(file => file.size > MAX_STORAGE_FILE_SIZE_BYTES)) {
@@ -380,11 +392,11 @@ export function SurveyFormRenderer({
     const controller = new AbortController();
     const request = formId === "__builder_preview__"
       ? getOrganizations(DEFAULT_FORM_ORGANIZATION_TYPES, controller.signal)
-      : getFormOrganizations(formId, controller.signal);
+      : getFormOrganizations(formId, controller.signal, usePublicClient);
 
     const savedData = isInteractiveMode ? savedResponse?.data : initialData;
     const savedOrganizationsRequest = savedData && formId !== "__builder_preview__"
-      ? getSavedFormOrganizations(formId, browserIdRef.current, controller.signal)
+      ? getSavedFormOrganizations(formId, browserIdRef.current, controller.signal, usePublicClient)
       : Promise.resolve([]);
 
     void Promise.all([request, savedOrganizationsRequest])
@@ -399,7 +411,7 @@ export function SurveyFormRenderer({
       });
 
     return () => controller.abort();
-  }, [formId, initialData, isInteractiveMode, model, savedResponse, showToast, usesOrganizationDirectory, personalOrganization]);
+  }, [formId, initialData, isInteractiveMode, model, savedResponse, showToast, usesOrganizationDirectory, personalOrganization, usePublicClient]);
 
   useEffect(() => {
     const handleOpenDropdownMenu = (_sender: Model, options: OpenDropdownMenuEvent) => {
@@ -424,13 +436,12 @@ export function SurveyFormRenderer({
 
     let draftTimer: ReturnType<typeof setTimeout> | undefined;
     let draftPending = false;
-    let draftCompleted = false;
     const cancelDraftSave = () => {
       clearTimeout(draftTimer);
       draftPending = false;
     };
     const flushDraft = () => {
-      if (!draftPending) return;
+      if (!draftPending || draftCompletedRef.current) return;
       cancelDraftSave();
       saveSurveyResponseDraft(responseDraftStorageKey, {
         data: model.data as Record<string, unknown>,
@@ -440,7 +451,7 @@ export function SurveyFormRenderer({
       });
     };
     const scheduleDraftSave = () => {
-      if (draftCompleted || ((existingResponse || savedResponse) && !isEditingResponse)) return;
+      if (draftCompletedRef.current || ((existingResponse || savedResponse) && !isEditingResponse)) return;
       draftPending = true;
       clearTimeout(draftTimer);
       draftTimer = setTimeout(flushDraft, 300);
@@ -534,12 +545,13 @@ export function SurveyFormRenderer({
         if (isEditingResponse && savedResponse) {
           const previousPaths = new Set(getStoragePathsFromResponseData(savedResponse.data));
           const nextPaths = new Set(getStoragePathsFromResponseData(payload.answers));
-          const updatedResponse = await updateResponseMutation.mutateAsync({
+          const updatedResponse = await updateResponseAsync({
             formId: payload.formId,
             responseId: savedResponse.responseId,
             data: payload.answers,
             browserId: browserIdRef.current,
             ...(personalToken ? { personalToken } : {}),
+            ...(usePublicClient ? { usePublicClient } : {}),
           });
           const removedPaths = [...previousPaths].filter((path) => !nextPaths.has(path));
 
@@ -556,21 +568,22 @@ export function SurveyFormRenderer({
             data: updatedResponse.data,
           });
           setIsEditingResponse(false);
-          draftCompleted = true;
+          draftCompletedRef.current = true;
           cancelDraftSave();
           clearSurveyResponseDraft(responseDraftStorageKey);
           showToast("Изменения ответа сохранены", "success");
           return;
         }
 
-        const result = await submitResponseMutation.mutateAsync({
+        const result = await submitResponseAsync({
           formId: payload.formId,
           data: payload.answers,
           submissionId: submissionIdRef.current,
           browserId: browserIdRef.current,
-            ...(personalToken ? { personalToken } : {}),
+          ...(personalToken ? { personalToken } : {}),
+          ...(usePublicClient ? { usePublicClient } : {}),
         });
-        draftCompleted = true;
+        draftCompletedRef.current = true;
         cancelDraftSave();
         clearSurveyResponseDraft(responseDraftStorageKey);
         setSavedResponse(result);
@@ -638,9 +651,10 @@ export function SurveyFormRenderer({
     personalToken,
     savedResponse,
     showToast,
-    submitResponseMutation,
-    updateResponseMutation,
+    submitResponseAsync,
+    updateResponseAsync,
     uploadedFiles,
+    usePublicClient,
   ]);
 
   const canEditSavedResponse = Boolean(savedResponse?.editable && allowResponseEditing);

@@ -41,8 +41,27 @@ const baseCorsHeaders = {
 };
 const defaultAllowedOrigins = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
 const defaultAllowedDevelopmentPorts = new Set(["3000", "4173", "5173", "8000"]);
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailPattern = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const blockedInternalSmtpHosts = new Set([
+  "localhost", "kong", "db", "postgres", "auth", "rest", "storage", "meta", "studio",
+  "functions", "office-service", "survey-office", "survey-mail-worker", "pooler",
+  "supavisor", "realtime", "imgproxy", "analytics", "vector",
+]);
+
+function isBlockedSmtpHost(host: string) {
+  const normalized = host.trim().toLowerCase().replace(/\.+$/, "");
+  if (!normalized || blockedInternalSmtpHosts.has(normalized)
+    || normalized.endsWith(".localhost") || normalized.endsWith(".localdomain")) {
+    return true;
+  }
+  const octets = normalized.split(".");
+  if (octets.length === 4 && octets.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
+    const [first, second] = octets.map(Number);
+    if (first === 127 || first === 0 || (first === 169 && second === 254)) return true;
+  }
+  return false;
+}
 
 function getAllowedOrigins() {
   const configured = Deno.env.get("MAIL_ADMIN_ALLOWED_ORIGINS")
@@ -122,7 +141,10 @@ function publicSettings(row: MailSettingsRow | null) {
 }
 
 function validateSettings(payload: Record<string, unknown>, hasStoredPassword: boolean, storedAllowInvalidCertificate = false) {
-  const enabled = payload.enabled !== false;
+  if (payload.enabled !== undefined && typeof payload.enabled !== "boolean") {
+    return { error: "Укажите корректное состояние SMTP-коннектора" };
+  }
+  const enabled = payload.enabled ?? true;
   const host = asTrimmedString(payload.host);
   const port = Number(payload.port);
   const sslMode = asTrimmedString(payload.sslMode);
@@ -134,15 +156,17 @@ function validateSettings(payload: Record<string, unknown>, hasStoredPassword: b
   const fromName = asTrimmedString(payload.fromName);
   const replyTo = asTrimmedString(payload.replyTo).toLowerCase();
 
-  if (!host || host.length > 253 || /[\s/:]/.test(host)) return { error: "Укажите SMTP-сервер без протокола и пробелов" };
+  if (!host || host.length > 253 || /[\s/:\x00-\x1f\x7f]/.test(host) || isBlockedSmtpHost(host)) {
+    return { error: "Укажите корректный SMTP-сервер без протокола, пробелов и локальных адресов" };
+  }
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: "Порт SMTP должен быть числом от 1 до 65535" };
   if (!new Set(["tls", "starttls", "none"]).has(sslMode)) return { error: "Выберите корректный режим шифрования" };
   if (typeof allowInvalidCertificate !== "boolean") return { error: "Укажите корректное значение проверки сертификата" };
-  if (!username || username.length > 320 || /[\r\n]/.test(username)) return { error: "Укажите имя пользователя SMTP" };
+  if (!username || username.length > 320 || /[\x00-\x1f\x7f]/.test(username)) return { error: "Укажите имя пользователя SMTP" };
   if (!password && !hasStoredPassword) return { error: "Укажите пароль SMTP" };
   if (password.length > 4096) return { error: "Пароль SMTP слишком длинный" };
   if (!emailPattern.test(fromEmail) || fromEmail.length > 320) return { error: "Укажите корректный email отправителя" };
-  if (!fromName || fromName.length > 200 || /[\r\n]/.test(fromName)) return { error: "Укажите имя отправителя" };
+  if (!fromName || fromName.length > 200 || /[\x00-\x1f\x7f]/.test(fromName)) return { error: "Укажите имя отправителя" };
   if (replyTo && (!emailPattern.test(replyTo) || replyTo.length > 320)) return { error: "Укажите корректный Reply-To" };
 
   return {
@@ -166,17 +190,18 @@ function toBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-async function encryptPassword(password: string) {
+async function encryptPassword(password: string, context: { host: string; port: number; username: string }) {
   const keyBytes = decodeEncryptionKey();
   if (!keyBytes) throw new Error("MAIL_SETTINGS_ENCRYPTION_KEY должен содержать Base64-ключ длиной 32 байта");
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const additionalData = new TextEncoder().encode(`smtp:${context.host.toLowerCase()}:${context.port}:${context.username}`);
   const encrypted = new Uint8Array(await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv, additionalData },
     key,
     new TextEncoder().encode(password),
   ));
-  return `v1:${toBase64(iv)}:${toBase64(encrypted)}`;
+  return `v2:${toBase64(iv)}:${toBase64(encrypted)}`;
 }
 
 function getAppBaseUrl() {
@@ -221,23 +246,24 @@ Deno.serve(async (req) => {
     return json(req, 400, { error: "Некорректное тело запроса" }, requestId);
   }
 
-  const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: userData, error: userError } = await authClient.auth.getUser(jwt);
-  if (userError || !userData.user) return json(req, 401, { error: "Сессия недействительна" }, requestId);
-
-  const { data: profileData, error: profileError } = await adminClient
-    .from("profiles")
-    .select("id, name, email, role, is_disabled")
-    .eq("id", userData.user.id)
-    .single();
-  const profile = profileData as RequestProfile | null;
-  if (profileError || !profile || profile.is_disabled) return json(req, 403, { error: "Доступ запрещён" }, requestId);
-
-  const action = asTrimmedString(payload.action);
-  console.info("mail-admin action started", { requestId, action, requesterId: profile.id });
-
+  let action = "";
   try {
+    const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: userData, error: userError } = await authClient.auth.getUser(jwt);
+    if (userError || !userData.user) return json(req, 401, { error: "Сессия недействительна" }, requestId);
+
+    const { data: profileData, error: profileError } = await adminClient
+      .from("profiles")
+      .select("id, name, email, role, is_disabled")
+      .eq("id", userData.user.id)
+      .single();
+    const profile = profileData as RequestProfile | null;
+    if (profileError || !profile || profile.is_disabled) return json(req, 403, { error: "Доступ запрещён" }, requestId);
+
+    action = asTrimmedString(payload.action);
+    console.info("mail-admin action started", { requestId, action, requesterId: profile.id });
+
     if (action === "get-settings") {
       if (profile.role !== "admin") return json(req, 403, { error: "Настройки доступны только администратору" }, requestId);
       const { data, error } = await adminClient.from("mail_settings").select("*").eq("id", 1).maybeSingle();
@@ -257,8 +283,19 @@ Deno.serve(async (req) => {
       const validation = validateSettings(payload, Boolean(existing?.password_encrypted), existing?.allow_invalid_certificate === true);
       if (validation.error || !validation.value) return json(req, 400, { error: validation.error ?? "Проверьте настройки" }, requestId);
       const settings = validation.value;
+      if (existing && !settings.password) {
+        const connectionChanged = existing.host.toLowerCase() !== settings.host.toLowerCase()
+          || existing.port !== settings.port
+          || existing.username !== settings.username
+          || existing.ssl_mode !== settings.sslMode;
+        if (connectionChanged) {
+          return json(req, 400, {
+            error: "При изменении сервера, порта, логина или режима шифрования введите пароль SMTP заново",
+          }, requestId);
+        }
+      }
       const passwordEncrypted = settings.password
-        ? await encryptPassword(settings.password)
+        ? await encryptPassword(settings.password, settings)
         : existing!.password_encrypted;
       const { data, error } = await adminClient.from("mail_settings").upsert({
         id: 1,
@@ -301,13 +338,18 @@ Deno.serve(async (req) => {
         total_count: 1,
       });
       if (batchError) throw batchError;
+      const recipientName = String(profile.name || recipientEmail)
+        .replace(/[\x00-\x1f\x7f]+/g, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim()
+        .slice(0, 300) || recipientEmail.slice(0, 300);
       try {
         await insertJobs(adminClient, [{
           batch_id: batchId,
           form_id: null,
           organization_id: null,
           recipient_email: recipientEmail,
-          recipient_name: profile.name || recipientEmail,
+          recipient_name: recipientName,
           subject: "Проверка SMTP — Формы",
           body_text: "SMTP-коннектор настроен. Это тестовое письмо из приложения «Формы».",
         }]);

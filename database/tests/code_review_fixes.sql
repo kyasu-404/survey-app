@@ -64,7 +64,7 @@ end $$;
 
 -- A claim survives COMMIT of the RPC; crashed/failed attempts become retryable.
 insert into public.forms(id,title,author_id,form_type,form_reason,schema,is_public)
-values ('b6000000-0000-4000-8000-000000000007','Upload review','a6000000-0000-4000-8000-000000000001','anketa','plan','{"pages":[]}',true);
+values ('b6000000-0000-4000-8000-000000000007','Upload review','a6000000-0000-4000-8000-000000000001','anketa','plan','{"pages":[{"elements":[{"type":"file","name":"f"}]}]}',true);
 do $$ declare path text; n integer; begin
   path := public.reserve_survey_upload('b6000000-0000-4000-8000-000000000007',gen_random_uuid(),repeat('a',64),1,'.txt');
   insert into storage.objects(bucket_id,name,metadata) values('survey-files',path,'{"size":1}');

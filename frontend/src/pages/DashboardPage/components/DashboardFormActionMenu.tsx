@@ -14,6 +14,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   SetStateAction,
 } from "react";
+import { canManageSurveyForm } from "../../../entities/survey/model/formAccess";
 import { getSurveyDisplayTitle, isTemplateForm } from "../../../entities/survey/model/surveyModel";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
 import { Icon } from "../../../shared/ui/Icon";
@@ -22,6 +23,7 @@ import type { OpenMenuState } from "../types";
 type DashboardFormActionMenuProps = {
   portal?: boolean;
   actionMenuOpen: boolean;
+  canAdministerAllForms?: boolean;
   currentUserId?: string;
   form: SurveyFormSummary;
   isFirstVisibleForm: boolean;
@@ -56,6 +58,7 @@ function FormAutomationsItem({ formId, userId, disabled, onClose }: { formId: st
 export function DashboardFormActionMenu({
   portal = false,
   actionMenuOpen,
+  canAdministerAllForms = false,
   currentUserId,
   form,
   isFirstVisibleForm,
@@ -70,9 +73,10 @@ export function DashboardFormActionMenu({
   const keyboard = useActionMenuKeyboard(actionMenuOpen, () => setOpenedMenu({ kind: "actions", formId: form.id }), () => setOpenedMenu(null));
   const title = getSurveyDisplayTitle(form);
   const isOwnForm = form.author_id === currentUserId;
+  const canManageForm = canManageSurveyForm(form, currentUserId ?? "", canAdministerAllForms);
   const isTemplate = isTemplateForm(form);
 
-  if (!isOwnForm && !isTemplate) {
+  if (!canManageForm && !isTemplate) {
     return (
       <button
         type="button"
@@ -127,7 +131,7 @@ export function DashboardFormActionMenu({
           aria-label={`${isTemplate ? "Меню действий шаблона" : "Меню действий формы"} ${title}`}
           onClick={stopCardEvent}
         >
-          {(isTemplate || isOwnForm) && (
+          {(isTemplate || canManageForm) && (
             <button
               type="button"
               role="menuitem"
@@ -145,7 +149,7 @@ export function DashboardFormActionMenu({
             </button>
           )}
 
-          {isOwnForm && !isTemplate && (
+          {canManageForm && !isTemplate && (
             <button
               type="button"
               role="menuitem"
@@ -181,7 +185,7 @@ export function DashboardFormActionMenu({
             </button>
           )}
 
-          {(isTemplate || isOwnForm) && (
+          {(isTemplate || canManageForm) && (
             <button
               type="button"
               role="menuitem"

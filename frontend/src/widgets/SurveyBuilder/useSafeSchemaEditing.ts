@@ -54,6 +54,44 @@ export function collectOriginalSchemaProtection(schema: SurveySchema) {
 }
 
 
+function containsProtectedElement(target: unknown, questionNames: Set<string>): boolean {
+  const stack: unknown[] = [target];
+  const seen = new Set<unknown>();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    seen.add(current);
+    const record = current as {
+      name?: unknown;
+      elements?: unknown;
+      questions?: unknown;
+      templateElements?: unknown;
+      getAllQuestions?: () => unknown[];
+    };
+    if (typeof record.name === "string" && questionNames.has(record.name)) {
+      return true;
+    }
+    if (typeof record.getAllQuestions === "function") {
+      try {
+        const questions = record.getAllQuestions();
+        if (Array.isArray(questions)) {
+          for (const question of questions) {
+            const name = question && typeof question === "object" ? (question as { name?: unknown }).name : undefined;
+            if (typeof name === "string" && questionNames.has(name)) return true;
+          }
+        }
+      } catch {
+        // Fall back to direct property traversal below.
+      }
+    }
+    for (const key of ["elements", "questions", "templateElements"] as const) {
+      const nested = record[key];
+      if (Array.isArray(nested)) stack.push(...nested);
+    }
+  }
+  return false;
+}
+
 export function useSafeSchemaEditing(creator: SurveyCreator | null, schema: SurveySchema | undefined, isSafeEditingMode: boolean) {
   useEffect(() => {
     if (!creator || !schema || !isSafeEditingMode) {
@@ -71,14 +109,20 @@ export function useSafeSchemaEditing(creator: SurveyCreator | null, schema: Surv
         element?: { name?: string };
         obj?: { name?: string };
       };
-      const elementName = options.element?.name ?? options.obj?.name;
-      if (!elementName || !protection.questionNames.has(elementName)) return;
+      const target = options.element ?? options.obj;
+      const elementName = target?.name;
+      if (elementName && protection.questionNames.has(elementName)) {
+        options.allowDelete = false;
+        options.allowChangeType = false;
+        options.allowChangeInputType = false;
+        options.allowDrag = true;
+        options.allowEdit = true;
+        return;
+      }
 
-      options.allowDelete = false;
-      options.allowChangeType = false;
-      options.allowChangeInputType = false;
-      options.allowDrag = true;
-      options.allowEdit = true;
+      if (target && containsProtectedElement(target, protection.questionNames)) {
+        options.allowDelete = false;
+      }
     };
     const handleCollectionOperations = (_sender: unknown, rawOptions: unknown) => {
       const options = rawOptions as {

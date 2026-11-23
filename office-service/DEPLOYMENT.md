@@ -65,3 +65,12 @@ API выборки двух ответов вернул ровно два XLSX. 
 Не удалять bucket, документы, добавленные столбцы и ключ шифрования.
 
 Рабочие ограничения и устройство интеграции описаны в [README.md](README.md).
+
+## Изоляция origin редактора и роль БД с минимальными правами
+
+1. **Роль PostgreSQL `office_service`**: после применения миграции `202611232200_full_code_review_fixes.sql` задайте пароль и разрешите вход роли (однократно на БД):
+   ```sql
+   ALTER ROLE office_service WITH LOGIN PASSWORD '<strong-random-password>';
+   ```
+   Затем задайте `OFFICE_PGUSER=office_service` и `OFFICE_PGPASSWORD=<strong-random-password>` в окружении `docker-compose.office.yml`. Роль имеет права только на таблицы `office_*`, `onlyoffice_settings` и чтение `forms`/`responses`/`profiles`/`education_organizations`, без доступа к `mail_settings` и `auth.*`.
+2. **Изолированный origin для ONLYOFFICE (`OFFICE_EMBED_ORIGIN`)**: чтобы iframe редактора и плагина ONLYOFFICE не разделяли origin и `localStorage` с основным приложением (`https://forms.imc-mosk.ru`), настройте отдельный поддомен (например, `https://office.imc-mosk.ru`) по примеру в конце `nginx.conf`, добавьте его в `frame-src` основного сайта и задайте `OFFICE_EMBED_ORIGIN=https://office.imc-mosk.ru` в окружении `survey-office`. Если переменная не задана, сохраняется прежний режим с единым origin.

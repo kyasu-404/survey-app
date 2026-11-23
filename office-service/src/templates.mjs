@@ -61,7 +61,8 @@ export function readTemplate(bytes,format,maxBytes=100*1024*1024){
   for(const name of Object.keys(files).filter(n=>/^word\/(document|header\d+|footer\d+|footnotes|endnotes)\.xml$/.test(n))){
    walk(part(name),node=>{if(key(node)!=='w:sdt')return;const pr=children(node['w:sdt'],'w:sdtPr')[0],tag=pr && attr(find(pr['w:sdtPr'],'w:tag'),'w:val'),source=tagSource(tag);if(!source)return;
     const content=children(node['w:sdt'],'w:sdtContent')[0];let nested=false;if(content)walk(content['w:sdtContent'],n=>{if(key(n)==='w:sdt')nested=true;});
-    bindings.push({...source,tag,part:name,node,content,error:source.error || (!content || nested ? 'Вложенные поля или некорректный элемент макета' : undefined)});
+    const wrapsTableStructure = Boolean(content && (children(content['w:sdtContent'], 'w:tc').length > 0 || children(content['w:sdtContent'], 'w:tr').length > 0));
+    bindings.push({...source,tag,part:name,node,content,error:source.error || (wrapsTableStructure ? 'Связанное поле охватывает ячейку или строку таблицы. Вставьте поле внутрь ячейки.' : !content || nested ? 'Вложенные поля или некорректный элемент макета' : undefined)});
    });
   }
  }else{
@@ -179,7 +180,8 @@ export function responseValues(form,response,organizations=[],context=responseVa
  for(const [id,value] of Object.entries({form_title:form.title,response_id:response.id,response_date:date(response.created_at),response_updated_at:date(response.updated_at || response.created_at)}))values.set('system:'+id,value);
  return values;
 }
-function wordRun(text,format){return {'w:r':[...(format?[structuredClone(format)]:[]),...String(text).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').split(/\r\n|\r|\n/).flatMap((line,i)=>[...(i?[{'w:br':[]}]:[]),{'w:t':[{'#text':line}],':@':{'@_xml:space':'preserve'}}])]};}
+const sanitizeXmlText=text=>String(text).toWellFormed().replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFE\uFFFF]/g,'');
+function wordRun(text,format){return {'w:r':[...(format?[structuredClone(format)]:[]),...sanitizeXmlText(text).split(/\r\n|\r|\n/).flatMap((line,i)=>[...(i?[{'w:br':[]}]:[]),{'w:t':[{'#text':line}],':@':{'@_xml:space':'preserve'}}])]};}
 
 function wrapSpreadsheetText(parts, files, sheet, cell, value, styleCache, readPart) {
  const stylePath = 'xl/styles.xml';
@@ -271,7 +273,7 @@ export function renderTemplate(template,values){
   for(const binding of template.bindings){let cell;walk(parts.get(binding.part),n=>{if(key(n)==='c'&&attr(n,'r')===binding.address)cell=n;});
    const value=values.get(binding.kind+':'+binding.id) ?? '';
    if(typeof value==='number'){cell[':@']['@_t']='n';cell.c=[{v:[{'#text':value}]}];}
-   else {requireValue(String(value).length<=32767,'Ответ превышает 32767 символов в ячейке XLSX');cell[':@']['@_t']='inlineStr';cell.c=[{is:[{t:[{'#text':String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'')}],':@':{'@_xml:space':'preserve'}}]}];}
+   else {const safeText=sanitizeXmlText(value);requireValue(safeText.length<=32767,'Ответ превышает 32767 символов в ячейке XLSX');cell[':@']['@_t']='inlineStr';cell.c=[{is:[{t:[{'#text':safeText}],':@':{'@_xml:space':'preserve'}}]}];}
    if(typeof value === 'string' && /[\r\n]/.test(value)) wrapSpreadsheetText(parts, files, parts.get(binding.part), cell, value, wrappedStyles, readPart);
   }
 
@@ -282,7 +284,8 @@ export function renderTemplate(template,values){
 export function generateArchive({bytes,format,form,responses,organizations=[],nameQuestionId,name,includeManifest=false}){
  requireValue(responses.length>0 && responses.length<=500,'Выберите от 1 до 500 ответов');
  const context=responseValueContext(form,organizations);
- const template=readTemplate(Buffer.from(bytes),format),checked=checkTemplate(template,form,context.sources);
+ const view=bytes instanceof Uint8Array ? Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength) : Buffer.from(bytes);
+ const template=readTemplate(view,format),checked=checkTemplate(template,form,context.sources);
  requireValue(checked.length>0,'В макете нет полей. Откройте редактор и вставьте вопросы.');
  const broken=checked.filter(b=>b.error);requireValue(!broken.length,broken.map(b=>(b.label || b.id || 'Поле')+': '+b.error).join('; ').slice(0,1500));
  if(nameQuestionId)requireValue(context.sources.some(q=>q.integrationId===nameQuestionId && !q.unsupported),'Вопрос для имени файла удалён');

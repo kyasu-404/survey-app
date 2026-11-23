@@ -1,5 +1,5 @@
 import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { getOrganizationDisplayName, getOrganizationTypeLabel } from "../../entities/organization/model";
 import type { OrganizationType } from "../../entities/organization/types";
 import type {
@@ -10,6 +10,7 @@ import type {
   ResponseReportValue,
 } from "../../entities/response/lib/responseReport";
 import { MailDeliveryPanel } from "../../features/mail-composer/MailDeliveryPanel";
+import { useLegacyModalDialog } from "../../shared/ui/useLegacyModalDialog";
 import { ReminderConfirmationModal } from "./ReminderConfirmationModal";
 
 const ANALYSIS_KIND_LABELS: Record<ResponseQuestionAnalysisKind, string> = {
@@ -86,15 +87,27 @@ export function ResponseReportModal({
   const [activeTab, setActiveTab] = useState<"statistics" | "coverage">("statistics");
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [isMailActivityOpen, setIsMailActivityOpen] = useState(false);
+  const titleId = useId();
+  const dialogRef = useLegacyModalDialog({
+    onClose,
+    disabled: isConfirmationOpen,
+  });
   const coverage = report.organizationCoverage;
 
   return (
-    <div className="modal-backdrop response-report-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="modal-card card response-report-modal" role="dialog" aria-modal="true" aria-label="Отчёт по ответам">
+    <div className="modal-backdrop response-report-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isConfirmationOpen && onClose()}>
+      <div
+        ref={dialogRef}
+        className="modal-card card response-report-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <div className="response-report-header">
           <div>
             <p>Аналитика формы</p>
-            <h2>Отчёт по ответам</h2>
+            <h2 id={titleId}>Отчёт по ответам</h2>
           </div>
           <button type="button" className="responses-export-button" onClick={onClose}>Закрыть</button>
         </div>

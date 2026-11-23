@@ -372,3 +372,44 @@ test("schema settings retain untouched deadlines and limits and reject malformed
   }
   assert.equal(writes.length, 2);
 });
+
+test("restore-upload returns 503 on database error during personal binding/check", async () => {
+  for (const failingRpc of ["bind_personal_survey_upload", "can_restore_personal_upload"]) {
+    const client = {
+      rpc: async (name) => {
+        if (name === "can_restore_survey_upload") return { data: failingRpc === "bind_personal_survey_upload" };
+        if (name === failingRpc) return { data: null, error: { message: "db timeout" } };
+        return { data: false };
+      },
+      storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: "https://api.test/s" } }) }) },
+    };
+    const response = await handlerFor("form-admin", {}, client)(null, "POST", {
+      action: "restore-upload", formId, browserId, path, personalToken: browserId,
+    });
+    assert.equal(response.status, 503, failingRpc);
+  }
+});
+
+test("user-admin routes updateRole and delete through atomic SQL RPCs and revokes sessions on password reset", async () => {
+  const calls = [];
+  const client = {
+    auth: {
+      getUser: async () => ({ data: { user: { id: administratorId } } }),
+      admin: {
+        async deleteUser(userId) { calls.push({ action: "deleteUser", userId }); return {}; },
+        async updateUserById(userId, attributes) { calls.push({ action: "updateUserById", userId, attributes }); return {}; },
+        async signOut(userId, scope) { calls.push({ action: "signOut", userId, scope }); return {}; },
+      },
+    },
+    from: () => ({ select() { return this; }, eq() { return this; }, single: async () => ({ data: { role: "admin", is_disabled: false } }) }),
+    rpc: async (name, args) => { calls.push({ action: "rpc", name, args }); return { data: true }; },
+  };
+  const send = payload => handlerFor("user-admin", {}, client)(null, "POST", payload, { Authorization: "Bearer test" });
+
+  assert.equal((await send({ action: "updateRole", userId: employeeId, role: "admin" })).status, 200);
+  assert.equal((await send({ action: "delete", userId: employeeId })).status, 200);
+  assert.equal((await send({ action: "updatePassword", userId: employeeId, password: "123456789012" })).status, 200);
+  assert.deepEqual(calls.map(c => c.action === "rpc" ? c.name : c.action), [
+    "set_employee_role", "assert_can_delete_employee", "deleteUser", "updateUserById", "signOut",
+  ]);
+});

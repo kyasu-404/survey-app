@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
+import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 
 type UserRole = "admin" | "user";
 type ListedUser = {
@@ -144,7 +144,19 @@ function isValidPassword(value: unknown): value is string {
 
 Deno.serve(async (req) => {
   const requestLogContext = createRequestLogContext(req);
+  try {
+    return await handleRequest(req, requestLogContext);
+  } catch (error) {
+    console.error("user-admin action failed", {
+      ...requestLogContext,
+      status: 500,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return errorResponse(req, 500, "Internal server error", requestLogContext);
+  }
+});
 
+async function handleRequest(req: Request, requestLogContext: RequestLogContext) {
   if (req.method === "OPTIONS") {
     if (!isOriginAllowed(req.headers.get("Origin"))) {
       return new Response("Origin not allowed", { status: 403, headers: buildCorsHeaders(req) });
@@ -257,14 +269,13 @@ Deno.serve(async (req) => {
     }
 
     case "create": {
-      if (typeof payload.name !== "string" || !payload.name.trim()
-        || typeof payload.email !== "string" || !payload.email.trim()
+      const name = typeof payload.name === "string" ? payload.name.trim() : "";
+      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+      if (!name || name.length > 200 || /[\x00-\x1f\x7f]/.test(name)
+        || !email || email.length > 320 || /[\x00-\x1f\x7f\s]/.test(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
         || !isValidPassword(payload.password) || !isUserRole(payload.role)) {
         return errorResponse(req, 400, "Invalid create payload", actionLogContext);
       }
-
-      const name = payload.name.trim();
-      const email = payload.email.trim();
 
       const { data, error } = await adminClient.auth.admin.createUser({
         email,
@@ -332,6 +343,18 @@ Deno.serve(async (req) => {
         return errorResponse(req, 400, "You cannot delete yourself", actionLogContext);
       }
 
+      const { data: canDelete, error: guardError } = await adminClient.rpc("assert_can_delete_employee", {
+        p_user_id: targetUserId,
+        p_actor_id: requester.id,
+      });
+      if (guardError) {
+        const status = guardError.code === "42501" ? 403 : guardError.code === "P0002" ? 404 : 400;
+        return errorResponse(req, status, guardError.message, actionLogContext);
+      }
+      if (canDelete !== true) {
+        return errorResponse(req, 503, "Invalid delete guard result", actionLogContext);
+      }
+
       const { error } = await adminClient.auth.admin.deleteUser(targetUserId);
       if (error) {
         return errorResponse(req, 400, error.message, actionLogContext);
@@ -356,6 +379,16 @@ Deno.serve(async (req) => {
 
       if (error) {
         return errorResponse(req, 400, error.message, actionLogContext);
+      }
+
+      if (typeof adminClient.auth.admin.signOut === "function") {
+        const { error: signOutError } = await adminClient.auth.admin.signOut(targetUserId, "global");
+        if (signOutError) {
+          console.warn("user-admin global signOut after password reset failed", {
+            ...actionLogContext,
+            error: signOutError.message,
+          });
+        }
       }
 
       console.info("user-admin action completed", actionLogContext);
@@ -400,19 +433,19 @@ Deno.serve(async (req) => {
         return errorResponse(req, 400, "You cannot change your own role", actionLogContext);
       }
 
-      const { data: updatedProfile, error } = await adminClient
-        .from("profiles")
-        .update({ role: payload.role })
-        .eq("id", targetUserId)
-        .select("id")
-        .maybeSingle();
+      const { data: changed, error } = await adminClient.rpc("set_employee_role", {
+        p_user_id: targetUserId,
+        p_role: payload.role,
+        p_actor_id: requester.id,
+      });
 
       if (error) {
-        return errorResponse(req, 400, error.message, actionLogContext);
+        const status = error.code === "42501" ? 403 : error.code === "P0002" ? 404 : 400;
+        return errorResponse(req, status, error.message, actionLogContext);
       }
 
-      if (!updatedProfile) {
-        return errorResponse(req, 404, "User profile not found", actionLogContext);
+      if (changed !== true) {
+        return errorResponse(req, 503, "Invalid role update result", actionLogContext);
       }
 
       console.info("user-admin action completed", {
@@ -426,4 +459,4 @@ Deno.serve(async (req) => {
     default:
       return errorResponse(req, 400, "Unsupported action", actionLogContext);
   }
-});
+}

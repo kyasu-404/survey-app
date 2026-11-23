@@ -151,6 +151,28 @@ class BackupCatalogTests(unittest.TestCase):
                 with self.assertRaises(BlockingIOError):
                     with backup.backup_lock(): pass
 
+    def test_validate_rejects_symlinks_and_path_traversal_and_ignores_blank_checksum_lines(self):
+        snap = self.full('20260922T000000Z')
+        manifest_path = snap / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['sha256']['../escape.txt'] = '0' * 64
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(RuntimeError, 'Invalid manifest path'):
+            backup.validate(snap)
+
+        dep = self.deployment('20260922T010000Z')
+        digest_hex = backup.digest(dep / 'magi-before.tar.gz')
+        (dep / 'SHA256SUMS').write_text(f'\n# comment\n{digest_hex}  magi-before.tar.gz\n\n')
+        backup.validate_deployment(dep)
+
+        for idx in range(1, 5):
+            p = self.base / f'2026-09-2{idx}' / f'.partial-0{idx}-00-00-full'
+            p.mkdir(parents=True)
+            os.utime(p, (1000 + idx, 1000 + idx))
+        backup.prune_partials(keep=2)
+        remaining = sorted(p.name for p in self.base.glob('*/.partial-*'))
+        self.assertEqual(remaining, ['.partial-03-00-00-full', '.partial-04-00-00-full'])
+
 
 if __name__ == '__main__':
     unittest.main()

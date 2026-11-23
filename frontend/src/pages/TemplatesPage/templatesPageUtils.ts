@@ -21,7 +21,12 @@ export function readPinnedTemplateIds(storageKey: string) {
 }
 
 export function writePinnedTemplateIds(storageKey: string, templateIds: string[]) {
-  window.localStorage.setItem(storageKey, JSON.stringify(templateIds));
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(templateIds));
+  } catch {
+    // Keep in-memory pin state working when localStorage is unavailable or full.
+  }
 }
 
 export function sortTemplatesByPins(templates: SurveyFormSummary[], pinnedTemplateIds: string[]) {

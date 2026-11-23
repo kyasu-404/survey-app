@@ -21,14 +21,11 @@ export function usePinnedTemplates(section: TemplatesSection, userId: string | n
   const sortedTemplates = useMemo(() => sortTemplatesByPins(templates, pinnedTemplateIds), [pinnedTemplateIds, templates]);
 
   const handleTogglePin = (templateId: string) => {
-    setPinnedTemplateIds((currentTemplateIds) => {
-      const nextTemplateIds = currentTemplateIds.includes(templateId)
-        ? currentTemplateIds.filter((currentTemplateId) => currentTemplateId !== templateId)
-        : [templateId, ...currentTemplateIds];
-
-      writePinnedTemplateIds(pinnedTemplateIdsStorageKey, nextTemplateIds);
-      return nextTemplateIds;
-    });
+    const nextTemplateIds = pinnedTemplateIds.includes(templateId)
+      ? pinnedTemplateIds.filter((currentTemplateId) => currentTemplateId !== templateId)
+      : [templateId, ...pinnedTemplateIds];
+    setPinnedTemplateIds(nextTemplateIds);
+    writePinnedTemplateIds(pinnedTemplateIdsStorageKey, nextTemplateIds);
   };
 
   return {

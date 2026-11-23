@@ -108,3 +108,28 @@ test("scheduled cleanup records a failed run without deleting the next bucket", 
     },
   );
 });
+
+test("scheduled cleanup batches Storage removals to 100 items and includes orphan app-favicons", async () => {
+  const manyFiles = Array.from({ length: 250 }, (_, index) => ({ name: `public/form/${index}.txt` }));
+  const removeCalls = [];
+  const responses = new Map([
+    ["begin_storage_cleanup_run", [{ id: "run-3" }]],
+    ["list_orphan_survey_files", manyFiles],
+    ["confirm_orphan_survey_files", manyFiles],
+    ["list_orphan_app_favicons", [{ name: "favicon-old.png" }]],
+    ["confirm_orphan_app_favicons", [{ name: "favicon-old.png" }]],
+    ["finish_storage_cleanup_run", [{ id: "run-3", status: "succeeded" }]],
+  ]);
+
+  const result = await runScheduledStorageCleanup({
+    rpc: async (name) => responses.get(name) ?? [],
+    removeObjects: async (bucket, names) => removeCalls.push({ bucket, count: names.length, names }),
+    workerId: "worker:3",
+  });
+
+  assert.equal(result.removedFiles, 250);
+  assert.equal(result.removedAssets, 1);
+  const fileBatches = removeCalls.filter((call) => call.bucket === "survey-files");
+  assert.deepEqual(fileBatches.map((call) => call.count), [100, 100, 50]);
+  assert.deepEqual(removeCalls.filter((call) => call.bucket === "app-favicons").map((call) => call.names), [["favicon-old.png"]]);
+});

@@ -21,7 +21,7 @@ export function createSmtpTransportManager({ encryptionKey, concurrency, createT
       ]);
       if (nextKey !== connectionKey) {
         close();
-        const password = decryptPassword(settings.password_encrypted, encryptionKey);
+        const password = decryptPassword(settings.password_encrypted, encryptionKey, settings);
         transporter = createTransport({
           ...createTransportOptions(settings, password),
           pool: true,

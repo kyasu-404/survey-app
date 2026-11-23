@@ -19,9 +19,10 @@ export function parseBoundedInteger(value, fallback, min, max) {
     : fallback;
 }
 
-export function decryptPassword(serialized, base64Key) {
+export function decryptPassword(serialized, base64Key, context = null) {
   const parts = String(serialized ?? "").split(":");
-  if (parts.length !== 3 || parts[0] !== "v1") {
+  const version = parts[0];
+  if (parts.length !== 3 || (version !== "v1" && version !== "v2")) {
     throw new Error("Неподдерживаемый формат SMTP-пароля");
   }
 
@@ -34,7 +35,13 @@ export function decryptPassword(serialized, base64Key) {
 
   const authTag = encryptedWithTag.subarray(encryptedWithTag.length - 16);
   const encrypted = encryptedWithTag.subarray(0, encryptedWithTag.length - 16);
-  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv, { authTagLength: 16 });
+  if (version === "v2") {
+    if (!context || typeof context.host !== "string" || !Number.isInteger(Number(context.port)) || typeof context.username !== "string") {
+      throw new Error("Отсутствует контекст SMTP для расшифровки пароля");
+    }
+    decipher.setAAD(Buffer.from(`smtp:${context.host.toLowerCase()}:${context.port}:${context.username}`, "utf8"));
+  }
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }

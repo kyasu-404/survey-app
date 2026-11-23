@@ -1,6 +1,6 @@
 import {SectionTabs} from '../../shared/ui/SectionTabs';
 import { OnlyofficeSettingsSection } from "./OnlyofficeSettingsSection";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
@@ -49,6 +49,7 @@ export default function SettingsPage() {
   const settingsQuery = useQuery({
     queryKey: ["smtp-settings"],
     queryFn: getSmtpSettings,
+    enabled: tab === "smtp",
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -57,6 +58,7 @@ export default function SettingsPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const didInitRecipientRef = useRef(Boolean(profile?.email));
   const [testRecipient, setTestRecipient] = useState(profile?.email ?? "");
   const [testBatchId, setTestBatchId] = useState<string | null>(null);
   const [isQueueingTest, setIsQueueingTest] = useState(false);
@@ -66,8 +68,9 @@ export default function SettingsPage() {
   const cleanupQuery = useQuery({
     queryKey: ["storage-cleanup-overview"],
     queryFn: getStorageCleanupOverview,
+    enabled: tab === "cleanup",
     staleTime: 30_000,
-    refetchInterval: (query) => query.state.data?.lastRun?.status === "running" ? 3000 : 60_000,
+    refetchInterval: (query) => (tab === "cleanup" ? (query.state.data?.lastRun?.status === "running" ? 3000 : 60_000) : false),
     refetchOnWindowFocus: false,
   });
 
@@ -78,8 +81,11 @@ export default function SettingsPage() {
   }, [isDirty, settingsQuery.data]);
 
   useEffect(() => {
-    if (!testRecipient && profile?.email) setTestRecipient(profile.email);
-  }, [profile?.email, testRecipient]);
+    if (!didInitRecipientRef.current && profile?.email) {
+      didInitRecipientRef.current = true;
+      setTestRecipient(profile.email);
+    }
+  }, [profile?.email]);
 
   const testActivityQuery = useQuery({
     queryKey: ["mail-batch", testBatchId],
@@ -458,7 +464,7 @@ export default function SettingsPage() {
               </div>
 
               {isCleanupConfirmationOpen && (
-                <div className="settings-cleanup-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="cleanup-confirmation-title">
+                <div className="settings-cleanup-confirmation" role="alertdialog" aria-labelledby="cleanup-confirmation-title">
                   <div>
                     <strong id="cleanup-confirmation-title">Запустить очистку файлов?</strong>
                     <p>Будут удалены только неподтверждённые объекты старше {retentionDays} дней.</p>

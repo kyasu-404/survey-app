@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Online PostgreSQL snapshot + versioned Storage backup; never stop production."""
-import argparse, datetime, fcntl, gzip, hashlib, json, os, pathlib, re, shutil, subprocess, tarfile, time
+import argparse, datetime, fcntl, gzip, hashlib, json, os, pathlib, re, shutil, signal, subprocess, tarfile, time
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo
 BASE = pathlib.Path('/mnt/data/forms_backup')
@@ -8,18 +8,28 @@ ROOT = pathlib.Path('/opt/survey-app')
 DB = 'supabase-db'
 USER = 'supabase_admin'
 RETENTION_COUNT = 5
+PARTIAL_RETENTION_COUNT = 2
 BACKUP_TIMEZONE = ZoneInfo('Europe/Moscow')
 STAMP_FORMAT = '%Y%m%dT%H%M%SZ'
 LEGACY_NAME = re.compile(r'(?:(deploy(?:-[a-z0-9-]+)?)-)?(\d{8}T\d{6}Z)')
 DATED_NAME = re.compile(r'(\d{2}-\d{2}-\d{2})-(full|deploy(?:-[a-z0-9-]+)?)')
 
 @contextmanager
-def backup_lock(shared=False):
+def backup_lock(shared=False, wait_seconds=0):
     if not os.path.ismount('/mnt/data'): raise RuntimeError('/mnt/data must be mounted; refusing to use the system disk')
     BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(BASE, 0o700)
+    mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+    deadline = time.monotonic() + max(0.0, float(wait_seconds))
     with (BASE / '.lock').open('a') as lock:
-        fcntl.flock(lock, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+        while True:
+            try:
+                fcntl.flock(lock, mode | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.5)
         yield
 
 def write_backup_readme():
@@ -82,11 +92,31 @@ def validate_deployment(path):
             raise RuntimeError('Deployment checksum mismatch: ' + str(path))
     checksums = path / 'SHA256SUMS'
     if checksums.is_file():
-        for line in checksums.read_text().splitlines():
-            expected, name = line.split(maxsplit=1)
+        if checksums.is_symlink(): raise RuntimeError('SHA256SUMS must not be a symlink')
+        for raw_line in checksums.read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith('#'): continue
+            parts = line.split(maxsplit=1)
+            if len(parts) != 2: raise RuntimeError('Malformed SHA256SUMS line')
+            expected, name = parts
             name = name.lstrip('*')
-            if pathlib.Path(name).name != name or digest(path / name) != expected:
+            target = path / name
+            if pathlib.Path(name).name != name or target.is_symlink() or not target.is_file() or digest(target) != expected:
                 raise RuntimeError('Deployment checksum mismatch: ' + name)
+
+def prune_partials(keep=PARTIAL_RETENTION_COUNT):
+    partials = []
+    for parent in BASE.iterdir():
+        if not parent.is_dir() or parent.is_symlink() or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', parent.name):
+            continue
+        for entry in parent.iterdir():
+            if entry.is_dir() and not entry.is_symlink() and entry.name.startswith('.partial-'):
+                partials.append((entry.stat().st_mtime, entry))
+    partials.sort(key=lambda item: (item[0], str(item[1])))
+    for _, stale in partials[:-keep] if keep > 0 else partials:
+        shutil.rmtree(stale)
+        print(json.dumps({'removed': str(stale), 'kind': 'partial'}))
+        if stale.parent != BASE and not any(stale.parent.iterdir()): stale.parent.rmdir()
 
 def prune_backups(kind):
     entries = backup_catalog(kind)
@@ -130,20 +160,32 @@ def digest(path):
     with path.open('rb') as f:
         for block in iter(lambda: f.read(1024 * 1024), b''): h.update(block)
     return h.hexdigest()
-def validate(path):
-    manifest = json.loads((path / 'manifest.json').read_text())
+def validate(path, verify_digests=True):
+    root_resolved = path.resolve()
+    manifest_file = path / 'manifest.json'
+    if manifest_file.is_symlink() or not manifest_file.is_file():
+        raise RuntimeError('Missing backup manifest: ' + str(path))
+    manifest = json.loads(manifest_file.read_text())
     for name, expected in manifest['sha256'].items():
+        if name.startswith('/') or '..' in pathlib.PurePosixPath(name).parts:
+            raise RuntimeError('Invalid manifest path: ' + name)
         file = path / name
-        if not file.is_file() or digest(file) != expected: raise RuntimeError('Backup checksum mismatch: ' + name)
+        if file.is_symlink() or not file.is_file() or not file.resolve().is_relative_to(root_resolved):
+            raise RuntimeError('Invalid backup file: ' + name)
+        if verify_digests and digest(file) != expected:
+            raise RuntimeError('Backup checksum mismatch: ' + name)
     for obj in manifest['objects']:
-        file = path / 'storage/stub/stub' / obj['bucket_id'] / obj['name'] / obj['version']
-        if not file.is_file() or (obj['size'] is not None and file.stat().st_size != obj['size']):
+        parts = (obj['bucket_id'], obj['name'], obj['version'])
+        if any('..' in pathlib.PurePosixPath(v).parts or v.startswith('/') for v in parts):
+            raise RuntimeError('Invalid storage object path')
+        file = path / 'storage/stub/stub' / parts[0] / parts[1] / parts[2]
+        if file.is_symlink() or not file.is_file() or not file.resolve().is_relative_to(root_resolved) or (obj['size'] is not None and file.stat().st_size != obj['size']):
             raise RuntimeError('Storage snapshot is incomplete')
     print(json.dumps({'backup': path.name, 'verifiedFiles': len(manifest['sha256']), 'storageObjects': len(manifest['objects'])}))
     return manifest
 
-def backup():
-    with backup_lock():
+def backup(lock_timeout=0):
+    with backup_lock(wait_seconds=lock_timeout):
         write_backup_readme()
         created = datetime.datetime.now(datetime.timezone.utc)
         stamp = created.strftime(STAMP_FORMAT)
@@ -204,11 +246,15 @@ def backup():
             manifest = {'createdAt': stamp, 'databaseImage': image, 'sharedPreloadLibraries': preload, 'objects': objects,
                         'sha256': {str(f.relative_to(work)): digest(f) for f in sorted(work.rglob('*')) if f.is_file()}}
             (work / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
-            validate(work)
+            validate(work, verify_digests=False)
             work.rename(final)
             # Only verified, completed snapshots participate in retention.
             prune_backups('full')
-            prune_backups('deploy')
+            try:
+                prune_backups('deploy')
+            except Exception as exc:
+                print(json.dumps({'warning': 'deploy prune skipped', 'error': str(exc)}))
+            prune_partials()
             print(json.dumps({'status':'complete','path':str(final)}))
         finally:
             if holder is not None:
@@ -241,37 +287,42 @@ def restore_check(path):
             run(['docker','exec','-i',name,'pg_restore','-U',USER,'-d','internal_backup_check','--exit-on-error','--no-owner','--no-privileges'],stdin=data,stdout=subprocess.DEVNULL)
         result=subprocess.check_output(['docker','exec',name,'psql','-U',USER,'-d','backup_check','-At','-c','select count(*) from storage.objects'],text=True).strip()
         if int(result) != len(manifest['objects']): raise RuntimeError('Restored object count differs')
-        (path/'restore-check.json').write_text(json.dumps({'verifiedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'storageObjects':int(result),'databases':['postgres','_supabase'],'database':'isolated container, no published ports'}))
+        report_tmp = path / '.restore-check.json.tmp'
+        report_tmp.write_text(json.dumps({'verifiedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'storageObjects':int(result),'databases':['postgres','_supabase'],'database':'isolated container, no published ports'}))
+        os.chmod(report_tmp, 0o600)
+        report_tmp.replace(path / 'restore-check.json')
         print(json.dumps({'restore':'passed','backup':path.name,'storageObjects':int(result)}))
     finally:
         subprocess.run(['docker','rm','-fv',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 if __name__ == '__main__':
     os.umask(0o077)
+    signal.signal(signal.SIGTERM, lambda signum, frame: (_ for _ in ()).throw(SystemExit(128 + signum)))
     parser=argparse.ArgumentParser()
     parser.add_argument('--verify',type=pathlib.Path)
     parser.add_argument('--restore-check',type=pathlib.Path)
     parser.add_argument('--restore-latest',action='store_true')
     parser.add_argument('--organize',action='store_true',help='Verify, move legacy backups to dated folders, and retain five of each kind')
     parser.add_argument('--deployment-dir',metavar='LABEL',help='Create a dated directory for a deployment; run --organize after copying archives')
+    parser.add_argument('--lock-timeout',type=float,default=0,help='Seconds to wait for backup lock before failing')
     args=parser.parse_args()
     if args.verify:
-        with backup_lock(shared=True): validate(args.verify)
+        with backup_lock(shared=True, wait_seconds=args.lock_timeout): validate(args.verify)
     elif args.restore_check:
-        with backup_lock(shared=True): restore_check(args.restore_check)
+        with backup_lock(shared=True, wait_seconds=args.lock_timeout): restore_check(args.restore_check)
     elif args.restore_latest:
-        with backup_lock(shared=True):
+        with backup_lock(shared=True, wait_seconds=args.lock_timeout):
             snapshots=backup_catalog('full')
             if not snapshots: raise RuntimeError('No completed backup to restore')
             restore_check(snapshots[-1][1])
     elif args.organize:
-        with backup_lock(): organize_backups()
+        with backup_lock(wait_seconds=args.lock_timeout): organize_backups()
     elif args.deployment_dir:
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', args.deployment_dir): parser.error('Deployment label must contain lowercase letters, digits and hyphens')
-        with backup_lock():
+        with backup_lock(wait_seconds=args.lock_timeout):
             write_backup_readme()
             path=backup_location(datetime.datetime.now(datetime.timezone.utc), 'deploy-' + args.deployment_dir)
             path.parent.mkdir(mode=0o700, exist_ok=True)
             path.mkdir(mode=0o700)
             print(path)
-    else: backup()
+    else: backup(lock_timeout=args.lock_timeout)

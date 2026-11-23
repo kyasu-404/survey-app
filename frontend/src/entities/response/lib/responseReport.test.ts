@@ -228,4 +228,31 @@ describe("createResponseReport", () => {
       metrics: expect.arrayContaining([{ label: "Прикреплено файлов", value: "3" }]),
     });
   });
+
+  it("sorts ranking positions numerically beyond 9 and handles large numeric series without stack overflow", () => {
+    const choices = Array.from({ length: 12 }, (_, index) => ({
+      value: `opt-${index + 1}`,
+      text: `Вариант ${index + 1}`,
+    }));
+    const rankingValues = choices.map((choice) => choice.value);
+    const secondPosition = [rankingValues[1], rankingValues[0], ...rankingValues.slice(2)];
+    const report = createResponseReport(
+      [
+        { id: "r-1", form_id: "f-1", created_at: "2026-08-03T12:00:00.000Z", data: { rank: rankingValues, num: 1 } },
+        { id: "r-2", form_id: "f-1", created_at: "2026-08-03T12:01:00.000Z", data: { rank: secondPosition, num: 50 } },
+        { id: "r-3", form_id: "f-1", created_at: "2026-08-03T12:02:00.000Z", data: { rank: [...rankingValues].reverse(), num: 100 } },
+      ],
+      {
+        pages: [{
+          elements: [
+            { type: "ranking", name: "rank", title: "Ранжирование", choices },
+            { type: "number", name: "num", title: "Число" },
+          ],
+        }],
+      },
+    );
+
+    const opt1Group = report.questionReports.find((q) => q.name === "rank")?.groups.find((g) => g.label === "Вариант 1");
+    expect(opt1Group?.values.map((v) => v.label)).toEqual(["1", "2", "12"]);
+  });
 });

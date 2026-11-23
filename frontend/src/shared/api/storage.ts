@@ -63,10 +63,11 @@ function buildUserStoragePath(userId: string, formId: string, fileName: string) 
 async function reservePublicStoragePath(formId: string, file: File, options: UploadFileToStorageOptions) {
   const { data, error } = await runRequest(
     "storage.reserveUpload",
-    (requestSignal) => publicSupabaseClient.functions.invoke("form-admin", {
+    (requestSignal, traceContext) => publicSupabaseClient.functions.invoke("form-admin", {
       body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name),
         ...(options.questionName ? { questionName: options.questionName, fileName: file.name, mimeType: file.type } : {}),
         ...(options.personalToken ? { personalToken: options.personalToken } : {}) },
+      headers: traceContext.headers,
       signal: requestSignal,
     }),
     { signal: options.signal },
@@ -117,8 +118,9 @@ function looksLikeStoragePath(value: string) {
     const parts = value.split("/");
     return (
       parts.length === 3
-      && parts.every((part) => part.length > 0)
+      && parts.every((part) => part.length > 0 && part !== "." && part !== "..")
       && parts[2].length <= 512
+      && !/[\\\x00-\x1f\x7f]/.test(parts[2])
       && (parts[0] === PUBLIC_STORAGE_PREFIX || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[0]))
       && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[1])
     );
@@ -234,8 +236,10 @@ export function getStoragePathsFromResponseData(data: Record<string, unknown>) {
 
 async function createSignedUrlForStoragePath(path: string, options: StorageAuthOptions) {
   if (options.allowAnonymous && options.restoreDraft && path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
-    const { data, error } = await runRequest("storage.restoreUpload", signal => publicSupabaseClient.functions.invoke("form-admin", {
-      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: options.browserId ?? getOrCreateResponseBrowserId(), ...(options.personalToken ? { personalToken: options.personalToken } : {}) }, signal,
+    const { data, error } = await runRequest("storage.restoreUpload", (signal, traceContext) => publicSupabaseClient.functions.invoke("form-admin", {
+      body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: options.browserId ?? getOrCreateResponseBrowserId(), ...(options.personalToken ? { personalToken: options.personalToken } : {}) },
+      headers: traceContext.headers,
+      signal,
     }), { signal: options.signal });
     if (error || typeof data?.signedUrl !== "string") {
       const response = error && "context" in error ? error.context : undefined;
@@ -359,6 +363,7 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
         ...(options.questionName ? { metadata: { questionName: options.questionName, fileName: file.name, mimeType: file.type } } : {}),
       }),
     {
+      signal: options.signal,
       timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,
       context: {
         bucket: SUPABASE_STORAGE_BUCKET,
@@ -388,8 +393,10 @@ export async function removeFileFromStorage(path: string, options: RemoveFileFro
   if (path.startsWith(`${PUBLIC_STORAGE_PREFIX}/`)) {
     const { error } = await runRequest(
       "storage.removeAnonymousUpload",
-      () => publicSupabaseClient.functions.invoke("form-admin", {
+      (signal, traceContext) => publicSupabaseClient.functions.invoke("form-admin", {
         body: { action: "delete-upload", formId: options.formId, path, browserId: options.browserId ?? getOrCreateResponseBrowserId() },
+        headers: traceContext.headers,
+        signal,
       }),
       { context: { bucket: SUPABASE_STORAGE_BUCKET, formId: options.formId ?? null } },
     );
