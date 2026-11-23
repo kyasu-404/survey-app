@@ -244,7 +244,8 @@ test("form themes are stored separately and constrained to safe compact JSON", (
   assert.match(schema, /theme jsonb not null default '\{\}'::jsonb/i);
   assert.match(schema, /create or replace function public\.survey_theme_is_safe\(value jsonb\)/i);
   assert.match(schema, /pg_column_size\(value\) <= 131072/i);
-  assert.match(schema, /forms_theme_is_safe check \(public\.survey_theme_is_safe\(theme\)\)/i);
+  assert.match(getFunctionDefinition("enforce_survey_theme"), /public\.survey_theme_is_safe\(new\.theme\)/i);
+  assert.match(schema, /trigger forms_enforce_theme\s+before insert or update of theme on public\.forms/i);
   assert.match(formThemesMigration, /add column if not exists theme jsonb not null default '\{\}'::jsonb/i);
   assert.match(formThemesMigration, /grant update \(title, schema, theme,/i);
 });
@@ -554,14 +555,13 @@ test("response listing does not disclose browser edit capabilities", () => {
 
 test("public response payloads are checked against the form schema and organization directory", () => {
   const validator = getFunctionDefinition("response_data_matches_form");
-  const submitFunction = getFunctionDefinition("submit_form_response");
-  const updateFunction = getFunctionDefinition("update_form_response");
+  const trigger = getFunctionDefinition("validate_response_schema");
 
   assert.match(validator, /jsonb_object_keys\(s\.data\)/i);
   assert.match(validator, /public\.survey_response_bindings\(form_schema, response_data\)/i);
   assert.match(validator, /from public\.education_organizations/i);
-  assert.match(submitFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
-  assert.match(updateFunction, /public\.response_data_matches_form\(target_form\.schema, target_form\.organization_types, p_data\)/i);
+  assert.match(trigger, /public\.response_data_matches_form\(form_schema, organization_types, new\.data\)/i);
+  assert.match(schema, /create or replace trigger responses_00_validate_schema\s+before insert or update of form_id, data on public\.responses/i);
 });
 
 test("the scope validation migration installs the same functions as a fresh database", () => {
@@ -618,6 +618,7 @@ test("review migrations and the bootstrap install identical function definitions
     "202611231500_review_regressions.sql",
     "202611231600_form_closed_automation.sql",
     "202611232200_full_code_review_fixes.sql",
+    "202611232230_review_followup.sql",
   ];
   const latest = new Map();
   for (const file of migrations) {

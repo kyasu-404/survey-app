@@ -10,6 +10,7 @@ import { NotificationPreferences } from "../../entities/notification/Notificatio
 import { notificationCategories, notificationKey, type NotificationCategory, type NotificationReadFilter } from "../../entities/notification/model";
 import { useNotificationActions } from "../../entities/notification/useNotificationActions";
 import { useUnreadCount } from "../../entities/notification/useNotifications";
+import { useTimelineHeadRefresh } from "../../shared/api/useTimelineHeadRefresh";
 import type { TimelineCursor } from "../../shared/api/timelinePage";
 import { Icon } from "../../shared/ui/Icon";
 import { Skeleton } from "../../shared/ui/Skeleton";
@@ -38,13 +39,18 @@ function NotificationCenter({ userId }: { userId: string }) {
   const [read, setRead] = useState<NotificationReadFilter>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const unread = useUnreadCount(userId);
+  const queryKey = [...notificationKey(userId), "list", category, read];
   const feed = useInfiniteQuery({
-    queryKey: [...notificationKey(userId), "list", category, read],
+    queryKey,
     initialPageParam: undefined as TimelineCursor | undefined,
     queryFn: ({ pageParam, signal }) => getNotifications(category, read, pageParam, signal),
     getNextPageParam: (last) => last.next,
     refetchOnMount: "always",
-    refetchInterval: 30_000,
+    refetchInterval: ({ state }) => (state.data?.pages.length ?? 0) <= 1 ? 30_000 : false,
+  });
+  useTimelineHeadRefresh({
+    queryKey, pageCount: feed.data?.pages.length ?? 0, interval: 30_000,
+    fetchPage: signal => getNotifications(category, read, undefined, signal),
   });
   const { mark, acknowledge } = useNotificationActions(userId);
   const items = feed.data?.pages.flatMap((page) => page.items) ?? [];
@@ -59,6 +65,8 @@ function NotificationCenter({ userId }: { userId: string }) {
             {unread.data !== undefined && <p aria-live="polite">Непрочитанных: {unread.data}</p>}
           </div>
           <div className="activity-actions">
+            {(feed.data?.pages.length ?? 0) > 1 && <button type="button" className="app-button"
+              disabled={feed.isFetching} onClick={() => void feed.refetch()}>Обновить ленту</button>}
             <button type="button" className="app-button" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
               <Icon name="settings" /> Настроить
             </button>

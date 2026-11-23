@@ -18,7 +18,9 @@ const appOrigin = parsePublicAppOrigin(process.env.PUBLIC_APP_URL);
 const workerId = `${os.hostname()}:${process.pid}:${randomBytes(6).toString("hex")}`;
 const pollIntervalMs = parseBoundedInteger(process.env.MAIL_WORKER_POLL_INTERVAL_MS, 3000, 1000, 2_147_483_647);
 const concurrency = parseBoundedInteger(process.env.MAIL_WORKER_CONCURRENCY, 5, 1, 20);
-const smtpTransports = createSmtpTransportManager({ encryptionKey, concurrency });
+const smtpTransports = createSmtpTransportManager({
+  encryptionKey, concurrency, privateHosts: process.env.SMTP_ALLOWED_PRIVATE_HOSTS,
+});
 const healthPort = parseBoundedInteger(process.env.MAIL_WORKER_HEALTH_PORT, 8080, 1, 65535);
 const healthHost = process.env.MAIL_WORKER_HEALTH_HOST?.trim() || "127.0.0.1";
 // Allow a claimed batch to finish SMTP and retry its ACKs before Docker stops the container.
@@ -230,6 +232,7 @@ async function cleanupExpiredUploads() {
       method: "DELETE",
       headers: { Prefer: "return=minimal" },
     });
+    await callRpc("prune_survey_file_deletion_claims", { p_limit: 500 });
   } catch (error) {
     console.error("expired upload cleanup failed", { message: error instanceof Error ? error.message : String(error) });
   }

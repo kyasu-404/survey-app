@@ -1,4 +1,4 @@
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { Icon } from "../../../shared/ui/Icon";
 import { canManageSurveyForm } from "../../../entities/survey/model/formAccess";
 import { getSurveyDisplayTitle } from "../../../entities/survey/model/surveyModel";
@@ -26,7 +26,7 @@ type TemplateCardProps = {
   template: SurveyFormSummary;
 };
 
-function stopCardEvent(event: ReactMouseEvent | ReactKeyboardEvent) {
+function stopCardEvent(event: ReactMouseEvent) {
   event.stopPropagation();
 }
 
@@ -53,31 +53,25 @@ export function TemplateCard({
   const createdAtLabel = formatCreatedAt(template.created_at);
   const shareLabel = template.is_public ? "Не показывать другим" : "Поделиться";
 
-  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    onOpen(template);
-  };
-
   return (
     <div
       className={`dashboard-form-card dashboard-form-card-static templates-card ${
         actionMenuOpen ? "dashboard-form-card-menu-open" : ""
       }`.trim()}
-      role="button"
-      tabIndex={0}
-      aria-label={`Открыть превью шаблона ${title}`}
       onClick={() => onOpen(template)}
-      onKeyDown={handleCardKeyDown}
     >
       <div className="templates-card-header">
         <div className="dashboard-form-heading-row templates-card-title-row">
           <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
-          <strong className="dashboard-form-title templates-card-title" title={title}>{title}</strong>
+          <button
+            type="button"
+            className="dashboard-form-title templates-card-title"
+            title={title}
+            aria-label={`Открыть превью шаблона ${title}`}
+            onClick={(event) => { stopCardEvent(event); onOpen(template); }}
+          >
+            {title}
+          </button>
         </div>
         <button
           type="button"

@@ -76,7 +76,7 @@ export default function SurveyPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const announcedPreview = useRef<string>();
-  const { user, loading: isAuthLoading } = useAuth();
+  const { user, profile, loading: isAuthLoading } = useAuth();
   const renderMode = getRouteRenderMode(location.state);
   const isPreview = renderMode !== "interactive";
   const personalToken = isPreview ? null : new URLSearchParams(location.hash.slice(1)).get("personal");
@@ -98,7 +98,8 @@ export default function SurveyPage() {
   }, []);
 
   const isPrivatePreview = isPreview;
-  const usePublicClient = !isPrivatePreview && (!user?.id || Boolean(personalToken));
+  const activeEmployee = Boolean(user && profile?.id === user.id && !profile.is_disabled);
+  const usePublicClient = !isPrivatePreview && (!activeEmployee || Boolean(personalToken));
   const surveyQuery = useQuery({
     queryKey: isPrivatePreview ? getPrivateSurveyFormQueryKey(id) : getPublicSurveyFormQueryKey(id),
     queryFn: async ({ signal }) => {
@@ -134,9 +135,9 @@ export default function SurveyPage() {
     queryKey: ["form-response-status", id, personalToken ?? responseBrowserId],
     queryFn: ({ signal }) => {
       if (!id) return null;
-      return personalToken
-        ? getExistingResponse(id, responseBrowserId, signal, personalToken, usePublicClient)
-        : getExistingResponse(id, responseBrowserId, signal, undefined, usePublicClient);
+      // The status RPC uses the browser capability regardless of employee
+      // identity. Keep this read independent of concurrent auth restoration.
+      return getExistingResponse(id, responseBrowserId, signal, personalToken ?? undefined, true);
     },
     enabled: renderMode === "interactive" && Boolean(id) && (!hasPersonalLink || Boolean(personalToken)),
     retry: 1,

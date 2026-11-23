@@ -94,9 +94,9 @@ describe("survey theme", () => {
     });
   });
 
-  it("allows local Supabase development URLs without allowing arbitrary plain HTTP", () => {
+  it("rejects HTTP images outside configured Storage and the current site", () => {
     expect(sanitizeSurveyTheme({ backgroundImage: "http://localhost:8000/storage/background.webp" }))
-      .toHaveProperty("backgroundImage");
+      .not.toHaveProperty("backgroundImage");
     expect(sanitizeSurveyTheme({ backgroundImage: "http://evil.example/background.webp" }))
       .not.toHaveProperty("backgroundImage");
   });

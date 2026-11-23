@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { useAuth } from "../../app/providers/AuthProvider";
 import { useToast } from "../../app/providers/ToastProvider";
 import { notificationKey } from "../../entities/notification/model";
+import { useTimelineHeadRefresh } from "../../shared/api/useTimelineHeadRefresh";
 import type { TimelineCursor } from "../../shared/api/timelinePage";
 import { getErrorMessage } from "../../shared/lib/error";
 import { Icon } from "../../shared/ui/Icon";
@@ -51,18 +52,32 @@ function AdminAnnouncements({ userId }: { userId: string }) {
   const [editor, setEditor] = useState<AdminAnnouncement | "new" | null>(null);
   const [archive, setArchive] = useState<AdminAnnouncement | null>(null);
   const key = ["admin-announcements", userId];
+  const queryKey = [...key, status];
   const list = useInfiniteQuery({
-    queryKey: [...key, status],
+    queryKey,
     initialPageParam: undefined as TimelineCursor | undefined,
     queryFn: ({ pageParam, signal }) => listAnnouncements(status, pageParam, signal),
     getNextPageParam: last => last.next,
     refetchOnMount: true,
-    refetchInterval: 20_000,
+    refetchInterval: ({ state }) => (state.data?.pages.length ?? 0) <= 1 ? 20_000 : false,
+  });
+
+  useTimelineHeadRefresh({
+    queryKey, pageCount: list.data?.pages.length ?? 0, interval: 20_000,
+    fetchPage: signal => listAnnouncements(status, undefined, signal),
   });
 
   function refresh() {
     void client.invalidateQueries({ queryKey: key });
     void client.invalidateQueries({ queryKey: notificationKey(userId) });
+  }
+  async function reloadAnnouncement(id: string) {
+    const latest = await list.refetch({ throwOnError: true });
+    const row = latest.data?.pages.flatMap(page => page.items).find(item => item.id === id);
+    if (!row) {
+      throw new Error("Объявление больше не в этом списке. Проверьте вкладки с другими статусами.");
+    }
+    setEditor(current => current !== "new" && current?.id === id ? row : current);
   }
   function finish(next: AnnouncementStatus, message: string) {
     setEditor(null);
@@ -107,12 +122,16 @@ function AdminAnnouncements({ userId }: { userId: string }) {
             <p>{getErrorMessage(list.error, "Не удалось загрузить следующую страницу объявлений.")}</p>
             <button type="button" className="app-button" disabled={list.isFetching} onClick={() => void list.fetchNextPage()}>Повторить</button>
           </div>}
+          {(list.data?.pages.length ?? 0) > 1 && <button type="button" className="app-button"
+            disabled={list.isFetching} onClick={() => void list.refetch()}>Обновить список</button>}
           {list.hasNextPage && !list.isFetchNextPageError && <button type="button" className="app-button activity-more" disabled={list.isFetching}
             onClick={() => void list.fetchNextPage()}>{list.isFetchingNextPage ? "Загрузка…" : "Показать ещё"}</button>}
         </>}
       </div>)}
     </section>
-    {editor && <AnnouncementEditor row={editor === "new" ? null : editor} onClose={() => setEditor(null)} onSaved={finish} onSaveError={refresh} />}
+    {editor && <AnnouncementEditor key={editor === "new" ? editor : `${editor.id}:${editor.updated_at}`}
+      row={editor === "new" ? null : editor} onClose={() => setEditor(null)}
+      onSaved={finish} onSaveError={refresh} onReload={reloadAnnouncement} />}
     {archive && <ArchiveDialog row={archive} onCancel={() => setArchive(null)} onConfirm={() => {
       change.mutate({ row: archive, action: "archive" }); setArchive(null);
     }} />}

@@ -42,9 +42,16 @@ function formatCleanupDate(value: string | null) {
   return value ? new Date(value).toLocaleString("ru-RU") : "—";
 }
 
+type SettingsTab = "branding" | "office" | "smtp" | "iframe" | "cleanup";
+
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const [tab,setTab]=useState<'branding'|'office'|'smtp'|'iframe'|'cleanup'>('branding');
+  const [tab, setTab] = useState<SettingsTab>("branding");
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SettingsTab>>(() => new Set(["branding"]));
+  const selectTab = (next: SettingsTab) => {
+    setVisitedTabs(current => current.has(next) ? current : new Set([...current, next]));
+    setTab(next);
+  };
   const { showToast } = useToast();
   const settingsQuery = useQuery({
     queryKey: ["smtp-settings"],
@@ -210,10 +217,10 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <SectionTabs id="settings" label="Разделы настроек" tabs={[{value:'branding',label:'Оформление'},{value:'office',label:'ONLYOFFICE'},{value:'smtp',label:'SMTP'},{value:'iframe',label:'iframe'},{value:'cleanup',label:'Очистка файлов'}]} value={tab} onChange={setTab}/>
+        <SectionTabs id="settings" label="Разделы настроек" tabs={[{value:'branding',label:'Оформление'},{value:'office',label:'ONLYOFFICE'},{value:'smtp',label:'SMTP'},{value:'iframe',label:'iframe'},{value:'cleanup',label:'Очистка файлов'}]} value={tab} onChange={selectTab}/>
         <div className="settings-tab-panel" role="tabpanel" id="settings-panel-branding" aria-labelledby="settings-tab-branding" hidden={tab!=='branding'}><BrandingSettingsSection /><FaviconSettingsSection /></div>
-        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-iframe" aria-labelledby="settings-tab-iframe" hidden={tab!=='iframe'}><EmbeddingSettingsSection /></div>
-        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-office" aria-labelledby="settings-tab-office" hidden={tab!=='office'}><OnlyofficeSettingsSection /></div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-iframe" aria-labelledby="settings-tab-iframe" hidden={tab!=='iframe'}>{visitedTabs.has('iframe') && <EmbeddingSettingsSection />}</div>
+        <div className="settings-tab-panel" role="tabpanel" id="settings-panel-office" aria-labelledby="settings-tab-office" hidden={tab!=='office'}>{visitedTabs.has('office') && <OnlyofficeSettingsSection />}</div>
         <div className="settings-tab-panel" role="tabpanel" id="settings-panel-smtp" aria-labelledby="settings-tab-smtp" hidden={tab!=='smtp'}>
 
         <section className="settings-area settings-smtp-area" aria-labelledby="smtp-settings-heading">

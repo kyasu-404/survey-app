@@ -287,9 +287,8 @@ as $$
         or (asset #>> '{}') ~ '[[:cntrl:]]'
         or not (
           regexp_replace(asset #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g') = ''
-          or regexp_replace(asset #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g') ~ '^/[A-Za-z0-9._/%-]+$'
+          or regexp_replace(asset #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g') ~ '^/[A-Za-z0-9._%-][A-Za-z0-9._/%-]*$'
           or regexp_replace(asset #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g') ~* '^__APP_SURVEY_ASSET__/(gallery/[a-z0-9._-]{1,255}|forms/[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(jpe?g|png|webp))$'
-          or regexp_replace(asset #>> '{}', '^[[:space:]]+|[[:space:]]+$', '', 'g') ~* '^http://(localhost|127\.0\.0\.1|10\.[0-9.]+|192\.168\.[0-9.]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9.]+|\[::1\])(:[0-9]+)?/[^[:space:]]*$'
         )
     );
 $$;
@@ -297,8 +296,25 @@ $$;
 revoke all on function public.survey_theme_is_safe(jsonb) from public;
 grant execute on function public.survey_theme_is_safe(jsonb) to authenticated, service_role;
 
-alter table public.forms
-add constraint forms_theme_is_safe check (public.survey_theme_is_safe(theme));
+-- Old databases may have a theme saved before the stricter URL policy.
+-- Validate theme writes without blocking operations such as counting answers
+-- on forms that have not had their legacy theme re-saved yet.
+create or replace function public.enforce_survey_theme()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'UPDATE' and new.theme is not distinct from old.theme then return new; end if;
+  if public.survey_theme_is_safe(new.theme) is distinct from true then
+    raise exception 'Тема формы содержит недопустимые значения' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_survey_theme() from public, anon, authenticated;
+
+create or replace trigger forms_enforce_theme
+before insert or update of theme on public.forms
+for each row execute function public.enforce_survey_theme();
 
 alter table public.forms
 add constraint forms_max_responses_positive check (max_responses is null or max_responses > 0);
@@ -826,10 +842,9 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 declare form_schema jsonb; binding record; path text; previous_paths text[] := '{}'::text[];
 begin
   select schema into form_schema from public.forms where id=new.form_id;
-  for binding in select * from public.survey_response_bindings(form_schema,new.data) loop
-    if not coalesce(public.survey_response_value_is_valid(binding.question,binding.value),false) then
-      raise exception 'Некорректный тип значения ответа' using errcode='22023';
-    end if;
+  for binding in select * from public.survey_response_bindings(form_schema,new.data)
+    where question ->> 'type' in ('file', 'signaturepad')
+  loop
     if binding.question->>'type'='file' and binding.value is not null then
       new.data := jsonb_set(new.data,binding.value_path,public.normalize_survey_file_value(binding.value,new.form_id));
     elsif binding.question->>'type'='signaturepad'
@@ -1021,7 +1036,35 @@ begin
 end;
 $$;
 revoke all on function public.assert_can_delete_employee(uuid, uuid) from public, anon, authenticated;
-grant execute on function public.assert_can_delete_employee(uuid, uuid) to service_role;
+create or replace function public.delete_employee(p_user_id uuid, p_actor_id uuid)
+returns boolean
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+  -- Serialize role mutations and take form locks before profile locks, as
+  -- the automation worker can hold a form lock while it records a notification.
+  perform pg_advisory_xact_lock(hashtextextended('survey-admin-role-mutation', 0));
+  perform 1 from public.forms where author_id = p_user_id order by id for update;
+  perform public.assert_can_delete_employee(p_user_id, p_actor_id);
+  delete from auth.users where id = p_user_id;
+  if not found then
+    raise exception 'Пользователь не найден' using errcode = 'P0002';
+  end if;
+
+  -- Installed Supabase Auth records admin mutations in this table. A minimal
+  -- schema used to exercise the application database can omit Auth audit.
+  if to_regclass('auth.audit_log_entries') is not null then
+    insert into auth.audit_log_entries(instance_id, id, payload, created_at, ip_address)
+    values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), jsonb_build_object(
+      'action', 'user_deleted', 'actor_id', p_actor_id, 'log_type', 'team',
+      'traits', jsonb_build_object('user_id', p_user_id)
+    ), clock_timestamp(), '');
+  end if;
+  return true;
+end;
+$$;
+
+revoke all on function public.delete_employee(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.delete_employee(uuid, uuid) to service_role;
 
 -- Bind each question to its actual answer path, including dynamic panel entries.
 create or replace function public.survey_response_bindings(
@@ -1040,7 +1083,8 @@ begin
     if p_schema->>'type'='paneldynamic' and jsonb_typeof(answer_value)='array' then
       for entry in select item,ordinality from jsonb_array_elements(answer_value) with ordinality a(item,ordinality) loop
         return query select * from public.survey_response_bindings(
-          jsonb_build_object('elements',case when jsonb_typeof(p_schema->'templateElements')='array' then p_schema->'templateElements' else '[]'::jsonb end),
+          jsonb_build_object('elements',case when jsonb_typeof(p_schema->'templateElements')='array' then p_schema->'templateElements'
+            when jsonb_typeof(p_schema->'questions')='array' then p_schema->'questions' else '[]'::jsonb end),
           entry.item,answer_path || (entry.ordinality-1)::text,p_depth+1);
       end loop;
     elsif p_schema->>'type' in ('matrixdynamic','matrixdropdown') then
@@ -1058,11 +1102,24 @@ begin
         end loop;
       end if;
     end if;
+    -- Choice elements write to the same scope as the choice question.
+    for child in
+      select e.item
+      from jsonb_array_elements(case when jsonb_typeof(p_schema->'choices')='array'
+        then p_schema->'choices' else '[]'::jsonb end) c(choice)
+      cross join lateral jsonb_array_elements(case when jsonb_typeof(c.choice->'elements')='array'
+        then c.choice->'elements' else '[]'::jsonb end) e(item)
+    loop
+      return query select * from public.survey_response_bindings(child,p_data,p_path,p_depth+1);
+    end loop;
     return;
   end if;
   for child in
     select item from jsonb_array_elements(case when jsonb_typeof(p_schema->'pages')='array' then p_schema->'pages' else '[]'::jsonb end) a(item)
     union all select item from jsonb_array_elements(case when jsonb_typeof(p_schema->'elements')='array' then p_schema->'elements' else '[]'::jsonb end) a(item)
+    union all select item from jsonb_array_elements(case
+      when jsonb_typeof(p_schema->'elements') is distinct from 'array' and jsonb_typeof(p_schema->'questions')='array'
+        then p_schema->'questions' else '[]'::jsonb end) a(item)
   loop return query select * from public.survey_response_bindings(child,p_data,p_path,p_depth+1); end loop;
 end;
 $$;
@@ -1114,7 +1171,15 @@ begin
         and b.value is not null
         and (
           jsonb_typeof(b.value) <> 'object'
-          or exists (select 1 from jsonb_each(b.value) e where jsonb_typeof(e.value) <> 'object')
+          or exists (
+            select 1 from jsonb_each(case when jsonb_typeof(b.value) = 'object' then b.value else '{}'::jsonb end) e
+            where jsonb_typeof(e.value) <> 'object'
+              or (jsonb_typeof(b.question -> 'rows') = 'array' and not exists (
+                select 1 from jsonb_array_elements(b.question -> 'rows') r(row_item)
+                where e.key = case when jsonb_typeof(r.row_item) = 'object'
+                  then r.row_item ->> 'value' else r.row_item #>> '{}' end
+              ))
+          )
         )
       )
       or (
@@ -1172,6 +1237,28 @@ $$;
 revoke all on function public.response_data_matches_form(jsonb, text[], jsonb) from public;
 grant execute on function public.response_data_matches_form(jsonb, text[], jsonb) to service_role;
 
+create or replace function public.validate_response_schema()
+returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  form_schema jsonb;
+  organization_types text[];
+begin
+  select f.schema, f.organization_types into form_schema, organization_types
+  from public.forms f where f.id = new.form_id;
+  if not found or not public.response_data_matches_form(form_schema, organization_types, new.data) then
+    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.validate_response_schema() from public, anon, authenticated;
+
+create or replace trigger responses_00_validate_schema
+before insert or update of form_id, data on public.responses
+for each row execute function public.validate_response_schema();
+
 create or replace function public.validate_response_payload()
 returns trigger
 language plpgsql
@@ -1184,10 +1271,8 @@ declare
   selected_is_archived boolean;
 begin
   select f.* into target_form from public.forms f where f.id = new.form_id;
-  if target_form.id is null
-    or not public.response_data_matches_form(target_form.schema, target_form.organization_types, new.data)
-  then
-    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
+  if not jsonb_path_exists(target_form.schema, '$.** ? (@.type == "organization")') then
+    return new;
   end if;
   -- Lock in UUID order so concurrent submissions acquire organization locks consistently.
   for binding in
@@ -1251,7 +1336,7 @@ begin
     raise exception 'Некорректный идентификатор отправки' using errcode = '22023';
   end if;
 
-  if jsonb_typeof(p_data) <> 'object' or pg_column_size(p_data) > 262144 then
+  if jsonb_typeof(p_data) is distinct from 'object' or pg_column_size(p_data) > 262144 then
     raise exception 'Некорректные данные ответа' using errcode = '22023';
   end if;
 
@@ -1266,10 +1351,6 @@ begin
 
   if target_form.id is null or target_form.form_type = 'template' then
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
-  end if;
-
-  if not public.response_data_matches_form(target_form.schema, target_form.organization_types, p_data) then
-    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
   end if;
 
   select r.*
@@ -1339,7 +1420,7 @@ begin
     raise exception 'Некорректный идентификатор ответа' using errcode = '22023';
   end if;
 
-  if jsonb_typeof(p_data) <> 'object' or pg_column_size(p_data) > 262144 then
+  if jsonb_typeof(p_data) is distinct from 'object' or pg_column_size(p_data) > 262144 then
     raise exception 'Некорректные данные ответа' using errcode = '22023';
   end if;
 
@@ -1354,10 +1435,6 @@ begin
 
   if target_form.id is null or target_form.form_type = 'template' then
     raise exception 'Форма не найдена или недоступна' using errcode = 'P0002';
-  end if;
-
-  if not public.response_data_matches_form(target_form.schema, target_form.organization_types, p_data) then
-    raise exception 'Ответ не соответствует структуре формы' using errcode = '22023';
   end if;
 
   if not target_form.allow_response_editing then
@@ -2013,6 +2090,7 @@ begin
   if not exists (
     select 1 from public.forms f
     where f.id = target_form_id
+      and f.form_type <> 'template'
       and (
         public.is_public_active_form(f.id)
         or (not anonymous_request and (f.author_id = auth.uid() or public.request_role() = 'admin'))
@@ -2170,11 +2248,10 @@ as $$
         o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
         and not exists (
           select 1 from public.forms f
-          where f.id::text = split_part(o.name, '/', 2)
-            and (
-              f.theme::text like '%' || o.name || '%'
-              or f.schema::text like '%' || o.name || '%'
-            )
+          where (f.id::text = split_part(o.name, '/', 2)
+                 and o.user_metadata ->> 'surveyThemeCopy' is distinct from 'true')
+            or strpos(f.theme::text, o.name) > 0
+            or strpos(f.schema::text, o.name) > 0
         )
       )
       or (
@@ -2210,11 +2287,10 @@ as $$
         o.name ~* '^forms/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpe?g|png|webp)$'
         and not exists (
           select 1 from public.forms f
-          where f.id::text = split_part(o.name, '/', 2)
-            and (
-              f.theme::text like '%' || o.name || '%'
-              or f.schema::text like '%' || o.name || '%'
-            )
+          where (f.id::text = split_part(o.name, '/', 2)
+                 and o.user_metadata ->> 'surveyThemeCopy' is distinct from 'true')
+            or strpos(f.theme::text, o.name) > 0
+            or strpos(f.schema::text, o.name) > 0
         )
       )
       or (
@@ -2495,6 +2571,46 @@ set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
 
+-- User uploads have one path namespace per account, including unsaved drafts.
+create index if not exists idx_survey_assets_uploader
+on storage.objects ((split_part(name, '/', 3)))
+where bucket_id = 'survey-assets' and name like 'forms/%';
+
+create or replace function public.enforce_survey_asset_quota()
+returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+begin
+  if new.bucket_id <> 'survey-assets' or new.name not like 'forms/%' or actor is null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and (old.bucket_id, old.name) = (new.bucket_id, new.name) then
+    return new;
+  end if;
+  if split_part(new.name, '/', 3) <> actor::text then
+    raise exception 'Загрузите изображение от своего имени' using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('survey-assets/' || actor::text, 0));
+  if not exists (
+    select 1 from storage.objects o where o.bucket_id = new.bucket_id and o.name = new.name
+  ) and (
+    select count(*) from storage.objects o
+    where o.bucket_id = 'survey-assets' and o.name like 'forms/%' and split_part(o.name, '/', 3) = actor::text
+  ) >= 500 then
+    raise exception 'Достигнут лимит изображений оформления. Удалите неиспользуемые изображения.' using errcode = '22023';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_survey_asset_quota() from public, anon, authenticated;
+
+create or replace trigger survey_asset_upload_quota
+before insert or update of bucket_id, name on storage.objects
+for each row execute function public.enforce_survey_asset_quota();
+
 create policy "survey_assets_authenticated_read" on storage.objects
 for select to authenticated
 using (
@@ -2551,7 +2667,6 @@ create index idx_forms_title_trgm on public.forms using gin (title extensions.gi
 create index idx_forms_author_name_trgm on public.forms using gin (author_name extensions.gin_trgm_ops);
 create index idx_mail_batches_form_created_at on public.mail_batches(form_id, created_at desc);
 create index idx_mail_batches_created_by on public.mail_batches(created_by) where created_by is not null;
-create index idx_mail_queue_claim on public.mail_queue(status, next_attempt_at, created_at);
 create index idx_mail_queue_claim_queued on public.mail_queue(next_attempt_at, created_at, id) where status = 'queued';
 create index idx_mail_queue_claim_processing on public.mail_queue(locked_at, next_attempt_at, created_at, id) where status = 'processing';
 create index idx_mail_queue_organization_id on public.mail_queue(organization_id) where organization_id is not null;
@@ -3426,6 +3541,46 @@ end;
 $$;
 revoke all on function public.reserve_personal_survey_upload(uuid,uuid,text,bigint,text,uuid) from public, anon, authenticated;
 grant execute on function public.reserve_personal_survey_upload(uuid,uuid,text,bigint,text,uuid) to service_role;
+
+-- Keep deletion markers through storage/upload retries. Only absent,
+-- unreserved paths can age out.
+create index if not exists idx_survey_file_deletion_claims_age
+on public.survey_file_deletion_claims (claimed_at, object_path);
+
+create index if not exists idx_storage_objects_bucket_created
+on storage.objects (bucket_id, created_at, id);
+
+create or replace function public.prune_survey_file_deletion_claims(p_limit integer default 500)
+returns integer
+language plpgsql security definer set search_path = '' as $$
+declare
+  removed integer;
+begin
+  with candidates as (
+    select c.object_path from public.survey_file_deletion_claims c
+    where c.claimed_at < now() - interval '30 days'
+      and not exists (
+        select 1 from storage.objects o where o.bucket_id = 'survey-files' and o.name = c.object_path
+      )
+      and not exists (
+        select 1 from public.survey_upload_reservations r where r.object_path = c.object_path
+      )
+      and not exists (
+        select 1 from public.response_file_references r where r.object_path = c.object_path
+      )
+    order by c.claimed_at, c.object_path
+    limit least(greatest(coalesce(p_limit, 500), 1), 1000)
+    for update skip locked
+  )
+  delete from public.survey_file_deletion_claims c using candidates p
+  where c.object_path = p.object_path;
+  get diagnostics removed = row_count;
+  return removed;
+end;
+$$;
+
+revoke all on function public.prune_survey_file_deletion_claims(integer) from public, anon, authenticated;
+grant execute on function public.prune_survey_file_deletion_claims(integer) to service_role;
 
 -- Restored drafts from earlier releases need the same association. Both the
 -- uploader browser and the personal token must be valid; a path is insufficient.
@@ -4490,7 +4645,11 @@ begin
   end if;
   if tg_op='INSERT' or old.author_id<>new.author_id or old.form_type<>new.form_type then
     for owner in select distinct id from unnest(array[old.author_id,new.author_id]) id where id is not null order by id loop
-      perform pg_advisory_xact_lock(hashtextextended('survey-automation-owner:'||owner::text,0));
+      -- This trigger already holds the form lock. A rule edit may hold the
+      -- owner lock while it waits for the form, so yield with a retryable error.
+      if not pg_try_advisory_xact_lock(hashtextextended('survey-automation-owner:'||owner::text,0)) then
+        raise exception 'Правила формы сейчас изменяются. Повторите сохранение.' using errcode = '40001';
+      end if;
     end loop;
     if tg_op='UPDATE' then
       delete from survey_automation.targets t using public.automation_rules r
@@ -4594,8 +4753,9 @@ create trigger automation_form_delete after delete on public.forms
   for each row execute function survey_automation.cancel_deleted_form_runs();
 
 create or replace function survey_automation.process_threshold_checks(p_limit integer)
-returns void language plpgsql set search_path = '' as $$
+returns integer language plpgsql set search_path = '' as $$
 declare
+  processed integer := 0;
   batch_size constant integer := 1000;
   candidate record;
   target survey_automation.targets;
@@ -4629,6 +4789,7 @@ begin
     if not found then continue; end if;
     select * into f from public.forms where id=target.form_id;
     if f.author_id is distinct from rule.user_id or f.form_type='template' then continue; end if;
+    processed := processed + 1;
 
     matching:=target.matching_count;
     if not target.count_ready then
@@ -4689,12 +4850,14 @@ begin
       count_cursor_at=null,count_cursor_id=null,check_at=null,check_response_id=null
       where rule_id=rule.id and form_id=f.id;
   end loop;
+  return processed;
 end;
 $$;
 
 create or replace function survey_automation.process_schedules(p_now timestamptz,p_limit integer)
-returns void language plpgsql set search_path = '' as $$
+returns integer language plpgsql set search_path = '' as $$
 declare
+  processed integer := 0;
   candidate record;
   due survey_automation.targets;
   deadline record;
@@ -4738,6 +4901,7 @@ begin
           +make_interval(mins=>rule.interval_minutes);
       else continue;
     end case;
+    processed := processed + 1;
     if rule.conditions='[]'::jsonb then
       select * into r from public.responses entry where entry.form_id=f.id
         order by created_at desc,id desc limit 1;
@@ -4784,7 +4948,9 @@ begin
         'closed:deadline:'||extract(epoch from deadline.due_at)::text,deadline.due_at);
     end if;
     delete from survey_automation.form_deadlines where form_id=deadline.form_id and due_at=deadline.due_at;
+    if found then processed := processed + 1; end if;
   end loop;
+  return processed;
 end;
 $$;
 
@@ -5044,8 +5210,8 @@ begin
     raise exception 'Для ссылок в письмах задайте PUBLIC_APP_URL' using errcode='P0001';
   end if;
   if not pg_try_advisory_xact_lock(hashtextextended('survey-automation-worker',0)) then return 0; end if;
-  perform survey_automation.process_schedules(sweep_time,max_items);
-  perform survey_automation.process_threshold_checks(max_items);
+  completed := survey_automation.process_schedules(sweep_time,max_items)
+    + survey_automation.process_threshold_checks(max_items);
 
   -- An expired SMTP lease can represent a successfully accepted message.
   -- Automation jobs are never delivered again after such an uncertain outcome.
@@ -5134,6 +5300,9 @@ create table survey_announcements.announcements (
   check (expires_at is null or publish_at is null or expires_at > publish_at),
   check (action_label is null or action_url is not null)
 );
+create index if not exists idx_announcements_active_until
+on survey_announcements.announcements (coalesce(expires_at, 'infinity'::timestamptz))
+where status = 'published';
 create index announcement_publication on survey_announcements.announcements (publish_at desc, id desc)
   where status = 'published';
 
@@ -5446,6 +5615,7 @@ begin
      left join survey_announcements.recipient_state s on s.announcement_id = a.id and s.user_id = v.user_id
      where (p_category is null or p_category = 'announcement')
        and a.status = 'published'
+       and a.publish_at <= now() and coalesce(a.expires_at, 'infinity'::timestamptz) > now()
        and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, v.role_name)
        and (p_read = 'all' or (p_read = 'unread' and s.read_at is null) or (p_read = 'read' and s.read_at is not null))
        and (p_before_at is null or (a.publish_at, a.id) < (p_before_at, p_before_id))
@@ -5465,6 +5635,7 @@ returns bigint language sql stable security definer set search_path = '' as $$
     (select count(*) from viewer v cross join survey_announcements.announcements a
      left join survey_announcements.recipient_state s on s.announcement_id = a.id and s.user_id = v.user_id
      where a.status = 'published'
+       and a.publish_at <= now() and coalesce(a.expires_at, 'infinity'::timestamptz) > now()
        and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, v.role_name)
        and s.read_at is null);
 $$;

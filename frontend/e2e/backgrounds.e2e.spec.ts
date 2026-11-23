@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // The auto-started server uses the HTTPS Supabase fixture in playwright.config.ts.
 // All API requests are intercepted, including uploads and form saves.
 test("gallery and uploaded backgrounds survive saving and public rendering", async ({ page }) => {
-  // This round trip reloads Creator repeatedly, copies/uploads images, saves
+  // This round trip reloads Creator repeatedly, selects and uploads images, saves
   // twice and opens the public form. Keep per-step assertions at their default
   // timeout while allowing the whole flow to finish on a cold CI worker.
   test.setTimeout(60_000);
@@ -110,11 +110,12 @@ test("gallery and uploaded backgrounds survive saving and public rendering", asy
   await expectBackground("/gallery/gallery.png");
   await page.getByRole("button", { name: "Сохранить тему", exact: true }).click();
   await expect.poll(() => saves).toBe(1);
-  expect(form.theme.backgroundImage).toBe(`__APP_SURVEY_ASSET__/${uploadedPath}`);
+  expect(form.theme.backgroundImage).toBe("__APP_SURVEY_ASSET__/gallery/gallery.png");
+  expect(uploadedPath).toBe("");
   await expect(page).toHaveURL(/dashboard/);
   await page.goto(`/builder/${formId}`);
   await openGallery();
-  await expect(gallery.locator(".theme-background-card-selected img")).toHaveAttribute("src", new RegExp(uploadedPath));
+  await expect(gallery.locator(".theme-background-card-selected img")).toHaveAttribute("src", /\/gallery\/gallery\.png$/);
   await gallery.locator('input[type="file"]').setInputFiles({ name: "custom.png", mimeType: "image/png", buffer: png });
   await expect(gallery.locator(".theme-background-card-selected img")).toHaveAttribute("src", /\/forms\/.+\.png$/);
   await gallery.getByRole("button", { name: "Закрыть", exact: true }).click();

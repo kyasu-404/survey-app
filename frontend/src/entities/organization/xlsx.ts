@@ -1,113 +1,52 @@
-import { exportToExcel } from "../../shared/lib/export";
-import {
-  getOrganizationTypeLabel,
-  isOrganizationType,
-  normalizeOrganizationInput,
-  validateOrganizationInput,
-} from "./model";
-import type { EducationOrganization, EducationOrganizationInput, OrganizationType } from "./types";
-
-const TYPE_ALIASES = new Map<string, OrganizationType>([
-  ["школа", "school"],
-  ["школы", "school"],
-  ["school", "school"],
-  ["сад", "kindergarten"],
-  ["сады", "kindergarten"],
-  ["детский сад", "kindergarten"],
-  ["детские сады", "kindergarten"],
-  ["kindergarten", "kindergarten"],
-  ["одо", "odo"],
-  ["odo", "odo"],
-  ["удод", "udod"],
-  ["удоды", "udod"],
-  ["udod", "udod"],
-]);
+import type { EducationOrganization, EducationOrganizationInput } from "./types";
+import type { OrganizationXlsxRequest, OrganizationXlsxResult } from "./xlsxCodec";
 
 export const MAX_ORGANIZATIONS_XLSX_BYTES = 10 * 1024 * 1024;
+const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-function normalizeHeader(value: string) {
-  return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/\s+/g, " ");
-}
+async function runTask(request: OrganizationXlsxRequest): Promise<OrganizationXlsxResult> {
+  if (typeof window === "undefined" || typeof Worker !== "function") {
+    const { runOrganizationXlsxTask } = await import("./xlsxCodec");
+    return runOrganizationXlsxTask(request);
+  }
 
-function parseOrganizationType(value: string) {
-  const normalized = normalizeHeader(value);
-  return TYPE_ALIASES.get(normalized) ?? (isOrganizationType(normalized) ? normalized : null);
+  const worker = new Worker(new URL("./xlsx.worker.ts", import.meta.url), { type: "module" });
+  try {
+    return await new Promise<OrganizationXlsxResult>((resolve, reject) => {
+      worker.onmessage = ({ data }: MessageEvent<OrganizationXlsxResult>) => resolve(data);
+      worker.onerror = () => reject(new Error("Не удалось запустить обработку XLSX"));
+      worker.onmessageerror = () => reject(new Error("Не удалось получить результат обработки XLSX"));
+      worker.postMessage(request, request.operation === "parse" ? [request.bytes] : []);
+    });
+  } finally {
+    worker.terminate();
+  }
 }
 
 export async function parseOrganizationsXlsx(file: File): Promise<EducationOrganizationInput[]> {
   if (file.size > MAX_ORGANIZATIONS_XLSX_BYTES) {
     throw new Error("Размер XLSX не должен превышать 10 МБ");
   }
-  const ExcelJS = await import("exceljs");
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await file.arrayBuffer());
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) {
-    throw new Error("В XLSX нет листов с данными");
-  }
 
-  const headers = new Map<string, number>();
-  worksheet.getRow(1).eachCell((cell, column) => {
-    headers.set(normalizeHeader(cell.text), column);
-  });
-  const typeColumn = headers.get("тип оу") ?? headers.get("тип");
-  const numberColumn = headers.get("номер");
-  const aliasColumn = headers.get("алиас") ?? headers.get("алиасы");
-  const emailColumn = headers.get("email") ?? headers.get("e-mail");
-  if (!typeColumn || !numberColumn || !aliasColumn || !emailColumn) {
-    throw new Error("Ожидаются столбцы: Тип ОУ, Номер, Алиасы, Email");
-  }
-
-  const inputs: EducationOrganizationInput[] = [];
-  worksheet.eachRow({ includeEmpty: false }, (row, rowIndex) => {
-    if (rowIndex < 2) return;
-    const typeText = row.getCell(typeColumn).text.trim();
-    const number = row.getCell(numberColumn).text.trim();
-    const alias = row.getCell(aliasColumn).text.trim();
-    const email = row.getCell(emailColumn).text.trim();
-    if (!typeText && !number && !alias && !email) {
-      return;
-    }
-
-    const organizationType = parseOrganizationType(typeText);
-    if (!organizationType) {
-      throw new Error(`Строка ${rowIndex}: неизвестный тип ОУ «${typeText}»`);
-    }
-    if (organizationType === "udod" && number) {
-      throw new Error(`Строка ${rowIndex}: для УДОД номер задавать нельзя`);
-    }
-
-    const input = normalizeOrganizationInput({
-      organization_type: organizationType,
-      number: number || null,
-      alias,
-      email,
-    });
-    const validationError = validateOrganizationInput(input);
-    if (validationError) {
-      throw new Error(`Строка ${rowIndex}: ${validationError}`);
-    }
-    inputs.push(input);
-    if (inputs.length > 5000) {
-      throw new Error("За один раз можно импортировать не более 5000 организаций");
-    }
-  });
-
-  if (inputs.length === 0) {
-    throw new Error("В XLSX нет организаций для импорта");
-  }
-  return inputs;
+  const result = await runTask({ operation: "parse", bytes: await file.arrayBuffer() });
+  if (!result.ok) throw new Error(result.message);
+  if (result.operation !== "parse") throw new Error("Не удалось прочитать XLSX");
+  return result.rows;
 }
 
-export async function exportOrganizationsXlsx(organizations: EducationOrganization[]) {
-  return exportToExcel(
-    organizations.map((organization) => ({
-      "Тип ОУ": getOrganizationTypeLabel(organization.organization_type, true),
-      Номер: organization.number ?? "",
-      Алиасы: organization.alias,
-      Email: organization.email,
-    })),
-    "справочник-оу",
-    "Организации",
-  );
+export async function exportOrganizationsXlsx(organizations: EducationOrganization[]): Promise<void> {
+  if (!organizations.length) return;
+  const rows = organizations.map(({ organization_type, number, alias, email }) => ({
+    organization_type, number, alias, email,
+  }));
+  const result = await runTask({ operation: "export", organizations: rows });
+  if (!result.ok) throw new Error(result.message);
+  if (result.operation !== "export") throw new Error("Не удалось сформировать XLSX");
+
+  const url = URL.createObjectURL(new Blob([result.bytes], { type: XLSX_MIME_TYPE }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "справочник-оу.xlsx";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

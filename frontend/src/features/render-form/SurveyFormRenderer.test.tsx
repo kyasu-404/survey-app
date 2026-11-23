@@ -104,6 +104,7 @@ vi.mock("survey-core", () => ({
     onUIStateChanged = includeUIStateEvent.current ? new FakeSurveyEvent() : undefined;
     doComplete = vi.fn();
     clear = vi.fn();
+    dispose = vi.fn(() => { this.currentPageNo = -1; });
     applyTheme = vi.fn();
     getAllQuestions = vi.fn(() => []);
 
@@ -225,7 +226,7 @@ describe("SurveyFormRenderer", () => {
   it("coalesces draft writes and flushes pending data on pagehide and unmount", async () => {
     vi.useFakeTimers();
     const view = render(<SurveyFormRenderer formId="form-1" respondentId="user-1" schema={{ pages: [{ elements: [{ type: "text", name: "email" }] }] }} />);
-    const model = createdModels[0] as unknown as { data: Record<string, unknown>; onValueChanged: FakeSurveyEvent; onUIStateChanged: FakeSurveyEvent };
+    const model = createdModels[0] as unknown as { data: Record<string, unknown>; currentPageNo: number; onValueChanged: FakeSurveyEvent; onUIStateChanged: FakeSurveyEvent };
     const write = vi.spyOn(Storage.prototype, "setItem");
     const draftKey = "survey-response:draft:user-1:form-1";
     const writes = () => write.mock.calls.filter(([key]) => key === draftKey).length;
@@ -243,10 +244,11 @@ describe("SurveyFormRenderer", () => {
       await model.onValueChanged.fire(model);
       window.dispatchEvent(new Event("pagehide"));
       expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "leaving" } });
+      model.currentPageNo = 1;
       model.data = { email: "unmounting" };
       await model.onValueChanged.fire(model);
       view.unmount();
-      expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "unmounting" } });
+      expect(JSON.parse(sessionStorage.getItem(draftKey)!)).toMatchObject({ data: { email: "unmounting" }, currentPageNo: 1 });
       const finalWrites = writes();
       await vi.advanceTimersByTimeAsync(1000);
       expect(writes()).toBe(finalWrites);

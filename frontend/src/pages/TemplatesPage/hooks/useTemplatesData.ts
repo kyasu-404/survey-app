@@ -12,6 +12,7 @@ import { TEMPLATE_FORM_TYPE, isTemplateForm } from "../../../entities/survey/mod
 import { TEMPLATE_PAGE_SIZE } from "../templatesPageConstants";
 import type { TemplatesSection } from "../types";
 import { shouldInvalidateTemplates } from "./templateRealtimeFilters";
+import type { DashboardRealtimePayload } from "../../DashboardPage/hooks/dashboardRealtimeFilters";
 
 type UseTemplatesDataOptions = {
   isAuthLoading: boolean;
@@ -37,14 +38,20 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
     const refresh = createQueryRefreshScheduler(queryClient, "templates realtime", 300);
     const reload = () => refresh.schedule([{ queryKey: templatesQueryKey }]);
     const recovery = createRealtimeRecovery(reload, showToast);
+    const change = (payload: DashboardRealtimePayload) => {
+      const cached = queryClient.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(templatesQueryKey);
+      const cachedIds = new Set(cached?.pages.flatMap(page => page.items.map(form => form.id)));
+      if (shouldInvalidateTemplates({ payload, cachedIds, section, userId,
+        isFetching: !cached || queryClient.isFetching({ queryKey: templatesQueryKey }) > 0,
+      })) reload();
+    };
+    const table = { schema: "public", table: "forms" };
+    const filter = `form_type=eq.${TEMPLATE_FORM_TYPE}`;
     const channel = supabaseClient.channel(`templates:${userId}:${section}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "forms" }, payload => {
-        const cached = queryClient.getQueryData<InfiniteData<PaginatedSurveyFormSummaries>>(templatesQueryKey);
-        const cachedIds = new Set(cached?.pages.flatMap(page => page.items.map(form => form.id)));
-        if (shouldInvalidateTemplates({ payload, cachedIds, section, userId,
-          isFetching: !cached || queryClient.isFetching({ queryKey: templatesQueryKey }) > 0,
-        })) reload();
-      })
+      .on("postgres_changes", { ...table, event: "INSERT", filter }, change)
+      .on("postgres_changes", { ...table, event: "UPDATE", filter }, change)
+      // Postgres Changes does not support column filters for DELETE events.
+      .on("postgres_changes", { ...table, event: "DELETE" }, change)
       .subscribe(recovery.status);
     return () => { recovery.dispose(); refresh.dispose(); void supabaseClient.removeChannel(channel); };
   }, [isAuthLoading, userId, section, templatesQueryKey, queryClient, showToast]);

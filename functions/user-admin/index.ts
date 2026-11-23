@@ -343,21 +343,16 @@ async function handleRequest(req: Request, requestLogContext: RequestLogContext)
         return errorResponse(req, 400, "You cannot delete yourself", actionLogContext);
       }
 
-      const { data: canDelete, error: guardError } = await adminClient.rpc("assert_can_delete_employee", {
+      const { data: deleted, error } = await adminClient.rpc("delete_employee", {
         p_user_id: targetUserId,
         p_actor_id: requester.id,
       });
-      if (guardError) {
-        const status = guardError.code === "42501" ? 403 : guardError.code === "P0002" ? 404 : 400;
-        return errorResponse(req, status, guardError.message, actionLogContext);
-      }
-      if (canDelete !== true) {
-        return errorResponse(req, 503, "Invalid delete guard result", actionLogContext);
-      }
-
-      const { error } = await adminClient.auth.admin.deleteUser(targetUserId);
       if (error) {
-        return errorResponse(req, 400, error.message, actionLogContext);
+        const status = error.code === "42501" ? 403 : error.code === "P0002" ? 404 : 400;
+        return errorResponse(req, status, error.message, actionLogContext);
+      }
+      if (deleted !== true) {
+        return errorResponse(req, 503, "Invalid employee deletion result", actionLogContext);
       }
 
       console.info("user-admin action completed", actionLogContext);
@@ -381,16 +376,7 @@ async function handleRequest(req: Request, requestLogContext: RequestLogContext)
         return errorResponse(req, 400, error.message, actionLogContext);
       }
 
-      if (typeof adminClient.auth.admin.signOut === "function") {
-        const { error: signOutError } = await adminClient.auth.admin.signOut(targetUserId, "global");
-        if (signOutError) {
-          console.warn("user-admin global signOut after password reset failed", {
-            ...actionLogContext,
-            error: signOutError.message,
-          });
-        }
-      }
-
+      // GoTrue revokes the other user’s sessions as part of updating the password.
       console.info("user-admin action completed", actionLogContext);
 
       return jsonResponse(req, 200, { success: true }, actionLogContext);

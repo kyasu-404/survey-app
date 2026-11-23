@@ -1,5 +1,6 @@
 import { Icon } from "../../shared/ui/Icon";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { getOrganizations } from "../../entities/organization/api";
@@ -22,8 +23,28 @@ import {
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { RESPONSES_HTML_LAYOUT_CSS } from "../../shared/lib/responsesHtmlLayout";
 
+const RESPONSES_PER_PREVIEW_PAGE = 200;
+
 export default function FormResponsesHtmlPage() {
   const { id } = useParams();
+  const [pageSelection, setPageSelection] = useState<{ formId?: string; page: number }>({ page: 1 });
+  const [isPrinting, setIsPrinting] = useState(() => window.matchMedia?.("print").matches ?? false);
+
+  useEffect(() => {
+    const beforePrint = () => flushSync(() => setIsPrinting(true));
+    const afterPrint = () => setIsPrinting(false);
+    const media = window.matchMedia?.("print");
+    const onPrintMediaChange = (event: MediaQueryListEvent) => setIsPrinting(event.matches);
+    media?.addEventListener("change", onPrintMediaChange);
+    window.addEventListener("beforeprint", beforePrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      media?.removeEventListener("change", onPrintMediaChange);
+      window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+    };
+  }, []);
+
 
   const formQuery = useQuery({
     queryKey: getFormQueryKey(id),
@@ -91,10 +112,16 @@ export default function FormResponsesHtmlPage() {
   );
   const formTitle = formQuery.data?.title ?? "Ответы формы";
   const generatedAt = useMemo(() => new Date(), [formTitle, table]);
-  const htmlPreview = useMemo(
-    () => createResponsesHtmlReport({ title: formTitle, ...table, generatedAt }),
-    [formTitle, generatedAt, table],
-  );
+  const pageCount = Math.max(1, Math.ceil(table.rows.length / RESPONSES_PER_PREVIEW_PAGE));
+  const currentPage = pageSelection.formId === id ? Math.min(pageSelection.page, pageCount) : 1;
+  const htmlPreview = useMemo(() => {
+    const input = { title: formTitle, ...table, generatedAt };
+    if (isPrinting) return createResponsesHtmlReport(input, { layout: "print" });
+    const start = (currentPage - 1) * RESPONSES_PER_PREVIEW_PAGE;
+    return createResponsesHtmlReport({ ...input, rows: table.rows.slice(start, start + RESPONSES_PER_PREVIEW_PAGE) }, {
+      layout: "screen", totalResponses: table.rows.length,
+    });
+  }, [currentPage, formTitle, generatedAt, isPrinting, table]);
   const isLoading = formQuery.isLoading
     || responsesQuery.isLoading
     || (usesOrganizationDirectory && organizationsQuery.isLoading);
@@ -103,7 +130,8 @@ export default function FormResponsesHtmlPage() {
   const canUseHtml = !isLoading && !combinedError;
 
   const handleDownload = () => {
-    const htmlDocument = createResponsesHtmlDocument({ title: formTitle, ...table, generatedAt }, htmlPreview);
+    const input = { title: formTitle, ...table, generatedAt };
+    const htmlDocument = createResponsesHtmlDocument(input, createResponsesHtmlReport(input));
     downloadHtmlDocument(htmlDocument, `ответы-${formTitle}`);
   };
 
@@ -146,14 +174,21 @@ export default function FormResponsesHtmlPage() {
         <p className="responses-page-error">{getErrorMessage(combinedError, "Не удалось загрузить ответы")}</p>
       )}
 
-      {!isLoading && !combinedError && (
+      {canUseHtml && (
         <>
           <div
             className="responses-html-preview"
-            dangerouslySetInnerHTML={{
-              __html: htmlPreview,
-            }}
+            dangerouslySetInnerHTML={{ __html: htmlPreview }}
           />
+          {pageCount > 1 && !isPrinting && (
+            <nav className="responses-pagination" aria-label="Страницы предпросмотра ответов">
+              <button type="button" className="button" disabled={currentPage <= 1}
+                onClick={() => setPageSelection({ formId: id, page: currentPage - 1 })}>Назад</button>
+              <span aria-live="polite">Страница {currentPage} из {pageCount}</span>
+              <button type="button" className="button" disabled={currentPage >= pageCount}
+                onClick={() => setPageSelection({ formId: id, page: currentPage + 1 })}>Далее</button>
+            </nav>
+          )}
         </>
       )}
     </main>

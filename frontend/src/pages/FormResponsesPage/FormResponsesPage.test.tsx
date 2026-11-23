@@ -1,7 +1,7 @@
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prepareFormMail, queueFormInvitations } from "../../entities/mail/api";
 import * as responseApi from "../../entities/response/api";
@@ -1110,6 +1110,37 @@ describe("FormResponsesPage", () => {
     expect(loadResponseRows).toHaveBeenCalledTimes(2);
   });
 
+  it("discards an unfinished report when switching to another form", async () => {
+    getFormById.mockImplementation(async (id: string) => ({
+      ...invitationForm, id, title: id === "form-1" ? "Первая форма" : "Вторая форма",
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    }));
+    loadResponseRows.mockImplementation(async (id: string) => [{
+      ...createResponse(1), form_id: id, data: { name: id === "form-1" ? "Первый ответ" : "Второй ответ" },
+    }]);
+    const deferred = createDeferred<SurveyResponse[]>();
+    const all = vi.spyOn(responseApi, "getAllResponsesByForm").mockImplementationOnce(() => deferred.promise);
+    try {
+      render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+        <QueryClientProvider client={createQueryClient()}>
+          <Link to="/forms/form-2/responses">К другой форме</Link>
+          <Routes><Route path="/forms/:id/responses" element={<FormResponsesPage />} /></Routes>
+        </QueryClientProvider>
+      </MemoryRouter>);
+      await screen.findByText("Первый ответ");
+      await userEvent.click(screen.getByRole("button", { name: "Отчёт" }));
+      const signal = all.mock.calls[0]?.[1]?.signal;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      await userEvent.click(screen.getByRole("link", { name: "К другой форме" }));
+      await screen.findByText("Второй ответ");
+      expect(signal?.aborted).toBe(true);
+      await act(async () => { deferred.resolve([createResponse(1)]); });
+      expect(screen.queryByRole("dialog", { name: "Отчёт по ответам" })).not.toBeInTheDocument();
+    } finally {
+      all.mockRestore();
+    }
+  });
+
   it("reconciles responses after the realtime subscription reconnects", async () => {
     getFormById.mockResolvedValue({ id: "form-1", author_id: "user-1", title: "Форма", schema: {
       pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }],
@@ -1154,6 +1185,9 @@ describe("FormResponsesPage", () => {
     );
 
     expect(await screen.findByText("Анна")).toBeInTheDocument();
+    const checkbox = screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" });
+    expect(checkbox.closest("tr")).not.toHaveAttribute("role", "button");
+    expect(screen.getByRole("button", { name: "Открыть Ответ Анна" })).not.toContainElement(checkbox);
     await userEvent.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
     expect(screen.getByText("Выбрано: 1")).toHaveClass("responses-selection-count");
     await userEvent.click(screen.getByRole("button", { name: "Удалить" }));

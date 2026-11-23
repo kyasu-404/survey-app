@@ -2,7 +2,7 @@ import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { publicSupabaseClient, supabaseClient } from "./client";
 import { getOrCreateResponseBrowserId } from "../lib/responseBrowserId";
 import { runRequest } from "./request";
-import { SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
+import { SUPABASE_ANON_KEY, SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const PUBLIC_STORAGE_PREFIX = "public";
@@ -85,7 +85,7 @@ async function getCurrentUserId(options: StorageAuthOptions = {}) {
   } = await runRequest(
     "auth.getStorageUser",
     () => supabaseClient.auth.getUser(),
-    { context: { allowAnonymous: Boolean(options.allowAnonymous) } },
+    { signal: options.signal, context: { allowAnonymous: Boolean(options.allowAnonymous) } },
   );
 
   if (error) {
@@ -300,8 +300,8 @@ async function fetchStorageFileBlob(path: string, options: StorageAuthOptions) {
   options.signal?.throwIfAborted();
   return runRequest(
     "storage.downloadSignedFile",
-    async (signal) => {
-      const response = await fetch(signedUrl, { signal });
+    async (signal, trace) => {
+      const response = await fetch(signedUrl, { signal, headers: trace.headers });
       if (!response.ok) {
         throw new Error(`Не удалось скачать файл: ${response.status} ${response.statusText}`.trim());
       }
@@ -338,6 +338,7 @@ export async function preparePersonalResponseUploads(formId: string, data: Recor
 }
 
 export async function uploadFileToStorage(formId: string, file: File, options: UploadFileToStorageOptions = {}) {
+  options.signal?.throwIfAborted();
   if (file.size > MAX_STORAGE_FILE_SIZE_BYTES) {
     throw new Error(`Размер файла превышает допустимые ${MAX_STORAGE_FILE_SIZE_MB} МБ`);
   }
@@ -352,16 +353,49 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
   const filePath = currentUserId
     ? buildUserStoragePath(currentUserId, formId, file.name)
     : await reservePublicStoragePath(formId, file, options);
-  const bucketClient = currentUserId ? supabaseClient : publicSupabaseClient;
-  const bucket = bucketClient.storage.from(SUPABASE_STORAGE_BUCKET);
+  let accessToken = SUPABASE_ANON_KEY;
+  if (currentUserId) {
+    const { data: { session }, error } = await runRequest(
+      "auth.getStorageSession", () => supabaseClient.auth.getSession(), { signal: options.signal },
+    );
+    if (error || session?.user.id !== currentUserId) {
+      throw new Error("Сессия авторизации изменилась. Войдите снова и повторите загрузку.");
+    }
+    accessToken = session.access_token;
+  }
 
-  const { error } = await runRequest(
+  const multipart = new FormData();
+  multipart.append("cacheControl", "3600");
+  if (options.questionName) {
+    multipart.append("metadata", JSON.stringify({
+      questionName: options.questionName, fileName: file.name, mimeType: file.type,
+    }));
+  }
+  multipart.append("", file);
+  const encodedPath = [SUPABASE_STORAGE_BUCKET, ...filePath.split("/")].map(encodeURIComponent).join("/");
+
+  // The SDK's upload API has no signal option. Use the same multipart Storage
+  // endpoint so the transfer itself observes cancellation and the timeout.
+  await runRequest(
     "storage.upload",
-    () =>
-      bucket.upload(filePath, file, {
-        upsert: false,
-        ...(options.questionName ? { metadata: { questionName: options.questionName, fileName: file.name, mimeType: file.type } } : {}),
-      }),
+    async (signal, trace) => {
+      signal.throwIfAborted();
+      const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodedPath}`, {
+        method: "POST",
+        body: multipart,
+        signal,
+        headers: {
+          ...trace.headers,
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "x-upsert": "false",
+        },
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null) as { message?: string } | null;
+        throw new Error(`Не удалось загрузить файл: ${error?.message ?? response.statusText ?? response.status}`);
+      }
+    },
     {
       signal: options.signal,
       timeoutMs: STORAGE_TRANSFER_TIMEOUT_MS,
@@ -374,10 +408,6 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
       },
     },
   );
-
-  if (error) {
-    throw new Error(`Не удалось загрузить файл: ${error.message}`);
-  }
 
   return {
     file,

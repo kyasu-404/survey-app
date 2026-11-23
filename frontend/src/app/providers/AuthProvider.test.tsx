@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthProvider";
+import { loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "../../widgets/SurveyBuilder/builderDraft";
 
 const { getCurrentSession, onAuthStateChange, from } = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
@@ -218,4 +219,52 @@ describe("AuthProvider", () => {
     await act(async () => { nextProfile.resolve({ data: { id: "employee", role: "user", is_disabled: false }, error: null }); });
     await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:employee:user"));
   });
+  it("drops a verified profile after an explicit authorization error but keeps it through a network error", async () => {
+    const session = { user: { id: "admin" } };
+    const single = vi.fn().mockResolvedValue({ data: { id: "admin", role: "admin", is_disabled: false }, error: null });
+    let listener!: (event: string, nextSession: typeof session) => Promise<void>;
+    getCurrentSession.mockResolvedValue({ data: { session } });
+    onAuthStateChange.mockImplementation(callback => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    from.mockReturnValue({ select: () => ({ eq: () => ({ single }) }) });
+    renderWithAuthProvider(<AuthStateProbe />);
+    await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:admin:admin"));
+
+    single.mockRejectedValueOnce(new Error("Temporary network outage"));
+    await act(async () => { await listener("TOKEN_REFRESHED", session); });
+    expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:admin:admin");
+
+    single.mockResolvedValueOnce({ data: null, error: { code: "42501", message: "Forbidden" }, status: 403 });
+    await act(async () => { await listener("TOKEN_REFRESHED", session); });
+    expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:admin:no-profile");
+  });
+
+  it("removes the signing-out user's local constructor drafts", async () => {
+    const session = { user: { id: "signed-in" } };
+    const single = vi.fn().mockResolvedValue({ data: { id: "signed-in", role: "user", is_disabled: false }, error: null });
+    let listener!: (event: string, nextSession: typeof session | null) => Promise<void>;
+    getCurrentSession.mockResolvedValue({ data: { session } });
+    onAuthStateChange.mockImplementation(callback => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    from.mockReturnValue({ select: () => ({ eq: () => ({ single }) }) });
+    renderWithAuthProvider(<AuthStateProbe />);
+    await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:signed-in:user"));
+    localStorage.clear();
+    saveSurveyBuilderDraft("signed-in", undefined, { title: "Новая", pages: [] });
+    saveSurveyBuilderDraft("signed-in", "saved", { title: "Существующая", pages: [] });
+    saveSurveyBuilderDraft("another", undefined, { title: "Чужая", pages: [] });
+    try {
+      await act(async () => { await listener("SIGNED_OUT", null); });
+      expect(loadSurveyBuilderDraft("signed-in")).toBeNull();
+      expect(loadSurveyBuilderDraft("signed-in", "saved")).toBeNull();
+      expect(loadSurveyBuilderDraft("another")).not.toBeNull();
+    } finally {
+      localStorage.clear();
+    }
+  });
+
 });

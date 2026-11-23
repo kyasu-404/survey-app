@@ -9,7 +9,7 @@ import { SectionTabs } from "../../shared/ui/SectionTabs";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { AnnouncementPreview } from "./AnnouncementPreview";
 import { MessageEditor } from "./MessageEditor";
-import { audienceLabels, displayLabels, saveAnnouncement, type AdminAnnouncement, type AnnouncementFields, type AnnouncementStatus, type Publication } from "./api";
+import { AnnouncementConflictError, audienceLabels, displayLabels, saveAnnouncement, type AdminAnnouncement, type AnnouncementFields, type AnnouncementStatus, type Publication } from "./api";
 
 const editorTabs = [{ value: "edit", label: "Редактор" }, { value: "preview", label: "Предпросмотр" }] as const;
 const saveTexts = { draft: "Черновик сохранён.", published: "Объявление опубликовано.", scheduled: "Публикация запланирована.", archived: "Изменения сохранены." };
@@ -30,8 +30,9 @@ function localDate(date: string, original: string | null) {
   return value.toISOString();
 }
 
-export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
-  row: AdminAnnouncement | null; onClose: () => void; onSaved: (status: AnnouncementStatus, message: string) => void; onSaveError: () => void;
+export function AnnouncementEditor({ row, onClose, onSaved, onSaveError, onReload }: {
+  row: AdminAnnouncement | null; onClose: () => void; onSaved: (status: AnnouncementStatus, message: string) => void;
+  onSaveError: () => void; onReload: (id: string) => Promise<void>;
 }) {
   const dialog = useModalSurface();
   const publishDateInputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,8 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
   const [expires, setExpires] = useState(formatDateTimeLocalValue(row?.expires_at ?? null));
   const [linkOpen, setLinkOpen] = useState(Boolean(fields.action_url));
   const [error, setError] = useState("");
+  const [hasConflict, setHasConflict] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const status = row?.status ?? "draft";
   const canPublish = status === "draft" || status === "scheduled";
   const unchangedSchedule = status === "scheduled" && publication === "schedule" && date === formatDateTimeLocalValue(row?.publish_at ?? null);
@@ -88,22 +91,38 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       return { status: next, message: mode === "keep" && row ? "Изменения сохранены." : saveTexts[next] };
     },
     onSuccess: result => onSaved(result.status, result.message),
-    onError: cause => { setTab("edit"); setError(getErrorMessage(cause, "Не удалось сохранить объявление.")); },
+    onError: cause => {
+      setTab("edit");
+      setHasConflict(cause instanceof AnnouncementConflictError);
+      setError(getErrorMessage(cause, "Не удалось сохранить объявление."));
+    },
   });
   function update<K extends keyof AnnouncementFields>(key: K, value: AnnouncementFields[K]) {
     setFields(previous => ({ ...previous, [key]: value }));
-    setError("");
+    if (!hasConflict) setError("");
   }
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (save.isPending) return;
+    if (save.isPending || hasConflict) return;
     setError("");
     save.mutate();
   }
 
+  async function reload() {
+    if (!row || reloading) return;
+    setReloading(true);
+    try {
+      await onReload(row.id);
+    } catch (cause) {
+      setError(getErrorMessage(cause, "Не удалось загрузить актуальное объявление."));
+    } finally {
+      setReloading(false);
+    }
+  }
+
   return <dialog className="card modal-card activity-rule-dialog announcement-editor-dialog" ref={dialog} aria-labelledby="announcement-editor-title"
     onCancel={event => { event.preventDefault(); if (!save.isPending) onClose(); }}>
-    <form noValidate onSubmit={submit} onChange={() => setError("")} className="announcement-editor-form">
+    <form noValidate onSubmit={submit} onChange={() => { if (!hasConflict) setError(""); }} className="announcement-editor-form">
       <header className="activity-heading">
         <h2 id="announcement-editor-title">{row ? "Редактировать объявление" : "Новое объявление"}</h2>
         <button type="button" className="app-button icon-button" aria-label="Закрыть" disabled={save.isPending} onClick={onClose}><Icon name="close" /></button>
@@ -111,7 +130,6 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
       <SectionTabs id="announcement-editor" label="Режим редактора" tabs={editorTabs} value={tab} onChange={setTab} />
       <div className="activity-editor-body" role="tabpanel" id="announcement-editor-panel-edit"
         aria-labelledby="announcement-editor-tab-edit" hidden={tab !== "edit"}>
-        {tab === "edit" && <>
           <fieldset disabled={save.isPending} className="activity-editor-step">
             <legend>Содержание</legend>
             <label className="activity-field">Заголовок
@@ -171,7 +189,6 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
             </div>
             {(status !== "archived" || expires) && <small className="activity-muted">Время местное.</small>}
           </fieldset>
-        </>}
       </div>
       <div className="activity-editor-body" role="tabpanel" id="announcement-editor-panel-preview"
         aria-labelledby="announcement-editor-tab-preview" hidden={tab !== "preview"}>
@@ -181,7 +198,10 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError }: {
         {error && <p className="activity-error activity-dialog-error" role="alert">{error}</p>}
         <div className="activity-actions activity-dialog-actions">
           <button className="app-button" type="button" onClick={onClose} disabled={save.isPending}>Отмена</button>
-          <button className="button-primary" type="submit" disabled={save.isPending}>{save.isPending && <InlineSpinner />}
+          {hasConflict && <button className="app-button" type="button" disabled={reloading} onClick={() => void reload()}>
+            Сбросить правки и загрузить актуальную версию
+          </button>}
+          <button className="button-primary" type="submit" disabled={save.isPending || hasConflict}>{save.isPending && <InlineSpinner />}
             {save.isPending ? "Сохранение…" : submitLabel}</button>
         </div>
       </footer>

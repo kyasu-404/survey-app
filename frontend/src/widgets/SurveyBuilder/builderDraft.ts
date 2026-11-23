@@ -3,7 +3,9 @@ import { sanitizeSurveySchema } from "../../entities/survey/model/surveySchemaSe
 import { resolveSurveyTheme, sanitizeSurveyTheme } from "../../entities/survey/model/surveyTheme";
 import type { SurveySchema } from "../../entities/survey/types";
 
-const BUILDER_DRAFT_STORAGE_PREFIX = "survey-builder:draft";
+import { getLegacySurveyBuilderDraftStorageKey, getSurveyBuilderDraftStorageKey } from "../../shared/lib/builderDraftStorage";
+
+export { getSurveyBuilderDraftStorageKey } from "../../shared/lib/builderDraftStorage";
 const BUILDER_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type BuilderDraftPayload = {
@@ -21,14 +23,6 @@ export type SurveyBuilderDraft = {
   theme: ITheme;
   assetFormId?: string;
 };
-
-function getLegacySurveyBuilderDraftStorageKey(formId?: string) {
-  return `${BUILDER_DRAFT_STORAGE_PREFIX}:${formId ?? "new"}`;
-}
-
-export function getSurveyBuilderDraftStorageKey(userId: string, formId?: string) {
-  return `${BUILDER_DRAFT_STORAGE_PREFIX}:${userId}:${formId ?? "new"}`;
-}
 
 export function loadSurveyBuilderDraft(userId: string, formId?: string): SurveyBuilderDraft | null {
   if (typeof window === "undefined") {

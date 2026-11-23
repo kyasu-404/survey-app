@@ -128,6 +128,15 @@ describe("SettingsPage", () => {
     resetAppLogo.mockResolvedValue({ sidebarLogoPath: null, sidebarLogoUrl: null, updatedAt: null });
   });
 
+  it("waits until the embedding tab is visited before loading its settings", async () => {
+    renderPage();
+    await waitFor(() => expect(getAppBranding).toHaveBeenCalled());
+    expect(getEmbeddingSettings).not.toHaveBeenCalled();
+    expect(getStorageCleanupOverview).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("tab", { name: "iframe" }));
+    await waitFor(() => expect(getEmbeddingSettings).toHaveBeenCalledOnce());
+  });
+
   it("lets an administrator upload and preview the main sidebar logo", async () => {
     renderPage();
 

@@ -62,7 +62,7 @@ test("CI workflow gates production releases", () => {
 
 test("production proxy applies a dedicated anonymous upload rate limit", () => {
   assert.match(productionProxy, /limit_req_zone\s+\$survey_upload_key\s+zone=survey_uploads_v2:\d+m\s+rate=10r\/s;/);
-  assert.match(productionProxy, /location\s+\^~\s+\/api\/storage\/v1\/object\/survey-files\//);
+  assert.match(productionProxy, /location\s+~\s+\^\/api\/storage\/v1\/object\/\(\?:upload\/sign\/\)\?survey-files\//);
   assert.match(productionProxy, /limit_req\s+zone=survey_uploads_v2\s+burst=200\s+nodelay;/);
   assert.match(productionProxy, /Do not expose Kong directly in production/i);
 });
@@ -84,11 +84,12 @@ test("production proxy limits Office and form-admin writes without bypassing nor
   assert.doesNotMatch(productionProxy, /location \^~ \/api\/ \{/);
 });
 
-test("production proxy redirects HTTP and does not allow arbitrary remote theme images", () => {
+test("production proxy uses a canonical HTTPS redirect and an explicit theme image origin", () => {
   assert.match(productionProxy, /listen\s+80;/);
-  assert.match(productionProxy, /return\s+301\s+https:\/\/\$host\$request_uri;/);
+  assert.match(productionProxy, /return\s+301\s+https:\/\/example\.com\$request_uri;/);
   assert.match(productionProxy, /ssl_protocols\s+TLSv1\.2\s+TLSv1\.3;/);
-  assert.doesNotMatch(productionProxy, /img-src[^;]*\shttps:/i);
+  assert.match(productionProxy, /img-src[^;]*\shttps:\/\/api\.example\.com;/i);
+  assert.doesNotMatch(productionProxy, /img-src[^;]*\shttps:(?:\s|;)/i);
 });
 
 test("deployment guide disables public registration while keeping email sign-in enabled", () => {

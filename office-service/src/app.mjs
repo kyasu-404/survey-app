@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { enqueueGeneration } from './generation-jobs.mjs';
-import { runOfficeTask } from './office-tasks.mjs';
+import { MAX_RESULT_ZIP_BYTES, runOfficeTask } from './office-tasks.mjs';
 import { readFile } from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
 import { createResponseArchiveRoutes } from './response-archive.mjs';
-import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, saveUrl, readLimited, fetchLimited, documentName, documentKey, callbackSaveTime } from './security.mjs';
+import { HttpError, requireValue, uuid, sign, verify, encrypt, decrypt, encryptionKey, baseUrl, configuredOrigins, saveUrl, readLimited, fetchLimited, documentName, documentKey, callbackSaveTime } from './security.mjs';
 import { DOCX_MIME, blankDocx } from './docx.mjs';
 import {XLSX_MIME,mimeFor,blankXlsx,templateSources,systemFields} from './templates.mjs';
 export const PLUGIN_GUID = 'asc.{BA7A912A-0856-4677-9AB5-390CA8D4D636}';
 const BUCKET = 'survey-documents';
+const MAX_ACTIVE_RESULT_DOWNLOADS = 2;
 const now = () => Math.floor(Date.now()/1000);
 const bearer = req => (req.headers.authorization || '').replace(/^Bearer /, '');
 
@@ -34,20 +36,32 @@ export function createApp({pool, supabase, env = process.env}) {
   const appUrl = baseUrl(env.PUBLIC_APP_URL);
   const appAddress = new URL(appUrl);
   const allowedOrigins = new Set([appAddress.origin]);
-  let embedOrigin = appAddress.origin;
-  if (env.OFFICE_EMBED_ORIGIN?.trim()) {
-    const embedAddress = new URL(baseUrl(env.OFFICE_EMBED_ORIGIN.trim()));
-    requireValue(embedAddress.pathname === '/', 'OFFICE_EMBED_ORIGIN принимает только адрес без пути');
-    embedOrigin = embedAddress.origin;
-    allowedOrigins.add(embedOrigin);
+  const [configuredEmbedOrigin] = configuredOrigins(env.OFFICE_EMBED_ORIGIN, 'OFFICE_EMBED_ORIGIN');
+  requireValue(!env.OFFICE_EMBED_ORIGIN?.includes(',') && configuredEmbedOrigin !== appAddress.origin,
+    'OFFICE_EMBED_ORIGIN принимает один отдельный origin');
+  const embedOrigin = configuredEmbedOrigin || appAddress.origin;
+  const embedHost = configuredEmbedOrigin && new URL(configuredEmbedOrigin).host;
+  allowedOrigins.add(embedOrigin);
+  for (const origin of configuredOrigins(env.OFFICE_ALLOWED_ORIGINS, 'OFFICE_ALLOWED_ORIGINS')) {
+    allowedOrigins.add(origin);
   }
-  for (const value of (env.OFFICE_ALLOWED_ORIGINS ?? '').split(',')) {
-    const origin = value.trim();
-    if (!origin) continue;
-    const address = new URL(baseUrl(origin));
-    requireValue(address.pathname === '/', 'OFFICE_ALLOWED_ORIGINS принимает только адреса без пути');
-    allowedOrigins.add(address.origin);
+  const documentServerOrigins = configuredOrigins(env.OFFICE_DOCUMENT_SERVER_ORIGINS, 'OFFICE_DOCUMENT_SERVER_ORIGINS');
+  const callbackOrigins = configuredOrigins(env.OFFICE_CALLBACK_ORIGINS, 'OFFICE_CALLBACK_ORIGINS');
+  callbackOrigins.add(appAddress.origin);
+  const checkDocumentServer = (url, status = 503) => {
+    requireValue(url && documentServerOrigins.has(new URL(baseUrl(url)).origin),
+      'Адрес ONLYOFFICE должен быть разрешён оператором в OFFICE_DOCUMENT_SERVER_ORIGINS', status);
+  };
+  const callbackBase = (override, status = 503) => {
+    requireValue(!override || callbackOrigins.has(new URL(baseUrl(override)).origin),
+      'Адрес приложения для ONLYOFFICE должен быть разрешён оператором в OFFICE_CALLBACK_ORIGINS', status);
+    return override || appUrl;
+  };
+  function fetchDocumentServer(url, options, limit) {
+    checkDocumentServer(new URL(url).origin);
+    return fetchLimited(url, options, limit);
   }
+  let activeResultDownloads = 0;
   const store = supabase.storage.from(BUCKET);
   const query = async (sql,args=[]) => (await pool.query(sql,args)).rows;
   const settings = async () => (await query('select * from public.onlyoffice_settings where id=1'))[0];
@@ -165,7 +179,7 @@ export function createApp({pool, supabase, env = process.env}) {
         forceTime=callbackSaveTime(payload.lastsave);
         if(!isCurrent(snapshot)) return send(res,200,{error:0});
         // No checked-out DB connection or row lock during HTTP/worker waits.
-        bytes=await fetchLimited(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
+        bytes=await fetchDocumentServer(saveUrl(payload.url,s),{},s.max_file_mb*1024*1024);
         ({fieldCount}=await runOfficeTask({task:'inspect',bytes,format:snapshot.file_type || 'docx',maxBytes:s.max_file_mb*1024*1024}));
         uploadedPath=`forms/${snapshot.form_id}/documents/${id}/${randomUUID()}.${snapshot.file_type || 'docx'}`;
         await upload(uploadedPath,bytes,snapshot.file_type || 'docx');
@@ -195,29 +209,32 @@ export function createApp({pool, supabase, env = process.env}) {
       throw error;
     }
   }
-  function send(res,status,body,headers={}) {
+  function writeResponseHeaders(res,status,headers={}) {
     const cors = res._corsHeaders || {};
     res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',...cors,...headers});
+  }
+  function send(res,status,body,headers={}) {
+    writeResponseHeaders(res,status,headers);
     res.end(Buffer.isBuffer(body) || typeof body==='string' ? body : JSON.stringify(body));
   }
   async function command(s,payload) {
     const secret=decrypt(s.jwt_secret_encrypted,key);
     const token=sign(payload,secret);
-    return JSON.parse(await fetchLimited(`${s.internal_url || s.public_url}/command`,{
+    return JSON.parse(await fetchDocumentServer(`${s.internal_url || s.public_url}/command`,{
       method:'POST',headers:{'Content-Type':'application/json',[s.jwt_header]:s.jwt_prefix+sign({payload},secret)},body:JSON.stringify({...payload,token}),
     }));
   }
   async function connectionTest(s) {
     const checks=[];
     const check=async(label,fn)=>{try{const detail=await fn();checks.push({label,ok:true,detail:detail || ''});}catch(e){checks.push({label,ok:false,detail:e instanceof HttpError ? e.message : 'Нет соединения; проверьте адрес, TLS и сетевой доступ'});}};
-    await check('Survey-app → ONLYOFFICE',async()=>{requireValue((await fetchLimited(`${s.internal_url || s.public_url}/healthcheck`)).toString().trim()==='true','Document Server не готов');});
-    await check('API редактора',async()=>{await fetchLimited(`${s.public_url}/web-apps/apps/api/documents/api.js`,{},4*1024*1024);});
+    await check('Survey-app → ONLYOFFICE',async()=>{requireValue((await fetchDocumentServer(`${s.internal_url || s.public_url}/healthcheck`)).toString().trim()==='true','Document Server не готов');});
+    await check('API редактора',async()=>{await fetchDocumentServer(`${s.public_url}/web-apps/apps/api/documents/api.js`,{},4*1024*1024);});
     await check('JWT принят',async()=>{const r=await command(s,{c:'version'});requireValue(!r.error && r.version,'Document Server отклонил JWT',502);return r.version;});
     await check('Конфигурация плагина',async()=>{const c=JSON.parse(await fetchLimited(`${embedOrigin}/api/office/plugin/config.json`));requireValue(c.guid===PLUGIN_GUID,'Не совпадает плагин');});
     await check('ONLYOFFICE → Survey-app: загрузка DOCX',async()=>{
       const token=issue('probe',{},180),secret=decrypt(s.jwt_secret_encrypted,key);
-      const payload={async:false,filetype:'docx',outputtype:'pdf',key:`survey_probe_${randomUUID().replaceAll('-','')}`,url:`${s.storage_url_override || appUrl}/api/office/probe?token=${token}`};
-      const result=JSON.parse(await fetchLimited(`${s.internal_url || s.public_url}/converter`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',[s.jwt_header]:s.jwt_prefix+sign({payload},secret)},body:JSON.stringify({...payload,token:sign(payload,secret)})}));
+      const payload={async:false,filetype:'docx',outputtype:'pdf',key:`survey_probe_${randomUUID().replaceAll('-','')}`,url:`${callbackBase(s.storage_url_override)}/api/office/probe?token=${token}`};
+      const result=JSON.parse(await fetchDocumentServer(`${s.internal_url || s.public_url}/converter`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',[s.jwt_header]:s.jwt_prefix+sign({payload},secret)},body:JSON.stringify({...payload,token:sign(payload,secret)})}));
       requireValue(result.endConvert===true && !result.error,'ONLYOFFICE не смог загрузить пробный DOCX. Проверьте адрес приложения и доверие TLS.',502);
     });
     checks.push({label:'Callback сохранения',ok:null,detail:'Проверяется фактическим сохранением DOCX; конвертация проверяет обратный доступ, но не заменяет callback.'});
@@ -227,7 +244,10 @@ export function createApp({pool, supabase, env = process.env}) {
   async function handle(req,res) {
     const url=new URL(req.url,'http://office.local'),path=url.pathname.replace(/^\/api\/office/,'');
     const origin=req.headers.origin;
-    const isPublicPluginGet = path.startsWith('/plugin/') && req.method==='GET';
+    const isPluginPath = path.startsWith('/plugin/');
+    const isEmbedAsset = isPluginPath || path === '/editor-frame' || path === '/editor-bridge.js';
+    requireValue(!embedHost || !isEmbedAsset || req.headers.host?.toLowerCase() === embedHost, 'Метод Office API не найден',404);
+    const isPublicPluginGet = isPluginPath && req.method==='GET';
     requireValue(!origin || allowedOrigins.has(origin) || isPublicPluginGet,'Недопустимый origin',403);
     if (origin && allowedOrigins.has(origin) && !isPublicPluginGet) {
       res._corsHeaders = {
@@ -248,10 +268,11 @@ export function createApp({pool, supabase, env = process.env}) {
     if (downloadArchive && req.method === 'GET') return archives.download(req, res, downloadArchive[1]);
     const s=await settings();
     requireValue(s,'Office API не настроен',503);
-    const dsOrigin=s.public_url ? new URL(s.public_url).origin : "'none'";
+    const configuredDocumentServer = s.public_url && new URL(s.public_url).origin;
+    const dsOrigin = documentServerOrigins.has(configuredDocumentServer) ? configuredDocumentServer : null;
     if(path==='/editor-frame' && req.method==='GET') {
       const frameAncestors = [...allowedOrigins].join(' ');
-      const csp=`default-src 'none'; script-src 'self' ${dsOrigin}; style-src 'self' 'unsafe-inline'; frame-src ${dsOrigin}; connect-src 'self' ${dsOrigin}; img-src 'self' data:; frame-ancestors 'self' ${frameAncestors}; base-uri 'none'; form-action 'none'`;
+      const csp=`default-src 'none'; script-src 'self' ${dsOrigin ?? "'none'"}; style-src 'self' 'unsafe-inline'; frame-src ${dsOrigin ?? "'none'"}; connect-src 'self' ${dsOrigin ?? "'none'"}; img-src 'self' data:; frame-ancestors 'self' ${frameAncestors}; base-uri 'none'; form-action 'none'`;
       return send(res,200,await readFile(new URL('editor.html',staticRoot)),{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':csp});
     }
     if(path==='/editor-bridge.js' && req.method==='GET') {
@@ -264,9 +285,12 @@ export function createApp({pool, supabase, env = process.env}) {
       const mime=PLUGIN_MIMES.get(name);
       requireValue(mime,'Файл не найден',404);
       const source=await readFile(new URL(`plugin/${name}`,staticRoot));
-      const content=name==='plugins.js' ? `const SURVEY_DOCUMENT_SERVER_ORIGIN=${JSON.stringify(s.public_url ? new URL(s.public_url).origin : null)};\n${source}` : source;
+      const content=name==='plugins.js' ? `const SURVEY_DOCUMENT_SERVER_ORIGIN=${JSON.stringify(dsOrigin)};\n${source}` : source;
+      // The document server and both application frames are ancestors of
+      // the plugin iframe when the editor has a dedicated origin.
+      const ancestors=[...allowedOrigins,...(dsOrigin ? [dsOrigin] : [])].join(' ');
       return send(res,200,content,{'Content-Type':mime,'Access-Control-Allow-Origin':'*',
-        'Content-Security-Policy':`default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'self' ${dsOrigin}; base-uri 'none'; form-action 'none'`});
+        'Content-Security-Policy':`default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'self' ${ancestors}; base-uri 'none'; form-action 'none'`});
     }
     if(path==='/probe' && req.method==='GET') {capability(url.searchParams.get('token') || '','probe');return send(res,200,blankDocx(),{'Content-Type':DOCX_MIME});}
     if(path.startsWith('/file/') && req.method==='GET') {
@@ -305,6 +329,11 @@ export function createApp({pool, supabase, env = process.env}) {
       const urlsChanged = (s.public_url || '') !== public_url || (s.internal_url || '') !== internal_url;
       if (urlsChanged && !body.jwt_secret && s.jwt_secret_encrypted) {
         throw new HttpError(400, 'При изменении адреса ONLYOFFICE введите JWT Secret заново');
+      }
+      if(body.enabled) {
+        checkDocumentServer(public_url, 400);
+        if(internal_url) checkDocumentServer(internal_url, 400);
+        callbackBase(override, 400);
       }
       const secret=body.jwt_secret ? encrypt(String(body.jwt_secret),key) : s.jwt_secret_encrypted;
       requireValue(!body.enabled || secret,'Укажите JWT Secret');
@@ -361,10 +390,37 @@ export function createApp({pool, supabase, env = process.env}) {
         await query('delete from public.office_generation_results where id=$1',[result.id]);return send(res,200,{ok:true});
       }
       requireValue(req.method==='GET' && resultMatch[2],'Метод не поддерживается',405);
-      const archive=await download(result.storage_path);
-      let bytes=archive,name=result.name,contentType='application/zip';
-      if(resultMatch[3]!==undefined){const index=Number(resultMatch[3]);requireValue(Number.isSafeInteger(index)&&index>=0&&index<result.files.length,'Файл не найден',404);name=result.files[index];const extracted=(await runOfficeTask({task:'extract',bytes:archive,filename:name})).bytes;bytes=Buffer.from(extracted.buffer,extracted.byteOffset,extracted.byteLength);contentType=mimeFor(result.file_type);}
-      return send(res,200,bytes,{'Content-Type':contentType,'Content-Disposition':contentDisposition(name,resultMatch[3]!==undefined ? `document.${result.file_type || 'docx'}` : 'result.zip')});
+      const index=resultMatch[3] === undefined ? null : Number(resultMatch[3]);
+      requireValue(index === null || (Number.isSafeInteger(index) && index < result.files.length),'Файл не найден',404);
+      const size=result.size_bytes == null ? undefined : Number(result.size_bytes);
+      if(index !== null && size !== undefined) {
+        requireValue(Number.isSafeInteger(size) && size > 0 && size <= MAX_RESULT_ZIP_BYTES,'Размер ZIP превышает допустимое значение',413);
+      }
+      requireValue(activeResultDownloads < MAX_ACTIVE_RESULT_DOWNLOADS,'Сервер загружает результаты. Повторите немного позже.',429);
+      activeResultDownloads++;
+      const controller = new AbortController();
+      const abort = () => { if (!res.writableFinished) controller.abort(); };
+      res.once('close', abort);
+      try {
+        const {data,error} = await store.download(result.storage_path, {}, { signal:controller.signal }).asStream();
+        requireValue(!error && data,'Файл временно недоступен в хранилище',502);
+        if(index === null) {
+          writeResponseHeaders(res,200,{'Content-Type':'application/zip','Content-Disposition':contentDisposition(result.name,'result.zip')});
+          await pipeline(data,res,{signal:controller.signal});
+        } else {
+          const archive=await readLimited(data,MAX_RESULT_ZIP_BYTES,size);
+          const name=result.files[index];
+          const {bytes}=await runOfficeTask({task:'extract',bytes:archive,filename:name},{transferInput:true});
+          if (res.destroyed) return;
+          // Keep the slot until the response has released its output buffer.
+          writeResponseHeaders(res,200,{'Content-Type':mimeFor(result.file_type),'Content-Disposition':contentDisposition(name,`document.${result.file_type || 'docx'}`)});
+          await pipeline([bytes],res,{signal:controller.signal});
+        }
+      } finally {
+        res.off('close', abort);
+        activeResultDownloads--;
+      }
+      return;
     }
     const match=path.match(/^\/documents\/([^/]+)(?:\/(.*))?$/);
     if(match) {
@@ -384,12 +440,13 @@ export function createApp({pool, supabase, env = process.env}) {
       }
       if(action==='editor-config' && req.method==='GET') {
         employeeOnly(auth);requireValue(s.enabled && s.jwt_secret_encrypted && s.public_url,'Редактор ONLYOFFICE отключён. Документ можно скачать.',503);
+        checkDocumentServer(s.public_url);
+        const documentCallbackBase=callbackBase(s.storage_url_override);
         const result=await transaction(async db=>{
           const current=await documentFor(doc.id,auth,db,true);
-          const callbackBase=s.storage_url_override || appUrl;
           const config={documentType:doc.file_type==='xlsx' ? 'cell' : 'word',type:'desktop',width:'100%',height:'100%',document:{fileType:doc.file_type || 'docx',key:documentKey(current),title:current.name,
-            url:`${callbackBase}/api/office/file/${doc.id}?token=${issue('file',{documentId:doc.id,storagePath:current.storage_path},3600)}`,
-            permissions:{edit:true,download:true,print:true,review:true,comment:true}},editorConfig:{lang:'ru',mode:'edit',callbackUrl:`${callbackBase}/api/office/callback/${doc.id}`,
+            url:`${documentCallbackBase}/api/office/file/${doc.id}?token=${issue('file',{documentId:doc.id,storagePath:current.storage_path},3600)}`,
+            permissions:{edit:true,download:true,print:true,review:true,comment:true}},editorConfig:{lang:'ru',mode:'edit',callbackUrl:`${documentCallbackBase}/api/office/callback/${doc.id}`,
             user:{id:auth.profile.id,name:auth.profile.name || 'Сотрудник'},customization:{forcesave:true,autosave:true},
             plugins:{pluginsData:[`${embedOrigin}/api/office/plugin/config.json`],autostart:[PLUGIN_GUID],options:{[PLUGIN_GUID]:{
               formId:doc.form_id,documentId:doc.id,fileType:doc.file_type || 'docx',apiBaseUrl:`${embedOrigin}/api/office`,token:issue('plugin',{formId:doc.form_id,documentId:doc.id,sub:auth.profile.id,sessionEnd:now()+8*3600}),

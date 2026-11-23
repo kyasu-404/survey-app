@@ -33,6 +33,7 @@ async function startWorker(t, publicAppUrl, handleRequest, preload = []) {
       SUPABASE_URL: `http://127.0.0.1:${apiPort}`,
       SUPABASE_SERVICE_ROLE_KEY: "test",
       MAIL_SETTINGS_ENCRYPTION_KEY: encryptionKey.toString("base64"),
+      SMTP_ALLOWED_PRIVATE_HOSTS: "127.0.0.1",
       MAIL_WORKER_HEALTH_PORT: String(port),
       ...(publicAppUrl === undefined ? {} : { PUBLIC_APP_URL: publicAppUrl }),
     },

@@ -32,13 +32,21 @@ export type AdminAnnouncement = TimelineCursor & AnnouncementFields & {
 export type Publication = "keep" | "publish" | "schedule";
 export type AnnouncementAction = "withdraw" | "duplicate" | "archive";
 
-function rpcError(error: { code: string; message: string }, fallback: string) {
-  const localized = ["22023", "42501", "40001"].includes(error.code) && /^[А-ЯЁ]/.test(error.message);
-  if (localized) return new Error(error.message);
-  if (error.code === "40001") {
-    return new Error("Объявление было изменено в другой вкладке. Обновите список и повторите действие.");
+export class AnnouncementConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AnnouncementConflictError";
   }
-  return new Error(fallback);
+}
+
+function rpcError(error: { code: string; message: string }, fallback: string) {
+  const localized = /^[А-ЯЁ]/.test(error.message);
+  if (error.code === "40001") {
+    return new AnnouncementConflictError(localized
+      ? error.message
+      : "Объявление было изменено в другой вкладке. Загрузите актуальную версию.");
+  }
+  return new Error(localized && ["22023", "42501"].includes(error.code) ? error.message : fallback);
 }
 
 export async function listAnnouncements(status: AnnouncementStatus, cursor?: TimelineCursor, signal?: AbortSignal) {

@@ -24,11 +24,16 @@ test('durable Office jobs: snapshot, bounded queue, restart recovery, fencing an
  assert.equal(first.state,'queued');
  await assert.rejects(enqueueGeneration(pool,doc,owner,[response]),e=>e.status===429);
  await pool.query("update public.responses set data='{\"answer\":\"changed later\"}' where id=$1",[response]);
- // Pretend the service died after claiming its first job; no worker lock survives.
+ // Pretend the service died after claiming its first job; its lease expired.
  await pool.query("update public.office_generation_jobs set state='running',attempts=1,attempt_token=$2 where id=$1",[first.id,randomUUID()]);
  const uploaded=new Map();
  const store={download:async()=>({data:new Blob(['template'])}),upload:async(path,bytes)=>{uploaded.set(path,bytes);return {};},remove:async paths=>{paths.forEach(p=>uploaded.delete(p));return {};}};
- const runTask=async data=>{assert.equal(data.responses[0].data.answer,'snapshot');return {bytes:Buffer.from('zip'),files:['one.docx']};};
+ const runTask=async data=>{
+  assert.equal(data.responses[0].data.answer,'snapshot');
+  assert.equal(pool.idleCount,pool.totalCount,'no database client remains checked out during processing');
+  assert.equal(await processGenerationJob({pool,store,runTask}),false,'another worker must respect the active lease');
+  return {bytes:Buffer.from('zip'),files:['one.docx']};
+ };
  assert.equal(await processGenerationJob({pool,store,runTask}),true);
  const {rows:[done]}=await pool.query('select * from public.office_generation_jobs where id=$1',[first.id]);
  assert.equal(done.state,'succeeded');assert.equal(done.attempts,2);assert.equal(done.payload,null);
@@ -47,7 +52,7 @@ test('durable Office jobs: snapshot, bounded queue, restart recovery, fencing an
  await pool.query('update public.profiles set is_disabled=false where id=$1',[owner]);
  // A replaced attempt token must not publish or delete another worker's result.
  const third=await enqueueGeneration(pool,doc,owner,[response]);
- await processGenerationJob({pool,store,runTask:async()=>{await pool.query('update public.office_generation_jobs set attempt_token=$2 where id=$1',[third.id,randomUUID()]);return {bytes:Buffer.from('zip'),files:['one.docx']};}});
+ await processGenerationJob({pool,store,runTask:async()=>{await pool.query('update public.office_generation_jobs set attempt_token=$2,available_at=now() where id=$1',[third.id,randomUUID()]);return {bytes:Buffer.from('zip'),files:['one.docx']};}});
  assert.equal((await pool.query('select id from public.office_generation_results where id=$1',[third.id])).rowCount,0);
  assert.equal(uploaded.size,1);
  await processGenerationJob({pool,store,runTask:async()=>{throw new HttpError(429,'Busy');}});
@@ -65,7 +70,11 @@ test('Office HTTP save persists bindings in PostgreSQL and generates from the co
  let template;
  const store={
   upload:async(path,bytes)=>{if(failUpload)return {error:new Error('Storage unavailable')};objects.set(path,Buffer.from(bytes));return {};},
-  download:async path=>objects.has(path) ? {data:new Blob([objects.get(path)])} : {error:new Error('Missing object')},
+  download(path) {
+   const data=objects.has(path) ? new Blob([objects.get(path)]) : null;
+   const error=data ? null : new Error('Missing object');
+   return Object.assign(Promise.resolve({data,error}),{asStream:async()=>({data:data?.stream() ?? null,error})});
+  },
   remove:async paths=>{paths.forEach(path=>objects.delete(path));return {};},
  };
  const s={enabled:true,public_url:'https://docs.fixture.test',internal_url:'http://document-server.fixture.test',storage_url_override:'',jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',jwt_secret_encrypted:encrypt(secret,key),max_file_mb:25};
@@ -74,7 +83,7 @@ test('Office HTTP save persists bindings in PostgreSQL and generates from the co
  const realQuery=pool.query.bind(pool);
  pool.query=(sql,args)=>sql.includes('select * from public.onlyoffice_settings') ? Promise.resolve({rows:[s]}) : realQuery(sql,args);
  const supabase={storage:{from:()=>store},auth:{getUser:async token=>({data:{user:token==='fixture' ? {id:owner} : null}})}};
- const server=createServer(createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.fixture.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64')}}));
+ const server=createServer(createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.fixture.test',OFFICE_DOCUMENT_SERVER_ORIGINS:'https://docs.fixture.test,http://document-server.fixture.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64')}}));
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  base=`http://127.0.0.1:${server.address().port}/api/office`;
  t.after(async()=>{
@@ -92,7 +101,10 @@ test('Office HTTP save persists bindings in PostgreSQL and generates from the co
    if(!commandError)pendingCallbacks.push(callback(6,'2026-10-30T07:34:45.000Z',payload.key).then(async r=>assert.equal(r.status,200,await r.text())));
    return Response.json({error:commandError});
   }
-  if(String(input).startsWith(s.internal_url+'/cache/files/'))return new Response(template);
+  if(String(input).startsWith(s.internal_url+'/cache/files/')) {
+   assert.equal(options.redirect,'error');
+   return new Response(template);
+  }
   return originalFetch(input,options);
  });
  const request=(path,options={})=>fetch(base+path,{...options,headers:{Authorization:'Bearer fixture',...options.headers}});
@@ -126,7 +138,12 @@ test('Office HTTP save persists bindings in PostgreSQL and generates from the co
  assert.deepEqual(pending.jobs.map(({id,state})=>({id,state})),[{id:job.id,state:'queued'}]);
  assert.equal(await processGenerationJob({pool,store}),true);
  const results=await (await request(`/forms/${form}/results`)).json();assert.equal(results.results[0].id,job.id);assert.equal(results.jobs.length,0);
- const archive=unzipSync(Buffer.from(await (await request(`/results/${job.id}/download`)).arrayBuffer()));
+ const downloaded=await request(`/results/${job.id}/download`);
+ assert.equal(downloaded.status,200);
+ const archive=unzipSync(Buffer.from(await downloaded.arrayBuffer()));
+ const single=await request(`/results/${job.id}/files/0`);
+ assert.equal(single.status,200);
+ assert.deepEqual(new Uint8Array(await single.arrayBuffer()),archive[results.results[0].files[0]]);
  const output=unzipSync(archive[results.results[0].files[0]]);
  assert.match(strFromU8(output['word/document.xml']),/Сохранённый ответ/);
  assert.doesNotMatch(strFromU8(output['word/document.xml']),/survey-question:/);

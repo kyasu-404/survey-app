@@ -273,6 +273,7 @@ export function SurveyFormRenderer({
   const submissionIdRef = useRef<string>(createSubmissionId());
   const browserIdRef = useRef<string>(responseBrowserId ?? getOrCreateResponseBrowserId());
   const draftCompletedRef = useRef(false);
+  const activeModelRef = useRef<Model | null>(null);
   const resolvedRenderMode = resolveRenderMode(renderMode, isPreview);
   const isInteractiveMode = resolvedRenderMode === "interactive";
   const usesOrganizationDirectory = useMemo(() => hasOrganizationQuestion(schema), [schema]);
@@ -333,10 +334,14 @@ export function SurveyFormRenderer({
 
   useEffect(() => {
     draftCompletedRef.current = false;
+    activeModelRef.current = model;
     return () => {
-      if (typeof model.dispose === "function") {
-        model.dispose();
-      }
+      activeModelRef.current = null;
+      // The other effects still need the current page and UI state to flush
+      // their pending draft before SurveyJS tears down the model.
+      queueMicrotask(() => {
+        if (activeModelRef.current !== model) model.dispose();
+      });
     };
   }, [model]);
 
@@ -663,6 +668,7 @@ export function SurveyFormRenderer({
       return;
     }
 
+    draftCompletedRef.current = false;
     model.clear(false, true);
     model.data = savedResponse.data;
     if (personalOrganization) lockPersonalOrganization(model, personalOrganization);

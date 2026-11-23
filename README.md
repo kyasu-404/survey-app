@@ -143,6 +143,10 @@ PUBLIC_APP_URL=https://forms.example.ru
 # Разрешённые origin-ы frontend через запятую.
 MAIL_ADMIN_ALLOWED_ORIGINS=https://forms.example.ru
 
+# Необязательно: точные имена или IPv4-адреса доверенных внутренних SMTP-серверов через запятую.
+# Настройка применяется в mail-admin и mail-worker. По умолчанию частные адреса запрещены.
+SMTP_ALLOWED_PRIVATE_HOSTS=
+
 # Необязательно: частота опроса очереди и число параллельных отправок.
 MAIL_WORKER_POLL_INTERVAL_MS=3000
 MAIL_WORKER_CONCURRENCY=5
@@ -188,7 +192,7 @@ docker compose \
   logs --tail=100 mail-worker
 ```
 
-После этого войдите администратором, откройте **«Администрирование»**, сохраните SMTP-параметры и отправьте тестовое письмо. Успешный тест проверяет не только TCP-подключение, но и авторизацию, TLS и фактическую приёмку письма SMTP-сервером.
+После этого войдите администратором, откройте **«Администрирование»** и сохраните SMTP-параметры. При отключении проверки TLS-сертификата сервера введите пароль SMTP снова. Для проверки укажите согласованный тестовый адрес. Успешный тест проверяет не только TCP-подключение, но и авторизацию, TLS и фактическую приёмку письма SMTP-сервером.
 
 Worker атомарно забирает задания через `FOR UPDATE SKIP LOCKED`, поэтому можно запустить несколько экземпляров. Неуспешная отправка приглашения или напоминания повторяется до трёх раз с увеличивающейся задержкой; в интерфейс сохраняется безопасное сообщение без SMTP-пароля и низкоуровневого ответа сервера.
 
@@ -207,20 +211,18 @@ Worker атомарно забирает задания через `FOR UPDATE S
 разовой даты, периода тишины и интервала расписания действует отдельная защита от повторов.
 После простоя воркер выполняет последнее пропущенное срабатывание периодического правила.
 
-При обновлении self-hosted Docker скопируйте новую версию Edge Function `user-admin`,
-контекст сборки воркера и Compose-overlay из корня репозитория:
+Перед обновлением существующей установки сделайте проверенную резервную копию
+и прогоните миграции на её изолированной копии. Используйте имена сервисов и
+bind-адреса текущей установки. В эталонном Compose шлюз называется `kong`,
+на STSS используется `api-gw`. Сверьте `depends_on` и внутренний `SUPABASE_URL`
+воркера с действующим шлюзом. Для Office проверьте `OFFICE_SUPABASE_URL`.
+
+Проверьте `PUBLIC_APP_URL` и разрешённые origin в окружении сервисов. Перед
+миграциями остановите почтовый воркер из каталога `./supabase/docker`,
+чтобы дать начатым отправкам завершиться:
 
 ```bash
-cp -R ./functions/user-admin ./supabase/docker/volumes/functions/
-cp -R ./mail-worker ./supabase/docker/
-cp ./mail-worker/docker-compose.mail-worker.yml ./supabase/docker/docker-compose.mail-worker.yml
-```
-
-Проверьте `PUBLIC_APP_URL` в `./supabase/docker/.env`. Перед миграциями остановите
-воркер из каталога `./supabase/docker`, чтобы дать уже начатым отправкам завершиться:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop mail-worker
+docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop -t 145 mail-worker
 ```
 
 В существующей БД примените по порядку ещё не установленные миграции из `database/migrations/`:
@@ -234,16 +236,37 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop mail
 7. `202611231400_default_response_notification_opt_in.sql`
 8. `202611231500_review_regressions.sql`
 9. `202611231600_form_closed_automation.sql`
+10. `202611232200_full_code_review_fixes.sql`
+11. `202611232230_review_followup.sql`
 
-Из `./supabase/docker` пересоздайте Edge Runtime, чтобы применились изменения `user-admin`,
-и пересоберите воркер с обновлённым overlay:
+Применяйте файлы по одному с `psql -v ON_ERROR_STOP=1`. Перед запуском сервисов
+проверьте присутствие `public.notifications` в публикации `supabase_realtime`.
+Подготовьте роль `office_service` и окружение Office по
+[инструкции развёртывания](office-service/DEPLOYMENT.md). До публикации frontend
+пересоздайте Auth с обязательной проверкой текущего пароля.
+
+Обновите файлы всех четырёх Edge Functions и контекст worker из корня репозитория.
+Перенесите изменения Compose-overlay в действующие файлы:
+
+```bash
+cp -R ./functions/app-settings ./functions/form-admin ./functions/mail-admin ./functions/user-admin ./supabase/docker/volumes/functions/
+cp -R ./mail-worker ./supabase/docker/
+```
+
+Из `./supabase/docker` пересоздайте Edge Runtime и пересоберите воркер с
+обновлённым overlay:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml \
   up -d --build --force-recreate --no-deps functions mail-worker
 ```
 
-Затем пересоберите и опубликуйте frontend. Для отправки писем включите SMTP-коннектор
+Обновите Office service и проверьте, что он обслуживает запросы через MAGI.
+Проверьте работу обоих циклов почтового воркера, затем пересоберите и опубликуйте
+frontend. Тестовая отправка использует общую очередь. При ожидающих рабочих
+заданиях используйте изолированную проверку SMTP с тестовым адресом.
+
+Для отправки писем включите SMTP-коннектор
 в «Администрировании». Воркер обрабатывает даты и сроки форм даже при
 выключенной отправке. Срабатывания правил и успешные отправки видны в истории правил.
 Если почтовый сервер вернул ошибку или подтвердить приёмку не удалось,

@@ -51,14 +51,20 @@ const blockedInternalSmtpHosts = new Set([
 
 function isBlockedSmtpHost(host: string) {
   const normalized = host.trim().toLowerCase().replace(/\.+$/, "");
-  if (!normalized || blockedInternalSmtpHosts.has(normalized)
+  const explicitlyAllowed = Deno.env.get("SMTP_ALLOWED_PRIVATE_HOSTS")?.split(",")
+    .some(value => value.trim().toLowerCase().replace(/\.+$/, "") === normalized);
+  if (explicitlyAllowed) return false;
+  if (!normalized.includes(".") || blockedInternalSmtpHosts.has(normalized)
     || normalized.endsWith(".localhost") || normalized.endsWith(".localdomain")) {
     return true;
   }
   const octets = normalized.split(".");
   if (octets.length === 4 && octets.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
     const [first, second] = octets.map(Number);
-    if (first === 127 || first === 0 || (first === 169 && second === 254)) return true;
+    if (first === 127 || first === 0 || first === 10 || first >= 224
+      || (first === 169 && second === 254) || (first === 192 && second === 168)
+      || (first === 172 && second >= 16 && second <= 31)
+      || (first === 100 && second >= 64 && second <= 127)) return true;
   }
   return false;
 }
@@ -156,7 +162,7 @@ function validateSettings(payload: Record<string, unknown>, hasStoredPassword: b
   const fromName = asTrimmedString(payload.fromName);
   const replyTo = asTrimmedString(payload.replyTo).toLowerCase();
 
-  if (!host || host.length > 253 || /[\s/:\x00-\x1f\x7f]/.test(host) || isBlockedSmtpHost(host)) {
+  if (!host || host.length > 253 || !/^[A-Za-z0-9.-]+$/.test(host) || isBlockedSmtpHost(host)) {
     return { error: "Укажите корректный SMTP-сервер без протокола, пробелов и локальных адресов" };
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: "Порт SMTP должен быть числом от 1 до 65535" };
@@ -287,10 +293,11 @@ Deno.serve(async (req) => {
         const connectionChanged = existing.host.toLowerCase() !== settings.host.toLowerCase()
           || existing.port !== settings.port
           || existing.username !== settings.username
-          || existing.ssl_mode !== settings.sslMode;
+          || existing.ssl_mode !== settings.sslMode
+          || (settings.allowInvalidCertificate && existing.allow_invalid_certificate !== true);
         if (connectionChanged) {
           return json(req, 400, {
-            error: "При изменении сервера, порта, логина или режима шифрования введите пароль SMTP заново",
+            error: "При изменении подключения или отключении проверки сертификата введите пароль SMTP заново",
           }, requestId);
         }
       }

@@ -144,6 +144,40 @@ class BackupCatalogTests(unittest.TestCase):
         self.assertEqual(len(backup.backup_catalog('full')), 6)
         self.assertEqual(len(list(self.base.glob('*/.partial-*'))), 1)
 
+    def test_repeated_backup_failures_keep_only_the_latest_partial_snapshots(self):
+        partials = []
+        for day in range(10, 14):
+            path = self.base / f"2026-09-{day}/.partial-00-00-00-full"
+            path.mkdir(parents=True)
+            os.utime(path, (day, day))
+            partials.append(path)
+        with mock.patch.object(backup.os.path, 'ismount', return_value=True), mock.patch.object(backup, 'run', side_effect=RuntimeError('disk full')):
+            with self.assertRaisesRegex(RuntimeError, 'disk full'):
+                backup.backup()
+        self.assertEqual(len(list(self.base.glob('*/.partial-*'))), 2)
+        self.assertEqual([path.exists() for path in partials], [False, False, False, True])
+
+    def test_manifest_rejects_symlinked_intermediate_directories(self):
+        path = self.full('20260922T000000Z')
+        metadata = path / 'manifest.json'
+        payload = json.loads(metadata.read_text())
+        actual = path / 'real'
+        actual.mkdir()
+        (actual / 'data').write_text('test')
+        (path / 'alias').symlink_to(actual, target_is_directory=True)
+        payload['sha256']['alias/data'] = backup.digest(actual / 'data')
+        metadata.write_text(json.dumps(payload))
+        with self.assertRaisesRegex(RuntimeError, 'Invalid backup file'):
+            backup.validate(path)
+
+    def test_deployment_rejects_symlinked_metadata(self):
+        path = self.deployment('20260922T000000Z')
+        metadata = path / 'deployment.json'
+        real = metadata.rename(path / 'meta.json')
+        metadata.symlink_to(real)
+        with self.assertRaisesRegex(RuntimeError, 'Invalid deployment metadata'):
+            backup.validate_deployment(path)
+
     def test_verification_lock_prevents_pruning_during_restore(self):
         with mock.patch.object(backup.os.path, 'ismount', return_value=True):
             with backup.backup_lock(shared=True):

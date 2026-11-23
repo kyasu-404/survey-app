@@ -103,6 +103,20 @@ describe("OrganizationsPage", () => {
     expect(screen.queryByText("ГБОУ")).not.toBeInTheDocument();
   });
 
+  it("limits rendered directory rows while exporting every filtered entry", async () => {
+    const directory = Array.from({ length: 101 }, (_, index) => ({
+      ...organizations[0], id: `org-${index}`, alias: `Организация ${index + 1}`,
+    }));
+    getOrganizations.mockResolvedValue(directory);
+    renderPage();
+    expect(await screen.findByText("Организация 100")).toBeInTheDocument();
+    expect(screen.queryByText("Организация 101")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Далее" }));
+    expect(screen.getByText("Организация 101")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Экспорт XLSX/ }));
+    await waitFor(() => expect(exportOrganizationsXlsx).toHaveBeenCalledWith(directory));
+  });
+
   it("disables the number field for UDOD and saves changes through the edit modal", async () => {
     renderPage();
     const row = await screen.findByRole("row", { name: /ДДТ/ });

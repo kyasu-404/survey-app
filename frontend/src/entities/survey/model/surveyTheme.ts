@@ -36,7 +36,6 @@ const ALLOWED_THEME_CSS_FUNCTIONS = new Set([
   "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
   "calc", "min", "max", "clamp", "var",
 ]);
-const MANAGED_ASSET_TOKEN = /^__APP_SURVEY_ASSET__\/(?:gallery\/[a-z0-9._-]{1,255}|forms\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpe?g|png|webp))$/i;
 
 function isSafeCssVariableValue(value: string) {
   const trimmed = value.trim();
@@ -93,31 +92,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isSafeImageUrl(value: string) {
+function normalizeThemeImageUrl(value: string | undefined) {
+  if (value === undefined) return undefined;
   const normalized = value.trim();
-  if (normalized === "") return true;
-  if (MANAGED_ASSET_TOKEN.test(normalized)) return true;
-  if (normalized.startsWith("/") && !normalized.startsWith("//") && !/[\\\s"'()<>]/.test(normalized)) return true;
-  if (/\s|\\|["'()<>]/.test(normalized)) return false;
+  if (!normalized) return "";
+  if (/[\\\s"'()<>]|[^\u0021-\u007e\u0080-\uffff]/.test(normalized)) return undefined;
+  if (normalized.startsWith("/")) return normalized.startsWith("//") ? undefined : normalized;
 
+  if (getManagedSurveyAssetPath(normalized) !== null) return normalized;
+  if (typeof window === "undefined") return undefined;
   try {
     const url = new URL(normalized);
-    if (url.protocol === "https:") {
-      return getManagedSurveyAssetPath(normalized) !== null
-        || (typeof window !== "undefined" && url.origin === window.location.origin);
-    }
-    if (url.protocol !== "http:") return false;
-
-    return (
-      url.hostname === "localhost"
-      || url.hostname === "127.0.0.1"
-      || url.hostname === "[::1]"
-      || /^10\./.test(url.hostname)
-      || /^192\.168\./.test(url.hostname)
-      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname)
-    );
+    if (!["http:", "https:"].includes(url.protocol) || url.origin !== window.location.origin
+      || url.username || url.password || url.pathname.startsWith("//")) return undefined;
+    return `${url.pathname}${url.search}${url.hash}`;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -141,14 +131,14 @@ function sanitizeHeader(value: unknown): IHeader | undefined {
   const mobileHeight = readNumber(value.mobileHeight, 0, 4096);
   const textAreaWidth = readNumber(value.textAreaWidth, 0, 4096);
   const imageOpacity = readNumber(value.backgroundImageOpacity, 0, 1);
-  const backgroundImage = readString(value.backgroundImage, 2048);
+  const backgroundImage = normalizeThemeImageUrl(readString(value.backgroundImage, 2048));
 
   if (height !== undefined) header.height = height;
   if (mobileHeight !== undefined) header.mobileHeight = mobileHeight;
   if (textAreaWidth !== undefined) header.textAreaWidth = textAreaWidth;
   if (typeof value.overlapEnabled === "boolean") header.overlapEnabled = value.overlapEnabled;
   if (imageOpacity !== undefined) header.backgroundImageOpacity = imageOpacity;
-  if (backgroundImage !== undefined && isSafeImageUrl(backgroundImage)) header.backgroundImage = backgroundImage.trim();
+  if (backgroundImage !== undefined) header.backgroundImage = backgroundImage;
 
   for (const [propertyName, acceptedValues] of Object.entries(HEADER_STRING_PROPERTIES)) {
     const propertyValue = value[propertyName];
@@ -168,13 +158,13 @@ export function sanitizeSurveyTheme(value: unknown): ITheme {
   const theme: ITheme = {};
   const themeName = readString(value.themeName);
   const colorPalette = value.colorPalette === "light" || value.colorPalette === "dark" ? value.colorPalette : undefined;
-  const backgroundImage = readString(value.backgroundImage, 2048);
+  const backgroundImage = normalizeThemeImageUrl(readString(value.backgroundImage, 2048));
   const backgroundOpacity = readNumber(value.backgroundOpacity, 0, 1);
 
   if (themeName) theme.themeName = themeName === "defaultV2" ? "default" : themeName;
   if (colorPalette) theme.colorPalette = colorPalette;
   if (typeof value.isPanelless === "boolean") theme.isPanelless = value.isPanelless;
-  if (backgroundImage !== undefined && isSafeImageUrl(backgroundImage)) theme.backgroundImage = backgroundImage.trim();
+  if (backgroundImage !== undefined) theme.backgroundImage = backgroundImage;
   if (value.backgroundImageFit === "auto" || value.backgroundImageFit === "contain" || value.backgroundImageFit === "cover") {
     theme.backgroundImageFit = value.backgroundImageFit;
   }

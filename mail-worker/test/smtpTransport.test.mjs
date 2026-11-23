@@ -38,6 +38,18 @@ test('SMTP pools survive polling batches and sender changes; connection changes 
   assert.equal(third.closed, true);
 });
 
+test('SMTP connects only to approved resolved addresses', async () => {
+  const manager = createSmtpTransportManager({
+    encryptionKey: key.toString('base64'), concurrency: 1,
+    resolve: async () => [{ address: '10.24.1.7', family: 4 }],
+    createTransport: options => options,
+  });
+  const transport = manager.get({ ...settings, host: 'smtp.example.invalid' });
+  await assert.rejects(new Promise((resolve, reject) => {
+    transport.getSocket(transport, (error, socket) => error ? reject(error) : resolve(socket));
+  }), { code: 'EDNS' });
+});
+
 test('successive mail batches reuse a single authenticated TCP connection', async t => {
   let connections = 0, authentications = 0, messages = 0;
   const sockets = new Set();
@@ -64,7 +76,7 @@ test('successive mail batches reuse a single authenticated TCP connection', asyn
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  const manager = createSmtpTransportManager({ encryptionKey: key.toString('base64'), concurrency: 1 });
+  const manager = createSmtpTransportManager({ encryptionKey: key.toString('base64'), concurrency: 1, privateHosts: '127.0.0.1' });
   t.after(async () => { manager.close(); for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); });
   const localSettings = { ...settings, port: server.address().port };
   for (let batch = 0; batch < 3; batch++) {

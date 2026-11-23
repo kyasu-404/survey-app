@@ -171,6 +171,11 @@ describe("FormResponsesHtmlPage", () => {
     expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Печать" })).toHaveClass("responses-print-button-secondary");
     expect(container.querySelector(".responses-print-button .toolbar-icon")).toBeInTheDocument();
+    expect(container.querySelector(".responses-report-print")).not.toBeInTheDocument();
+    act(() => { window.dispatchEvent(new Event("beforeprint")); });
+    expect(container.querySelector(".responses-report-print")).toHaveTextContent("Анна");
+    act(() => { window.dispatchEvent(new Event("afterprint")); });
+    expect(container.querySelector(".responses-report-print")).not.toBeInTheDocument();
     expect(screen.getByText("Анна", { selector: ".responses-report-screen td" })).toBeInTheDocument();
     expect(screen.getByText("Хорошее", { selector: ".responses-report-screen td" })).toBeInTheDocument();
   });

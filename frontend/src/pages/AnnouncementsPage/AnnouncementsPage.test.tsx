@@ -16,14 +16,15 @@ const row = {
 };
 function renderPage(published: Omit<typeof row, "expires_at" | "action_label" | "action_url"> & {
   expires_at: string | null; action_label: string | null; action_url: string | null;
-} = row) {
+} = row, handleSave?: (payload: Record<string, unknown>) => Response) {
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init: RequestInit) => {
     const path = new URL(input).pathname.split("/").pop()!;
     const body = JSON.parse(String(init.body));
     requests.push({ path, body });
     if (path === "list_admin_announcements") return Response.json(body.p_status === "published" ? [published] : []);
-    if (path === "save_announcement" || path === "change_announcement") return Response.json(row.id);
+    if (path === "save_announcement") return handleSave?.(body) ?? Response.json(row.id);
+    if (path === "change_announcement") return Response.json(row.id);
     throw new Error("Unexpected request: " + path);
   });
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -146,4 +147,42 @@ describe("Административные объявления", () => {
     }));
     expect(await screen.findByRole("tab", { name: scheduled ? "Запланированные" : "Опубликованные", selected: true })).toBeVisible();
   });
+  it("rejects an incomplete end date when submitting from preview", async () => {
+    const { user, requests } = renderPage({ ...row, expires_at: "2099-01-01T10:00:00Z" });
+    await user.click(screen.getByRole("tab", { name: "Опубликованные" }));
+    await user.click(await screen.findByRole("button", { name: row.title }));
+    const editor = within(screen.getByRole("dialog"));
+    const input = editor.getByLabelText("Окончание действия (необязательно)") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "" } });
+    vi.spyOn(input, "validity", "get").mockReturnValue({ badInput: true } as ValidityState);
+
+    await user.click(editor.getByRole("tab", { name: "Предпросмотр" }));
+    await user.click(editor.getByRole("button", { name: "Сохранить изменения" }));
+    expect(await editor.findByRole("alert")).toHaveTextContent("Проверьте дату и время");
+    expect(requests.some(r => r.path === "save_announcement")).toBe(false);
+  });
+
+  it("can reload the current announcement after a conflicting update", async () => {
+    const updated = { ...row };
+    const { user, requests } = renderPage(updated, (payload) => {
+      if (payload.p_expected_updated_at === row.updated_at) {
+        Object.assign(updated, { title: "Изменено в другой вкладке", updated_at: "2025-01-04T12:00:00Z" });
+        return Response.json({ code: "40001", message: "Conflict" }, { status: 409 });
+      }
+      return Response.json(row.id);
+    });
+    await user.click(screen.getByRole("tab", { name: "Опубликованные" }));
+    await user.click(await screen.findByRole("button", { name: row.title }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.type(editor.getByRole("textbox", { name: "Заголовок" }), " моя правка");
+    await user.click(editor.getByRole("button", { name: "Сохранить изменения" }));
+    expect(await editor.findByRole("alert")).toHaveTextContent("другой вкладке");
+    expect(editor.getByRole("textbox", { name: "Заголовок" })).toHaveValue(`${row.title} моя правка`);
+    await user.click(editor.getByRole("button", { name: "Сбросить правки и загрузить актуальную версию" }));
+    await waitFor(() => expect(within(screen.getByRole("dialog")).getByRole("textbox", { name: "Заголовок" })).toHaveValue(updated.title));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Сохранить изменения" }));
+    await waitFor(() => expect(requests.filter(r => r.path === "save_announcement").slice(-1)[0]?.body.p_expected_updated_at)
+      .toBe(updated.updated_at));
+  });
+
 });

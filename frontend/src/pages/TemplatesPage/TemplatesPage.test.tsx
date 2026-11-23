@@ -8,7 +8,7 @@ import { getFormsNextCursor } from "../../entities/survey/model/batchedInfiniteQ
 import { getTemplateFormsQueryKey } from "../../entities/survey/model/queryKeys";
 import type { FormsCursor, SurveyForm } from "../../entities/survey/types";
 import { readAppCss } from "../../test/readAppCss";
-import { getSurveyBuilderDraftStorageKey } from "../../widgets/SurveyBuilder/builderDraft";
+import { getSurveyBuilderDraftStorageKey, saveSurveyBuilderDraft } from "../../widgets/SurveyBuilder/builderDraft";
 import TemplatesPage from "./TemplatesPage";
 
 const {
@@ -25,6 +25,7 @@ const {
   authState: {
     loading: false,
     user: { id: "user-1" },
+    profile: null as { role: string } | null,
   },
   changeFormStatus: vi.fn(),
   createFormFromTemplate: vi.fn(),
@@ -36,9 +37,12 @@ const {
   showToast: vi.fn(),
 }));
 
-const realtime = vi.hoisted(() => ({ change: undefined as undefined | ((payload: unknown) => void) }));
+const realtime = vi.hoisted(() => ({
+  change: undefined as undefined | ((payload: unknown) => void),
+  filters: [] as unknown[],
+}));
 vi.mock("../../shared/api", () => ({ supabaseClient: {
-  channel: () => { const channel = { on: (_event: string, _config: unknown, callback: (payload: unknown) => void) => { realtime.change = callback; return channel; }, subscribe: () => channel }; return channel; },
+  channel: () => { const channel = { on: (_event: string, filter: unknown, callback: (payload: unknown) => void) => { realtime.filters.push(filter); realtime.change = callback; return channel; }, subscribe: () => channel }; return channel; },
   removeChannel: vi.fn(),
 } }));
 
@@ -159,14 +163,41 @@ function renderPage(
 describe("TemplatesPage", () => {
   beforeEach(() => {
     localStorage.clear();
+    realtime.filters.length = 0;
     vi.clearAllMocks();
     authState.loading = false;
     authState.user = { id: "user-1" };
+    authState.profile = null;
     changeFormStatus.mockResolvedValue(undefined);
     createFormFromTemplate.mockResolvedValue({ id: "created-from-template" });
     getFormById.mockResolvedValue(createTemplate(1));
     removeForm.mockResolvedValue(undefined);
     renameForm.mockResolvedValue(undefined);
+  });
+
+  it("filters template insert and update subscriptions at the server", async () => {
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1)]));
+    renderPage();
+    await screen.findByRole("button", { name: "Открыть превью шаблона Шаблон 1" });
+    expect(realtime.filters).toEqual([
+      expect.objectContaining({ event: "INSERT", filter: "form_type=eq.template" }),
+      expect.objectContaining({ event: "UPDATE", filter: "form_type=eq.template" }),
+      expect.objectContaining({ event: "DELETE" }),
+    ]);
+  });
+
+  it("allows administrators to manage another employee's public template", async () => {
+    authState.profile = { role: "admin" };
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([
+      createTemplate(1, { author_id: "user-2", is_public: true }),
+    ]));
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "Публичные" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Действия шаблона Шаблон 1" }));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Переименовать" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Удалить" })).toBeInTheDocument();
   });
 
   it("renders template card creation time without seconds", async () => {
@@ -641,16 +672,36 @@ describe("TemplatesPage", () => {
     expect(css).toMatch(/\.templates-page-actions\s*\{[^}]*align-items:\s*flex-end;/);
   });
 
-  it("does not open template preview when pressing Space or Enter on a nested card action button", async () => {
+  it("preserves a named draft without questions when replacement is declined", async () => {
+    const key = getSurveyBuilderDraftStorageKey("user-1");
+    saveSurveyBuilderDraft("user-1", undefined, { title: "Черновик", pages: [{ elements: [] }] });
+    const original = localStorage.getItem(key);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1)]));
+    renderPage();
+
+    try {
+      await userEvent.click(await screen.findByRole("button", { name: "Использовать шаблон Шаблон 1" }));
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(localStorage.getItem(key)).toBe(original);
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it.each([" ", "{Enter}"])("activates card actions separately from the preview on %s", async (key) => {
     getTemplateFormsPage.mockResolvedValue(createTemplatesPage([createTemplate(1, { title: "Шаблон с кнопками" })]));
 
     renderPage();
 
     const pinButton = await screen.findByRole("button", { name: "Закрепить шаблон Шаблон с кнопками" });
     pinButton.focus();
-    await userEvent.keyboard(" ");
+    await userEvent.keyboard(key);
 
+    expect(pinButton).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("dialog", { name: "Превью шаблона Шаблон с кнопками" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть превью шаблона Шаблон с кнопками" })).not.toContainElement(pinButton);
   });
 
 });

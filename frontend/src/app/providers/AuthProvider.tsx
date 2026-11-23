@@ -14,6 +14,7 @@ import { apiClient } from "../../shared/api";
 import type { UserProfile } from "../../entities/user/types";
 import { runRequest } from "../../shared/api/request";
 import { setObservabilityUser } from "../../shared/lib/observability";
+import { clearSurveyBuilderDraftsForUser } from "../../shared/lib/builderDraftStorage";
 import { refreshAuthDependentQueries } from "./authCache";
 
 type AuthContextValue = {
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     try {
-      const { data, error } = await runRequest(
+      const { data, error, status } = await runRequest(
         "profiles.load",
         () =>
           apiClient
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           if (logoutError) {
             console.error(logoutError);
           }
-        } else if (!preserveOnTransientError) {
+        } else if (!preserveOnTransientError || status === 401 || status === 403 || error.code === "42501") {
           setProfile(null);
         }
         return;
@@ -162,6 +163,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const { data: listener } = apiClient.auth.onAuthStateChange(async (event, session) => {
       receivedAuthEvent = true;
+      if (event === "SIGNED_OUT" && previousUserIdRef.current) {
+        clearSurveyBuilderDraftsForUser(previousUserIdRef.current);
+      }
       applySession(session?.user ?? null, event === "INITIAL_SESSION");
     });
 

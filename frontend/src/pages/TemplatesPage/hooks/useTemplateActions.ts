@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { routes } from "../../../app/routes";
@@ -22,6 +22,12 @@ export function useTemplateActions(userId: string | undefined) {
   const navigate = useNavigate();
   const [pendingActionKeys, setPendingActionKeys] = useState<Record<string, boolean>>({});
   const inFlightKeysRef = useRef(new Set<string>());
+  const templateUseRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    templateUseRef.current?.abort();
+    templateUseRef.current = null;
+  }, [userId]);
 
   const renameMutation = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => renameForm(id, title),
@@ -123,23 +129,26 @@ export function useTemplateActions(userId: string | undefined) {
       return;
     }
 
-    const existingDraft = loadSurveyBuilderDraft(userId, undefined);
-    const hasDraftElements = Boolean(
-      existingDraft?.schema.pages?.some((page) => Array.isArray(page.elements) && page.elements.length > 0),
-    );
-    if (hasDraftElements && !window.confirm("В конструкторе есть несохранённый черновик новой формы. Заменить его выбранным шаблоном?")) {
-      return;
-    }
-
+    if (templateUseRef.current) return;
     const actionKey = getTemplateActionKey(template.id);
-    if (inFlightKeysRef.current.has(actionKey)) {
-      return;
-    }
+    if (inFlightKeysRef.current.has(actionKey)) return;
+
+    const existingDraft = loadSurveyBuilderDraft(userId, undefined);
+    const confirmReplacement = () => window.confirm(
+      "В конструкторе есть несохранённый черновик новой формы. Заменить его выбранным шаблоном?",
+    );
+    if (existingDraft && !confirmReplacement()) return;
+
+    const request = new AbortController();
+    templateUseRef.current = request;
     inFlightKeysRef.current.add(actionKey);
     setActionPending(actionKey, true);
 
     try {
       const fullTemplate = await ensureTemplateDetails(template.id);
+      if (request.signal.aborted) return;
+      const latestDraft = loadSurveyBuilderDraft(userId, undefined);
+      if (latestDraft && JSON.stringify(latestDraft) !== JSON.stringify(existingDraft) && !confirmReplacement()) return;
 
       saveSurveyBuilderDraft(
         userId,
@@ -153,10 +162,13 @@ export function useTemplateActions(userId: string | undefined) {
       showToast("Шаблон загружен в конструктор", "success");
       navigate(routes.builder);
     } catch (error) {
-      console.error(error);
-      showToast(getErrorMessage(error, "Не удалось загрузить шаблон в конструктор"), "error");
+      if (!request.signal.aborted) {
+        console.error(error);
+        showToast(getErrorMessage(error, "Не удалось загрузить шаблон в конструктор"), "error");
+      }
     } finally {
       inFlightKeysRef.current.delete(actionKey);
+      if (templateUseRef.current === request) templateUseRef.current = null;
       setActionPending(actionKey, false);
     }
   };

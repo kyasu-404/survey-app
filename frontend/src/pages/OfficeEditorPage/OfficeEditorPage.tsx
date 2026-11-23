@@ -67,7 +67,7 @@ export default function OfficeEditorPage() {
   const saveDocument=async(next:'stay'|'leave'|'download')=>{
     if(dirty){setSaveError({message:'Изменения передаются в ONLYOFFICE. Подождите несколько секунд и повторите.'});return;}
     if(!ready){if(next==='leave')navigate(resultsPath);return;}
-    if(next==='leave' && saved && !pendingChanges && !doc.data?.last_save_error){navigate(resultsPath);return;}
+    if(next==='leave' && !pendingChanges){navigate(resultsPath);return;}
     setSaving(true);setSaveError(null);setError('');setSaved(false);
     const revision=editRevision.current;
     try {
@@ -76,7 +76,7 @@ export default function OfficeEditorPage() {
       if(revision!==editRevision.current){setSaveError({message:'Во время сохранения появились новые изменения. Сохраните макет ещё раз.'});return;}
       setSaved(true);setPendingChanges(false);
       if(next==='leave')navigate(resultsPath);
-      if(next==='download')await downloadOfficeDocument({id:documentId!,name:doc.data?.name || config.data?.name || 'Документ.docx'}).catch(e=>setError(getErrorMessage(e,'Не удалось скачать макет')));
+      if(next==='download')await downloadOfficeDocument({id:documentId!,name:doc.data?.name || config.data?.name || `Документ.${doc.data?.file_type ?? 'docx'}`}).catch(e=>setError(getErrorMessage(e,'Не удалось скачать макет')));
     }
     catch(e){setSaveError({message:getErrorMessage(e,'Не удалось сохранить документ'),storagePath:doc.data?.storage_path,revision});}
     finally{setSaving(false);}

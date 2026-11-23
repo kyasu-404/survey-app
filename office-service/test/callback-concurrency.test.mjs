@@ -48,7 +48,7 @@ async function setup(t, { onUpload = () => {}, failUpdate = false, loseCommit = 
     }
     return originalFetch(url, options);
   });
-  const app = createApp({ pool, supabase: { storage: { from: () => store } }, env: { PUBLIC_APP_URL: 'https://forms.test', ONLYOFFICE_SETTINGS_ENCRYPTION_KEY: key.toString('base64') } });
+  const app = createApp({ pool, supabase: { storage: { from: () => store } }, env: { OFFICE_DOCUMENT_SERVER_ORIGINS:'https://docs.test,http://onlyoffice',PUBLIC_APP_URL: 'https://forms.test', ONLYOFFICE_SETTINGS_ENCRYPTION_KEY: key.toString('base64') } });
   const server = createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));

@@ -319,18 +319,23 @@ function renderPrintGroupHeaders(columns: ResponsesTableColumn[]) {
   }).join("");
 }
 
-export function createResponsesHtmlReport({ title, columns, rows, generatedAt = new Date() }: ResponsesHtmlInput) {
+export function createResponsesHtmlReport(
+  { title, columns, rows, generatedAt = new Date() }: ResponsesHtmlInput,
+  options: { layout?: "screen" | "print"; totalResponses?: number } = {},
+) {
   const generatedAtLabel = formatResponseDate(generatedAt.toISOString());
-  const blocks = getResponsesPrintBlocks(columns);
+  const printBlocks = options.layout === "screen" || rows.length === 0 ? [] : getResponsesPrintBlocks(columns);
+  const printBody = printBlocks.length > 0 ? `<div class="responses-report-print">${printBlocks.map((block, index) =>
+    `<section class="responses-print-block">${printBlocks.length > 1 ? `<h2>Таблица ${index + 1} из ${printBlocks.length}</h2>` : ""}${renderHtmlTable(block, rows, renderPrintGroupHeaders(block))}</section>`,
+  ).join("")}</div>` : "";
+  const screenBody = options.layout === "print" || rows.length === 0 ? "" : `<div class="responses-report-screen">${renderHtmlTable(columns, rows)}</div>`;
   const body = rows.length
-    ? `<div class="responses-report-screen">${renderHtmlTable(columns, rows)}</div><div class="responses-report-print">${blocks.map((block, index) =>
-      `<section class="responses-print-block">${blocks.length > 1 ? `<h2>Таблица ${index + 1} из ${blocks.length}</h2>` : ""}${renderHtmlTable(block, rows, renderPrintGroupHeaders(block))}</section>`,
-    ).join("")}</div>`
+    ? screenBody + printBody
     : `<section class="empty-state"><h2>Ответов пока нет</h2><p>Новые ответы появятся здесь после отправки формы.</p></section>`;
 
   return `<article class="responses-html-report"><header class="report-header"><p class="eyebrow">Ответы формы</p><h1>${escapeHtml(
     title,
-  )}</h1><dl class="report-meta"><div><dt>Всего ответов</dt><dd>${rows.length}</dd></div><div><dt>Сформировано</dt><dd>${escapeHtml(
+  )}</h1><dl class="report-meta"><div><dt>Всего ответов</dt><dd>${options.totalResponses ?? rows.length}</dd></div><div><dt>Сформировано</dt><dd>${escapeHtml(
     generatedAtLabel,
   )}</dd></div></dl></header>${body}</article>`;
 }

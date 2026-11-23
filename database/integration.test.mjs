@@ -115,6 +115,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const reviewRegressionsMigration = await source("./migrations/202611231500_review_regressions.sql");
     const formClosedMigration = await source("./migrations/202611231600_form_closed_automation.sql");
     const fullReviewFixesMigration = await source("./migrations/202611232200_full_code_review_fixes.sql");
+    const reviewFollowupFixes = await source("./migrations/202611232230_review_followup.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -197,6 +198,14 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
         await db.query(formClosedMigration);
         await db.query(fullReviewFixesMigration);
+        const legacyTheme = { backgroundImage: "http://localhost:8000/storage/v1/object/public/survey-assets/gallery/fixture.png" };
+        await db.query("update public.forms set theme=$2 where id=$1", [form, legacyTheme]);
+        await db.query(reviewFollowupFixes);
+        const { rows: [legacySubmit] } = await db.query(
+          "select status from public.submit_form_response($1,$2,$3,$4)", [form, randomUUID(), randomUUID(), {}],
+        );
+        assert.equal(legacySubmit.status, "submitted");
+        assert.deepEqual((await db.query("select theme from public.forms where id=$1", [form])).rows[0].theme, legacyTheme);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
@@ -212,6 +221,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/announcements.sql");
       await runPsql(database, "./tests/review_regressions.sql");
       await runPsql(database, "./tests/full_code_review_fixes.sql");
+      await runPsql(database, "./tests/review_followup.sql");
       for (const path of ["./tests/response_scope_validation.sql", "./tests/nested_personal_organizations.sql", "./tests/response_comments.sql", "./tests/response_attachment_ownership.sql", "./tests/code_review_fixes.sql", ...(process.env.SURVEY_TEST_SCALE === "1" ? ["./tests/review_fixes.sql"] : []), "./tests/office_orphan_cleanup.sql", "./site_settings.test.sql", "./personal_links.test.sql", "./tests/restore_response_uploads.sql"]) {
         await runPsql(database, path);
       }

@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Compare actual offset/keyset HTTP exports in a disposable Supabase database.
-Run on the Docker backend host; uses only Python's standard library. The production
-DB is only inspected to locate PostgREST. Test rows never enter production tables.
-"""
+"""Compare offset/keyset HTTP exports using disposable PostgreSQL and PostgREST containers."""
 import argparse
 import base64
 import hashlib
@@ -11,13 +8,12 @@ import http.client
 import json
 import os
 from pathlib import Path
-import re
 import secrets
 import statistics
 import subprocess
 import tempfile
 import time
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode
 
 
 def command(args, data=None):
@@ -34,13 +30,17 @@ def main():
     parser.add_argument('--rows', type=int, default=100000)
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--postgres-image', default='postgres:17')
+    parser.add_argument('--postgrest-image', default='postgrest/postgrest:v14.12')
     args = parser.parse_args()
-    assert 1000 <= args.rows <= 1000000
-    assert 1 <= args.rounds <= 5
+    if not 1000 <= args.rows <= 1000000 or not 1 <= args.rounds <= 5:
+        parser.error('Expected 1000–1000000 rows and 1–5 rounds')
     suffix = secrets.token_hex(5)
-    database = f'forms_keyset_bench_{suffix}'
-    container = f'forms-keyset-bench-{suffix}'
-    created = started = False
+    database = 'forms_keyset_bench'
+    network = f'forms-keyset-bench-{suffix}'
+    postgres = f'{network}-db'
+    postgrest = f'{network}-api'
+    cleanup = []
     env_path = None
     connection = None
     report = {'rows': args.rows, 'rounds': args.rounds, 'database': database,
@@ -48,36 +48,61 @@ def main():
               'full_exports': [], 'samples': [], 'plans': {}, 'checks': {}}
 
     def sql(statement):
-        return command(['docker', 'exec', '-i', 'supabase-db', 'psql', '-X', '-qAt',
+        return command(['docker', 'exec', '-i', postgres, 'psql', '-X', '-qAt',
                         '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', database], statement)
 
     try:
-        config = json.loads(command(['docker', 'inspect', 'supabase-rest']))[0]
-        env = dict(item.split('=', 1) for item in config['Config']['Env'] if '=' in item)
-        uri = urlsplit(env['PGRST_DB_URI'])
-        bench_uri = urlunsplit((uri.scheme, uri.netloc, '/' + database, uri.query, uri.fragment))
-        network = next(iter(config['NetworkSettings']['Networks']))
-        command(['docker', 'exec', 'supabase-db', 'createdb', '-U', 'postgres', database])
-        created = True
-        baseline = (args.root / 'database/supabase_schema.sql').read_text()
-        forms_table = re.search(r'create table public\.forms \([\s\S]*?\n\);', baseline)[0]
-        helpers = '\n'.join(re.search(r'create or replace function public\.' + name + r'\([\s\S]*?\$\$;', baseline)[0]
-                            for name in ['request_role', 'request_is_enabled', 'is_public_active_form'])
-        policies = '\n'.join(re.search(r'create policy "' + name + r'"[\s\S]*?\n\);', baseline)[0]
-                             for name in ['forms_select', 'forms_select_anon'])
-        indexes = '\n'.join(re.findall(r'create index idx_forms_\w+[\s\S]*?;', baseline))
+        command(['docker', 'network', 'create', network])
+        cleanup.append(['docker', 'network', 'rm', network])
+        with tempfile.NamedTemporaryFile('w', prefix='forms-bench-db-env-') as db_env:
+            db_env.write(f'POSTGRES_DB={database}\nPOSTGRES_PASSWORD={secrets.token_hex(32)}\n')
+            db_env.flush()
+            cleanup.append(['docker', 'rm', '-fv', postgres])
+            command(['docker', 'run', '--detach', '--name', postgres, '--network', network,
+                     '--network-alias', 'db', '--memory=1g', '--cpus=2', '--env-file', db_env.name,
+                     args.postgres_image])
+        for attempt in range(60):
+            try:
+                command(['docker', 'exec', postgres, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', database])
+                break
+            except RuntimeError:
+                if attempt == 59:
+                    raise RuntimeError('Disposable PostgreSQL did not start') from None
+                time.sleep(0.5)
+        authenticator_password = secrets.token_hex(32)
+        bench_uri = f'postgresql://authenticator:{authenticator_password}@db:5432/{database}'
         sql(f"""
-set statement_timeout = '120s';
+create role anon nologin;
+create role authenticated nologin;
+create role service_role nologin bypassrls;
+create role authenticator login noinherit password '{authenticator_password}';
+grant anon, authenticated to authenticator;
 create schema auth;
-create schema extensions;
-create extension pg_trgm with schema extensions;
+create table auth.users(id uuid primary key, email text, raw_user_meta_data jsonb default '{{}}', banned_until timestamptz);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
 $$;
-create table public.profiles (id uuid primary key, role text not null, is_disabled boolean not null);
-insert into public.profiles select ('10000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
-  case when n = 1 then 'admin' else 'user' end, n = 100 from generate_series(1, 100) n;
-{forms_table}
+grant usage on schema auth to anon, authenticated, service_role;
+create schema storage;
+create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+create table storage.objects(id uuid default gen_random_uuid() primary key, bucket_id text references storage.buckets(id),
+  name text, owner uuid, metadata jsonb, user_metadata jsonb, created_at timestamptz default now(),
+  updated_at timestamptz default now(), version text);
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated, service_role;
+grant all on storage.buckets, storage.objects to service_role;
+grant select, insert, update, delete on storage.objects to anon, authenticated;
+create publication supabase_realtime;
+""")
+        sql((args.root / 'database/supabase_schema.sql').read_text())
+        sql(f"""
+set statement_timeout = '120s';
+insert into auth.users (id, email, raw_user_meta_data)
+select ('10000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+  'fixture-' || n || '@example.invalid', jsonb_build_object('name', 'Synthetic author ' || n)
+from generate_series(1, 100) n;
+update public.profiles set role = 'admin' where id = '10000000-0000-4000-8000-000000000001';
+update public.profiles set is_disabled = true where id = '10000000-0000-4000-8000-000000000100';
 insert into public.forms (id, title, form_type, form_reason, schema, theme, is_public,
   author_id, author_name, created_at, responses_count)
 select ('20000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
@@ -90,18 +115,11 @@ select ('20000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
   'Synthetic author ' || (n % 99 + 1),
   '2026-01-01T00:00:00.123456Z'::timestamptz + (n / 50) * interval '1 microsecond', n % 100
 from generate_series(1, {args.rows}) n;
-{indexes}
-{helpers}
-alter table public.forms enable row level security;
-{policies}
-grant usage on schema public, auth, extensions to anon, authenticated, service_role;
-grant select on public.forms to anon, authenticated, service_role;
 analyze public.forms;
 analyze public.profiles;
 """)
-        sql((args.root / 'database/migrations/202609081200_forms_keyset_pagination.sql').read_text())
         report['postgres_version'] = sql('select version();')
-        report['postgrest_image'] = config['Config']['Image']
+        report['postgrest_image'] = args.postgrest_image
         report['table_bytes'] = int(sql("select pg_total_relation_size('public.forms');"))
         jwt_secret = secrets.token_urlsafe(48)
         def token(user):
@@ -117,12 +135,12 @@ analyze public.profiles;
             env_file.write(f'PGRST_DB_URI={bench_uri}\nPGRST_DB_SCHEMAS=public\nPGRST_DB_ANON_ROLE=anon\n'
                            f'PGRST_JWT_SECRET={jwt_secret}\nPGRST_DB_MAX_ROWS=1000\nPGRST_DB_PLAN_ENABLED=true\n'
                            'PGRST_DB_POOL=2\nPGRST_DB_CHANNEL_ENABLED=false\n')
-        command(['docker', 'run', '-d', '--name', container, '--network', network,
-                 '--memory=256m', '--cpus=1', '-p', '127.0.0.1::3000', '--env-file', env_path, config['Config']['Image']])
-        started = True
+        cleanup.append(['docker', 'rm', '-fv', postgrest])
+        command(['docker', 'run', '-d', '--name', postgrest, '--network', network,
+                 '--memory=256m', '--cpus=1', '-p', '127.0.0.1::3000', '--env-file', env_path, args.postgrest_image])
         os.unlink(env_path)
         env_path = None
-        port = int(command(['docker', 'port', container, '3000']).split(':')[-1])
+        port = int(command(['docker', 'port', postgrest, '3000']).split(':')[-1])
         connection = http.client.HTTPConnection('127.0.0.1', port, timeout=30)
         select = 'id,title,form_type,form_reason,is_public,deadline_at,max_responses,author_id,author_name,created_at,responses_count'
         def request(mode, size, offset=0, cursor=None, filters=None, user=1, plan=False, include_lookahead=True):
@@ -167,7 +185,8 @@ analyze public.profiles;
         # Deep-page plans and warmed HTTP samples. Fetching the boundary is setup,
         # equivalent to a key the application retained from its preceding page.
         for size in [20, 999]:
-            for offset in [0, expected_count // 10, expected_count // 2, expected_count - size - 1]:
+            last_full_page = max(0, expected_count - size - 1)
+            for offset in sorted({0, expected_count // 10, expected_count // 2, last_full_page}):
                 cursor = request('offset', 1, offset - 1)[0][0] if offset else None
                 series = {'offset': [], 'keyset': []}
                 for repeat in range(12):
@@ -179,7 +198,7 @@ analyze public.profiles;
                 for mode in series:
                     report['samples'].append({'mode': mode, 'page_size': size, 'offset_equivalent': offset,
                                               'median_ms': statistics.median(series[mode]), 'runs_ms': series[mode]})
-                if offset == expected_count - size - 1:
+                if last_full_page and offset == last_full_page:
                     for mode in series:
                         report['plans'][f'{mode}_{size}'] = request(mode, size, offset, cursor, plan=True)[0]
         def plan_nodes(node):
@@ -187,12 +206,15 @@ analyze public.profiles;
             for child in node.get('Plans', []):
                 yield from plan_nodes(child)
         for name, plans in report['plans'].items():
-            if name.startswith('keyset'):
+            page_size = int(name.rsplit('_', 1)[1])
+            # A full scan can be cheaper on small data sets if a wide page
+            # selects much of the table. Check the index at selective boundaries.
+            if name.startswith('keyset') and (page_size + 1) * 10 <= expected_count:
                 assert any('ROW(created_at, id) < ROW(' in node.get('Index Cond', '')
                            for node in plan_nodes(plans[0]['Plan'])), (name, 'HTTP plan does not seek by cursor')
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2) + '\n')
-        print('HTTP plans verified: keyset row comparison is an Index Cond.', flush=True)
+        print('HTTP plans verified: selective keyset pages seek by the cursor index.', flush=True)
         # Same function/filter path with templates, own forms, title/author search,
         # dates and a non-admin/disabled identity, not just an unrestricted scan.
         for name, filters, user in [
@@ -258,14 +280,17 @@ analyze public.profiles;
             connection.close()
         if env_path:
             os.unlink(env_path)
-        if started:
-            command(['docker', 'rm', '-f', container])
-        if created:
-            command(['docker', 'exec', 'supabase-db', 'dropdb', '-U', 'postgres', database])
-        report['cleaned_up'] = True
+        cleanup_errors = []
+        for action in reversed(cleanup):
+            result = subprocess.run(action, capture_output=True, text=True)
+            if result.returncode and not any(message in result.stderr for message in ('No such container', 'not found')):
+                cleanup_errors.append(action[-1])
+        report['cleaned_up'] = not cleanup_errors
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(f'Complete. Test container and database removed. Report: {args.output}', flush=True)
+        if cleanup_errors:
+            raise RuntimeError('Could not clean up disposable resources: ' + ', '.join(cleanup_errors))
+    print(f'Complete. Disposable database, API and network removed. Report: {args.output}', flush=True)
 
 
 if __name__ == '__main__':

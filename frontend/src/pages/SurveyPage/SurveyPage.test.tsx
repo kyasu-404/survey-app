@@ -8,6 +8,7 @@ import SurveyPage from "./SurveyPage";
 const { authState, getExistingResponse, getFormById, getPublicFormById, showToast } = vi.hoisted(() => ({
   authState: {
     user: null as { id: string } | null,
+    profile: null as { id: string; is_disabled: boolean } | null,
     loading: false,
   },
   getFormById: vi.fn(),
@@ -32,14 +33,16 @@ vi.mock("../../entities/response/api", () => ({
 }));
 
 vi.mock("../../features/render-form/SurveyFormRenderer", () => ({
-  SurveyFormRenderer: ({ existingResponse, isPreview, renderMode }: {
+  SurveyFormRenderer: ({ existingResponse, isPreview, renderMode, usePublicClient }: {
     existingResponse?: { responseId: string } | null;
     isPreview?: boolean;
     renderMode?: string;
+    usePublicClient?: boolean;
   }) => (
     <div
       data-testid="survey-renderer"
       data-preview={String(Boolean(isPreview))}
+      data-public-client={String(Boolean(usePublicClient))}
       data-render-mode={renderMode ?? ""}
       data-existing-response={existingResponse?.responseId ?? ""}
     />
@@ -82,6 +85,7 @@ describe("SurveyPage", () => {
     vi.clearAllMocks();
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     authState.user = null;
+    authState.profile = null;
     authState.loading = false;
     getExistingResponse.mockResolvedValue(null);
   });
@@ -92,6 +96,14 @@ describe("SurveyPage", () => {
     await waitFor(() => expect(getPublicFormById).toHaveBeenCalled());
     await waitFor(() => expect(getExistingResponse).toHaveBeenCalled());
     expect(screen.queryByTestId("survey-renderer")).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])("selects the interactive RPC client based on verified employee status (%s)", async (verified) => {
+    authState.user = { id: "employee" };
+    if (verified) authState.profile = { id: "employee", is_disabled: false };
+    getPublicFormById.mockResolvedValue({ id: "form-1", title: "Анкета", is_public: true, schema: { pages: [] } });
+    renderSurveyPage();
+    expect(await screen.findByTestId("survey-renderer")).toHaveAttribute("data-public-client", String(!verified));
   });
 
   it("renders public survey shell hooks", async () => {

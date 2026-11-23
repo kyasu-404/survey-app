@@ -545,41 +545,38 @@ export async function insertForm(payload: {
   const targetFormId = payload.id ?? createSurveyAssetFormId();
   const materialized = await materializeSurveyThemeAssets(resolveSurveyTheme(payload.theme), targetFormId, currentUserId);
 
-  try {
-    const { data, error } = await runRequest(
-      "forms.insert",
-      () =>
-        apiClient
-          .from("forms")
-          .insert({
-            id: targetFormId,
-            title: payload.title,
-            form_type: payload.formType,
-            form_reason: payload.formReason,
-            schema: payload.schema,
-            theme: serializeSurveyThemeAssetUrls(materialized.theme),
-            deadline_at: deadlinePayload.deadline_at ?? null,
-            max_responses: normalizedMaxResponses,
-            allow_response_editing: payload.allowResponseEditing ?? false,
-            organization_types: normalizeOrganizationTypes(
-              payload.organizationTypes ?? DEFAULT_FORM_ORGANIZATION_TYPES,
-            ),
-            author_id: currentUserId,
-            is_public: resolvedPublicationState,
-          })
-          .select("id")
-          .single(),
-      { context: { formId: targetFormId, authorId: currentUserId, formType: payload.formType } },
-    );
+  // A failed acknowledgement does not prove that the insert rolled back.
+  // Leave unreferenced copies for Storage maintenance to reconcile.
+  const { data, error } = await runRequest(
+    "forms.insert",
+    () =>
+      apiClient
+        .from("forms")
+        .insert({
+          id: targetFormId,
+          title: payload.title,
+          form_type: payload.formType,
+          form_reason: payload.formReason,
+          schema: payload.schema,
+          theme: serializeSurveyThemeAssetUrls(materialized.theme),
+          deadline_at: deadlinePayload.deadline_at ?? null,
+          max_responses: normalizedMaxResponses,
+          allow_response_editing: payload.allowResponseEditing ?? false,
+          organization_types: normalizeOrganizationTypes(
+            payload.organizationTypes ?? DEFAULT_FORM_ORGANIZATION_TYPES,
+          ),
+          author_id: currentUserId,
+          is_public: resolvedPublicationState,
+        })
+        .select("id")
+        .single(),
+    { context: { formId: targetFormId, authorId: currentUserId, formType: payload.formType } },
+  );
 
-    if (error) {
-      throw error;
-    }
-    return data;
-  } catch (error) {
-    await removeSurveyAssetPaths(materialized.uploadedPaths).catch(() => undefined);
+  if (error) {
     throw error;
   }
+  return data;
 }
 
 export async function updateFormTitle(id: string, title: string) {
@@ -638,64 +635,61 @@ export async function updateFormSchema(
   }
   const currentUserId = await getAuthenticatedUserId();
 
+  const {
+    data: { session },
+  } = await runRequest(
+    "auth.getSession",
+    () => apiClient.auth.getCurrentSession(),
+    { context: { formId: id, action: "update-schema" } },
+  );
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  }
+
   // Existing custom images belong to the form's gallery. Changing the selected
   // background must not delete an image the author may choose again later.
+  // Retain copies if the request outcome is unknown. A committed update may
+  // already reference them, and unreferenced copies are eligible for cleanup.
   const materialized = await materializeSurveyThemeAssets(theme, id, currentUserId);
-  try {
-    const {
-      data: { session },
-    } = await runRequest(
-      "auth.getSession",
-      () => apiClient.auth.getCurrentSession(),
-      { context: { formId: id, action: "update-schema" } },
-    );
-    const accessToken = session?.access_token;
-
-    if (!accessToken) {
-      throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
-    }
-
-    const { data, error, response } = await runRequest(
-      "functions.form-admin.update-schema",
-      (signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
-        body: {
-          action: "update-schema",
-          formId: id,
-          schema,
-          theme: serializeSurveyThemeAssetUrls(materialized.theme),
-          title,
-          allowResponseEditing,
-          organizationTypes: normalizeOrganizationTypes(organizationTypes),
-          confirmWarnings,
-          expectedRevision,
-          ...(settings ? { settings } : {}),
-        },
-        headers: {
-          ...traceContext.headers,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        signal,
-      }),
-      { context: { formId: id, pageCount: schema.pages.length, confirmWarnings } },
-    );
-    if (error) {
-      throw new Error(await getFunctionErrorMessage(error, response));
-    }
-
-    if (!isSchemaUpdateResult(data)) {
-      throw new Error("Сервер вернул некорректный результат проверки формы");
-    }
-
-    if (data.status !== "updated") {
-      await removeSurveyAssetPaths(materialized.uploadedPaths).catch(() => undefined);
-      return data;
-    }
-
-    return data;
-  } catch (error) {
-    await removeSurveyAssetPaths(materialized.uploadedPaths).catch(() => undefined);
-    throw error;
+  const { data, error, response } = await runRequest(
+    "functions.form-admin.update-schema",
+    (signal, traceContext) => supabaseClient.functions.invoke("form-admin", {
+      body: {
+        action: "update-schema",
+        formId: id,
+        schema,
+        theme: serializeSurveyThemeAssetUrls(materialized.theme),
+        title,
+        allowResponseEditing,
+        organizationTypes: normalizeOrganizationTypes(organizationTypes),
+        confirmWarnings,
+        expectedRevision,
+        ...(settings ? { settings } : {}),
+      },
+      headers: {
+        ...traceContext.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      signal,
+    }),
+    { context: { formId: id, pageCount: schema.pages.length, confirmWarnings } },
+  );
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error, response));
   }
+
+  if (!isSchemaUpdateResult(data)) {
+    throw new Error("Сервер вернул некорректный результат проверки формы");
+  }
+
+  if (data.status !== "updated") {
+    await removeSurveyAssetPaths(materialized.uploadedPaths).catch(() => undefined);
+    return data;
+  }
+
+  return data;
 }
 
 export async function updateFormStatus(id: string, isPublic: boolean) {

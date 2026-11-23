@@ -12,6 +12,9 @@ import {
   updateFormSchema,
   updateFormTitle,
 } from "./formsApi";
+import { resolveSurveyThemeAssetUrls } from "./themeAssets";
+import { resolveSurveyTheme } from "../model/surveyTheme";
+import { SUPABASE_URL } from "../../../shared/config/env";
 import { apiClient, publicApiClient, supabaseClient } from "../../../shared/api/client";
 
 vi.mock("../../../shared/api/client", () => ({
@@ -809,68 +812,111 @@ describe("updateFormTitle", () => {
     vi.resetAllMocks();
   });
 
-  it("keeps the persisted survey schema title in sync with the form title", async () => {
-    const schemaReadQuery = createSchemaReadQuery({
-      data: {
-        schema: {
-          title: "Старое название",
-          pages: [{ name: "page1", elements: [] }],
-        },
-        theme: {},
-        allow_response_editing: false,
-        organization_types: ["school"],
-      },
-      error: null,
-    });
-    const themeReadQuery = createSchemaReadQuery({ data: { theme: {} }, error: null });
-    vi.mocked(apiClient.from)
-      .mockReturnValueOnce(schemaReadQuery as never)
-      .mockReturnValueOnce(themeReadQuery as never);
-    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
-      data: { user: { id: "user-1" } },
-      error: null,
-    } as never);
-    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({
-      data: { session: { access_token: "access-token" } },
-      error: null,
-    } as never);
-    vi.mocked(supabaseClient.functions.invoke).mockResolvedValue({
-      data: {
-        status: "updated",
-        safeChanges: ["Изменено оформление или текст формы"],
-        warnings: [],
-        breakingChanges: [],
-      },
-      error: null,
-    } as never);
-
-    await updateFormTitle("form-1", "Новое название");
-
-    expect(schemaReadQuery.select).toHaveBeenCalledWith(
-      "schema, theme, allow_response_editing, organization_types, revision",
-    );
-    expect(schemaReadQuery.eq).toHaveBeenCalledWith("id", "form-1");
-    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(
-      "form-admin",
-      expect.objectContaining({
-        body: expect.objectContaining({
-          action: "update-schema",
-          formId: "form-1",
+  it.each([{}, { backgroundImage: "__APP_SURVEY_ASSET__/gallery/background.webp" }])(
+    "updates the schema title without copying the shared gallery: %j", async (theme) => {
+      const schemaReadQuery = createSchemaReadQuery({
+        data: {
           schema: {
-            title: "Новое название",
+            title: "Старое название",
             pages: [{ name: "page1", elements: [] }],
           },
-          confirmWarnings: false,
+          theme,
+          allow_response_editing: false,
+          organization_types: ["school"],
+        },
+        error: null,
+      });
+      const themeReadQuery = createSchemaReadQuery({ data: { theme: {} }, error: null });
+      vi.mocked(apiClient.from)
+        .mockReturnValueOnce(schemaReadQuery as never)
+        .mockReturnValueOnce(themeReadQuery as never);
+      vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
+        data: { user: { id: "user-1" } },
+        error: null,
+      } as never);
+      vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({
+        data: { session: { access_token: "access-token" } },
+        error: null,
+      } as never);
+      vi.mocked(supabaseClient.functions.invoke).mockResolvedValue({
+        data: {
+          status: "updated",
+          safeChanges: ["Изменено оформление или текст формы"],
+          warnings: [],
+          breakingChanges: [],
+        },
+        error: null,
+      } as never);
+
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false } as Response);
+      try {
+        await updateFormTitle("form-1", "Новое название");
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        fetchMock.mockRestore();
+      }
+
+      expect(supabaseClient.storage.from).not.toHaveBeenCalled();
+      expect(schemaReadQuery.select).toHaveBeenCalledWith(
+        "schema, theme, allow_response_editing, organization_types, revision",
+      );
+      expect(schemaReadQuery.eq).toHaveBeenCalledWith("id", "form-1");
+      expect(supabaseClient.functions.invoke).toHaveBeenCalledWith(
+        "form-admin",
+        expect.objectContaining({
+          body: expect.objectContaining({
+            action: "update-schema",
+            formId: "form-1",
+            schema: {
+              title: "Новое название",
+              pages: [{ name: "page1", elements: [] }],
+            },
+            theme: expect.objectContaining(theme),
+            confirmWarnings: false,
+          }),
+          headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
         }),
-        headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
-      }),
-    );
-  });
+      );
+    },
+  );
 });
 
 describe("updateFormSchema", () => {
   afterEach(() => {
     vi.resetAllMocks();
+  });
+
+  it("leaves a copied background available when save acknowledgement is lost", async () => {
+    const sourceFormId = "b5000000-0000-4000-8000-000000000001";
+    const targetFormId = "b5000000-0000-4000-8000-000000000002";
+    const ownerId = "a5000000-0000-4000-8000-000000000001";
+    const source = resolveSurveyThemeAssetUrls({
+      backgroundImage: `__APP_SURVEY_ASSET__/forms/${sourceFormId}/${ownerId}/c5000000-0000-4000-8000-000000000001.png`,
+    });
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(supabaseClient.storage.from).mockReturnValue({
+      upload,
+      remove,
+      getPublicUrl: (path: string) => ({ data: { publicUrl: `${SUPABASE_URL}/storage/v1/object/public/survey-assets/${path}` } }),
+    } as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: ownerId } }, error: null } as never);
+    vi.mocked(apiClient.auth.getCurrentSession).mockResolvedValue({ data: { session: { access_token: "test-token" } }, error: null } as never);
+    vi.mocked(supabaseClient.functions.invoke).mockRejectedValue(new Error("Connection interrupted"));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["image"], { type: "image/png" }),
+    } as Response);
+    try {
+      await expect(updateFormSchema(targetFormId, { pages: [] }, resolveSurveyTheme(source), "Тест",
+        false, ["school"], 0)).rejects.toThrow("Connection interrupted");
+      expect(upload).toHaveBeenCalledWith(expect.any(String), expect.any(File), expect.objectContaining({
+        metadata: { surveyThemeCopy: true },
+      }));
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it("keeps the previous custom background in the gallery after switching backgrounds", async () => {

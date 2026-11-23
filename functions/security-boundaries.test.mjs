@@ -390,7 +390,7 @@ test("restore-upload returns 503 on database error during personal binding/check
   }
 });
 
-test("user-admin routes updateRole and delete through atomic SQL RPCs and revokes sessions on password reset", async () => {
+test("user-admin routes employee mutations through atomic RPCs and delegates password reset to GoTrue", async () => {
   const calls = [];
   const client = {
     auth: {
@@ -410,6 +410,6 @@ test("user-admin routes updateRole and delete through atomic SQL RPCs and revoke
   assert.equal((await send({ action: "delete", userId: employeeId })).status, 200);
   assert.equal((await send({ action: "updatePassword", userId: employeeId, password: "123456789012" })).status, 200);
   assert.deepEqual(calls.map(c => c.action === "rpc" ? c.name : c.action), [
-    "set_employee_role", "assert_can_delete_employee", "deleteUser", "updateUserById", "signOut",
+    "set_employee_role", "delete_employee", "updateUserById",
   ]);
 });

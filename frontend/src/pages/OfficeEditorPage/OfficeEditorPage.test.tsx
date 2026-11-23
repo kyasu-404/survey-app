@@ -46,7 +46,8 @@ it('saves before downloading and invalidates the template list after confirmatio
   expect(client.getQueryData<OfficeDocument>(['office-document','doc'])?.binding_count).toBe(2);
 });
 it('keeps the editor open after a failed save and clears the timeout after a later persisted callback',async()=>{
-  const {client,user}=await setup();
+  const {client,user,message}=await setup();
+  message('office-state',true);message('office-state',false);
   const request=vi.mocked(officeRequest).getMockImplementation()!;
   vi.mocked(officeRequest).mockImplementation((path,options)=>path.endsWith('/save') ? Promise.reject(new Error('Сохранение ещё не подтверждено')) : request(path,options));
   await user.click(screen.getByRole('button',{name:'← К результатам'}));
@@ -71,6 +72,7 @@ it('warns about edits sent to Document Server until Storage has confirmed saving
 });
 it('does not leave when another edit arrives while the save is in progress',async()=>{
   const {user,message}=await setup();
+  message('office-state',true);message('office-state',false);
   let finish!:(value:unknown)=>void;
   const request=vi.mocked(officeRequest).getMockImplementation()!;
   vi.mocked(officeRequest).mockImplementation((path,options)=>path.endsWith('/save') ? new Promise(resolve=>{finish=resolve;}) : request(path,options));
@@ -81,14 +83,22 @@ it('does not leave when another edit arrives while the save is in progress',asyn
   expect(await screen.findByRole('alert')).toHaveTextContent('появились новые изменения');
   expect(navigate).not.toHaveBeenCalled();
 });
-it('returns to results only after saving succeeds',async()=>{
+it('returns directly from an unchanged document',async()=>{
   const {user}=await setup();
+  await user.click(screen.getByRole('button',{name:'← К результатам'}));
+  expect(navigate).toHaveBeenCalledWith('/dashboard/forms/form/responses');
+  expect(officeRequest).not.toHaveBeenCalledWith('/documents/doc/save',{method:'POST'});
+});
+it('returns to results only after saving succeeds',async()=>{
+  const {user,message}=await setup();
+  message('office-state',true);message('office-state',false);
   await user.click(screen.getByRole('button',{name:'← К результатам'}));
   await waitFor(()=>expect(navigate).toHaveBeenCalledWith('/dashboard/forms/form/responses'));
   expect(officeRequest).toHaveBeenCalledWith('/documents/doc/save',{method:'POST'});
 });
 it('lets the user leave without saving when save fails',async()=>{
-  const {user}=await setup();
+  const {user,message}=await setup();
+  message('office-state',true);message('office-state',false);
   const request=vi.mocked(officeRequest).getMockImplementation()!;
   vi.mocked(officeRequest).mockImplementation((path,options)=>path.endsWith('/save') ? Promise.reject(new Error('Сохранение не подтверждено')) : request(path,options));
   await user.click(screen.getByRole('button',{name:'← К результатам'}));

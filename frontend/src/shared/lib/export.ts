@@ -1,3 +1,4 @@
+import { loadExcelJS } from "./exceljs";
 import {
   getTableValueColumns,
   getTableHeaderLevels,
@@ -65,7 +66,7 @@ export async function createExcelWorkbook(
   worksheetName = "Ответы",
   columns?: TableColumn[],
 ) {
-  const ExcelJS = await import("exceljs");
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sanitizeWorksheetName(worksheetName));
   const exportColumns = getTableValueColumns(columns ?? getHeaders(data).map((header) => ({ key: header, header })));

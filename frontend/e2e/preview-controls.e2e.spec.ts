@@ -30,7 +30,8 @@ for (const theme of ["sand", "graphite"]) {
     await page.goto("/templates");
     const card = page.getByRole("button", { name: "Открыть превью шаблона Проверка шаблона", exact: true });
     await expect(card).toBeVisible();
-    const badgeBackground = await card.locator(".dashboard-status-pill-template").evaluate(el => getComputedStyle(el).backgroundColor);
+    const cardHeader = page.locator(".templates-card-header").filter({ has: card });
+    const badgeBackground = await cardHeader.locator(".dashboard-status-pill-template").evaluate(el => getComputedStyle(el).backgroundColor);
     expect(badgeBackground).not.toBe("rgba(0, 0, 0, 0)");
     await card.click();
     const preview = page.getByRole("dialog", { name: "Превью шаблона Проверка шаблона", exact: true });

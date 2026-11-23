@@ -104,3 +104,20 @@ test('saveUrl rejects encoded path traversal and decrypt rejects truncated auth 
  const shortTag=Buffer.from(tag,'base64').subarray(0,12).toString('base64');
  assert.throws(()=>decrypt(`${iv}.${shortTag}.${data}`,key));
 });
+
+test('OOXML accepts namespaced relationships and a streamed ZIP with data descriptors', async () => {
+  const { Readable } = await import('node:stream');
+  const { ZipFile } = await import('yazl');
+  const entries = unzipSync(blankDocx());
+  entries['word/_rels/document.xml.rels'] = Buffer.from(
+    '<r:Relationships xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<r:Relationship Id="hyperlink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" ' +
+    'Target="https://example.org/page?a=1&amp;b=2" TargetMode="External"/></r:Relationships>'
+  );
+  const zip = new ZipFile();
+  for (const [name, bytes] of Object.entries(entries)) zip.addReadStream(Readable.from([bytes]), name);
+  zip.end();
+  const chunks = [];
+  for await (const chunk of zip.outputStream) chunks.push(chunk);
+  assert.ok(validateDocx(Buffer.concat(chunks), 1024 * 1024)['word/document.xml']);
+});

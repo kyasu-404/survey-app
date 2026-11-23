@@ -229,7 +229,7 @@ describe("createResponseReport", () => {
     });
   });
 
-  it("sorts ranking positions numerically beyond 9 and handles large numeric series without stack overflow", () => {
+  it("sorts ranking positions numerically beyond 9", () => {
     const choices = Array.from({ length: 12 }, (_, index) => ({
       value: `opt-${index + 1}`,
       text: `Вариант ${index + 1}`,
@@ -255,4 +255,15 @@ describe("createResponseReport", () => {
     const opt1Group = report.questionReports.find((q) => q.name === "rank")?.groups.find((g) => g.label === "Вариант 1");
     expect(opt1Group?.values.map((v) => v.label)).toEqual(["1", "2", "12"]);
   });
+  it("calculates numeric limits for a large response series without argument spreading", () => {
+    const count = 130_000;
+    const input = Array.from({ length: count }, (_, index): SurveyResponse => ({
+      id: `row-${index}`, form_id: "form-1", created_at: "2026-08-03T10:00:00Z", data: { value: (index % 8) + 1 },
+    }));
+    const report = createResponseReport(input, { pages: [{ elements: [{ type: "number", name: "value" }] }] });
+    expect(report.questionReports[0].metrics).toEqual(expect.arrayContaining([
+      { label: "Минимум", value: "1" }, { label: "Максимум", value: "8" },
+    ]));
+  });
+
 });

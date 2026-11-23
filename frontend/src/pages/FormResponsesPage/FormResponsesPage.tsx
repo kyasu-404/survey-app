@@ -2,7 +2,7 @@ import { Presence } from "../../shared/ui/Presence";
 import {officeRequest} from '../../entities/office/api';
 import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
 import { DocumentsModal } from "./DocumentsModal";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -574,20 +574,6 @@ export default function FormResponsesPage() {
     });
   };
 
-  const handleResponseRowKeyDown = (
-    event: ReactKeyboardEvent<HTMLTableRowElement>,
-    response: SurveyResponse,
-    row: ResponsesTableRow,
-    index: number,
-  ) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    handleOpenResponsePreview(response, row, index);
-  };
-
   const toggleResponseSelection = (responseId: string) => {
     setSelectedResponseIds((current) => {
       const next = new Set(current);
@@ -806,17 +792,9 @@ export default function FormResponsesPage() {
                     <tr
                       key={rowId}
                       className={`responses-table-row-clickable${highlightedResponses.has(rowId) ? " response-row-new" : ""}`}
-                      role={response ? "button" : undefined}
-                      tabIndex={response ? 0 : undefined}
-                      aria-label={response ? `Открыть ${previewLabel}` : undefined}
                       onClick={() => {
                         if (response) {
                           handleOpenResponsePreview(response, row, index);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (response) {
-                          handleResponseRowKeyDown(event, response, row, index);
                         }
                       }}
                     >
@@ -834,13 +812,20 @@ export default function FormResponsesPage() {
                           />
                         )}
                       </td>
-                      {columns.map((column) => {
+                      {columns.map((column, columnIndex) => {
+                        const content = renderResponseCell(column, row[column.key] ?? "");
                         return (
                           <td
                             key={column.key}
                             className={getResponseColumnClassName(column) || undefined}
                           >
-                            {renderResponseCell(column, row[column.key] ?? "")}
+                            {columnIndex === 0 && response
+                              ? <button type="button" className="responses-row-preview-button"
+                                  aria-label={`Открыть ${previewLabel}`}
+                                  onClick={(event) => { event.stopPropagation(); handleOpenResponsePreview(response, row, index); }}>
+                                  {content}
+                                </button>
+                              : content}
                           </td>
                         );
                       })}

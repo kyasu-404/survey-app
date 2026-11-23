@@ -19,6 +19,7 @@ vi.mock("./client", () => ({
   supabaseClient: {
     auth: {
       getUser: vi.fn(),
+      getSession: vi.fn(),
     },
     storage: {
       from: vi.fn(),
@@ -39,6 +40,9 @@ describe("storage api", () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    vi.mocked(supabaseClient.auth.getSession).mockResolvedValue({
+      data: { session: { access_token: "employee-token", user: { id: "user-1" } } }, error: null,
+    } as never);
     vi.mocked(publicSupabaseClient.functions.invoke).mockImplementation(async (_name, options) => {
       const payload = options?.body as { action?: string; formId?: string; extension?: string };
       return { data: payload?.action === "reserve-upload" ? { path: `public/${payload.formId}/${fileId}${payload.extension}` } : { success: true }, error: null } as never;
@@ -53,21 +57,25 @@ describe("storage api", () => {
   });
 
   it("binds the public reservation and actual upload to the originating file question", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
+    vi.stubGlobal("fetch", upload);
     const file = new File(["document"], "report.pdf", { type: "application/pdf" });
     await uploadFileToStorage("form-1", file, { allowAnonymous: true, questionName: "documents" });
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({
       body: expect.objectContaining({ questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" }),
     }));
-    expect(upload).toHaveBeenCalledWith(expect.any(String), file, {
-      upsert: false, metadata: { questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" },
+    expect(upload).toHaveBeenCalledOnce();
+    const [, init] = upload.mock.calls[0];
+    expect((init.body as FormData).get("")).toEqual(file);
+    expect(JSON.parse(String((init.body as FormData).get("metadata")))).toEqual({
+      questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf",
     });
+    expect(new Headers(init.headers).get("x-upsert")).toBe("false");
   });
 
   it("uploads a file of exactly 50 MiB and rejects one byte more before reserving it", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
+    vi.stubGlobal("fetch", upload);
     const file = new File([], "report.pdf", { type: "application/pdf" });
     const size = vi.spyOn(file, "size", "get").mockReturnValue(52428800);
     const options = { allowAnonymous: true, questionName: "documents" };
@@ -85,14 +93,19 @@ describe("storage api", () => {
   });
 
   it("sends the question binding on authenticated uploads that do not use reservations", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
-    vi.mocked(supabaseClient.storage.from).mockReturnValue({ upload } as never);
+    vi.stubGlobal("fetch", upload);
     const file = new File(["document"], "report.pdf", { type: "application/pdf" });
     await uploadFileToStorage("form-1", file, { questionName: "documents" });
-    expect(upload).toHaveBeenCalledWith(expect.any(String), file, {
-      upsert: false, metadata: { questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf" },
+    expect(upload).toHaveBeenCalledOnce();
+    const [, init] = upload.mock.calls[0];
+    expect((init.body as FormData).get("")).toEqual(file);
+    expect(JSON.parse(String((init.body as FormData).get("metadata")))).toEqual({
+      questionName: "documents", fileName: "report.pdf", mimeType: "application/pdf",
     });
+    expect(new Headers(init.headers).get("x-upsert")).toBe("false");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer employee-token");
     expect(publicSupabaseClient.functions.invoke).not.toHaveBeenCalled();
   });
 
@@ -106,8 +119,7 @@ describe("storage api", () => {
       return { data: action === "reserve-upload" ? { path } : action === "restore-upload"
         ? { signedUrl: `/storage/v1/object/sign/survey-files/${path}?token=fresh` } : { success: true }, error: null } as never;
     });
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) } as never);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("file")));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(null)).mockResolvedValueOnce(new Response("file")));
     const personalToken = "30000000-0000-4000-8000-000000000000";
     const options = { allowAnonymous: true, browserId, formId, restoreDraft: true, personalToken };
     await uploadFileToStorage(formId, new File(["file"], "file.txt"), options);
@@ -128,7 +140,7 @@ describe("storage api", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(resolveSurveyFileValueContent({ name: "file.txt", content: path }, { allowAnonymous: true, restoreDraft: true })).resolves.toBe("data:text/plain;base64,aGVsbG8=");
     expect(publicSupabaseClient.functions.invoke).toHaveBeenCalledWith("form-admin", expect.objectContaining({ body: { action: "restore-upload", formId: path.split("/")[1], path, browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) } }));
-    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/sign/survey-files/${path}?token=short-lived`, { signal: expect.any(AbortSignal) });
+    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/sign/survey-files/${path}?token=short-lived`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(publicSupabaseClient.storage.from).not.toHaveBeenCalled();
   });
 
@@ -162,7 +174,7 @@ describe("storage api", () => {
 
     await expect(resolveSurveyFileValueContent({ content: path }, { allowAnonymous: true, restoreDraft: true })).resolves.toBe("data:text/plain;base64,aGVsbG8=");
 
-    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1${signedPath}`, { signal: expect.any(AbortSignal) });
+    expect(fetchMock).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1${signedPath}`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it("passes a personal capability when restoring an attached file on another browser", async () => {
@@ -183,15 +195,15 @@ describe("storage api", () => {
   });
 
   it("uploads files under the current user's prefix and stores the storage path", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
-    vi.mocked(supabaseClient.storage.from).mockReturnValue({ upload } as never);
+    vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage("form-1", new File(["hello"], "answer.txt", { type: "text/plain" }));
 
-    expect(upload).toHaveBeenCalledWith(`user-1/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(upload).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/survey-files/user-1/form-1/${fileId}.txt`, expect.objectContaining({ method: "POST" }));
     expect(result).toEqual(
       expect.objectContaining({
         path: `user-1/form-1/${fileId}.txt`,
@@ -200,14 +212,14 @@ describe("storage api", () => {
   });
 
   it("uploads files for public forms without auth into the public form prefix", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
     vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
       data: { user: null },
       error: new AuthSessionMissingError(),
     } as never);
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage(
       "form-1",
@@ -215,7 +227,7 @@ describe("storage api", () => {
       { allowAnonymous: true },
     );
 
-    expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(upload).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/survey-files/public/form-1/${fileId}.txt`, expect.objectContaining({ method: "POST" }));
     expect(result).toEqual(
       expect.objectContaining({
         path: `public/form-1/${fileId}.txt`,
@@ -224,7 +236,7 @@ describe("storage api", () => {
   });
 
   it("falls back to getRandomValues when randomUUID is unavailable", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
     const getRandomValues = vi.fn((buffer: Uint8Array) => {
       buffer.set([
         0x00, 0x00, 0x00, 0x00,
@@ -245,7 +257,7 @@ describe("storage api", () => {
       data: { user: null },
       error: new AuthSessionMissingError(),
     } as never);
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage(
       "form-1",
@@ -254,7 +266,7 @@ describe("storage api", () => {
     );
 
     expect(getRandomValues).toHaveBeenCalled();
-    expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(upload).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/survey-files/public/form-1/${fileId}.txt`, expect.objectContaining({ method: "POST" }));
     expect(result).toEqual(
       expect.objectContaining({
         path: `public/form-1/${fileId}.txt`,
@@ -263,11 +275,11 @@ describe("storage api", () => {
   });
 
   it("uses public storage without waiting for a stalled dashboard auth session", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
+    const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
     vi.mocked(supabaseClient.auth.getUser).mockImplementation(() => new Promise(() => {}));
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage(
       "form-1",
@@ -275,7 +287,7 @@ describe("storage api", () => {
       { allowAnonymous: true },
     );
 
-    expect(upload).toHaveBeenCalledWith(`public/form-1/${fileId}.txt`, expect.any(File), { upsert: false });
+    expect(upload).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/survey-files/public/form-1/${fileId}.txt`, expect.objectContaining({ method: "POST" }));
     expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
@@ -363,10 +375,34 @@ describe("storage api", () => {
     );
   });
 
+  it("aborts the actual upload request when the caller cancels", async () => {
+    const cancellation = new AbortController();
+    let requestStarted!: () => void;
+    const started = new Promise<void>(resolve => { requestStarted = resolve; });
+    const transfer = vi.fn((_url: string, init: RequestInit) => {
+      requestStarted();
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", transfer);
+    const result = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), {
+      allowAnonymous: true, signal: cancellation.signal,
+    });
+    const reachedNetwork = await Promise.race([started.then(() => true), result.then(() => false)]);
+    expect(reachedNetwork).toBe(true);
+    const rejected = expect(result).rejects.toMatchObject({ name: "AbortError" });
+    cancellation.abort();
+    await rejected;
+    const [, sent] = transfer.mock.calls[0];
+    expect(sent.signal?.aborted).toBe(true);
+    expect(new Headers(sent.headers).get("x-request-id")).toBeTruthy();
+  });
+
   it("allows a slow upload to finish after the ordinary API timeout", async () => {
     vi.useFakeTimers();
-    const upload = vi.fn(() => new Promise(resolve => setTimeout(() => resolve({ error: null }), 20_000)));
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload } as never);
+    const upload = vi.fn(() => new Promise(resolve => setTimeout(() => resolve(new Response(null)), 20_000)));
+    vi.stubGlobal("fetch", upload);
     const pending = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), { allowAnonymous: true });
     const result = expect(pending).resolves.toMatchObject({ path: expect.stringMatching(/^public\/form-1\//) });
     await vi.advanceTimersByTimeAsync(20_000);
@@ -375,7 +411,7 @@ describe("storage api", () => {
 
   it("times out a stalled upload so the respondent can retry", async () => {
     vi.useFakeTimers();
-    vi.mocked(publicSupabaseClient.storage.from).mockReturnValue({ upload: vi.fn(() => new Promise(() => {})) } as never);
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
     const pending = uploadFileToStorage("form-1", new File(["hello"], "answer.txt"), { allowAnonymous: true });
     const result = expect(pending).rejects.toThrow("таймаут");
     await vi.advanceTimersByTimeAsync(600_000);

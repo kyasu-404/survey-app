@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { routes } from "../../app/routes";
 import { listAutomationRuns } from "../../entities/automation/api";
 import { automationKey, type AutomationRun } from "../../entities/automation/model";
+import { useTimelineHeadRefresh } from "../../shared/api/useTimelineHeadRefresh";
 import type { TimelineCursor } from "../../shared/api/timelinePage";
 import { formatActivityTime } from "../../shared/lib/activityTime";
 import { Icon } from "../../shared/ui/Icon";
@@ -49,8 +50,9 @@ function RunCard({ run }: { run: AutomationRun }) {
 }
 
 export function RuleHistory({ ruleId, userId, isRuleActive = true }: { ruleId: string; userId: string; isRuleActive?: boolean }) {
+  const queryKey = [...automationKey(userId), "runs", ruleId];
   const history = useInfiniteQuery({
-    queryKey: [...automationKey(userId), "runs", ruleId],
+    queryKey,
     initialPageParam: undefined as TimelineCursor | undefined,
     queryFn: ({ pageParam, signal }) => listAutomationRuns(ruleId, pageParam, signal),
     getNextPageParam: (last) => last.next,
@@ -58,6 +60,7 @@ export function RuleHistory({ ruleId, userId, isRuleActive = true }: { ruleId: s
     refetchInterval: ({ state }) => {
       if (state.status !== "success" || !state.data) return false;
       const pages = state.data.pages;
+      if (pages.length !== 1) return false;
       const hasInFlightRuns = pages.some(page => page.items.some(
         run => run.status === "pending" || run.status === "queued",
       ));
@@ -66,6 +69,11 @@ export function RuleHistory({ ruleId, userId, isRuleActive = true }: { ruleId: s
     },
   });
   const runs = history.data?.pages.flatMap((page) => page.items) ?? [];
+  useTimelineHeadRefresh({
+    queryKey, pageCount: history.data?.pages.length ?? 0,
+    interval: isRuleActive || runs.some(run => run.status === "pending" || run.status === "queued") ? 10_000 : false,
+    fetchPage: signal => listAutomationRuns(ruleId, undefined, signal),
+  });
   return <section aria-labelledby="rule-history-heading" className="automation-section">
     <header className="activity-heading">
       <h2 id="rule-history-heading">История срабатываний</h2>

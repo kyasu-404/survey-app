@@ -32,7 +32,11 @@ function setup({ role = "admin", stored = original } = {}) {
       };
     },
   };
-  const Deno = { serve: fn => { handler = fn; }, env: { get: name => name.includes("ORIGINS") ? undefined : "configured" } };
+  const Deno = { serve: fn => { handler = fn; }, env: { get(name) {
+    if (name === "MAIL_SETTINGS_ENCRYPTION_KEY") return Buffer.alloc(32).toString("base64");
+    if (name.includes("ORIGINS") || name === "SMTP_ALLOWED_PRIVATE_HOSTS") return undefined;
+    return "configured";
+  } } };
   const names = Object.keys(content);
   new Function("Deno", "createClient", "crypto", "console", ...names, source)(
     Deno, () => client, webcrypto, { info() {}, error() {} }, ...names.map(name => content[name]),
@@ -50,16 +54,23 @@ test("SMTP certificate exceptions default off and round-trip through admin setti
   const initial = await app.request({ action: "get-settings" });
   assert.equal(initial.status, 200);
   assert.equal(initial.body.settings.allowInvalidCertificate, false);
-  for (const allowInvalidCertificate of [true, false]) {
-    const saved = await app.request({ ...draft, allowInvalidCertificate });
-    assert.equal(saved.status, 200);
-    assert.equal(saved.body.settings.allowInvalidCertificate, allowInvalidCertificate);
-    assert.equal(app.writes.at(-1).allow_invalid_certificate, allowInvalidCertificate);
-    assert.equal(app.writes.at(-1).password_encrypted, original.password_encrypted);
-    assert.doesNotMatch(JSON.stringify(saved.body), /existing-encrypted-password|password_encrypted/);
-    const loaded = await app.request({ action: "get-settings" });
-    assert.equal(loaded.body.settings.allowInvalidCertificate, allowInvalidCertificate);
-  }
+  const rejected = await app.request({ ...draft, allowInvalidCertificate: true });
+  assert.equal(rejected.status, 400);
+  assert.equal(app.writes.length, 0);
+
+  const exceptional = await app.request({ ...draft, allowInvalidCertificate: true, password: "new-test-password" });
+  assert.equal(exceptional.status, 200);
+  assert.equal(exceptional.body.settings.allowInvalidCertificate, true);
+  const encrypted = app.writes.at(-1).password_encrypted;
+  assert.match(encrypted, /^v2:/);
+
+  const strict = await app.request({ ...draft, allowInvalidCertificate: false });
+  assert.equal(strict.status, 200);
+  assert.equal(strict.body.settings.allowInvalidCertificate, false);
+  assert.equal(app.writes.at(-1).password_encrypted, encrypted);
+  assert.doesNotMatch(JSON.stringify(strict.body), /password_encrypted|new-test-password/);
+  const loaded = await app.request({ action: "get-settings" });
+  assert.equal(loaded.body.settings.allowInvalidCertificate, false);
 });
 
 test("old clients preserve the saved certificate policy when omitting the new field", async () => {

@@ -131,12 +131,15 @@ function OrganizationEditModal({
   );
 }
 
+const ORGANIZATIONS_PER_PAGE = 100;
+
 export default function OrganizationsPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<OrganizationFilter>("all");
+  const [page, setPage] = useState(1);
   const [editingOrganization, setEditingOrganization] = useState<EducationOrganization | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [draft, setDraft] = useState<EducationOrganizationInput>(EMPTY_ORGANIZATION);
@@ -146,6 +149,7 @@ export default function OrganizationsPage() {
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [deletingOrganizationId, setDeletingOrganizationId] = useState<string | null>(null);
   const busyOpRef = useRef(false);
+  const exportingRef = useRef(false);
   const canManage = profile?.role === "admin";
   const isDirectoryBusy = isImporting || isDeletingAll || Boolean(deletingOrganizationId);
   const organizationsQuery = useQuery({
@@ -160,6 +164,17 @@ export default function OrganizationsPage() {
       : organizations.filter((organization) => organization.organization_type === filter),
     [filter, organizations],
   );
+
+  const pageCount = Math.max(1, Math.ceil(filteredOrganizations.length / ORGANIZATIONS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleOrganizations = filteredOrganizations.slice(
+    (currentPage - 1) * ORGANIZATIONS_PER_PAGE,
+    currentPage * ORGANIZATIONS_PER_PAGE,
+  );
+  const selectType = (next: OrganizationFilter) => {
+    setFilter(next);
+    setPage(1);
+  };
 
   const openCreateModal = () => {
     setEditingOrganization(null);
@@ -186,7 +201,7 @@ export default function OrganizationsPage() {
   };
 
   const handleSave = async () => {
-    if (!canManage) return;
+    if (!canManage || busyOpRef.current) return;
     const normalized = normalizeOrganizationInput(draft);
     const validationError = validateOrganizationInput(normalized);
     if (validationError) {
@@ -194,6 +209,7 @@ export default function OrganizationsPage() {
       return;
     }
 
+    busyOpRef.current = true;
     setIsSaving(true);
     try {
       if (editingOrganization) {
@@ -209,6 +225,7 @@ export default function OrganizationsPage() {
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось сохранить организацию"), "error");
     } finally {
+      busyOpRef.current = false;
       setIsSaving(false);
     }
   };
@@ -266,13 +283,15 @@ export default function OrganizationsPage() {
   };
 
   const handleExport = async () => {
-    if (filteredOrganizations.length === 0 || isExporting) return;
+    if (filteredOrganizations.length === 0 || exportingRef.current) return;
+    exportingRef.current = true;
     setIsExporting(true);
     try {
       await exportOrganizationsXlsx(filteredOrganizations);
     } catch (error) {
       showToast(getErrorMessage(error, "Не удалось экспортировать справочник"), "error");
     } finally {
+      exportingRef.current = false;
       setIsExporting(false);
     }
   };
@@ -340,7 +359,7 @@ export default function OrganizationsPage() {
             role="tab"
             aria-selected={filter === "all"}
             className={filter === "all" ? "active" : ""}
-            onClick={() => setFilter("all")}
+            onClick={() => selectType("all")}
           >
             Все
           </button>
@@ -351,7 +370,7 @@ export default function OrganizationsPage() {
               role="tab"
               aria-selected={filter === option.value}
               className={filter === option.value ? "active" : ""}
-              onClick={() => setFilter(option.value)}
+              onClick={() => selectType(option.value)}
             >
               {option.label}
             </button>
@@ -385,7 +404,7 @@ export default function OrganizationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrganizations.map((organization) => (
+                {visibleOrganizations.map((organization) => (
                   <tr key={organization.id}>
                     <td>{getOrganizationTypeLabel(organization.organization_type, true)}</td>
                     <td>{organization.number ?? "—"}</td>
@@ -411,6 +430,13 @@ export default function OrganizationsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {pageCount > 1 && (
+          <nav className="responses-pagination" aria-label="Страницы справочника">
+            <button type="button" className="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Назад</button>
+            <span aria-live="polite">Страница {currentPage} из {pageCount}</span>
+            <button type="button" className="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Далее</button>
+          </nav>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import concurrent.futures
 import http.server
 import http.client
 import json
+import os
 import pathlib
 import re
 import socket
@@ -17,14 +18,28 @@ root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
 nginx = sys.argv[2] if len(sys.argv) > 2 else "/usr/sbin/nginx"
 
 class Stub(http.server.BaseHTTPRequestHandler):
+    policy_calls = 0
+    policy_status = 200
+    policy_lock = threading.Lock()
+
     def respond(self):
-        self.send_response(200)
+        if self.path == "/rest/v1/rpc/get_form_embedding_policy":
+            with self.policy_lock:
+                type(self).policy_calls += 1
+                status = self.policy_status
+            self.send_response(status)
+            if status == 200:
+                self.send_header("X-Form-Frame-Ancestors", "https://embed.example.test")
+            self.send_header("Cache-Control", "no-store")
+        else:
+            self.send_response(200)
+            self.send_header("Cache-Control", "private")
         self.send_header("Content-Length", "2")
         self.send_header("X-Upstream-Path", self.path)
         self.send_header("X-Survey-Client-IP", self.headers.get("X-Survey-Client-IP", ""))
         self.end_headers()
         self.wfile.write(b"ok")
-    do_GET = do_POST = do_OPTIONS = respond
+    do_GET = do_POST = do_PUT = do_OPTIONS = respond
     def log_message(self, *args):
         pass
 
@@ -44,17 +59,41 @@ with tempfile.TemporaryDirectory(prefix="survey-nginx-test-") as directory:
     assets.mkdir()
     (temp / "index.html").write_text("<html>test</html>")
     (assets / "app-12345678.js").write_text("console.log('cache');" * 100)
-    frontend_port, api_port = port(), port()
+    frontend_port, api_port, redirect_port, direct_api_port = port(), port(), port(), port()
     source = (root / "nginx.conf").read_text()
-    globals_conf = source[:source.index("upstream app_api")]
+    redirect = source[source.index("server {\n  listen 80;"):source.index("server {\n  listen 443")]
+    redirect = re.sub(r"^  listen .*;$", "", redirect, flags=re.M)
+    redirect = redirect.replace("server {", f"server {{\n  listen 127.0.0.1:{redirect_port};", 1)
     api = source[source.index("server {\n  listen 443"):]
     api = re.sub(r"  listen 443 ssl;", f"  listen 127.0.0.1:{api_port};", api)
     api = re.sub(r"^  (?:listen \[::\]:443|http2 |ssl_).*\n", "", api, flags=re.M)
     api = re.sub(r"root /var/www/[^;]+;", f"root {temp};", api)
     frontend = (root / "frontend/nginx.conf").read_text()
-    frontend = frontend[frontend.index("server {"):].replace("listen 8080;", f"listen 127.0.0.1:{frontend_port};")
+    # The standalone config has its own cache-header map. This harness uses
+    # the shared map from the root config and preserves any standalone limits.
+    frontend = re.sub(r"map \$uri \$survey_static_cache_control \{.*?^}\n", "", frontend, flags=re.S | re.M)
+    frontend = frontend.replace("limit_req_status 429;\n", "").replace("listen 8080;", f"listen 127.0.0.1:{frontend_port};")
     frontend = frontend.replace("root /usr/share/nginx/html;", f'root {temp};\n  add_header X-Test-Policy new;')
     upstream_port = upstream.server_address[1]
+    input_path = temp / "frontend.conf"
+    output_path = temp / "frontend-rendered.conf"
+    key_path = temp / "anon-jwt"
+    template_path = temp / "frontend-template.conf"
+    template_path.write_text(frontend)
+    subprocess.run(["node", str(root / "frontend/scripts/render-nginx-config.mjs"), str(template_path), str(input_path)],
+                   env={**os.environ, "VITE_SUPABASE_URL": "https://backend.example.test", "VITE_SENTRY_DSN": ""},
+                   check=True)
+    key_path.write_text("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.fixture")
+    subprocess.run([sys.executable, str(root / "ops/render-embedding-nginx.py"), "--config", str(input_path),
+                    "--upstream", f"http://127.0.0.1:{upstream_port}", "--anon-key-file", str(key_path),
+                    "--cache-path", str(temp / "embed"), "--output", str(output_path)], check=True)
+    frontend = output_path.read_text().replace("proxy_cache_valid 200 10s;", "proxy_cache_valid 200 1s;")
+    magi_config = temp / "magi"
+    upstream_address = f"127.0.0.1:{upstream_port}"
+    subprocess.run([sys.executable, str(root / "ops/prepare-magi-nginx.py"), "--backend", upstream_address,
+                    "--office", upstream_address, "--output", str(magi_config)], check=True)
+    globals_conf = (magi_config / "survey-http.conf").read_text()
+    direct_api = (magi_config / "api-proxy.inc").read_text()
     api = api.replace("proxy_pass http://127.0.0.1:8095;", f"proxy_pass http://127.0.0.1:{upstream_port};")
     config = f"""pid {temp}/nginx.pid;
 error_log {temp}/error.log;
@@ -68,10 +107,13 @@ http {{
   scgi_temp_path {temp}/scgi;
   types {{ text/html html; application/javascript js; text/css css; }}
   {globals_conf}
-  upstream app_api {{ server 127.0.0.1:{upstream_port}; }}
-  upstream app_ws {{ server 127.0.0.1:{upstream_port}; }}
+  server {{
+    listen 127.0.0.1:{direct_api_port};
+    {direct_api}
+  }}
   {frontend}
   {api}
+  {redirect}
 }}
 """
     config_path = temp / "nginx.conf"
@@ -129,6 +171,37 @@ http {{
             assert request(port_number, "/assets/app-12345678.js", headers={"If-None-Match": headers["ETag"]})[0] == 304
             cache_results.append({"immutable_assets": True, "html_revalidated": True, "missing_asset_404": True, "security_headers_preserved": True})
 
+        status, redirect_headers = request(redirect_port, "/form/example?source=website")
+        assert status == 301 and redirect_headers["Location"] == "https://example.com/form/example?source=website", redirect_headers
+        status, api_headers = request(api_port, "/api/rest/v1/forms")
+        assert status == 200 and api_headers.get("Cache-Control") == "private", api_headers
+        for port_number in [frontend_port, api_port]:
+            headers = request(port_number, "/settings")[1]
+            connect = next(directive for directive in headers["Content-Security-Policy"].split(";") if directive.strip().startswith("connect-src "))
+            assert "https:" not in connect.split() and "wss:" not in connect.split(), connect
+
+        # Expiry followed by an upstream error keeps top-level forms available,
+        # while denying iframe access with the default policy. 401 and 429
+        # also use this path instead of blocking the top-level route.
+        assert "frame-ancestors https://embed.example.test" in request(frontend_port, "/form/embeddable")[1]["Content-Security-Policy"]
+        with Stub.policy_lock:
+            cached_calls = Stub.policy_calls
+        assert request(frontend_port, "/form/embeddable")[0] == 200
+        with Stub.policy_lock:
+            assert Stub.policy_calls == cached_calls
+        time.sleep(2.0)
+        for policy_error in [401, 429, 503]:
+            with Stub.policy_lock:
+                Stub.policy_status = policy_error
+            status, headers = request(frontend_port, "/form/embeddable")
+            assert status == 200 and "frame-ancestors 'none'" in headers["Content-Security-Policy"], (policy_error, status, headers)
+        with Stub.policy_lock:
+            internal_calls = Stub.policy_calls
+        _, internal_headers = request(frontend_port, "/__form_embedding_policy")
+        assert "X-Form-Frame-Ancestors" not in internal_headers
+        with Stub.policy_lock:
+            assert Stub.policy_calls == internal_calls
+
         def burst(path, method, count, source_ip="127.0.0.1"):
             start = time.monotonic()
             with concurrent.futures.ThreadPoolExecutor(max_workers=40) as pool:
@@ -165,10 +238,20 @@ http {{
             assert result["statuses"].get("429", 0) > 0, (path, result)
             assert request(api_port, path, "OPTIONS", source_ip=source_ip)[0] == 200
             protected.append({"path": path, **result})
+        signed_path = "/api/storage/v1/object/upload/sign/survey-files/example"
+        status, signed_headers = request(api_port, signed_path, "PUT", source_ip="127.0.0.6")
+        assert status == 200 and signed_headers["X-Upstream-Path"] == signed_path.removeprefix("/api"), signed_headers
+        signed = burst(signed_path, "PUT", 250, "127.0.0.6")
+        assert signed["statuses"].get("429", 0) > 0, signed
+        assert request(api_port, "/api/storage/v1/upload/resumable", "POST")[0] == 403
+        direct_signed_path = signed_path.removeprefix("/api")
+        status, headers = request(direct_api_port, direct_signed_path, "PUT", source_ip="127.0.0.7")
+        assert status == 200 and headers["X-Upstream-Path"] == direct_signed_path, (status, headers)
+        assert request(direct_api_port, "/storage/v1/upload/resumable", "POST")[0] == 403
         for path in ["/api/office/plugin/config.json", "/api/office/file/example?token=test", "/api/office/probe?token=test"]:
             assert request(api_port, path, source_ip="127.0.0.5")[0] == 200
         assert request(api_port, "/api/office/callback/example", "POST", source_ip="127.0.0.5")[0] == 200
-        print(json.dumps({"graceful_reload": True, "cache": cache_results, "preflight": preflight, "responses": responses, "uploads": uploads, "reads": reads, "overload": overload, "protected_routes": protected}, indent=2))
+        print(json.dumps({"graceful_reload": True, "cache": cache_results, "preflight": preflight, "responses": responses, "uploads": uploads, "reads": reads, "overload": overload, "protected_routes": protected, "signed_upload": signed}, indent=2))
     finally:
         subprocess.run([nginx, "-p", str(temp), "-c", str(config_path), "-s", "quit"], check=True)
         upstream.shutdown()

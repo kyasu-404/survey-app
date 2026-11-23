@@ -23,7 +23,7 @@ try {
     : [];
   parentPort.postMessage({ result }, transferList);
 } catch (error) {
-  const isExpected = Number.isInteger(error?.status);
+  const isExpected = error instanceof HttpError;
   parentPort.postMessage({
     error: isExpected ? error.message : 'Не удалось обработать документ',
     status: isExpected ? error.status : 422,

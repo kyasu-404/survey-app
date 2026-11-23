@@ -7,6 +7,6 @@ PartOf=docker.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/opt/survey-app/ops/forms-ingress.sh
-ExecStop=/opt/survey-app/ops/forms-ingress.sh --remove
+ExecReload=/opt/survey-app/ops/forms-ingress.sh
 [Install]
 WantedBy=multi-user.target

@@ -102,13 +102,16 @@ export function validateSurveyBackgroundFile(file: File) {
   }
 }
 
-export async function uploadSurveyBackground(formId: string, ownerId: string, file: File) {
+export async function uploadSurveyBackground(formId: string, ownerId: string, file: File, copied = false) {
   validateSurveyBackgroundFile(file);
   const path = `forms/${formId}/${ownerId}/${generateUuid()}${getImageExtension(file)}`;
   const bucket = supabaseClient.storage.from(SURVEY_ASSETS_BUCKET);
   const { error } = await runRequest(
     "surveyAssets.upload",
-    () => bucket.upload(path, file, { cacheControl: "31536000", contentType: file.type, upsert: false }),
+    (_signal, trace) => bucket.upload(path, file, {
+      cacheControl: "31536000", contentType: file.type, upsert: false, headers: trace.headers,
+      ...(copied ? { metadata: { surveyThemeCopy: true } } : {}),
+    }),
     { context: { bucket: SURVEY_ASSETS_BUCKET, formId, fileSize: file.size, fileType: file.type } },
   );
 
@@ -185,7 +188,7 @@ export function getSurveyThemeAssetPaths(themeValue: unknown) {
 }
 
 export async function materializeSurveyThemeAssets(themeValue: unknown, targetFormId: string, ownerId: string) {
-  const theme = sanitizeSurveyTheme(themeValue);
+  const theme = resolveSurveyThemeAssetUrls(themeValue);
   const imageLocations: Array<{ get: () => string | undefined; set: (url: string) => void }> = [
     {
       get: () => theme.backgroundImage,
@@ -207,7 +210,7 @@ export async function materializeSurveyThemeAssets(themeValue: unknown, targetFo
       const sourceUrl = location.get();
       if (!sourceUrl) continue;
       const sourcePath = getSurveyAssetPath(sourceUrl);
-      if (!sourcePath || getAssetFormId(sourcePath) === targetFormId) continue;
+      if (!sourcePath || sourcePath.startsWith("gallery/") || getAssetFormId(sourcePath) === targetFormId) continue;
 
       let copiedUrl = copiedBySource.get(sourcePath);
       if (!copiedUrl) {
@@ -215,7 +218,7 @@ export async function materializeSurveyThemeAssets(themeValue: unknown, targetFo
         if (!response.ok) throw new Error("Не удалось скопировать фоновое изображение темы");
         const blob = await response.blob();
         const file = new File([blob], "background", { type: blob.type });
-        const uploaded = await uploadSurveyBackground(targetFormId, ownerId, file);
+        const uploaded = await uploadSurveyBackground(targetFormId, ownerId, file, true);
         uploadedPaths.push(uploaded.path);
         copiedUrl = uploaded.url;
         copiedBySource.set(sourcePath, copiedUrl);

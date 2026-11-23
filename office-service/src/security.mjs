@@ -66,6 +66,14 @@ export function baseUrl(value, optional = false) {
   requireValue(!isBlockedMetadataHost(url.hostname), 'Недопустимый адрес сервера');
   return url.href.replace(/\/+$/, '');
 }
+export function configuredOrigins(values, name) {
+  return new Set((values ?? '').split(',').map(value => value.trim()).filter(Boolean).map(value => {
+    const url = new URL(baseUrl(value));
+    requireValue(url.pathname === '/', `${name} принимает только адреса без пути`);
+    return url.origin;
+  }));
+}
+
 // Only the configured Document Server may supply a save result. No redirects,
 // arbitrary hosts, credentials or caller-selected protocols are followed.
 export function saveUrl(value, settings) {
@@ -82,15 +90,25 @@ export function saveUrl(value, settings) {
   // Keep the signed query verbatim when mapping the public address to the internal address.
   return internalBase.href.replace(/\/$/, '') + '/' + url.pathname.slice(sourceBase.pathname.length) + url.search;
 }
-export async function readLimited(stream, limit) {
+export async function readLimited(stream, limit, expectedBytes) {
   requireValue(stream, 'Удалённый сервер вернул пустой ответ', 502);
-  const chunks = []; let size = 0;
+  const output = expectedBytes === undefined ? null : Buffer.allocUnsafeSlow(expectedBytes);
+  const chunks = [];
+  let size = 0;
   for await (const chunk of stream) {
-    size += chunk.length;
-    requireValue(size <= limit, 'Превышен допустимый размер файла', 413);
-    chunks.push(Buffer.from(chunk));
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+    const next = size + bytes.length;
+    requireValue(next <= limit, 'Превышен допустимый размер файла', 413);
+    if (output) {
+      requireValue(next <= expectedBytes, 'Размер файла в хранилище изменился', 502);
+      output.set(bytes, size);
+    } else {
+      chunks.push(bytes);
+    }
+    size = next;
   }
-  return Buffer.concat(chunks);
+  requireValue(!output || size === expectedBytes, 'Размер файла в хранилище изменился', 502);
+  return output ?? Buffer.concat(chunks, size);
 }
 export async function fetchLimited(url, options = {}, limit = 1024 * 1024) {
   const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(60000) });

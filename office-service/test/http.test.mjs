@@ -1,15 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {zipSync,strToU8} from 'fflate';
-import {createServer} from 'node:http';
+import {unzipSync,zipSync,strToU8} from 'fflate';
+import {createServer,request as httpRequest} from 'node:http';
+import {Readable} from 'node:stream';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {createApp} from '../src/app.mjs';
 import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
 const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx',template_field_count:1};
-async function setup(t,{env={},disabled=false,role='user',result,commandResult,resultsFeed,documentAtRead}={}){
+async function setup(t,{env={},disabled=false,role='user',result,commandResult,resultsFeed,documentAtRead,resultStream}={}){
  const statements=[];
+ const downloadPaths=[];
  let documentReads=0;
  const query=async(sql,args=[])=>{
   statements.push({sql,args});
@@ -28,17 +30,28 @@ async function setup(t,{env={},disabled=false,role='user',result,commandResult,r
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})};
- const store={download(){if(result)return {data:new Blob([zipSync({'first.xlsx':strToU8('first'), 'second.xlsx':strToU8('second')})])};throw new Error('Unexpected Storage request');},upload(){throw new Error('Unexpected Storage request');}};
+ const store={download(path){
+  downloadPaths.push(path);
+  if(!result) throw new Error('Unexpected Storage request');
+  const data=new Blob([zipSync({'first.xlsx':strToU8('first'), 'second.xlsx':strToU8('second')})]);
+  return Object.assign(Promise.resolve({data}),{asStream:async()=>({data:resultStream?.() ?? data.stream()})});
+ },upload(){throw new Error('Unexpected Storage request');}};
  const supabase={storage:{from:()=>store},auth:{getUser:async(token)=>({data:{user:token==='employee' ? {id:userId}:null},error:token==='employee' ? null : new Error()})}};
  if(commandResult) {
   const originalFetch=globalThis.fetch;
   t.mock.method(globalThis,'fetch',(url,options)=>String(url)==='http://onlyoffice/command'
    ? Promise.resolve(Response.json(commandResult)) : originalFetch(url,options));
  }
- const app=createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.test',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64'),...env}});
+ const app=createApp({pool,supabase,env:{PUBLIC_APP_URL:'https://forms.test',OFFICE_DOCUMENT_SERVER_ORIGINS:'https://docs.test,http://onlyoffice',ONLYOFFICE_SETTINGS_ENCRYPTION_KEY:key.toString('base64'),...env}});
  const server=createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(r=>server.close(r)));
  const base=`http://127.0.0.1:${server.address().port}/api/office`;
- return {statements,request:(path,options)=>fetch(base+path,options)};
+ const requestAtHost=(path,Host)=>new Promise((resolve,reject)=>{
+  const request=httpRequest(base+path,{headers:{Host}},response=>{
+   resolve(new Response(Readable.toWeb(response),{status:response.statusCode,headers:response.headers}));
+  });
+  request.on('error',reject).end();
+ });
+ return {statements,downloadPaths,requestAtHost,request:(path,options)=>fetch(base+path,options)};
 }
 test('anonymous and disabled employees cannot read documents',async t=>{
  const a=await setup(t);assert.equal((await a.request(`/documents/${documentId}`)).status,401);
@@ -133,15 +146,19 @@ test('batch selections reject empty, duplicate and malformed response IDs before
 
 test('results require employee authentication and enforce creator/admin deletion',async t=>{
  const result={id:randomUUID(),created_by:randomUUID(),storage_path:'private/result.zip',files:['first.xlsx','second.xlsx'],file_type:'xlsx',name:'Result.zip'};
- const {request,statements}=await setup(t,{result});
+ const {request,statements,downloadPaths}=await setup(t,{result});
  assert.equal((await request(`/results/${result.id}/download`)).status,401);
  const token=sign({purpose:'plugin',exp:Math.floor(Date.now()/1000)+300,sub:userId,formId,documentId},key.toString('hex')+':survey-office-capability-v1');
  for(const path of [`/results/${result.id}/download`,`/forms/${formId}/results`,'/status'])assert.equal((await request(path,{headers:{Authorization:'Bearer '+token}})).status,403);
  const headers={Authorization:'Bearer employee'};
  assert.equal((await request(`/results/${result.id}`,{method:'DELETE',headers})).status,403);
  assert.ok(!statements.some(s=>s.sql.startsWith('delete from')));
- const file=await request(`/results/${result.id}/files/1`,{headers});assert.equal(file.status,200);assert.equal(await file.text(),'second');assert.match(file.headers.get('content-disposition'),/second.xlsx/);
  assert.equal((await request(`/results/${result.id}/files/9`,{headers})).status,404);
+ assert.deepEqual(downloadPaths,[]);
+ const file=await request(`/results/${result.id}/files/1`,{headers});assert.equal(file.status,200);assert.equal(await file.text(),'second');assert.match(file.headers.get('content-disposition'),/second.xlsx/);
+ const archive=await request(`/results/${result.id}/download`,{headers});
+ assert.equal(archive.headers.get('content-type'),'application/zip');
+ assert.deepEqual(Object.keys(unzipSync(new Uint8Array(await archive.arrayBuffer()))),['first.xlsx','second.xlsx']);
  const admin=await setup(t,{result,role:'admin'});assert.equal((await admin.request(`/results/${result.id}`,{method:'DELETE',headers})).status,200);
  assert.ok(admin.statements.some(s=>s.sql.startsWith('delete from public.office_generation_results')));
 });
@@ -232,19 +249,28 @@ test('force save notices document deletion while awaiting a callback',async t=>{
 
 test('OFFICE_EMBED_ORIGIN isolates editor frame and plugin origin while permitting parent framing and CORS',async t=>{
  const embed='https://office.forms.test';
- const {request}=await setup(t,{env:{OFFICE_EMBED_ORIGIN:embed}});
+ const {request,requestAtHost}=await setup(t,{env:{OFFICE_EMBED_ORIGIN:embed}});
  const cfg=await request(`/documents/${documentId}/editor-config`,{headers:{Authorization:'Bearer employee',Origin:'https://forms.test'}});
  assert.equal(cfg.status,200);
  assert.equal(cfg.headers.get('access-control-allow-origin'),'https://forms.test');
  const body=await cfg.json();
  assert.equal(body.embedOrigin,embed);
  assert.deepEqual(body.config.editorConfig.plugins.pluginsData,[`${embed}/api/office/plugin/config.json`]);
- const frame=await request('/editor-frame');
+ const embedHost=new URL(embed).host;
+ assert.equal((await requestAtHost('/editor-frame','forms.test')).status,404);
+ assert.equal((await requestAtHost('/editor-bridge.js','forms.test')).status,404);
+ assert.equal((await requestAtHost('/plugin/config.json','forms.test')).status,404);
+ const plugin=await requestAtHost('/plugin/config.json',embedHost);
+ assert.equal(plugin.status,200);
+ const pluginAncestors=plugin.headers.get('content-security-policy').split(';').find(value=>value.trim().startsWith('frame-ancestors'));
+ assert.ok(pluginAncestors.includes('https://forms.test'), 'The top-level Forms origin must be allowed to contain the plugin');
+ assert.ok(pluginAncestors.includes(embed), 'The isolated editor frame must be allowed to contain the plugin');
+ const frame=await requestAtHost('/editor-frame',embedHost);
  assert.equal(frame.status,200);
  assert.match(frame.headers.get('content-security-policy'),/frame-ancestors 'self' https:\/\/forms\.test https:\/\/office\.forms\.test/);
- const bridge=await request('/editor-bridge.js');
+ const bridge=await requestAtHost('/editor-bridge.js',embedHost);
  assert.match(await bridge.text(),/^const SURVEY_APP_ORIGIN="https:\/\/forms\.test";/);
- assert.equal((await request('/plugin/toString')).status,404);
+ assert.equal((await requestAtHost('/plugin/toString',embedHost)).status,404);
  const badCallback=await request(`/callback/${documentId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'not-json'});
  assert.equal(badCallback.status,400);
 });
@@ -256,4 +282,60 @@ test('PUT /settings requires re-entering JWT secret when ONLYOFFICE URLs change'
   jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000,
  })});
  assert.equal(r.status,400);
+});
+
+test('Office CORS permits a configured browser preflight before authentication',async t=>{
+ const Origin='https://ui.test';
+ const {request,statements}=await setup(t,{env:{OFFICE_ALLOWED_ORIGINS:Origin}});
+ const response=await request('/settings',{method:'OPTIONS',headers:{
+  Origin,'Access-Control-Request-Method':'PUT','Access-Control-Request-Headers':'Authorization, Content-Type'
+ }});
+ assert.equal(response.status,204);
+ assert.equal(response.headers.get('access-control-allow-origin'),Origin);
+ assert.equal(response.headers.get('vary'),'Origin');
+ assert.match(response.headers.get('access-control-allow-methods'),/PUT/);
+ assert.match(response.headers.get('access-control-allow-headers'),/Authorization, Content-Type/);
+ assert.deepEqual(statements,[]);
+});
+
+test('Office settings accepts the exact public and private origins enrolled by the operator',async t=>{
+ const {request,statements}=await setup(t,{role:'admin'});
+ const handler=body=>request('/settings',{method:'PUT',headers:{Authorization:'Bearer employee','Content-Type':'application/json'},body:JSON.stringify(body)});
+ const body={enabled:true,public_url:'https://docs.test/editor',internal_url:'http://onlyoffice',storage_url_override:'',
+  jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',jwt_secret:'replacement fixture',max_file_mb:25,max_table_rows:1000};
+ assert.equal((await handler(body)).status,200);
+ assert.equal((await handler({...body,public_url:'https://new-docs.test/editor'})).status,400);
+ assert.equal(statements.filter(({sql})=>sql.startsWith('update public.onlyoffice_settings')).length,1);
+});
+
+test('result ZIP downloads reserve capacity before opening Storage and release it after streaming', async t => {
+ const result={id:randomUUID(),storage_path:'private/result.zip',files:['first.xlsx'],file_type:'xlsx',name:'Result.zip'};
+ const headers={Authorization:'Bearer employee'};
+ const archive=zipSync({'first.xlsx':strToU8('first')});
+ const streams=[];
+ const {request,downloadPaths}=await setup(t,{result,resultStream:()=>new ReadableStream({
+  start(controller) {
+   streams.push(controller);
+   controller.enqueue(archive.subarray(0,20));
+  }
+ })});
+ const start=()=>request(`/results/${result.id}/download`,{headers});
+ const downloads=[];
+ try {
+  await Promise.all([start(),start()].map(async request=>downloads.push(await request)));
+  assert.ok(downloads.every(response=>response.status===200));
+  assert.equal((await start()).status,429);
+  assert.equal(downloadPaths.length,2);
+ } finally {
+  for(const controller of streams.splice(0)) {
+   controller.enqueue(archive.subarray(20));
+   controller.close();
+  }
+ }
+ for(const response of downloads) assert.deepEqual(new Uint8Array(await response.arrayBuffer()),archive);
+ const next=await start();
+ assert.equal(next.status,200);
+ for(const controller of streams) controller.close();
+ await next.arrayBuffer();
+ assert.equal(downloadPaths.length,3);
 });

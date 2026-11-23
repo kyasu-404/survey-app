@@ -390,6 +390,21 @@ button.dashboard-qr-download-button:focus-visible {
   cursor: pointer;
 }
 
+button.responses-row-preview-button {
+  display: block;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.responses-table tbody tr:has(.responses-row-preview-button:focus-visible) td {
+  background: var(--theme-accent-soft, rgba(251, 146, 60, 0.14));
+}
+
 .responses-table tbody .responses-table-row-clickable:hover td,
 .responses-table tbody .responses-table-row-clickable:focus-visible td {
   background: rgba(251, 146, 60, 0.14);

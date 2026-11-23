@@ -38,6 +38,8 @@ export function getManagedSurveyAssetPath(value: unknown): string | null {
 
     if (
       assetUrl.origin !== supabaseUrl.origin
+      || assetUrl.username !== ""
+      || assetUrl.password !== ""
       || assetUrl.search !== ""
       || assetUrl.hash !== ""
       || !assetUrl.pathname.startsWith(publicAssetPathPrefix)

@@ -95,9 +95,12 @@ const {
 
 vi.mock("../../entities/automation/api", () => ({ countActiveFormRules }));
 
+const dashboardAuth = vi.hoisted(() => ({ profile: null as { role: string } | null }));
+
 vi.mock("../../app/providers/AuthProvider", () => ({
   useAuth: () => ({
     user: { id: "user-1" },
+    profile: dashboardAuth.profile,
     loading: false,
   }),
 }));
@@ -239,6 +242,7 @@ function createDeferred<T>() {
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dashboardAuth.profile = null;
     HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     HTMLDialogElement.prototype.close = function () { this.open = false; };
     vi.mocked(copyTextToClipboard).mockResolvedValue(true);
@@ -1319,6 +1323,20 @@ describe("DashboardPage", () => {
     expect(await within(dialog).findByAltText("QR-код формы Форма 1")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("tab", { name: "Ссылка" }));
     expect(within(dialog).getByRole("textbox", { name: "Ссылка на форму" })).toHaveValue(`${window.location.origin}/form/form-1`);
+  });
+
+  it("allows administrators to manage another employee's form without exposing its automations", async () => {
+    dashboardAuth.profile = { role: "admin" };
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([
+      createForm(1, { title: "Чужая форма", author_id: "user-2", is_public: true }),
+    ]));
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Действия формы Чужая форма" }));
+    const menu = screen.getByRole("menu", { name: "Меню действий формы Чужая форма" });
+    expect(within(menu).getByRole("menuitem", { name: "Редактировать" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Переименовать" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: /Автоматизации/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Статус формы Чужая форма: Активна" })).toBeEnabled();
   });
 
   it("shows the compact action set for non-owners and the status dropdown for owners", async () => {

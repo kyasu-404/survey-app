@@ -71,8 +71,14 @@ jobs:
       - name: Validate repository policies and migrations
         run: node --test database/supabase_schema.test.mjs database/migrations.test.mjs functions/user-admin/index.test.mjs functions/form-admin/index.test.mjs functions/mail-admin/index.test.mjs frontend/tooling.test.mjs frontend/scripts/check-bundle-budget.test.mjs frontend/Dockerfile.test.mjs mail-worker/Dockerfile.test.mjs office-service/Dockerfile.test.mjs
 
-      - name: Test backup layout and retention
+      - name: Test deployment and backup tools
         run: python3 -m unittest discover -s ops -p 'test_*.py'
+
+      - name: Check Nginx routing, headers, and request budgets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nginx
+          python3 ops/check-nginx-performance.py
 
       - name: Install, audit and test Office service
         working-directory: office-service

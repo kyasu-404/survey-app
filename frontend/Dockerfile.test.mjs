@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { renderNginxConfig } from "./scripts/render-nginx-config.mjs";
 
 const dockerfile = readFileSync(new URL("./Dockerfile", import.meta.url), "utf8");
 const nginxConfig = readFileSync(new URL("./nginx.conf", import.meta.url), "utf8");
@@ -51,7 +52,8 @@ test("production image runs nginx as a non-root user on an unprivileged port", (
 });
 
 test("production nginx sends browser hardening security headers", () => {
-  const contentSecurityPolicy = readHeader(nginxConfig, "Content-Security-Policy");
+  const rendered = renderNginxConfig(nginxConfig, { supabaseUrl: "https://backend.example.test:8443/api" });
+  const contentSecurityPolicy = readHeader(rendered, "Content-Security-Policy");
 
   assert.ok(contentSecurityPolicy, "Content-Security-Policy header should be configured with always");
   const directives = readCspDirectives(contentSecurityPolicy);
@@ -64,21 +66,46 @@ test("production nginx sends browser hardening security headers", () => {
   assertCspDirectiveIncludes(directives, "style-src", "'self'");
   assertCspDirectiveIncludes(directives, "font-src", "'self'", "data:", "https://fonts.gstatic.com");
   assert.ok(!directives.get("style-src")?.includes("https://fonts.googleapis.com"));
-  assertCspDirectiveIncludes(directives, "img-src", "'self'", "data:", "blob:", "http://$host:8000");
+  assertCspDirectiveIncludes(directives, "img-src", "'self'", "data:", "blob:", "https://backend.example.test:8443");
   assertCspDirectiveIncludes(
     directives,
     "connect-src",
     "'self'",
-    "http://$host:8000",
-    "ws://$host:8000",
-    "https:",
-    "wss:",
+    "https://backend.example.test:8443",
+    "wss://backend.example.test:8443",
   );
 
+  assert.ok(!directives.get("connect-src").includes("https:"));
+  assert.ok(!directives.get("connect-src").includes("wss:"));
+  assert.ok(!directives.get("connect-src").some((value) => value.includes("$host")));
   assert.equal(readHeader(nginxConfig, "X-Frame-Options"), "DENY");
   assert.equal(readHeader(nginxConfig, "X-Content-Type-Options"), "nosniff");
   assert.equal(readHeader(nginxConfig, "Referrer-Policy"), "strict-origin-when-cross-origin");
   assert.match(readHeader(nginxConfig, "Permissions-Policy") ?? "", /camera=\(\)/);
   assert.match(readHeader(nginxConfig, "Permissions-Policy") ?? "", /microphone=\(\)/);
   assert.match(readHeader(nginxConfig, "Permissions-Policy") ?? "", /geolocation=\(\)/);
+});
+
+test("config rendering preserves loopback remapping and allows only the telemetry origin", () => {
+  const rendered = renderNginxConfig(nginxConfig, {
+    supabaseUrl: "http://localhost:8000",
+    sentryDsn: "https://public-key@telemetry.example.test/project",
+  });
+  const policy = readHeader(rendered, "Content-Security-Policy");
+  const sources = readCspDirectives(policy).get("connect-src");
+  assert.deepEqual(sources, [
+    "'self'", "http://localhost:8000", "ws://localhost:8000", "http://$host:8000", "ws://$host:8000",
+    "https://telemetry.example.test",
+  ]);
+  assert.doesNotMatch(rendered, /public-key|__SURVEY_/);
+  assert.throws(() => renderNginxConfig(nginxConfig, { supabaseUrl: "ftp://backend.example.test" }));
+});
+
+test("an isolated Office editor is allowed to frame only from its configured origin", () => {
+  const supabaseUrl = "https://backend.example.test";
+  const officeEmbedOrigin = "https://editor.example.test:8443";
+  const rendered = renderNginxConfig(nginxConfig, { supabaseUrl, officeEmbedOrigin });
+  const policy = readCspDirectives(readHeader(rendered, "Content-Security-Policy"));
+  assert.deepEqual(policy.get("frame-src"), ["'self'", officeEmbedOrigin]);
+  assert.throws(() => renderNginxConfig(nginxConfig, { supabaseUrl, officeEmbedOrigin: officeEmbedOrigin + "/editor" }));
 });

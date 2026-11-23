@@ -74,3 +74,44 @@ API выборки двух ответов вернул ровно два XLSX. 
    ```
    Затем задайте `OFFICE_PGUSER=office_service` и `OFFICE_PGPASSWORD=<strong-random-password>` в окружении `docker-compose.office.yml`. Роль имеет права только на таблицы `office_*`, `onlyoffice_settings` и чтение `forms`/`responses`/`profiles`/`education_organizations`, без доступа к `mail_settings` и `auth.*`.
 2. **Изолированный origin для ONLYOFFICE (`OFFICE_EMBED_ORIGIN`)**: чтобы iframe редактора и плагина ONLYOFFICE не разделяли origin и `localStorage` с основным приложением (`https://forms.imc-mosk.ru`), настройте отдельный поддомен (например, `https://office.imc-mosk.ru`) по примеру в конце `nginx.conf`, добавьте его в `frame-src` основного сайта и задайте `OFFICE_EMBED_ORIGIN=https://office.imc-mosk.ru` в окружении `survey-office`. Если переменная не задана, сохраняется прежний режим с единым origin.
+
+3. **Разрешённые адреса Document Server.** Перед обновлением сверьте
+   `public_url` и `internal_url` в «Настройки → ONLYOFFICE». Укажите их
+   точные origin через запятую в `OFFICE_DOCUMENT_SERVER_ORIGINS`,
+   включая схему и нестандартный порт. Путь указывается только в настройках
+   приложения. Например, Document Server за публичным прокси и в общей
+   Docker-сети можно настроить так:
+
+   ```dotenv
+   OFFICE_DOCUMENT_SERVER_ORIGINS=https://docs.example.org,http://onlyoffice
+   ```
+
+   Для Document Server в локальной сети можно явно разрешить его origin с
+   именем из внутреннего DNS или частным IP. Используйте только имена и DNS,
+   которыми управляет оператор. Сервис не следует перенаправлениям при
+   обращениях к Document Server. Сохранение через callback по-прежнему
+   использует только путь `cache/files/` настроенного Document Server.
+
+   Если задан альтернативный адрес приложения для callback или загрузки
+   документов, добавьте его origin в `OFFICE_CALLBACK_ORIGINS`. Origin из
+   `PUBLIC_APP_URL` уже разрешён. Настройки браузерного CORS в
+   `OFFICE_ALLOWED_ORIGINS` действуют отдельно. Без разрешённых origin
+   интеграция ONLYOFFICE не открывает редактор и не отправляет серверные
+   запросы к Document Server. Уже сохранённые файлы остаются доступны.
+
+4. **Обновление воркера генерации.** При обновлении остановите экземпляры
+   со старым воркером перед запуском новых экземпляров. После аварийного
+   завершения активное задание автоматически доступно другой реплике
+   по истечении четырёх минут с начала попытки. Схема БД для этого
+   обновления воркера не меняется.
+
+Для фронтенда в Docker передайте тот же `OFFICE_EMBED_ORIGIN` аргументом сборки
+`frontend/Dockerfile`. Он попадёт в `frame-src` контейнера.
+
+Для `OFFICE_EMBED_ORIGIN` также нужны DNS-запись, действующий TLS-сертификат
+и доступ к поддомену из браузера сотрудников и Document Server. Прокси
+должен сохранять `Host` поддомена редактора, включая порт для нестандартного
+HTTPS-порта. На основном домене запросы к iframe и файлам плагина получают
+404 при включённом `OFFICE_EMBED_ORIGIN`. После
+настройки проверьте открытие XLSX/DOCX, доступность плагина, вставку поля,
+сохранение и скачивание результата.

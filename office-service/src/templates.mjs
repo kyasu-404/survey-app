@@ -298,5 +298,6 @@ export function generateArchive({bytes,format,form,responses,organizations=[],na
   const filename=`${safe(prefix)} — ${safe(name.replace(/\.(docx|xlsx)$/i,''))} — ${String(index+1).padStart(3,'0')}-${response.id}.${format}`;
   outputs[filename]=[file,{level:0}];
  }
- const archive=Buffer.from(zipSync(outputs));return includeManifest ? {bytes:archive,files:Object.keys(outputs)} : archive;
+ const zipped=zipSync(outputs);
+ const archive=Buffer.from(zipped.buffer,zipped.byteOffset,zipped.byteLength);return includeManifest ? {bytes:archive,files:Object.keys(outputs)} : archive;
 }
