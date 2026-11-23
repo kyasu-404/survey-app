@@ -31,7 +31,16 @@ test("an administrator previews and schedules a formatted announcement", async (
   const editor = page.getByRole("dialog", { name: "Новое объявление" });
   await page.setViewportSize({ width: 390, height: 840 });
   await editor.getByLabel("Заголовок", { exact: true }).fill(title);
-  await editor.getByLabel("Текст объявления", { exact: true }).fill("**Плановое обновление**\n\n- Перерыв в работе");
+  const message = editor.getByLabel("Текст объявления", { exact: true });
+  await message.fill("- Привет");
+  await message.selectText();
+  await editor.getByRole("button", { name: "Курсив", exact: true }).click();
+  await expect(message).toHaveValue("- *Привет*");
+  await expect.poll(() => message.evaluate((input: HTMLTextAreaElement) =>
+    input.value.slice(input.selectionStart, input.selectionEnd))).toBe("Привет");
+  await editor.getByRole("button", { name: "Полужирный", exact: true }).click();
+  await expect(message).toHaveValue("- ***Привет***");
+  await message.fill("**Плановое обновление**\n\n- Перерыв в работе");
   await editor.getByText("Ссылка на дополнительную информацию", { exact: true }).click();
   await editor.getByLabel("Ссылка", { exact: true }).fill("/preferences");
   await editor.getByRole("combobox", { name: "Аудитория", exact: true }).selectOption("user");

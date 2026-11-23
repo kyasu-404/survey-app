@@ -43,8 +43,23 @@ begin
     raise exception 'Short recurring interval passed the rule API';
   exception when invalid_parameter_value then null;
   end;
-  valid_rule:=public.save_automation_rule(null,form_id,'Письмо организации','',true,'response_received',null,null,null,
+  foreach invalid in array array[
+    '[{"path":["note"],"op":"eq","value":"\t\n"}]'::jsonb,
+    '[{"path":["note"],"op":"contains","value":"\r\n"}]'::jsonb
+  ] loop
+    begin
+      perform public.save_automation_rule(null,form_id,'Проверка','',false,'response_received',null,null,null,
+        'all',invalid,action||'{"recipientPath":["org"]}');
+      raise exception 'Whitespace-only comparison was accepted';
+    exception when invalid_parameter_value then null;
+    end;
+  end loop;
+  valid_rule:=public.save_automation_rule(null,form_id,'Письмо организации',E'\t\n Описание \n\t',true,'response_received',null,null,null,
     'all','[]',action||jsonb_build_object('recipientPath',array['org'],'subject',repeat('я',470)||'{{sent_at}}'));
+  assert (select description from public.automation_rules where id=valid_rule)='Описание', 'New rule retained padding';
+  perform public.save_automation_rule(valid_rule,form_id,'Письмо организации',E'\r\t',true,'response_received',null,null,null,
+    'all','[]',action||jsonb_build_object('recipientPath',array['org'],'subject',repeat('я',470)||'{{sent_at}}'));
+  assert (select description from public.automation_rules where id=valid_rule)='', 'Rule edit retained a blank description';
   perform public.submit_form_response(form_id,gen_random_uuid(),gen_random_uuid(),
     '{"org":"e7000000-0000-4000-8000-000000000001","note":"Содержание ответа"}');
   begin
@@ -55,6 +70,11 @@ begin
   begin
     perform public.process_automations('https://forms.example.invalid:99999',10);
     raise exception 'Out-of-range worker port was accepted' using errcode='23514';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform public.process_automations('https://forms.example.invalid:00000',10);
+    raise exception 'Port zero was accepted' using errcode='23514';
   exception when raise_exception then null;
   end;
   assert exists(select from public.automation_runs r join survey_automation.payloads p on p.run_id=r.id

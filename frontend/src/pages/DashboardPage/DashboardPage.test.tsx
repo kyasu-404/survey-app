@@ -1526,6 +1526,26 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Автор другой")).not.toHaveClass("dashboard-meta-item-author-own");
   });
 
+  it("focuses the action trigger before opening the rename prompt", async () => {
+    getDashboardFormsPage.mockResolvedValue(createDashboardPage([createForm(1, { title: "Моя форма", author_id: "user-1" })]));
+    renderPage("all");
+    const trigger = await screen.findByRole("button", { name: "Действия формы Моя форма" });
+    let focusedAtPrompt: Element | null = null;
+    const prompt = vi.spyOn(window, "prompt").mockImplementation(() => {
+      focusedAtPrompt = document.activeElement;
+      return null;
+    });
+    try {
+      await userEvent.click(trigger);
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Переименовать" }));
+      expect(prompt).toHaveBeenCalledOnce();
+      expect(focusedAtPrompt).toBe(trigger);
+      expect(trigger).toHaveFocus();
+    } finally {
+      prompt.mockRestore();
+    }
+  });
+
   it("renders the delete modal action wrapper for dashboard styling", async () => {
     getDashboardFormsPage.mockResolvedValue(
       createDashboardPage([
@@ -1538,12 +1558,15 @@ describe("DashboardPage", () => {
 
     const { container } = renderPage("all");
 
-    await userEvent.click(await screen.findByRole("button", { name: "Действия формы Моя форма" }));
+    const trigger = await screen.findByRole("button", { name: "Действия формы Моя форма" });
+    await userEvent.click(trigger);
     await userEvent.click(await screen.findByRole("menuitem", { name: "Удалить" }));
 
     expect(screen.getByRole("heading", { name: "Удаление формы" })).toHaveClass("dashboard-delete-modal-title");
     expect(container.querySelector(".dashboard-delete-modal-actions")).toBeInTheDocument();
     expect(container.querySelector(".dashboard-delete-modal-actions .dashboard-danger-button")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("confirms closure and clears the deadline in the single status request", async () => {

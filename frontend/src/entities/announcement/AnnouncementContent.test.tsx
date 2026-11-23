@@ -23,7 +23,7 @@ describe("announcement content", () => {
   });
 
   it.each(["//other.test", "/.//other.test", "/\\other.test", "data:text/plain,test", "javascript:void(0)", "ftp://example.test",
-    "https://name:secret@site.test", "https://site.test/\npart", "/a b"])("rejects unsupported CTA %j", value => {
+    "https://name:secret@site.test", "https://site.test/\npart", "https://site.test:0/notice", "/a b"])("rejects unsupported CTA %j", value => {
     expect(safeAnnouncementUrl(value)).toBeNull();
   });
   it("uses an optional link caption and keeps the editor preview inert", () => {

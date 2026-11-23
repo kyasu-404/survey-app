@@ -9,6 +9,7 @@ test("uses only HTTP origins supported by automation email links", () => {
   for (const value of [
     "", "forms.example.ru", "ftp://forms.example.ru", "https://user@example.ru",
     "http://[::1]:5173", "http://localhost:99999", "https://example.ru/path",
+    "http://localhost:0", "https://forms.example.ru:00000/",
     "https://example.ru?q", "https://example.ru#section", `https://${"a.".repeat(150)}ru`,
   ]) assert.equal(parsePublicAppOrigin(value), null, value);
 });

@@ -251,7 +251,7 @@ begin
   assert exists(select from public.list_admin_announcements('archived') where id = expired_id and expires_at = expiry),
     'Editing the archived text did not preserve the expiry';
 
-  foreach url in array array['https://name@example.invalid/help', 'https://:', 'https://example.invalid:99999',
+  foreach url in array array['https://name@example.invalid/help', 'https://:', 'https://example.invalid:99999', 'https://example.invalid:0',
     '/folder/../settings'] loop
     begin
       perform public.save_announcement(null, null, fields || jsonb_build_object('action_url', url), 'keep', null);

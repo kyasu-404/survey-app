@@ -3940,8 +3940,9 @@ begin
   end if;
 
   p_name:=btrim(p_name,E' \t\n\r\f\013');
+  p_description:=coalesce(btrim(p_description,E' \t\n\r\f\013'),'');
   if p_enabled is null or coalesce(char_length(btrim(p_name)),0) not between 1 and 120
-    or char_length(coalesce(p_description,''))>1000 or coalesce(p_event_type,'') not in (
+    or char_length(p_description)>1000 or coalesce(p_event_type,'') not in (
       'response_received','response_updated','response_count','matching_count','matching_share','inactivity','date','recurring')
     or coalesce(p_match_mode,'') not in ('all','any') then
     raise exception 'Проверьте название и настройки события' using errcode='22023';
@@ -3971,7 +3972,7 @@ begin
     case condition->>'op'
       when 'eq','contains' then
         if coalesce(jsonb_typeof(condition->'value'),'') not in ('string','number','boolean')
-          or char_length(btrim(condition->>'value')) not between 1 and 2000 then
+          or char_length(btrim(condition->>'value',E' \t\n\r\f\013')) not between 1 and 2000 then
           raise exception 'Укажите значение для сравнения' using errcode='22023';
         end if;
       when 'gt','lt' then
@@ -4016,7 +4017,7 @@ begin
     end if;
     insert into public.automation_rules(user_id,form_id,name,description,enabled,event_type,threshold,interval_minutes,
         scheduled_at,match_mode,conditions,action_config)
-      values(actor,p_form_id,btrim(p_name),coalesce(btrim(p_description),''),p_enabled,p_event_type,p_threshold,p_interval_minutes,
+      values(actor,p_form_id,btrim(p_name),p_description,p_enabled,p_event_type,p_threshold,p_interval_minutes,
         p_scheduled_at,p_match_mode,p_conditions,p_action)
       returning * into saved;
     event_changed:=true;
@@ -4026,7 +4027,7 @@ begin
     event_changed:=row(previous.form_id,previous.event_type,previous.threshold,previous.interval_minutes,
       previous.scheduled_at,previous.match_mode,previous.conditions) is distinct from
       row(p_form_id,p_event_type,p_threshold,p_interval_minutes,p_scheduled_at,p_match_mode,p_conditions);
-    update public.automation_rules set form_id=p_form_id,name=btrim(p_name),description=coalesce(btrim(p_description),''),
+    update public.automation_rules set form_id=p_form_id,name=btrim(p_name),description=p_description,
       enabled=p_enabled,event_type=p_event_type,threshold=p_threshold,interval_minutes=p_interval_minutes,scheduled_at=p_scheduled_at,
       match_mode=p_match_mode,conditions=p_conditions,action_config=p_action,updated_at=now(),
       event_version=event_version+event_changed::integer,
@@ -4663,7 +4664,7 @@ declare
   data_values jsonb;
 begin
   if p_origin is null or p_origin !~ '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' or length(p_origin)>300
-    or coalesce(substring(p_origin from ':([0-9]{1,5})$')::integer,0)>65535 then
+    or coalesce(substring(p_origin from ':([0-9]{1,5})$')::integer,1) not between 1 and 65535 then
     raise exception 'Для ссылок в письмах задайте PUBLIC_APP_URL' using errcode='P0001';
   end if;
   if not exists(select from public.mail_settings where id=1 and enabled) then
@@ -4755,7 +4756,7 @@ declare
   sweep_time timestamptz := clock_timestamp();
 begin
   if p_app_origin is null or p_app_origin !~ '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$' or length(p_app_origin)>300
-    or coalesce(substring(p_app_origin from ':([0-9]{1,5})$')::integer,0)>65535 then
+    or coalesce(substring(p_app_origin from ':([0-9]{1,5})$')::integer,1) not between 1 and 65535 then
     raise exception 'Для ссылок в письмах задайте PUBLIC_APP_URL' using errcode='P0001';
   end if;
   if not pg_try_advisory_xact_lock(hashtextextended('survey-automation-worker',0)) then return 0; end if;
@@ -4952,7 +4953,7 @@ begin
 end;
 $$;
 
-create function survey_announcements.valid_action_url(p_url text)
+create or replace function survey_announcements.valid_action_url(p_url text)
 returns boolean language plpgsql immutable strict set search_path = '' as $$
 declare
   url_parts text[];
@@ -4969,7 +4970,7 @@ begin
   url_parts := regexp_match(p_url,
     '^https?://(\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?)(?::([0-9]{1,5}))?(?:[/?#]|$)',
     'i');
-  if url_parts is null or coalesce(url_parts[2]::integer, 0) > 65535 then
+  if url_parts is null or coalesce(url_parts[2]::integer, 1) not between 1 and 65535 then
     return false;
   end if;
   if left(url_parts[1], 1) = '[' then

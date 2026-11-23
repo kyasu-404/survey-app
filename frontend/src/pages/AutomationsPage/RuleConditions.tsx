@@ -1,4 +1,4 @@
-import { type AutomationField, type Condition, type ConditionOperation } from "../../entities/automation/model";
+import { type AutomationField, type Condition, type ConditionOperation, type ConditionValue } from "../../entities/automation/model";
 import { Icon } from "../../shared/ui/Icon";
 
 const operations: Record<ConditionOperation, string> = {
@@ -14,6 +14,14 @@ const multiValueFields = new Set(["checkbox", "tagbox", "imagepicker", "ranking"
 
 export function fieldKey(path?: string[]) {
   return path?.length ? JSON.stringify(path) : "";
+}
+
+export function trimConditionValue(value: ConditionValue) {
+  return typeof value === "string" ? value.trim() : value;
+}
+
+function conditionValueKey(value: ConditionValue) {
+  return String(trimConditionValue(value));
 }
 
 function isMultiple(op: ConditionOperation) {
@@ -75,7 +83,9 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
       const multiple = isMultiple(condition.op);
       const selected = Array.isArray(condition.value) ? condition.value : [];
       const usesChoices = Array.isArray(currentField?.choices) && (multiple || condition.op === "eq");
-      const removed = (multiple ? selected : [condition.value]).map(String).filter(value => value && !options.some(option => option.value === value));
+      const savedOptions = Array.isArray(condition.value) ? condition.value : [condition.value];
+      const removed = [...new Set(savedOptions.map(conditionValueKey))]
+        .filter(value => value && !options.some(option => option.value === value));
       return (
         <div key={index} className="activity-condition">
           <div className="activity-condition-controls">
@@ -107,18 +117,18 @@ export function RuleConditions({ fields, conditions, mode, onMode, onConditions 
             ? <fieldset className="activity-choices">
               <legend>Варианты ответа</legend>
               {removed.map(value => <label className="activity-checkbox" key={value}>
-                <input type="checkbox" checked onChange={() => update(index, { ...condition, value: selected.filter(item => String(item) !== value) })} />
+                <input type="checkbox" checked onChange={() => update(index, { ...condition, value: selected.filter(item => conditionValueKey(item) !== value) })} />
                 Удалённый вариант · {value}
               </label>)}
               {options.map((option, row) => <label className="activity-checkbox" key={row}>
-                <input type="checkbox" checked={selected.some((value) => String(value) === option.value)} onChange={(event) => update(index, {
-                  ...condition, value: event.target.checked ? [...selected, option.value] : selected.filter((value) => String(value) !== option.value),
+                <input type="checkbox" checked={selected.some(value => conditionValueKey(value) === option.value)} onChange={(event) => update(index, {
+                  ...condition, value: event.target.checked ? [...selected, option.value] : selected.filter(value => conditionValueKey(value) !== option.value),
                 })} />{option.label}
               </label>)}
             </fieldset>
             : usesChoices
               ? <label className="activity-field">Значение
-                <select required value={String(condition.value)} onChange={(event) => update(index, { ...condition, value: event.target.value })}>
+                <select required value={conditionValueKey(savedOptions[0] ?? "")} onChange={(event) => update(index, { ...condition, value: event.target.value })}>
                   <option value="">Выберите вариант</option>
                   {removed.map(value => <option key={value} value={value} disabled>Удалённый вариант · {value}</option>)}
                   {options.map((option, row) => <option key={row} value={option.value}>{option.label}</option>)}

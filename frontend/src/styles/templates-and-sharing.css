@@ -434,6 +434,15 @@ button.dashboard-qr-download-button:disabled {
   color: #b91c1c;
 }
 
+.dashboard-delete-modal {
+  width: min(460px, calc(100% - 32px));
+}
+
+.dashboard-delete-modal::backdrop {
+  background: rgba(12, 12, 12, 0.36);
+  backdrop-filter: blur(10px);
+}
+
 .dashboard-delete-modal-title,
 .users-modal-title {
   margin: 0 0 10px;

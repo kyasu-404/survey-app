@@ -4,8 +4,8 @@ export function parsePublicAppOrigin(value) {
   // Keep the origin passed to process_automations within the database contract.
   if (!value || !/^https?:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?\/?$/.test(value)) return null;
   try {
-    const { origin } = new URL(value);
-    return origin.length <= 300 ? origin : null;
+    const { origin, port } = new URL(value);
+    return port !== "0" && origin.length <= 300 ? origin : null;
   } catch {
     return null;
   }

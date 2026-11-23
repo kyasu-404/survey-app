@@ -241,6 +241,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
+    setTimeout(() => process.exit(1), 10_000).unref();
     clearInterval(timer);
     clearInterval(automationsTimer);
     clearInterval(cleanupTimer);
@@ -248,6 +249,5 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     await Promise.all([activePoll, activeCleanup, activeAutomations, activeExpiredUploads]);
     smtpTransports.close();
     server.close(() => process.exit(0));
-    setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

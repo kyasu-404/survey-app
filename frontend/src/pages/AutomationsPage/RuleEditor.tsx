@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getAutomationFields, saveAutomationRule, type AutomationForm } from "../../entities/automation/api";
-import { automationEvents, type AutomationEvent, type AutomationRule, type Condition, type ConditionValue, type EmailAction, type RuleConfig } from "../../entities/automation/model";
+import { automationEvents, type AutomationEvent, type AutomationRule, type Condition, type EmailAction, type RuleConfig } from "../../entities/automation/model";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { getErrorMessage } from "../../shared/lib/error";
 import { Icon } from "../../shared/ui/Icon";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { RuleEmailPreview, RuleEmailTemplate } from "./RuleEmail";
 import "./ruleEditor.css";
-import { conditionError, fieldKey, RuleConditions } from "./RuleConditions";
+import { conditionError, fieldKey, RuleConditions, trimConditionValue } from "./RuleConditions";
 
 const periods = { 1: "минуты", 60: "часы", 1440: "дни" };
 
@@ -21,10 +21,6 @@ function validAddress(address: string) {
 }
 
 const steps = ["Основное", "Событие", "Письмо", "Предпросмотр"];
-
-function trimConditionValue(value: ConditionValue) {
-  return typeof value === "string" ? value.trim() : value;
-}
 
 function displayPeriod(minutes?: number | null) {
   const value = minutes ?? 1440;
@@ -51,7 +47,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
     formatDateTimeLocalValue(new Date(Date.now() + 60_000).toISOString()));
   const [matchMode, setMatchMode] = useState(rule?.match_mode ?? "all");
   const [conditions, setConditions] = useState<Condition[]>(rule?.conditions ?? []);
-  const conditionDetails = useRef<HTMLDetailsElement>(null);
+  const [conditionsOpen, setConditionsOpen] = useState(() => Boolean(rule?.conditions.length));
   const backdropPressed = useRef(false);
   const [recipients, setRecipients] = useState(rule?.action_config.recipients.join(", ") ?? "");
   const [recipientPath, setRecipientPath] = useState(rule?.action_config.recipientPath ?? []);
@@ -67,8 +63,10 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
   });
   const fields = questions.data ?? [];
   const recipientFields = fields.filter(field => field.type === "organization" && field.path.length === 1);
-  const loadingRequiredFields = questions.isPending && Boolean(formId) &&
-    ((step === 1 && conditions.length > 0) || (step === 2 && recipientPath.length > 0));
+  const requiredFieldsUnavailable = Boolean(formId) && (
+    (step === 1 && conditions.length > 0 && questions.isPending) ||
+    (step === 2 && recipientPath.length > 0 && !questions.isSuccess)
+  );
   const needsThreshold = ["response_count", "matching_count", "matching_share"].includes(event);
   const needsInterval = event === "inactivity" || event === "recurring";
   const needsDate = event === "date" || event === "recurring";
@@ -93,7 +91,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
 
   function onSubmit(submission: FormEvent<HTMLFormElement>) {
     submission.preventDefault();
-    if (save.isPending || loadingRequiredFields) return;
+    if (save.isPending || requiredFieldsUnavailable) return;
     if (step === 0 && !name.trim()) {
       setValidationError("Укажите название правила.");
       return;
@@ -118,7 +116,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
       const error = questions.isError && conditions.length ? "Не удалось загрузить вопросы."
         : cleanConditions.map(condition => conditionError(condition, fields)).find(Boolean);
       if (error) {
-        if (conditionDetails.current) conditionDetails.current.open = true;
+        setConditionsOpen(true);
         setValidationError(error);
         return;
       }
@@ -231,7 +229,8 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
                 required value={scheduledAt} onChange={(change) => setScheduledAt(change.target.value)} />
             </label>}
             {event === "inactivity" && <p className="activity-muted">Период отсчитывается с включения правила или поступления последнего нового ответа.</p>}
-            {formId && <details ref={conditionDetails} className="activity-variables rule-conditions" open={conditions.length > 0 || undefined}>
+            {formId && <details className="activity-variables rule-conditions" open={conditionsOpen}
+              onToggle={event => setConditionsOpen(event.currentTarget.open)}>
               <summary>Дополнительные условия{conditions.length > 0 && ` (${conditions.length})`}</summary>
               <div className="rule-step-fields">
                 <p className="activity-muted">Без условий учитываются все ответы формы.</p>
@@ -254,14 +253,16 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
               <small>Перечислите адреса через запятую или с новой строки.</small>
             </label>
             {formId && (recipientFields.length > 0 || recipientPath.length > 0) && <label className="activity-field">Получатель из ответа
-              <select value={fieldKey(recipientPath)} onChange={change => {
+              <select value={fieldKey(recipientPath)} disabled={!questions.isSuccess} onChange={change => {
                 const path = recipientFields.find(field => fieldKey(field.path) === change.target.value)?.path ?? [];
                 setRecipientPath(path);
                 if (path.length) setMode("summary");
               }}>
                 <option value="">Не использовать</option>
                 {recipientPath.length > 0 && !recipientFields.some((field) => fieldKey(field.path) === fieldKey(recipientPath)) &&
-                  <option value={fieldKey(recipientPath)} disabled>Недоступный вопрос · {recipientPath.join(" / ")}</option>}
+                  <option value={fieldKey(recipientPath)} disabled>
+                    {questions.isSuccess ? "Недоступный вопрос" : "Сохранённый вопрос"} · {recipientPath.join(" / ")}
+                  </option>}
                 {recipientFields.map((field) => <option key={fieldKey(field.path)} value={fieldKey(field.path)}>{field.label}</option>)}
               </select>
             </label>}
@@ -289,7 +290,7 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
         <footer className="activity-actions activity-dialog-actions">
           <button type="button" className="app-button" onClick={onClose} disabled={save.isPending}>Отмена</button>
           {step > 0 && <button type="button" className="app-button" disabled={save.isPending} onClick={() => changeStep(step - 1)}>Назад</button>}
-          <button type="submit" className="button-primary" disabled={save.isPending || loadingRequiredFields}>
+          <button type="submit" className="button-primary" disabled={save.isPending || requiredFieldsUnavailable}>
             {step < steps.length - 1 ? "Далее" : save.isPending ? "Сохранение…" : "Сохранить правило"}
           </button>
         </footer>

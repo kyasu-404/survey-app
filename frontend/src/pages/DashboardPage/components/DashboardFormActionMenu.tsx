@@ -134,6 +134,7 @@ export function DashboardFormActionMenu({
               className="form-menu-item"
               onClick={(event) => {
                 stopCardEvent(event);
+                keyboard.trigger.current?.focus({ preventScroll: true });
                 setOpenedMenu(null);
                 void onRename(form);
               }}
@@ -187,6 +188,7 @@ export function DashboardFormActionMenu({
               className="form-menu-item form-menu-item-danger"
               onClick={(event) => {
                 stopCardEvent(event);
+                keyboard.trigger.current?.focus({ preventScroll: true });
                 setOpenedMenu(null);
                 onDeleteRequest(form);
               }}

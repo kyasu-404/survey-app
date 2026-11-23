@@ -610,15 +610,16 @@ test("review migrations and the bootstrap install identical function definitions
   const migrations = [
     "202611221400_automation_review_fixes.sql",
     "202611221410_announcement_review_fixes.sql",
+    "202611231200_review_followup.sql",
   ];
+  const latest = new Map();
   for (const file of migrations) {
     const sql = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
     const definitions = [...sql.matchAll(/^create (?:or replace )?function ([\w.]+)\([\s\S]*?^\$\$;/gim)];
     assert.ok(definitions.length > 0, file);
-    for (const [definition, name] of definitions) {
-      assert.ok(schema.includes(definition), name);
-    }
+    for (const [definition, name] of definitions) latest.set(name, definition);
   }
+  for (const [name, definition] of latest) assert.ok(schema.includes(definition), name);
 });
 
 test("bootstrap has one atomic transaction and one canonical definition per function", () => {

@@ -91,3 +91,20 @@ test("SIGTERM drains expired uploads before exiting with an idle health connecti
   assert.deepEqual(await exit, [0, null]);
   assert.equal(expiredReservationsRemoved, true);
 });
+
+test("SIGTERM forces an error exit when cleanup outlives the shutdown grace period", { timeout: 18_000 }, async (t) => {
+  let onListingStarted;
+  const listingStarted = new Promise(resolve => { onListingStarted = resolve; });
+  const { worker, exit, healthAfterPoll } = await startWorker(t, "https://forms.example.test", (req, res) => {
+    if (req.url.endsWith("/list_expired_survey_uploads")) {
+      // Leave this request pending beyond the worker's shutdown grace period.
+      onListingStarted();
+    } else {
+      res.end("[]");
+    }
+  });
+  await listingStarted;
+  await healthAfterPoll();
+  worker.kill("SIGTERM");
+  assert.deepEqual(await exit, [1, null]);
+});

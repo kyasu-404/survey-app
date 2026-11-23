@@ -55,18 +55,25 @@ export function useAnnouncementPrompts(userId: string) {
         const rows = await listAnnouncementPrompts(ids, signal);
         if (signal.aborted || document.hidden) return;
         const eligible = rows.filter(isEligible);
+        if (deferredClaim && !eligible.some(row => row.id === deferredClaim && row.display_mode === "modal" && !row.read_at)) {
+          deferredClaim = null;
+          entryModalId.current = null;
+          dialogObserver?.disconnect();
+          dialogObserver = undefined;
+        }
         const next = visible.current.flatMap(item => eligible.filter(row => row.id === item.id && row.display_mode === item.display_mode));
         if (next.length || visible.current.length) update(next);
         if (entryModalId.current === undefined) {
-          entryModalId.current = eligible.find(row => row.display_mode === "modal" && !row.presented_at)?.id ?? null;
+          entryModalId.current = eligible.find(row => row.display_mode === "modal" && !row.presented_at && !row.read_at)?.id ?? null;
         }
         for (const row of eligible) {
-          if (visible.current.some(item => item.display_mode === row.display_mode)) continue;
+          if (row.read_at || visible.current.some(item => item.display_mode === row.display_mode)) continue;
           const modal = row.display_mode === "modal";
-          if (row.presented_at && row.id !== deferredClaim) continue;
+          const alreadyClaimed = modal && row.id === deferredClaim;
+          if (row.presented_at && !alreadyClaimed) continue;
           if (modal && (row.id !== entryModalId.current || modalBlocked())) continue;
           if (signal.aborted || document.hidden) break;
-          const claimed = row.id === deferredClaim || await claimAnnouncementPrompt(row, signal);
+          const claimed = alreadyClaimed || await claimAnnouncementPrompt(row, signal);
           if (!claimed || signal.aborted || !isEligible(row)) continue;
           if (modal && (modalBlocked() || document.hidden)) {
             deferredClaim = row.id;

@@ -128,6 +128,38 @@ describe("announcement spotlight", () => {
     } finally { blocker.remove(); }
   });
 
+  it.each(["withdrawn", "read", "banner"])("drops a deferred modal once it becomes %s", async outcome => {
+    const modal = prompt("deferred", "modal");
+    let completeClaim!: (value: boolean) => void;
+    const list = vi.mocked(listAnnouncementPrompts);
+    list.mockResolvedValue([modal]);
+    vi.mocked(claimAnnouncementPrompt).mockImplementation(() => new Promise(resolve => { completeClaim = resolve; }));
+    display();
+    await waitFor(() => expect(claimAnnouncementPrompt).toHaveBeenCalledTimes(1));
+
+    const blocker = document.createElement("dialog");
+    blocker.open = true;
+    document.body.append(blocker);
+    try {
+      await act(async () => completeClaim(true));
+      list.mockImplementation(async ids => {
+        if (!ids.includes(modal.id) || outcome === "withdrawn") return [];
+        return [{ ...modal, presented_at: "now", read_at: outcome === "read" ? "now" : null,
+          display_mode: outcome === "banner" ? "banner" : "modal" }];
+      });
+      await act(async () => { fireEvent(window, new Event("focus")); });
+      expect(list.mock.lastCall?.[0]).toEqual([modal.id]);
+      expect(screen.queryByRole("region", { name: modal.title })).toBeNull();
+      await act(async () => {
+        blocker.remove();
+        fireEvent(window, new Event("focus"));
+      });
+      expect(list.mock.lastCall?.[0]).toEqual([]);
+      expect(screen.queryByRole("dialog", { name: modal.title })).toBeNull();
+      expect(claimAnnouncementPrompt).toHaveBeenCalledTimes(1);
+    } finally { blocker.remove(); }
+  });
+
   it("skips announcements with an invalid deadline and ignores modal publications after entry", async () => {
     vi.mocked(listAnnouncementPrompts).mockResolvedValue([{ ...prompt("bad", "banner"), expires_at: "unknown" }]);
     display();

@@ -32,7 +32,7 @@ const initialRule: AutomationRule = {
   action_config: { recipients: ["owner@example.invalid"], subject: "Ответ", body: "Пришёл ответ", mode: "summary" },
 };
 
-function renderPage(options: { rule?: object; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void> } = {}) {
+function renderPage(options: { rule?: object; entry?: string; accessibleForm?: boolean; fieldsReady?: Promise<void>; fieldsUnavailable?: () => boolean } = {}) {
   let rule = { ...initialRule, ...options.rule };
   const requests: { path: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
   vi.stubGlobal("fetch", async (input: string | URL, init?: RequestInit) => {
@@ -42,7 +42,9 @@ function renderPage(options: { rule?: object; entry?: string; accessibleForm?: b
     requests.push({ path, params: url.searchParams, body });
     switch (path) {
       case "forms": return Response.json(options.accessibleForm === false ? [] : [form]);
-      case "rpc/automation_form_fields": await options.fieldsReady; return Response.json(fields);
+      case "rpc/automation_form_fields":
+        await options.fieldsReady;
+        return options.fieldsUnavailable?.() ? Response.json({ message: "Offline" }, { status: 503 }) : Response.json(fields);
       case "automation_rules":
         return Response.json(url.searchParams.get("form_id") === "is.null" && rule.form_id ? [] : [rule]);
       case "automation_runs": return Response.json([{
@@ -190,7 +192,7 @@ describe("AutomationsPage", () => {
     let loaded!: () => void;
     const fieldsReady = new Promise<void>(resolve => { loaded = resolve; });
     const { user } = renderPage({ entry: "/automations/rule", fieldsReady,
-      rule: { conditions: [{ path: ["topics"], op: "all_of", value: ["Архив", "История"] }] } });
+      rule: { conditions: [{ path: ["topics"], op: "all_of", value: ["Архив", " Архив\t", " История\n"] }] } });
     await user.click(await screen.findByRole("button", { name: "Редактировать" }));
     const editor = within(screen.getByRole("dialog"));
     const next = editor.getByRole("button", { name: "Далее" });
@@ -198,6 +200,8 @@ describe("AutomationsPage", () => {
     expect(next).toBeDisabled();
     loaded();
     const missing = await editor.findByRole("checkbox", { name: /Удалённый вариант · Архив/ });
+    expect(editor.getAllByRole("checkbox", { name: /Удалённый вариант/ })).toHaveLength(1);
+    expect(editor.getByRole("checkbox", { name: "История" })).toBeChecked();
     const details = missing.closest("details")!;
     await user.click(editor.getByText(/Дополнительные условия/));
     expect(details.open).toBe(false);
@@ -207,6 +211,47 @@ describe("AutomationsPage", () => {
     await user.click(missing);
     await user.click(next);
     expect(editor.getByText("Адреса получателей")).toBeVisible();
+  });
+
+  it("keeps the existing recipient during a question-loading error and restores it after retry", async () => {
+    let offline = true;
+    const { user, requests } = renderPage({ entry: "/automations/rule", fieldsUnavailable: () => offline,
+      rule: { action_config: { ...initialRule.action_config, recipientPath: ["school"] } } });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    const next = editor.getByRole("button", { name: "Далее" });
+    await user.click(next);
+    await user.click(next);
+    const recipient = editor.getByLabelText("Получатель из ответа");
+    expect(await editor.findByRole("alert")).toHaveTextContent("Не удалось загрузить вопросы");
+    expect(recipient).toHaveValue('["school"]');
+    expect(recipient).toBeDisabled();
+    expect(editor.queryByRole("option", { name: /Недоступный вопрос/ })).not.toBeInTheDocument();
+    expect(next).toBeDisabled();
+
+    offline = false;
+    await user.click(editor.getByRole("button", { name: "Повторить" }));
+    await editor.findByRole("option", { name: "Организация" });
+    expect(recipient).toHaveValue('["school"]');
+    await user.click(next);
+    await user.click(editor.getByRole("button", { name: "Сохранить правило" }));
+    await waitFor(() => expect(requests.find(r => r.path === "rpc/save_automation_rule")?.body).toMatchObject({
+      p_action: { recipientPath: ["school"] },
+    }));
+  });
+
+  it("keeps the conditions section open after removing its last condition", async () => {
+    const { user } = renderPage({ entry: "/automations/rule",
+      rule: { conditions: [{ path: ["topics"], op: "any_of", value: ["История"] }] } });
+    await user.click(await screen.findByRole("button", { name: "Редактировать" }));
+    const editor = within(screen.getByRole("dialog"));
+    await user.click(editor.getByRole("button", { name: "Далее" }));
+    const remove = await editor.findByRole("button", { name: "Удалить условие 1" });
+    const details = remove.closest("details")!;
+    expect(details.open).toBe(true);
+    await user.click(remove);
+    expect(details.open).toBe(true);
+    expect(editor.getByRole("button", { name: "Добавить условие" })).toBeVisible();
   });
 
   it("repairs an old recipient path and restricts organization recipients to summary", async () => {

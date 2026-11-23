@@ -16,7 +16,7 @@ export function safeAnnouncementUrl(value?: string | null) {
     const url = new URL(value);
     const host = url.hostname;
     const validHost = host.startsWith("[") || host.replace(/\.$/, "").split(".").every(label => dnsLabel.test(label));
-    return validHost && !url.username && !url.password && url.href.length <= 2048 ? url.href : null;
+    return validHost && url.port !== "0" && !url.username && !url.password && url.href.length <= 2048 ? url.href : null;
   } catch {
     return null;
   }

@@ -109,6 +109,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const announcementMigration = await source("./migrations/202611221300_announcements.sql");
     const automationReviewMigration = await source("./migrations/202611221400_automation_review_fixes.sql");
     const announcementReviewMigration = await source("./migrations/202611221410_announcement_review_fixes.sql");
+    const reviewFollowupMigration = await source("./migrations/202611231200_review_followup.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -149,6 +150,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         await checkAutomationQueueUpgrade(db, automationReviewMigration, owner, form);
         await db.query(automationReviewMigration);
         await db.query(announcementReviewMigration);
+        await db.query(reviewFollowupMigration);
         assert.equal((await db.query("select count(*)::int n from public.forms where id=$1", [form])).rows[0].n, 1);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");

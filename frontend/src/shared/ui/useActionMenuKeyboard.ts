@@ -35,8 +35,11 @@ export function useActionMenuKeyboard(open: boolean, onOpen: () => void, onClose
     event.stopPropagation();
     event.preventDefault();
     const current = items.indexOf(document.activeElement as HTMLElement);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
-      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    const last = items.length - 1;
+    const previous = current > 0 ? current - 1 : last;
+    const following = current < last ? current + 1 : 0;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? last
+      : event.key === "ArrowUp" ? previous : following;
     items[next].focus({ preventScroll: true });
   }
   return { trigger, menu, triggerKeyDown, menuKeyDown };
