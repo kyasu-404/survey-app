@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, type MemoryRouterProps } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyResponse } from "../../entities/response/types";
 import { readAppCss } from "../../test/readAppCss";
@@ -48,11 +48,17 @@ function createQueryClient() {
   });
 }
 
-function renderHtmlPage() {
+function ResponsesList() {
+  const { search } = useLocation();
+  return <h1>Список ответов{search}</h1>;
+}
+
+function renderHtmlPage(initialEntries: MemoryRouterProps["initialEntries"] = ["/dashboard/forms/form-1/responses/html"]) {
   return render(
-    <MemoryRouter initialEntries={["/dashboard/forms/form-1/responses/html"]}>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={createQueryClient()}>
         <Routes>
+          <Route path="/dashboard/forms/:id/responses" element={<ResponsesList />} />
           <Route path="/dashboard/forms/:id/responses/html" element={<FormResponsesHtmlPage />} />
         </Routes>
       </QueryClientProvider>
@@ -68,6 +74,29 @@ describe("FormResponsesHtmlPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getOrganizations.mockResolvedValue([]);
+  });
+
+  it("returns to the responses list when the HTML preview was opened directly", async () => {
+    getFormById.mockResolvedValue(null);
+    getAllResponsesByForm.mockResolvedValue([]);
+    renderHtmlPage();
+
+    await userEvent.click(screen.getByRole("link", { name: "Назад к ответам" }));
+
+    expect(await screen.findByRole("heading", { name: "Список ответов" })).toBeInTheDocument();
+  });
+
+  it("returns to the previous responses URL when opened from the responses list", async () => {
+    getFormById.mockResolvedValue(null);
+    getAllResponsesByForm.mockResolvedValue([]);
+    renderHtmlPage([
+      "/dashboard/forms/form-1/responses?page=2",
+      { pathname: "/dashboard/forms/form-1/responses/html", state: { fromResponses: true } },
+    ]);
+
+    await userEvent.click(screen.getByRole("link", { name: "Назад к ответам" }));
+
+    expect(await screen.findByRole("heading", { name: "Список ответов?page=2" })).toBeInTheDocument();
   });
 
   it("uses the branded browser tab title", () => {

@@ -65,7 +65,7 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   await expect(report.locator(".response-report-summary strong").first()).toHaveText("200");
   await expect(report.getByText(commentTitle, { exact: true })).toHaveCount(16);
   await report.getByRole("button", { name: "Закрыть", exact: true }).click();
-  await page.goto(`/dashboard/forms/${formId}/responses/html`);
+  await page.getByRole("button", { name: "HTML", exact: true }).click();
   await expect(page.locator(".responses-report-screen").getByText("Ответ 200", { exact: true })).toBeVisible();
   await expect(page.locator(".responses-report-screen th")).toHaveText(expectedHeaders);
   const htmlDownloadPromise = page.waitForEvent("download");
@@ -86,7 +86,8 @@ test("200 answers preserve 16 duplicated comments in the table, XLSX, HTML, and 
   for (let index = 0; index < 16; index += 1) {
     expect(downloadedTable.firstRow[3 + 2 * index]).toBe(index === 15 ? "" : `Комментарий ${index + 1}, ответ 1`);
   }
-  await page.goto(`/dashboard/forms/${formId}/responses`);
+  await page.getByRole("link", { name: "Назад к ответам", exact: true }).click();
+  await expect(page).toHaveURL(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 200", { exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "Выбрать ответы на странице", exact: true }).check();
   await expect(page.getByText("Выбрано: 50")).toBeVisible();

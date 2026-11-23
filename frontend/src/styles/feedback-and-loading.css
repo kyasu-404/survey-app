@@ -540,6 +540,11 @@
   gap: 10px;
 }
 
+.responses-html-actions > a.responses-back-link {
+  gap: 6px;
+  margin: 0 auto 0 0;
+}
+
 .responses-html-button img.toolbar-icon {
   filter: brightness(0) invert(1);
 }
@@ -744,6 +749,10 @@ button.responses-export-button.responses-print-button-secondary:focus-visible {
 @media (max-width: 720px) {
   .responses-html-actions {
     justify-content: stretch;
+  }
+
+  .responses-html-actions > .responses-back-link {
+    flex-basis: 100%;
   }
 
   .responses-html-actions button {

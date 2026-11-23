@@ -2,7 +2,8 @@ import { Icon } from "../../shared/ui/Icon";
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { routes } from "../../app/routes";
 import { getOrganizations } from "../../entities/organization/api";
 import {
   getOrganizationDisplayName,
@@ -27,6 +28,8 @@ const RESPONSES_PER_PREVIEW_PAGE = 200;
 
 export default function FormResponsesHtmlPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { state } = useLocation();
   const [pageSelection, setPageSelection] = useState<{ formId?: string; page: number }>({ page: 1 });
   const [isPrinting, setIsPrinting] = useState(() => window.matchMedia?.("print").matches ?? false);
 
@@ -147,6 +150,20 @@ export default function FormResponsesHtmlPage() {
     <main className="responses-html-page">
       <style>{RESPONSES_HTML_LAYOUT_CSS}</style>
       <div className="responses-html-actions" aria-label="Действия HTML">
+        <Link
+          className="responses-back-link"
+          to={routes.formResponses(id)}
+          replace
+          onClick={(event) => {
+            if (state?.fromResponses !== true) return;
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate(-1);
+          }}
+        >
+          <Icon name="arrow_back" size={18} />
+          Назад к ответам
+        </Link>
         <button type="button" className="responses-export-button" onClick={handleDownload} disabled={!canUseHtml}>
           <span>Скачать HTML</span>
           <Icon name="download" size={18} className="toolbar-icon" />

@@ -542,7 +542,7 @@ export default function FormResponsesPage() {
       return;
     }
 
-    navigate(routes.formResponsesHtml(id));
+    navigate(routes.formResponsesHtml(id), { state: { fromResponses: true } });
   };
 
   const handleCopyFormLink = async () => {
