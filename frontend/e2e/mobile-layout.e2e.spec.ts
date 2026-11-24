@@ -22,6 +22,76 @@ async function navigateFromMenu(page: Page, name: string) {
 }
 
 for (const width of [320, 390]) {
+  test(`long survey title wraps in the public form and answer preview at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const title = "Исследование специфики и компоненты содержания_ИНЖЕНЕРНЫЕ_КЛАССЫ";
+    const { formId, form } = await openSurveyApp(page, {
+      responseCount: 1,
+      responseData: [{ name: "Анна" }],
+      elements: [{ type: "text", name: "name", title: "Имя" }],
+    });
+    form.title = title;
+    Object.assign(form.schema, { title, logo: "__APP_DEFAULT_CARD_LOGO__", logoPosition: "left", logoWidth: 120, logoHeight: 90 });
+
+    await page.goto(`/form/${formId}`);
+    const publicTitle = page.locator(".survey-runtime-surface").getByText(title, { exact: true });
+    await expect(publicTitle).toBeVisible();
+
+    const titleFits = (element: Element) => {
+      const card = element.closest(".survey-runtime-surface")!.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return Array.from(range.getClientRects()).every(rect =>
+        rect.left >= Math.max(card.left, 0) - 1 && rect.right <= Math.min(card.right, innerWidth) + 1,
+      );
+    };
+    await expect.poll(() => publicTitle.evaluate(titleFits)).toBe(true);
+    await expectPageFits(page);
+
+    await page.goto(`/dashboard/forms/${formId}/responses`);
+    await page.getByRole("button", { name: "Открыть Ответ Анна", exact: true }).tap();
+    const previewTitle = page.locator(".response-preview-drawer").getByText(title, { exact: true });
+    await expect(previewTitle).toBeVisible();
+    await expect.poll(() => previewTitle.evaluate(titleFits)).toBe(true);
+    await expectPageFits(page);
+  });
+
+  test(`form deletion buttons align at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await openSurveyApp(page, { responseCount: 0 });
+    await page.getByRole("button", { name: "Действия формы Карточка 1", exact: true }).tap();
+    await page.getByRole("menuitem", { name: "Удалить", exact: true }).tap();
+    const dialog = page.getByRole("dialog", { name: "Удаление формы" });
+    const cancel = dialog.getByRole("button", { name: "Отмена", exact: true });
+    const confirm = dialog.getByRole("button", { name: "Удалить", exact: true });
+    await expect(cancel).toBeVisible();
+    await expect(confirm).toBeVisible();
+    await expect.poll(() => dialog.evaluate(async element => {
+      await Promise.all(element.getAnimations().map(animation => animation.finished));
+      const [cancel, confirm] = Array.from(element.querySelectorAll("button"), button => {
+        const box = button.getBoundingClientRect();
+        const text = document.createRange();
+        text.selectNodeContents(button);
+        const label = text.getBoundingClientRect();
+        return {
+          x: box.x, y: box.y, width: box.width, height: box.height,
+          radius: getComputedStyle(button).borderRadius,
+          centered: Math.abs(label.x + label.width / 2 - (box.x + box.width / 2)) < 1,
+        };
+      });
+      return {
+        labelsCentered: cancel.centered && confirm.centered,
+        sameRadius: cancel.radius === confirm.radius,
+        sameSize: Math.abs(cancel.width - confirm.width) < 1 && Math.abs(cancel.height - confirm.height) < 1,
+        sameRow: Math.abs(cancel.y - confirm.y) < 1 && cancel.x < confirm.x,
+      };
+    })).toEqual({ labelsCentered: true, sameRadius: true, sameSize: true, sameRow: true });
+    await cancel.tap();
+    await expect(dialog).toBeHidden();
+  });
+}
+
+for (const width of [320, 390]) {
   test(`mobile navigation, filters and admin screens fit ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
     const app = await openSurveyApp(page, { responseCount: 2 });

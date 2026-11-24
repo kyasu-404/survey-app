@@ -40,6 +40,32 @@ test("Other text, matrix labels and smiley colors agree in answers and readonly 
   expect(pageErrors).toEqual([]);
 });
 
+test("XLSX uses the custom and default organization labels", async ({ page }) => {
+  const { formId } = await openSurveyApp(page, {
+    responseCount: 1,
+    responseData: [{ school: "school-1", вопрос2: "school-2" }],
+    elements: [
+      { type: "organization", name: "вопрос1", valueName: "school", title: "Место работы" },
+      { type: "organization", name: "вопрос2" },
+    ],
+  });
+  await page.route("**/rest/v1/education_organizations?*", route => route.fulfill({ json: [
+    { id: "school-1", organization_type: "school", alias: "ГБОУ", number: "355" },
+    { id: "school-2", organization_type: "school", alias: "ГБОУ", number: "353" },
+  ] }));
+  await page.goto(`/dashboard/forms/${formId}/responses`);
+  await expect(page.locator(".responses-table")).toContainText("ГБОУ 355");
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Скачать XLSX", exact: true }).click();
+  const path = await (await downloaded).path();
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = (await workbook.xlsx.readFile(path)).worksheets[0];
+  expect(worksheet.getCell("B1").text).toBe("Место работы");
+  expect(worksheet.getCell("B2").text).toBe("ГБОУ 355");
+  expect(worksheet.getCell("C1").text).toBe("Организация");
+  expect(worksheet.getCell("C2").text).toBe("ГБОУ 353");
+});
+
 test("server validation errors preserve the draft and identify the cause", async ({ page }) => {
   const { formId } = await openSurveyApp(page, { responseCount: 0, elements: [{ type: "text", name: "name", title: "Имя" }] });
   await page.route("**/rest/v1/rpc/submit_form_response", route => route.fulfill({ status: 400, json: { code: "22023", message: "Срок загрузки файла истёк. Прикрепите файл заново." } }));

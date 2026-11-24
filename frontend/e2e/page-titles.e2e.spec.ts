@@ -45,3 +45,21 @@ test("page titles entered before the first question survive the first save and r
   expect(form.schema.pages.map(p => p.title ?? "")).toEqual([...titles, ""]);
   expect(pageErrors).toEqual([]);
 });
+
+test("new Phone and Email questions save their default titles", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { formId, form } = await openSurveyApp(page, { responseCount: 0, elements: [] });
+  await page.goto(`/builder/${formId}`);
+  const toolbox = page.locator(".svc-toolbox");
+  await toolbox.getByRole("button", { name: "Телефон", exact: true }).click();
+  await toolbox.getByRole("button", { name: "Email", exact: true }).click();
+
+  const questions = page.locator(".svc-question__content");
+  await expect(questions).toHaveCount(2);
+  await expect(questions.nth(0).getByRole("textbox", { name: "Телефон", exact: true })).toBeVisible();
+  await expect(questions.nth(1).getByRole("textbox", { name: "Email", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Сохранить опрос", exact: true }).click();
+  await expect.poll(() => form.schema.pages[0].elements.map(({ type, title }) => ({ type, title }))).toEqual([
+    { type: "phone", title: "Телефон" }, { type: "email", title: "Email" },
+  ]);
+});

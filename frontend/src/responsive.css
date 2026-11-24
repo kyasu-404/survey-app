@@ -306,8 +306,15 @@
   .modal-card { max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; padding: 18px; border-radius: 18px; }
   .modal-card :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { min-width: 0; max-width: 100%; }
   .deadline-modal-primary-grid { grid-template-columns: minmax(0, 1fr); }
-  .deadline-modal-actions > *,
-  .dashboard-delete-modal-actions > * { flex: 1 1 120px; min-height: 44px; }
+  .deadline-modal-actions > * { flex: 1 1 120px; min-height: 44px; }
+  :root .app-shell .dashboard-delete-modal-actions > button {
+    flex: 1 1 0;
+    min-height: 44px;
+    justify-content: center;
+    border-radius: 22px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
   .template-preview-drawer,
   .response-preview-drawer { width: 100%; max-width: 100%; }
   .office-dialog { max-width: calc(100vw - 16px); }

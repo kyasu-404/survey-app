@@ -6,6 +6,7 @@ import {
 } from "../../../shared/lib/tableColumns";
 export { getResponseAnswerColumns, getResponseHeaderLevels };
 export type { ResponsesTableColumn, ResponsesColumnGroup };
+import { DEFAULT_ORGANIZATION_QUESTION_TITLE, ORGANIZATION_QUESTION_TYPE } from "../../organization/model";
 import type { SurveyResponse } from "../types";
 import type { SurveyQuestion, SurveySchema } from "../../survey/types";
 import { answerCommentKey, hasAnswerComment, formatSimpleAnswer, formatMatrixAnswer, readableValue, COMPLEX_ANSWER_TYPES } from "../../../shared/lib/answerValue";
@@ -66,7 +67,8 @@ function getQuestionMeta(schema: SurveySchema) {
         continue;
       }
       if (!name || NON_ANSWER_TYPES.has(question.type)) continue;
-      const header = question.title?.trim() || question.name;
+      const defaultHeader = question.type === ORGANIZATION_QUESTION_TYPE ? DEFAULT_ORGANIZATION_QUESTION_TITLE : question.name;
+      const header = question.title?.trim() || defaultHeader;
       if (!seenNames.has(name)) {
         columns.push({ key: `answer:${name}`, header, ...groups, section, answerType: question.type });
         seenNames.add(name);

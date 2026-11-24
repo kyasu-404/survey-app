@@ -7,6 +7,7 @@ import {
 } from "./types";
 
 export const ORGANIZATION_QUESTION_TYPE = "organization";
+export const DEFAULT_ORGANIZATION_QUESTION_TITLE = "Организация";
 export const DEFAULT_FORM_ORGANIZATION_TYPES: OrganizationType[] = ["school", "kindergarten"];
 
 export const ORGANIZATION_TYPE_OPTIONS: Array<{

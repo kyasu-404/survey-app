@@ -1,4 +1,5 @@
 import { ComponentCollection } from "survey-core";
+import { DEFAULT_ORGANIZATION_QUESTION_TITLE } from "../../organization/model";
 
 export const QUESTION_TYPES = [
   "panel",
@@ -100,11 +101,11 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
   {
     name: "organization",
     iconName: "icon-dropdown",
-    title: "Организация",
+    title: DEFAULT_ORGANIZATION_QUESTION_TITLE,
     category: "basic",
     questionJSON: {
       type: "dropdown",
-      title: "Организация",
+      title: DEFAULT_ORGANIZATION_QUESTION_TITLE,
       placeholder: "Начните вводить название…",
       searchEnabled: true,
       choices: [],
@@ -180,6 +181,7 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
     iconName: "icon-toolbox-phone-custom",
     title: "Телефон",
     category: "basic",
+    defaultQuestionTitle: "Телефон",
     questionJSON: {
       type: "text",
       inputType: "tel",
@@ -204,6 +206,7 @@ export const QUESTION_TYPE_DEFINITIONS: QuestionTypeDefinition[] = [
     iconName: "icon-toolbox-email-custom",
     title: "Email",
     category: "basic",
+    defaultQuestionTitle: "Email",
     questionJSON: {
       type: "text",
       inputType: "email",

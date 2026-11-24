@@ -181,6 +181,16 @@ body,
   background-clip: padding-box;
 }
 
+.survey-runtime-surface.survey-page-card .sd-header__text {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.survey-runtime-surface.survey-page-card :is(.sd-header__text, .sv-header__title) .sd-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Survey Creator uses a fixed neutral interface theme. This fallback keeps
    the canvas neutral and prevents the built-in aqua default from flashing
    before the Creator model applies its theme through applyCreatorTheme(). */
