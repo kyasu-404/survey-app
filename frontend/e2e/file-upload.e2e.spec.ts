@@ -4,6 +4,60 @@ import { openSurveyApp } from "./fixtures/surveyApp";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64");
 const file = (name: string) => ({ name, mimeType: "image/png", buffer: png });
 
+test("rejects a mixed batch with an unsupported format before reserving any upload", async ({ page }) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 0, elements: [
+    { type: "file", name: "attachment", title: "План мероприятий", allowMultiple: true, acceptedTypes: ".pdf, .doc, .docx" },
+  ] });
+  const reserved: string[] = [];
+  const uploaded: string[] = [];
+  const path = `public/${formId}/10000000-0000-4000-8000-000000000001.pdf`;
+  await page.route("**/functions/v1/form-admin", route => {
+    const body = route.request().postDataJSON();
+    if (body.action !== "reserve-upload") return route.fulfill({ json: { success: true } });
+    reserved.push(body.fileName);
+    if (body.fileName === "photo.png") {
+      return route.fulfill({ status: 400, json: { error: "Тип файла не разрешён автором вопроса" } });
+    }
+    return route.fulfill({ json: { path } });
+  });
+  await page.route("**/storage/v1/object/survey-files/**", route => {
+    uploaded.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ json: { Key: path } });
+  });
+  const pdf = { name: "plan.PDF", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") };
+  await page.goto(`/form/${formId}`);
+  await chooseFiles(page, [pdf, "photo.png"]);
+  const error = page.locator(".sd-question__erbox");
+  await expect(error).toContainText("photo.png");
+  await expect(error).toContainText(".pdf, .doc, .docx");
+  expect(reserved).toEqual([]);
+  expect(uploaded).toEqual([]);
+
+  await chooseFiles(page, [pdf]);
+  await expect(page.locator(".sd-file__preview-item")).toContainText(pdf.name);
+  await expect(error).toHaveCount(0);
+  expect(reserved).toEqual([pdf.name]);
+  expect(uploaded).toHaveLength(1);
+});
+
+test("shows a reservation error returned by the server without uploading the file", async ({ page }) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 0, elements: [
+    { type: "file", name: "attachment", title: "Файл", acceptedTypes: "image/*" },
+  ] });
+  const uploads: string[] = [];
+  const reason = "Тип файла не разрешён автором вопроса";
+  // The server can reject a file when the author has changed the format since the form was loaded.
+  await page.route("**/functions/v1/form-admin", route => route.fulfill({ status: 400, json: { error: reason } }));
+  await page.route("**/storage/v1/object/survey-files/**", route => {
+    uploads.push(route.request().url());
+    return route.fulfill({ json: {} });
+  });
+  await page.goto(`/form/${formId}`);
+  await chooseFiles(page, ["photo.png"]);
+  await expect(page.locator(".sd-question__erbox")).toContainText(reason);
+  expect(uploads).toEqual([]);
+});
+
 test("editing deletes new uploads immediately and saved attachments only after commit", async ({ page }) => {
   const { formId, form, pageErrors } = await openSurveyApp(page, { responseCount: 0, elements: [
     { type: "file", name: "files", title: "Файлы", allowMultiple: true, needConfirmRemoveFile: false },
@@ -68,10 +122,10 @@ test("an expired upload restored from a draft names the file and allows replacem
   await expect(page.locator(".survey-renderer > [role=alert]")).toHaveCount(0);
 });
 
-async function chooseFiles(page: Page, names: string[]) {
+async function chooseFiles(page: Page, files: (string | ReturnType<typeof file>)[]) {
   const chooser = page.waitForEvent("filechooser");
   await page.locator(".sd-file label[for]").click();
-  await (await chooser).setFiles(names.map(file));
+  await (await chooser).setFiles(files.map(item => typeof item === "string" ? file(item) : item));
 }
 
 test("public file upload recovers from failed deletion and upload without refreshing", async ({ page }) => {

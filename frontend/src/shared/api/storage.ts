@@ -1,4 +1,4 @@
-import { isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
+import { FunctionsHttpError, isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { publicSupabaseClient, supabaseClient } from "./client";
 import { getOrCreateResponseBrowserId } from "../lib/responseBrowserId";
 import { runRequest } from "./request";
@@ -61,7 +61,7 @@ function buildUserStoragePath(userId: string, formId: string, fileName: string) 
 }
 
 async function reservePublicStoragePath(formId: string, file: File, options: UploadFileToStorageOptions) {
-  const { data, error } = await runRequest(
+  const { data, error, response } = await runRequest(
     "storage.reserveUpload",
     (requestSignal, traceContext) => publicSupabaseClient.functions.invoke("form-admin", {
       body: { action: "reserve-upload", formId, browserId: options.browserId ?? getOrCreateResponseBrowserId(), size: file.size, extension: getFileExtension(file.name),
@@ -73,7 +73,13 @@ async function reservePublicStoragePath(formId: string, file: File, options: Upl
     { signal: options.signal },
   );
   if (error || typeof data?.path !== "string" || !data.path.startsWith(`public/${formId}/`)) {
-    throw new Error(data?.error || "Не удалось подготовить загрузку. Повторите позже.");
+    const payload: unknown = error instanceof FunctionsHttpError && (response?.status === 400 || response?.status === 429)
+      ? await response.json().catch(() => null)
+      : data;
+    const message = payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+      ? payload.error.trim()
+      : "";
+    throw new Error(message || "Не удалось подготовить загрузку. Повторите позже.");
   }
   return data.path as string;
 }

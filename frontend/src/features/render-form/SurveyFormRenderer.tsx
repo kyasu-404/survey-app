@@ -10,6 +10,7 @@ import {
   type ProcessHtmlEvent,
   type Question,
   type QuestionFileModel,
+  type UploadFilesEvent,
 } from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/survey-core.css";
@@ -118,6 +119,30 @@ function prepareFileQuestionActions(question: Question) {
     // React mounts, otherwise an update between render and subscription can be lost.
     (question as QuestionFileModel).actionsContainer.flushUpdates();
   }
+}
+
+function getFileFormatError({ question, files }: UploadFilesEvent) {
+  if (question?.getType() !== "file") return null;
+
+  const formats = (question as QuestionFileModel).renderedAcceptedTypes?.split(",")
+    .map((format) => format.trim()).filter(Boolean);
+  if (!formats?.length || formats.includes("*") || formats.includes("*/*")) return null;
+
+  const invalidFile = files.find((file) => {
+    const name = file.name.toLowerCase();
+    const mime = file.type.split(";", 1)[0].trim().toLowerCase();
+    return !formats.some((format) => {
+      const rule = format.toLowerCase();
+      if (rule.startsWith(".")) return name.endsWith(rule);
+      // The server can infer known MIME types from extensions when the browser omits them.
+      if (!mime || mime === "application/octet-stream") return true;
+      return rule.endsWith("/*") ? mime.startsWith(rule.slice(0, -1)) : mime === rule;
+    });
+  });
+
+  return invalidFile
+    ? `Файл «${invalidFile.name}» не подходит по формату. Разрешены форматы ${formats.join(", ")}.`
+    : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -465,12 +490,16 @@ export function SurveyFormRenderer({
     const handleVisibilityChange = () => { if (document.visibilityState === "hidden") flushDraft(); };
     const uiStateChangedEvent = (model as SurveyModelWithOptionalUIState).onUIStateChanged;
 
-    const handleUploadFiles = async (
-      _sender: Model,
-      options: { name?: string; files: File[]; callback: (data: unknown, errors?: unknown) => void }
-    ) => {
-      const uploaded: Awaited<ReturnType<typeof uploadFileToStorage>>[] = [];
+    const handleUploadFiles = async (_sender: Model, options: UploadFilesEvent) => {
       setFileError(null);
+      const formatError = getFileFormatError(options);
+      if (formatError) {
+        options.callback([], [formatError]);
+        showToast(formatError, "error");
+        return;
+      }
+
+      const uploaded: Awaited<ReturnType<typeof uploadFileToStorage>>[] = [];
       try {
         for (const file of options.files) {
           uploaded.push(await uploadFileToStorage(formId, file, { allowAnonymous: allowAnonymousUploads, browserId: browserIdRef.current, personalToken,
