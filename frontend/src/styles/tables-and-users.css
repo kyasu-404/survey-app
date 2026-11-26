@@ -237,6 +237,10 @@ button.dashboard-qr-download-button:focus-visible {
   white-space: normal;
 }
 
+:root[data-theme="sand"] .responses-table th.responses-table-date-column {
+  white-space: nowrap;
+}
+
 .responses-table .response-signature-image {
   display: block;
   width: 180px;

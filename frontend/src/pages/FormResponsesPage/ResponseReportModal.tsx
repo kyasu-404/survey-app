@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
 import { useId, useState } from "react";
 import { getOrganizationDisplayName, getOrganizationTypeLabel } from "../../entities/organization/model";
@@ -104,13 +105,12 @@ export function ResponseReportModal({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <div className="response-report-header">
+        <ModalHeading className="response-report-header" onClose={onClose} disabled={isConfirmationOpen} closeClassName="responses-export-button" graphiteText="Закрыть">
           <div>
             <p>Аналитика формы</p>
             <h2 id={titleId}>Отчёт по ответам</h2>
           </div>
-          <button type="button" className="responses-export-button" onClick={onClose}>Закрыть</button>
-        </div>
+        </ModalHeading>
 
         <AnimatedTabs className="response-report-tabs" role="tablist" aria-label="Разделы отчёта">
           <button

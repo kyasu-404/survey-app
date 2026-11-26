@@ -1,7 +1,7 @@
 /* Application color schemes. Form themes remain owned by SurveyJS and are not
    replaced by these interface-only tokens. */
-:root,
-:root[data-theme="sand"] {
+:root {
+  --survey-page-backdrop: linear-gradient(145deg, #f4f4f5 0%, #e4e4e7 100%);
   --app-bg:
     radial-gradient(circle at 90% 0%, rgba(152, 80, 54, 0.08), transparent 28%),
     linear-gradient(145deg, #f3f0ec 0%, #ebe6e0 55%, #e4ddd6 100%);
@@ -41,6 +41,61 @@
   --creator-text: #2f2925;
   --creator-text-muted: #6d655f;
   --creator-accent: #0b57d0;
+}
+
+@media screen {
+  :root[data-theme="sand"] {
+    --app-bg: #faf7f1;
+    --sidebar-bg: #f0e9df;
+    --theme-card-background: #fffdfc;
+    --theme-page-surface: var(--app-bg);
+    --theme-panel-background: #f4efe8;
+    --theme-surface: #f1ebe3;
+    --theme-surface-light: var(--theme-card-background);
+    --theme-surface-muted: var(--theme-panel-background);
+    --theme-control-background: #fffefc;
+    --theme-form-card-background: var(--theme-card-background);
+    --theme-popover-background: var(--theme-card-background);
+    --theme-container-high: var(--theme-surface);
+    --theme-row-alt: var(--app-bg);
+    --theme-row-hover: #fbf3ee;
+    --theme-border: #dcd3c8;
+    --theme-outline: #817365;
+    --theme-text: #191715;
+    --theme-muted: #5f564c;
+    --theme-icon: #2b2724;
+    --theme-shadow-color: rgb(41 33 25 / 7%);
+    --theme-accent: #9b442c;
+    --theme-accent-strong: #7d3523;
+    --theme-accent-soft: var(--theme-selected-background);
+    --theme-accent-gradient: var(--theme-accent);
+    --theme-selected-background: #f2e3d8;
+    --theme-selected-text: var(--theme-text);
+    --theme-action: #24201d;
+    --theme-action-hover: #3d352f;
+    --theme-focus: #8b3e29;
+    --theme-success-text: #166534;
+    --theme-success-background: #dcefe1;
+    --theme-danger-text: #8a3a3c;
+    --theme-danger-background: #f8ece9;
+    --theme-danger-border: var(--theme-danger-text);
+    --theme-closed-text: #554d44;
+    --theme-closed-background: #efeae3;
+    --theme-warning-text: #574d42;
+    --theme-warning-background: #f5eee5;
+    --creator-toolbar: var(--theme-control-background);
+    --creator-panel: var(--theme-panel-background);
+    --creator-panel-muted: var(--theme-surface);
+    --creator-workspace: #eee7dd;
+    --creator-control: var(--theme-control-background);
+    --creator-border: var(--theme-border);
+    --creator-border-strong: var(--theme-outline);
+    --creator-hover: var(--theme-selected-background);
+    --creator-selected: var(--theme-selected-background);
+    --creator-text: var(--theme-text);
+    --creator-text-muted: var(--theme-muted);
+    --creator-accent: var(--theme-accent);
+  }
 }
 
 
@@ -143,12 +198,16 @@ body,
 }
 
 
-/* Public runtime and the Builder preview share the same neutral backdrop. */
+/* The light Preview tab uses the standalone survey backdrop for its workspace. */
 .app-main-public,
 .builder-creator-shell .svc-creator-tab:has(> .builder-preview-tab-shell) {
   background:
     radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.8), transparent 26%),
     linear-gradient(180deg, #f7f2ea 0%, #ebe2d6 100%);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-creator-tab:has(> .builder-preview-tab-shell) {
+  background: var(--survey-page-backdrop);
 }
 
 .builder-preview-tab-shell {
@@ -336,6 +395,15 @@ button.responses-report-button:focus-visible,
   color: var(--theme-accent-strong);
 }
 
+:root[data-theme="sand"] .organizations-table a[href^="mailto:"] {
+  text-decoration: none;
+  text-underline-offset: .2em;
+}
+
+:root[data-theme="sand"] .organizations-table a[href^="mailto:"]:hover {
+  text-decoration: underline;
+}
+
 .organizations-row-actions button {
   display: inline-flex;
   align-items: center;
@@ -381,6 +449,16 @@ button.responses-report-button:focus-visible,
 
 .organization-edit-modal {
   width: min(520px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+}
+
+:root[data-theme="sand"] .organization-edit-modal {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+:root[data-theme="sand"] .organization-edit-modal form {
   display: grid;
   gap: 16px;
 }

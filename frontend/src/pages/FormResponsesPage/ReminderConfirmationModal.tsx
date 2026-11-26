@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { lazy, Suspense, useState } from "react";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 const MailComposer = lazy(() => import("../../features/mail-composer/MailComposer").then(module => ({ default: module.MailComposer })));
@@ -7,10 +8,9 @@ export function ReminderConfirmationModal({ formId, onCancel }: { formId: string
   const [busy, setBusy] = useState(false);
   return <dialog ref={dialog} className="modal-card card dashboard-share-modal" aria-label="Подготовить напоминания"
     onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
-    <div className="dashboard-qr-modal-header">
+    <ModalHeading className="dashboard-qr-modal-header" onClose={onCancel} disabled={busy} label="Закрыть напоминания" closeClassName="dashboard-qr-close-button" graphiteText="×">
       <h2 className="dashboard-qr-modal-title">Напомнить о заполнении</h2>
-      <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть напоминания" disabled={busy} onClick={onCancel}>×</button>
-    </div>
+    </ModalHeading>
     <div className="dashboard-share-panel"><Suspense fallback={<p role="status">Загрузка редактора…</p>}><MailComposer formId={formId} kind="reminder" onBusyChange={setBusy} /></Suspense></div>
   </dialog>;
 }

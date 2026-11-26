@@ -309,13 +309,13 @@
   fill: #111111 !important;
 }
 
-.builder-creator-shell .sd-question__title {
+.builder-creator-shell .sd-question__title:where(:not(.survey-renderer *)) {
   white-space: normal !important;
   overflow-wrap: break-word !important;
   word-break: normal !important;
 }
 
-.builder-creator-shell .sd-question__required-text {
+.builder-creator-shell .sd-question__required-text:where(:not(.survey-renderer *)) {
   white-space: nowrap !important;
 }
 

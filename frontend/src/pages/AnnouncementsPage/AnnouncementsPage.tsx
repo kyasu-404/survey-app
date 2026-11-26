@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -31,7 +32,9 @@ function ArchiveDialog({ row, onConfirm, onCancel }: { row: AdminAnnouncement; o
   const dialog = useModalSurface();
   return <dialog ref={dialog} className="card modal-card activity-rule-dialog announcement-archive-dialog"
     aria-labelledby="archive-title" onCancel={event => { event.preventDefault(); onCancel(); }}>
-    <h2 id="archive-title">Архивировать объявление?</h2>
+    <ModalHeading onClose={onCancel} lightOnly>
+      <h2 id="archive-title">Архивировать объявление?</h2>
+    </ModalHeading>
     <p>«{row.title}» будет доступно администраторам в архиве. Для новой публикации можно будет создать копию.</p>
     <div className="activity-actions activity-dialog-actions">
       <button className="app-button" type="button" onClick={onCancel}>Отмена</button>

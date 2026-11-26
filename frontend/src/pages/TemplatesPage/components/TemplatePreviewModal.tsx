@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { Suspense } from "react";
 import { LazySurveyRenderer } from "../../../widgets/SurveyRenderer/LazySurveyRenderer";
@@ -25,14 +26,11 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
         aria-modal="true"
         tabIndex={-1}
       >
-        <div className="template-preview-header">
+        <ModalHeading className="template-preview-header" onClose={onClose} closeClassName="responses-export-button" graphiteText="Закрыть">
           <div>
             <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
           </div>
-          <button type="button" className="responses-export-button" onClick={onClose}>
-            Закрыть
-          </button>
-        </div>
+        </ModalHeading>
         <SurveyRuntimeSurface className="template-preview-body">
           {isLoading && (
             <div className="dashboard-forms-loading" role="status" aria-live="polite">

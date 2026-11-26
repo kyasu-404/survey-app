@@ -27,6 +27,10 @@
   background: color-mix(in srgb, var(--theme-accent) 11%, var(--theme-card-background));
 }
 
+:root[data-theme="sand"] .notification-card[data-unread="true"] .notification-card-header {
+  background: color-mix(in srgb, var(--theme-selected-background) 93%, var(--theme-accent));
+}
+
 .notification-card-category,
 .notification-card-meta {
   display: flex;
@@ -44,6 +48,18 @@
   height: 7px;
   background: var(--theme-accent);
   border-radius: 50%;
+}
+
+:root[data-theme="sand"] .notification-card-unread {
+  flex: none;
+  height: auto;
+  color: var(--theme-selected-text);
+  background: transparent;
+  font-weight: 700;
+}
+
+:root[data-theme="sand"] .notification-card-unread::after {
+  content: attr(aria-label) / "";
 }
 
 :root .app-shell .notification-card .notification-card-read {
@@ -93,6 +109,10 @@
   color: var(--theme-accent-strong);
   font-weight: 600;
   text-underline-offset: 3px;
+}
+
+:root[data-theme="sand"] .notification-card-actions :is(a, .announcement-action) {
+  text-decoration: none;
 }
 
 .notification-acknowledged {

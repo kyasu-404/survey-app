@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useDeferredValue, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -81,7 +82,9 @@ function ArchiveRuleDialog({ name, pending, error, onClose, onConfirm }: {
   return <dialog ref={dialog} className="card modal-card rule-archive-dialog"
     aria-labelledby="rule-archive-heading" aria-describedby="rule-archive-description"
     onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
-    <h2 id="rule-archive-heading">Архивировать правило?</h2>
+    <ModalHeading onClose={onClose} disabled={pending} lightOnly>
+      <h2 id="rule-archive-heading">Архивировать правило?</h2>
+    </ModalHeading>
     <p id="rule-archive-description">Правило «{name}» будет выключено. История срабатываний сохранится.</p>
     {error && <p className="activity-error" role="alert">{getErrorMessage(error, "Не удалось архивировать правило")}</p>}
     <div className="activity-actions">

@@ -729,6 +729,7 @@ export default function FormResponsesPage() {
         {!isLoading && !combinedError && !rows.length && (
           form ? (
             <div className="dashboard-empty-state responses-page-empty">
+              <Icon name="description" size={24} className="responses-page-empty-icon" />
               <h4>Ответов пока нет</h4>
               {canShareForm && responsesQuery.data?.count === 0 ? (
                 <>

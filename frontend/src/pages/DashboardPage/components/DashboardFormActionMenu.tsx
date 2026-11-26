@@ -189,7 +189,7 @@ export function DashboardFormActionMenu({
             <button
               type="button"
               role="menuitem"
-              className="form-menu-item form-menu-item-danger"
+              className="form-menu-item form-menu-item-danger form-menu-item-delete"
               onClick={(event) => {
                 stopCardEvent(event);
                 keyboard.trigger.current?.focus({ preventScroll: true });

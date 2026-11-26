@@ -109,6 +109,23 @@
   border-bottom: 2px solid var(--creator-accent);
 }
 
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__panel {
+  border-radius: 16px;
+  background: var(--theme-card-background);
+  box-shadow: inset 0 0 0 1px var(--creator-border);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-side-bar__container-content {
+  --ctr-property-grid-background-color: var(--theme-card-background);
+  --ctr-property-grid-form-background-color: var(--theme-card-background);
+  --ctr-property-grid-chapter-caption-background-color: var(--theme-card-background);
+  background: var(--theme-card-background);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-side-bar__container-content :is(.svc-side-bar__content, .svc-side-bar__content-wrapper) {
+  background: var(--theme-card-background) !important;
+}
+
 /* Preview chrome belongs to the application theme; the survey surface inside
    keeps its own independently selected form theme. */
 .template-preview-drawer,
@@ -150,6 +167,69 @@
   transform: translateX(2px);
 }
 
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:hover {
+  background: var(--creator-question-type-hover) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:focus-visible {
+  outline: 2px solid var(--creator-text);
+  outline-offset: -2px;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-dropdown-action--convertTo {
+  --ctr-survey-question-panel-toolbar-item-background-color-hovered: var(--creator-question-type-hover);
+  --ctr-list-item-background-color-hovered: var(--creator-question-type-hover);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-creator {
+  --creator-question-type-hover: color-mix(in srgb, var(--creator-panel) 80%, var(--creator-accent));
+  --sjs-primary-backcolor-light: var(--creator-selected) !important;
+  --sjs-primary-background-10: var(--creator-selected) !important;
+  --sjs-secondary-background-500: var(--creator-accent) !important;
+  --sjs-secondary-background-25: var(--creator-selected) !important;
+  --sjs-special-red: var(--theme-danger-text) !important;
+  --sjs-special-red-light: var(--theme-danger-background) !important;
+  --sjs-special-green: var(--theme-success-text) !important;
+  --sjs-special-green-light: var(--theme-success-background) !important;
+  --sjs-semantic-red-background-500: var(--theme-danger-text) !important;
+  --sjs-semantic-red-background-10: var(--theme-danger-background) !important;
+  --sjs-semantic-green-background-500: var(--theme-success-text) !important;
+  --sjs-semantic-green-background-10: var(--theme-success-background) !important;
+  --ctr-menu-item-border-color-selected: transparent !important;
+  --ctr-menu-toolbar-button-background-color-hovered: var(--creator-panel) !important;
+  --ctr-menu-toolbar-button-background-color-pressed: var(--creator-panel-muted) !important;
+  --ctr-menu-toolbar-button-icon-color: var(--theme-icon) !important;
+  --ctr-menu-toolbar-button-opacity-disabled: .6 !important;
+  --ctr-survey-question-panel-border-color-selected: var(--creator-accent) !important;
+  --ctr-survey-question-panel-border-color-hovered: var(--creator-border-strong) !important;
+  --ctr-survey-action-button-text-color-positive: var(--theme-action) !important;
+  --ctr-survey-action-button-icon-color-positive: var(--theme-icon) !important;
+  --ctr-survey-action-button-background-color-hovered-positive: var(--creator-panel-muted) !important;
+  --ctr-survey-action-button-icon-color-negative: var(--theme-danger-text) !important;
+  --ctr-survey-action-button-background-color-hovered-negative: var(--theme-danger-background) !important;
+  --ctr-toolbox-item-icon-color: var(--theme-icon) !important;
+  --ctr-toolbox-item-background-color-hovered: var(--creator-question-type-hover) !important;
+  --ctr-button-contextual-button-background-color-hovered: var(--creator-question-type-hover) !important;
+  --ctr-toolbox-item-text-opacity-pressed: 1 !important;
+  --ctr-toolbox-item-icon-opacity-pressed: 1 !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled):is(.svc-toolbox__tool--pressed, :has(.svc-toolbox__item:active)) .svc-toolbox__item {
+  background: var(--creator-text) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled):is(.svc-toolbox__tool--pressed, :has(.svc-toolbox__item:active)) :is(.svc-toolbox__item-title, .sv-svg-icon use) {
+  color: var(--theme-accent-foreground) !important;
+  fill: var(--theme-accent-foreground) !important;
+}
+
 .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover,
 .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):focus {
   color: var(--creator-text) !important;
@@ -170,6 +250,128 @@
 .builder-creator-shell .svc-toolbox__category-header {
   border-color: var(--creator-border);
   background: var(--creator-panel-muted) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu .svc-tabbed-menu-item {
+  min-height: 40px;
+  margin: 5px 2px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  box-shadow: none !important;
+  text-decoration: none;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu { border-block-end-width: 0; }
+
+:root[data-theme="sand"] .builder-creator-shell .svc-top-bar .svc-tabbed-menu {
+  block-size: 100%;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover {
+  background: var(--creator-panel) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item--selected {
+  background: var(--creator-selected) !important;
+  color: var(--creator-text) !important;
+  font-weight: 650;
+}
+
+:root[data-theme="sand"] .builder-creator-shell :is(.svc-tabbed-menu-item, .svc-question__content):focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item--selected::after {
+  content: none;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__category-header {
+  background: color-mix(in srgb, var(--creator-panel-muted) 88%, var(--creator-text)) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__category-header:not(.svc-toolbox__category-header--collapsed) {
+  background: color-mix(in srgb, var(--creator-panel-muted) 82%, var(--creator-text)) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .spg-panel__title[aria-expanded="true"],
+:root[data-theme="sand"] .builder-creator-shell .spg-button-group__item--selected {
+  background: color-mix(in srgb, var(--creator-panel-muted) 82%, var(--creator-text)) !important;
+  font-weight: 650;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .spg-panel__title:focus-visible {
+  outline: 2px solid var(--creator-accent);
+  outline-offset: -3px;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-item-value-controls__add {
+  --ctr-survey-action-button-icon-color-positive: #817d77;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-item-value-controls__add:is(:hover, :focus-visible) {
+  --ctr-survey-action-button-icon-color-positive: var(--creator-text);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tab-designer .svc-item-value-controls__remove {
+  --ctr-survey-action-button-icon-color-negative: #e50a3e;
+}
+
+:root[data-theme="sand"] .builder-creator-shell :is(.svc-panel__placeholder_frame, .spg-checkbox__rectangle) {
+  border-color: var(--creator-border-strong) !important;
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-panel__content { background: var(--theme-card-background); }
+:root[data-theme="sand"] .builder-creator-shell .svc-side-bar__shadow { background: var(--theme-shadow-color); }
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tab-designer :is(.svc-panel__placeholder, .sd-description, .sd-page__title) {
+  color: var(--creator-text-muted);
+}
+
+/* Search uses a real border. SurveyJS editors own their inset borders and
+   focus states, including when a nested input receives focus. */
+:root[data-theme="sand"] .builder-creator-shell .svc-creator {
+  --ctr-editor-border-color: var(--creator-border-strong) !important;
+}
+
+:root[data-theme="sand"] .app-shell .builder-creator-shell .svc-search {
+  border-color: var(--creator-border-strong) !important;
+}
+
+:root[data-theme="sand"] .app-shell .builder-creator-shell .svc-search:focus-within {
+  border-color: var(--creator-accent) !important;
+  box-shadow: inset 0 0 0 1px var(--creator-accent);
+}
+
+:root[data-theme="sand"] .app-shell .builder-creator-shell :is(
+  .svc-search__input, .spg-input, .spg-input-container__input, .spg-dropdown__filter-string-input,
+  .svc-tab-designer :is(.sd-input, .sd-dropdown__filter-string-input, .sd-tagbox__filter-string-input)
+):focus-visible {
+  outline: none;
+}
+
+/* Property panel selects own the border around their inner input. */
+:root[data-theme="sand"] .builder-creator-shell .spg-input:is(.spg-dropdown, .spg-tagbox):where(:not(.sd-input--error, .spg-input--error, .spg-table__cell *, .sd-multipletext__item-container *)) {
+  box-shadow: inset 0 0 0 1px var(--creator-border-strong);
+}
+
+/* Match the default survey preview's field surface on the Designer canvas. */
+:root[data-theme="sand"] .builder-creator-shell .svc-tab-designer .sd-question__content
+  .sd-input:is(input, textarea, .sd-dropdown, .sd-tagbox):where(:not(.sd-input--error, .sd-input--readonly, .sd-input--preview)) {
+  background-color: var(--sjs-editorpanel-backcolor, var(--sjs-editor-background, #f8f5f0));
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-tab-designer .sd-question__content
+  .sd-input:is(input, textarea, .sd-dropdown, .sd-tagbox):where(:not(.sd-input--error, .sd-input--readonly, .sd-input--preview, :focus-within)) {
+  box-shadow: var(--sjs-shadow-inner, inset 0 1px 2px rgb(0 0 0 / 15%));
+}
+
+:root[data-theme="sand"] .builder-creator-shell :is(
+  .spg-input:is(.spg-dropdown, .spg-tagbox),
+  .svc-tab-designer :is(input.sd-input, textarea.sd-input, .sd-dropdown.sd-input, .sd-tagbox.sd-input)
+):where(:not(.sd-input--error, .spg-input--error, .spg-table__cell *, .sd-multipletext__item-container *)):focus-within {
+  box-shadow: inset 0 0 0 2px var(--creator-accent);
 }
 
 .builder-creator-shell .svc-toolbox__search-container,

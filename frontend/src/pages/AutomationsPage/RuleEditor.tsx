@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAuthCacheGuard } from "../../app/providers/authCache";
@@ -7,7 +8,6 @@ import { getFormOrganizations } from "../../entities/organization/api";
 import { getOrganizationDisplayName, ORGANIZATION_QUESTION_TYPE } from "../../entities/organization/model";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { getErrorMessage } from "../../shared/lib/error";
-import { Icon } from "../../shared/ui/Icon";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
 import { RuleEmailPreview, RuleEmailTemplate } from "./RuleEmail";
 import { nextFridayMorning, RuleScenarios, type RuleScenario } from "./RuleScenarios";
@@ -255,10 +255,9 @@ export function RuleEditor({ userId, form, rule, onClose, onSaved }: Props) {
         if (click.clientX < rect.left || click.clientX > rect.right || click.clientY < rect.top || click.clientY > rect.bottom) onClose();
       }}>
       <form noValidate onSubmit={onSubmit} onChange={() => { setValidationError(null); if (save.isError) save.reset(); }} className={"activity-rule-editor" + (choosingScenario ? " rule-editor-scenario" : "")}>
-        <header className="activity-heading">
+        <ModalHeading className="activity-heading" onClose={onClose} disabled={save.isPending}>
           <h2 id="rule-editor-heading">{rule ? "Редактировать правило" : "Новое правило"}</h2>
-          <button type="button" className="app-button icon-button" aria-label="Закрыть" onClick={onClose} disabled={save.isPending}><Icon name="close" /></button>
-        </header>
+        </ModalHeading>
 
         {!choosingScenario && <ol className="rule-steps" aria-label="Этапы настройки">
           {steps.map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined}>

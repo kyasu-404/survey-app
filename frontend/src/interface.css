@@ -76,6 +76,7 @@
     color: var(--theme-selected-text);
     font-weight: 500;
   }
+  :root[data-theme="sand"] .sidebar .nav-link-active { text-decoration: none; }
 
   :root .sidebar-account-trigger {
     width: 48px;
@@ -183,7 +184,7 @@
   }
   :root .app-shell .button-primary:hover { background: var(--theme-accent-strong); }
 
-  :root .app-shell :is(button, a, input, select, textarea):focus-visible {
+  :root .app-shell :is(button, a, input, select, textarea):where(:not(.survey-renderer *)):focus-visible {
     outline: 2px solid var(--theme-accent);
     outline-offset: 3px;
   }
@@ -314,7 +315,8 @@
 
   /* Shared dialog actions: neutral cancel, blue confirmation, semantic removal.
      Override the legacy gradients for both dashboard and Creator dialogs. */
-  :root .app-shell .deadline-modal-actions > button {
+  :root .app-shell .deadline-modal-actions > button,
+  :root[data-theme="sand"] .app-shell .users-create-modal .deadline-modal-actions > .button-primary {
     justify-content: center;
     min-height: 40px;
     padding: 9px 16px;
@@ -533,7 +535,7 @@
   }
   :root[data-theme="graphite"] .responses-page-table-shell { border: 1px solid var(--theme-border); border-radius: 12px; }
   :root[data-theme="graphite"] .app-shell :is(.organizations-table, .users-table, .responses-table) tbody td { transition: background-color 160ms ease; }
-  :root[data-theme="graphite"] .app-shell :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--theme-accent); color-scheme: dark; }
+  :root[data-theme="graphite"] .app-shell :is(input[type="checkbox"], input[type="radio"]):where(:not(.survey-renderer *)) { accent-color: var(--theme-accent); color-scheme: dark; }
   :root[data-theme="graphite"] .builder-safe-editing-banner { color: #ffdf99; background: #332b1c; border: 1px solid #5c4d2c; box-shadow: none; }
   .sidebar-account-avatar { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--theme-selected-background); color: var(--theme-selected-text); }
   .sidebar-account-header { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; padding: 10px; border-bottom: 1px solid var(--theme-border); color: var(--theme-text); }
@@ -568,6 +570,8 @@
   :root .app-shell .response-preview-drawer { position: fixed; inset: 0 0 0 auto; margin: 0 0 0 auto; width: min(820px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 20px 0 0 20px; color: var(--theme-text); box-shadow: -8px 0 32px #0003; }
   :root .app-shell .builder-creator-shell .svc-question__content { border: 1px solid var(--creator-border); border-radius: 14px; box-shadow: none; }
   :root .app-shell .builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) { border-color: var(--creator-accent) !important; box-shadow: inset 4px 0 0 var(--creator-accent) !important; }
+  :root[data-theme="sand"] .app-shell .builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) { box-shadow: 0 0 0 1px var(--creator-accent) !important; }
+  :root[data-theme="sand"] .builder-creator-shell .svc-question__content--selected::after { box-shadow: none; }
   .builder-creator-shell .svc-creator {
     --property-grid-card-gap: 12px;
     --property-grid-card-top-gap: 10px;

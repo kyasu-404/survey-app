@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import type { Dispatch, SetStateAction } from "react";
 import type { UserRole } from "../../../entities/user/types";
 import { NEW_PASSWORD_MIN_LENGTH } from "../../../shared/lib/passwordPolicy";
@@ -25,7 +26,9 @@ export function CreateUserForm({ isCreatePending, passwordError, newUser, onCrea
         const r = event.currentTarget.getBoundingClientRect();
         if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) cancel();
       }}>
-      <h2 id="create-user-title">Добавить пользователя</h2>
+      <ModalHeading onClose={cancel} disabled={isCreatePending} lightOnly>
+        <h2 id="create-user-title">Добавить пользователя</h2>
+      </ModalHeading>
       <form onSubmit={event => { event.preventDefault(); onCreateUser(); }}>
         <div className="users-create-grid">
           <label className="deadline-field"><span>Имя</span><input required autoComplete="name" value={newUser.name} onChange={event => setNewUser(prev => ({ ...prev, name: event.target.value }))} placeholder="Имя" /></label>

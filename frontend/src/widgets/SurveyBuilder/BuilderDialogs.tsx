@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useId, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { hasOrganizationQuestion } from "../../entities/organization/model";
 import type { FormSaveSettings } from "../../entities/survey/api/surveysApi";
@@ -27,7 +28,9 @@ export function BuilderResetDialog({ isSurveyMutationBusy, isTemplateBusy, setIs
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="builder-reset-title">Сбросить конструктор?</h3>
+        <ModalHeading onClose={() => setIsResetConfirmOpen(false)} disabled={isBusy} lightOnly>
+          <h3 id={titleId} className="builder-reset-title">Сбросить конструктор?</h3>
+        </ModalHeading>
         <p className="builder-template-subtitle">
           Все несохранённые вопросы и поля будут очищены. Это действие нельзя отменить.
         </p>
@@ -78,11 +81,13 @@ export function BuilderCompatibilityDialog({ compatibilityDialog, isCompatibilit
           : "Предупреждение об изменениях формы"}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="builder-reset-title">
-          {compatibilityDialog.result.status === "blocked"
-            ? "Некоторые изменения несовместимы с полученными ответами"
-            : "Подтвердите изменения формы"}
-        </h3>
+        <ModalHeading onClose={handleCloseCompatibilityDialog} disabled={isBusy} lightOnly>
+          <h3 id={titleId} className="builder-reset-title">
+            {compatibilityDialog.result.status === "blocked"
+              ? "Некоторые изменения несовместимы с полученными ответами"
+              : "Подтвердите изменения формы"}
+          </h3>
+        </ModalHeading>
         <p className="builder-template-subtitle">
           {compatibilityDialog.result.status === "blocked"
             ? "Эти изменения нельзя сохранить в текущей форме. Создайте копию, чтобы продолжить без риска для ответов."
@@ -210,7 +215,9 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="deadline-modal-title">Настройки формы</h3>
+        <ModalHeading onClose={closePostSaveSettings} disabled={isPostSaveSettingsSaving} lightOnly>
+          <h3 id={titleId} className="deadline-modal-title">Настройки формы</h3>
+        </ModalHeading>
         <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
         <div className="deadline-modal-primary-grid">
           <label className="deadline-field">

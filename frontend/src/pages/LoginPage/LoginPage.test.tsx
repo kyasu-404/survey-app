@@ -72,7 +72,7 @@ describe("LoginPage", () => {
   it("keeps the sign-in surface neutral regardless of the saved application theme", () => {
     const css = readAppCss();
 
-    expect(css).toMatch(/\.app-shell-login,[^{]+\.app-shell-login\.app-shell-monochrome,[^{]+\.app-shell-login \.app-main-login\s*\{[^}]*color:\s*#18181b;[^}]*background:\s*linear-gradient\(145deg,\s*#f4f4f5 0%,\s*#e4e4e7 100%\)\s*!important;[^}]*color-scheme:\s*light;/s);
+    expect(css).toMatch(/\.app-shell-login,[^{]+\.app-shell-login\.app-shell-monochrome,[^{]+\.app-shell-login \.app-main-login\s*\{[^}]*color:\s*#18181b;[^}]*background:\s*var\(--survey-page-backdrop\)\s*!important;[^}]*color-scheme:\s*light;/s);
     expect(css).toMatch(/\.app-shell-login \.login-card\s*\{[^}]*color:\s*#18181b;[^}]*border-color:\s*#d4d4d8;[^}]*background:\s*#ffffff;/s);
   });
 });

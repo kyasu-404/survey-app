@@ -5,6 +5,46 @@
   font-weight: 600;
 }
 
+/* The Preview tab hosts the same runtime as the public page. Clear the
+   Creator's inherited defaults here so omitted theme properties get the
+   respondent defaults, while SurveyJS still applies the authored theme to
+   its own root inside this boundary. */
+.builder-preview-tab-shell .survey-runtime-surface {
+  color: #18181b;
+  color-scheme: light;
+}
+
+.builder-preview-tab-shell .survey-renderer {
+  --sjs-border-25-overlay: initial;
+  --sjs-general-backcolor: initial;
+  --sjs-general-backcolor-dark: initial;
+  --sjs-general-backcolor-dim: initial;
+  --sjs-general-backcolor-dim-light: initial;
+  --sjs-general-forecolor: initial;
+  --sjs-general-forecolor-light: initial;
+  --sjs-primary-backcolor: initial;
+  --sjs-primary-backcolor-dark: initial;
+  --sjs-primary-backcolor-light: initial;
+  --sjs-primary-forecolor: initial;
+  --sjs-semantic-blue-background-10: initial;
+  --sjs-semantic-blue-background-500: initial;
+  --sjs-semantic-yellow-background-10: initial;
+  --sjs-semantic-yellow-background-500: initial;
+  --sjs-special-glow: initial;
+  --sjs-special-shadow: initial;
+  --sjs-special-green: initial;
+  --sjs-special-green-light: initial;
+  --sjs-special-red: initial;
+  --sjs-special-red-light: initial;
+}
+
+/* SurveyJS omits the focus stroke on read-only text controls, which can still
+   receive focus so respondents can select and copy the displayed value. */
+.survey-renderer :is(input, textarea).sd-input.sd-input--readonly:focus {
+  outline: 2px solid var(--sjs-primary-backcolor, #121212);
+  outline-offset: 1px;
+}
+
 /* The combobox owns its border and focus ring. Its text/search input is inline. */
 :is(.survey-renderer, .builder-creator-shell) :is(.sd-dropdown, .sd-tagbox) input.sd-dropdown__filter-string-input,
 :is(.survey-renderer, .builder-creator-shell) :is(.sd-dropdown, .sd-tagbox) input.sd-dropdown__filter-string-input:focus {

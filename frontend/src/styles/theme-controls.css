@@ -79,9 +79,7 @@ textarea {
   background: var(--theme-surface-light);
 }
 
-input:focus,
-select:focus,
-textarea:focus {
+:is(input, select, textarea):where(:not(.survey-renderer *)):focus {
   border-color: color-mix(in srgb, var(--theme-accent) 56%, transparent);
   background: var(--theme-popover-background);
   box-shadow: 0 0 0 4px var(--theme-accent-soft);

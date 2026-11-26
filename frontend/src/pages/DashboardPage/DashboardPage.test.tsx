@@ -1289,7 +1289,7 @@ describe("DashboardPage", () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: `Поделиться формой ${title}` }));
     const dialog = screen.getByRole("dialog", { name: `Поделиться формой ${title}` });
-    expect(within(dialog).getByText(/Форма закрыта/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("note")).toHaveTextContent("Приём ответов закрыт");
     await userEvent.click(within(dialog).getByRole("tab", { name: "Код для сайта" }));
     const field = within(dialog).getByRole("textbox", { name: "Код для встраивания" }) as HTMLTextAreaElement;
     const parsed = new DOMParser().parseFromString(field.value, "text/html");

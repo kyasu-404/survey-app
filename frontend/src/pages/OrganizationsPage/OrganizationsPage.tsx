@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { Presence } from "../../shared/ui/Presence";
 import { AnimatedTabs } from "../../shared/ui/AnimatedTabs";
 import { useId, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
@@ -73,7 +74,9 @@ function OrganizationEditModal({
             if (!isSaving) void onSave();
           }}
         >
-          <h3 id={titleId} className="users-modal-title">{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
+          <ModalHeading onClose={onClose} disabled={isSaving} lightOnly>
+            <h3 id={titleId} className="users-modal-title">{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
+          </ModalHeading>
           <label>
             <span>Тип ОУ</span>
             <select

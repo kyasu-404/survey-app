@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { useId } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useModalSurface } from "../../../shared/ui/useModalSurface";
@@ -18,7 +19,9 @@ export function DeleteFormModal({ form, isPending, onCancel, onConfirm }: Delete
     <dialog ref={dialog} className="modal-card card dashboard-delete-modal"
       aria-labelledby={titleId} aria-describedby={descriptionId}
       onCancel={event => { event.preventDefault(); if (!isPending) onCancel(); }}>
-      <h3 className="dashboard-delete-modal-title" id={titleId}>Удаление формы</h3>
+      <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+        <h3 className="dashboard-delete-modal-title" id={titleId}>Удаление формы</h3>
+      </ModalHeading>
       <p className="dashboard-delete-modal-copy" id={descriptionId}>Удалить форму «{form.title}»? Это действие нельзя отменить.</p>
       <div className="dashboard-delete-modal-actions">
         <button type="button" className="app-button" onClick={onCancel} disabled={isPending}>

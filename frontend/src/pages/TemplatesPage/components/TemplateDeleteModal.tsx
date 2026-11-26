@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { useId } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
@@ -24,7 +25,9 @@ export function TemplateDeleteModal({ isPending, onCancel, onConfirm, template }
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="dashboard-delete-modal-title">Удаление шаблона</h3>
+        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+          <h3 id={titleId} className="dashboard-delete-modal-title">Удаление шаблона</h3>
+        </ModalHeading>
         <p className="dashboard-delete-modal-copy">Удалить шаблон «{template.title}»? Это действие нельзя отменить.</p>
         <div className="dashboard-delete-modal-actions">
           <button type="button" className="app-button" onClick={onCancel} disabled={isPending}>

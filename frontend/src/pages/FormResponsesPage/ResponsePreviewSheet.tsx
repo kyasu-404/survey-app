@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { Suspense } from "react";
 import type { SurveyForm } from "../../entities/survey/types";
 import type { SurveyResponse } from "../../entities/response/types";
@@ -17,10 +18,9 @@ export function ResponsePreviewSheet({ form, response, label, initialPageNo, onC
       const r = event.currentTarget.getBoundingClientRect();
       if (event.clientX < r.left || event.clientX > r.right) onClose();
     }}>
-    <div className="response-preview-header">
+    <ModalHeading className="response-preview-header" onClose={onClose} closeClassName="responses-export-button" graphiteText="Закрыть">
       <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
-      <button type="button" className="responses-export-button" onClick={onClose}>Закрыть</button>
-    </div>
+    </ModalHeading>
     <SurveyRuntimeSurface className="response-preview-body response-preview-builder-palette">
       <Suspense fallback={<Skeleton className="response-preview-renderer-skeleton" />}>
         <LazySurveyRenderer schema={{ ...form.schema, title: form.title }} theme={form.theme} formId={form.id}

@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { useId } from "react";
 import { NEW_PASSWORD_MIN_LENGTH } from "../../../shared/lib/passwordPolicy";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
@@ -40,7 +41,9 @@ export function PasswordModal({
             if (!isPending && !passwordError) onChangePassword();
           }}
         >
-          <h3 id={titleId} className="users-modal-title">{modal.title}</h3>
+          <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+            <h3 id={titleId} className="users-modal-title">{modal.title}</h3>
+          </ModalHeading>
           <label className="deadline-field">
             <span>Новый пароль</span>
             <input

@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { useId } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
@@ -24,7 +25,9 @@ export function DeleteUserModal({ isPending, modal, onCancel, onConfirm }: Delet
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="users-modal-title">Удаление пользователя</h3>
+        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+          <h3 id={titleId} className="users-modal-title">Удаление пользователя</h3>
+        </ModalHeading>
         <p className="users-modal-copy">Вы уверены, что хотите удалить пользователя {modal.userName}?</p>
         <p className="users-modal-copy users-modal-copy-danger">
           Внимание: вместе с пользователем удалятся все созданные им формы. Если формы нужны - лучше просто отключить пользователя.

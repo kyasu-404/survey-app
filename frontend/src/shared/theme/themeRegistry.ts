@@ -27,12 +27,12 @@ const themeIds = ["sand", "graphite"] as const satisfies readonly ThemeId[];
 const palettes: Record<ThemeId, AppThemeTokens> = {
   sand: {
     label: "Светлая",
-    accent: "#0b57d0",
-    accentHover: "#0842a0",
-    bg: "#eeeae5",
-    surface: "#e7ddd3",
-    text: "#2f2925",
-    muted: "#6d655f",
+    accent: "#9b442c",
+    accentHover: "#7d3523",
+    bg: "#faf7f1",
+    surface: "#f1ebe3",
+    text: "#191715",
+    muted: "#5f564c",
   },
   graphite: {
     label: "Тёмная",
@@ -60,16 +60,16 @@ type CreatorThemeTokens = {
 
 const creatorPalettes: Record<ThemeId, CreatorThemeTokens> = {
   sand: {
-    toolbar: "#fcfaf7",
-    panel: "#fffdf9",
-    panelMuted: "#ece7e2",
-    workspace: "#f4f2ef",
-    control: "#ffffff",
-    border: "#d6d0ca",
-    text: "#2f2925",
-    textMuted: "#6d655f",
-    accent: "#0b57d0",
-    accentHover: "#0842a0",
+    toolbar: "#fffefc",
+    panel: "#f4efe8",
+    panelMuted: palettes.sand.surface,
+    workspace: "#eee7dd",
+    control: "#fffefc",
+    border: "#dcd3c8",
+    text: palettes.sand.text,
+    textMuted: palettes.sand.muted,
+    accent: palettes.sand.accent,
+    accentHover: palettes.sand.accentHover,
   },
   graphite: {
     toolbar: "#1e1f20",

@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { useId } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
@@ -29,7 +30,9 @@ export function ResponseLimitModal({ editor, isPending, onCancel, onClear, onSav
         aria-labelledby={titleId}
       >
         <form noValidate onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-          <h3 id={titleId} className="deadline-modal-title">Ограничение ответов</h3>
+          <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+            <h3 id={titleId} className="deadline-modal-title">Ограничение ответов</h3>
+          </ModalHeading>
           <p className="deadline-modal-subtitle">{editor.form.title}</p>
           <label className="deadline-field">
             <span>Максимум ответов</span>

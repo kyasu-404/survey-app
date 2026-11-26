@@ -1,4 +1,5 @@
 import {SectionTabs} from '../../shared/ui/SectionTabs';
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { OnlyofficeSettingsSection } from "./OnlyofficeSettingsSection";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -472,10 +473,12 @@ export default function SettingsPage() {
 
               {isCleanupConfirmationOpen && (
                 <div className="settings-cleanup-confirmation" role="alertdialog" aria-labelledby="cleanup-confirmation-title">
-                  <div>
-                    <strong id="cleanup-confirmation-title">Запустить очистку файлов?</strong>
-                    <p>Будут удалены только неподтверждённые объекты старше {retentionDays} дней.</p>
-                  </div>
+                  <ModalHeading onClose={() => setIsCleanupConfirmationOpen(false)} disabled={isRunningCleanup} lightOnly>
+                    <div>
+                      <strong id="cleanup-confirmation-title">Запустить очистку файлов?</strong>
+                      <p>Будут удалены только неподтверждённые объекты старше {retentionDays} дней.</p>
+                    </div>
+                  </ModalHeading>
                   <div className="settings-cleanup-confirmation-actions">
                     <button type="button" className="app-button" disabled={isRunningCleanup} onClick={() => setIsCleanupConfirmationOpen(false)}>
                       Отмена

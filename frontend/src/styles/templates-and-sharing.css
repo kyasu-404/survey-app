@@ -269,7 +269,7 @@ button.dashboard-status-trigger-glossy:focus-visible {
   gap: 6px;
   min-height: 34px;
   padding: 7px 10px;
-  border-radius: 8px !important;
+  border-radius: var(--templates-action-radius, 8px) !important;
 }
 
 .templates-use-button {

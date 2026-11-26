@@ -373,7 +373,7 @@ describe("SurveyBuilder", () => {
     registerElement.mockClear();
   });
 
-  it("applies the beige Survey Creator UI theme independently of the survey palette", async () => {
+  it("applies the light terracotta Creator UI theme independently of the survey palette", async () => {
     renderBuilder();
 
     await waitFor(() => {
@@ -384,11 +384,11 @@ describe("SurveyBuilder", () => {
           iconSet: "v2",
           isLight: true,
           cssVariables: expect.objectContaining({
-            "--sjs-primary-backcolor": "#0b57d0",
-            "--sjs-general-backcolor": "#ffffff",
-            "--sjs-general-forecolor": "#2f2925",
-            "--sjs-special-background": "#ece7e2",
-            "--sjs2-color-utility-surface-designer": "#f4f2ef",
+            "--sjs-primary-backcolor": "#9b442c",
+            "--sjs-general-backcolor": "#fffefc",
+            "--sjs-general-forecolor": "#191715",
+            "--sjs-special-background": "#f1ebe3",
+            "--sjs2-color-utility-surface-designer": "#eee7dd",
           }),
         }),
       );
@@ -1302,10 +1302,10 @@ describe("SurveyBuilder", () => {
     const appCss = readAppCss();
 
     expect(appCss).toMatch(
-      /\.builder-creator-shell\s+\.sd-question__title\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/s,
+      /\.builder-creator-shell\s+\.sd-question__title:where\(:not\(\.survey-renderer \*\)\)\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/s,
     );
     expect(appCss).toMatch(
-      /\.builder-creator-shell\s+\.sd-question__required-text\s*\{[^}]*white-space:\s*nowrap/s,
+      /\.builder-creator-shell\s+\.sd-question__required-text:where\(:not\(\.survey-renderer \*\)\)\s*\{[^}]*white-space:\s*nowrap/s,
     );
     expect(appCss).not.toMatch(/\.survey-page-card\s+\.sd-question__title\s*\{[^}]*font-(?:size|weight):/s);
     expect(appCss).toMatch(

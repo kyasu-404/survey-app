@@ -1,9 +1,9 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useRef, useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { safeAnnouncementUrl } from "../../entities/announcement/AnnouncementContent";
 import { formatDateTimeLocalValue } from "../../shared/lib/dateTime";
 import { getErrorMessage } from "../../shared/lib/error";
-import { Icon } from "../../shared/ui/Icon";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 import { SectionTabs } from "../../shared/ui/SectionTabs";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
@@ -123,10 +123,9 @@ export function AnnouncementEditor({ row, onClose, onSaved, onSaveError, onReloa
   return <dialog className="card modal-card activity-rule-dialog announcement-editor-dialog" ref={dialog} aria-labelledby="announcement-editor-title"
     onCancel={event => { event.preventDefault(); if (!save.isPending) onClose(); }}>
     <form noValidate onSubmit={submit} onChange={() => { if (!hasConflict) setError(""); }} className="announcement-editor-form">
-      <header className="activity-heading">
+      <ModalHeading className="activity-heading" onClose={onClose} disabled={save.isPending}>
         <h2 id="announcement-editor-title">{row ? "Редактировать объявление" : "Новое объявление"}</h2>
-        <button type="button" className="app-button icon-button" aria-label="Закрыть" disabled={save.isPending} onClick={onClose}><Icon name="close" /></button>
-      </header>
+      </ModalHeading>
       <SectionTabs id="announcement-editor" label="Режим редактора" tabs={editorTabs} value={tab} onChange={setTab} />
       <div className="activity-editor-body" role="tabpanel" id="announcement-editor-panel-edit"
         aria-labelledby="announcement-editor-tab-edit" hidden={tab !== "edit"}>

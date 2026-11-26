@@ -114,9 +114,7 @@ a:hover {
   text-decoration: none;
 }
 
-input:focus,
-select:focus,
-textarea:focus,
+:is(input, select, textarea):where(:not(.survey-renderer *)):focus,
 .app-button:focus-visible,
 .button-link:focus-visible,
 .button-primary:focus-visible,

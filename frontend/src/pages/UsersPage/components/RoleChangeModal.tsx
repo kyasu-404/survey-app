@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useLegacyModalDialog } from "../../../shared/ui/useLegacyModalDialog";
 import type { RoleChangeModalState } from "../types";
@@ -27,9 +28,11 @@ export function RoleChangeModal({ isPending, modal, onCancel, onConfirm }: RoleC
         aria-describedby="users-role-change-description"
         tabIndex={-1}
       >
-        <h3 id="users-role-change-title" className="users-modal-title">
-          Смена роли пользователя
-        </h3>
+        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+          <h3 id="users-role-change-title" className="users-modal-title">
+            Смена роли пользователя
+          </h3>
+        </ModalHeading>
         <p id="users-role-change-description" className="users-modal-copy">
           Изменить роль пользователя {modal.userName} с <strong>{modal.currentRole}</strong> на{" "}
           <strong>{modal.nextRole}</strong>?

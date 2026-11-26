@@ -4,7 +4,7 @@
 .app-shell-login.app-shell-monochrome,
 .app-shell-login .app-main-login {
   color: #18181b;
-  background: linear-gradient(145deg, #f4f4f5 0%, #e4e4e7 100%) !important;
+  background: var(--survey-page-backdrop) !important;
   color-scheme: light;
 }
 

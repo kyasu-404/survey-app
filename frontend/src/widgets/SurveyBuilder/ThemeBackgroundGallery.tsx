@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   SURVEY_BACKGROUND_ACCEPT,
@@ -154,13 +155,12 @@ export function ThemeBackgroundGallery({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <div className="theme-background-modal-header">
+        <ModalHeading className="theme-background-modal-header" onClose={onClose} closeClassName="theme-background-close" graphiteText="Закрыть">
           <div>
             <h3 id={titleId}>Галерея фонов</h3>
             <p>Общие фоны доступны всем. Пользовательские принадлежат этой форме.</p>
           </div>
-          <button type="button" className="theme-background-close" onClick={onClose}>Закрыть</button>
-        </div>
+        </ModalHeading>
 
         {isLoading ? (
           <div className="theme-background-loading" role="status">

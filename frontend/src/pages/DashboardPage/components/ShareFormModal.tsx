@@ -11,6 +11,7 @@ import { useModalSurface } from "../../../shared/ui/useModalSurface";
 import { SectionTabs } from "../../../shared/ui/SectionTabs";
 import { PersonalLinksPanel } from "./PersonalLinksPanel";
 import { Icon } from "../../../shared/ui/Icon";
+import { ModalHeading } from "../../../shared/ui/ModalHeading";
 
 const MailComposer = lazy(() => import("../../../features/mail-composer/MailComposer").then(module => ({ default: module.MailComposer })));
 
@@ -83,17 +84,22 @@ export function ShareFormModal({ form, initialTab = "link", onClose }: {
         const rect = event.currentTarget.getBoundingClientRect();
         if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
       }}>
-      <div className="dashboard-qr-modal-header">
+      <ModalHeading className="dashboard-qr-modal-header" closeClassName="dashboard-qr-close-button" label="Закрыть окно поделиться" disabled={mailBusy} onClose={close}>
         <div>
           <h2 className="dashboard-qr-modal-title">Поделиться формой</h2>
           <p className="dashboard-qr-modal-copy">{title}</p>
         </div>
-        <button type="button" className="dashboard-qr-close-button" aria-label="Закрыть окно поделиться" disabled={mailBusy} onClick={close}><Icon name="close" /></button>
-      </div>
+      </ModalHeading>
       <SectionTabs id="form-share" label="Способ поделиться" tabs={[
         { value: "link", label: "Ссылка" }, { value: "qr", label: "QR-код" }, { value: "embed", label: "Код для сайта" }, ...(isAuthor ? [{ value: "mail" as const, label: "Рассылка" }] : []),
       ]} value={tab} disabled={mailBusy} onChange={next => { setTab(next); if (next === "mail") setMailVisited(true); }} />
-      {!form.is_public && <p className="dashboard-share-notice">Форма закрыта. Откройте её для приёма ответов, чтобы посетители могли её заполнить.</p>}
+      {!form.is_public && <div className="dashboard-share-notice" role="note">
+        <Icon name="info" size={20} />
+        <div>
+          <strong>Приём ответов закрыт</strong>
+          <p>Респонденты не смогут заполнить форму, пока вы не откроете приём ответов.</p>
+        </div>
+      </div>}
       <div className="dashboard-share-panel" role="tabpanel" id="form-share-panel-link" aria-labelledby="form-share-tab-link" hidden={tab !== "link"}>
         <label className="dashboard-share-field">
           <span>Ссылка на форму</span>

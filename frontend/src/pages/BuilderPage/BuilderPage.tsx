@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { Presence } from "../../shared/ui/Presence";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +39,9 @@ function AnsweredFormWarningModal({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="builder-reset-title">У формы уже есть ответы</h3>
+        <ModalHeading onClose={onCancel} disabled={isCopying} lightOnly>
+          <h3 id={titleId} className="builder-reset-title">У формы уже есть ответы</h3>
+        </ModalHeading>
         <p className="builder-template-subtitle">
           Форму можно открыть в безопасном режиме. Изменение типов вопросов,
           технических идентификаторов и удаление существующих полей будет недоступно.

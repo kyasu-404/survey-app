@@ -1,3 +1,4 @@
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -21,10 +22,9 @@ function PreferencesDialog({ userId, onClose }: { userId: string; onClose: () =>
   const dialog = useModalSurface();
   return <dialog ref={dialog} aria-labelledby="notification-settings-title" className="card modal-card notification-preferences-dialog"
     onCancel={event => { event.preventDefault(); onClose(); }}>
-    <header className="activity-heading">
+    <ModalHeading className="activity-heading" onClose={onClose} label="Закрыть настройки">
       <h2 id="notification-settings-title">Настройки уведомлений</h2>
-      <button type="button" className="app-button icon-button" onClick={onClose} aria-label="Закрыть настройки"><Icon name="close" /></button>
-    </header>
+    </ModalHeading>
     <NotificationPreferences userId={userId} onSaved={onClose} />
   </dialog>;
 }

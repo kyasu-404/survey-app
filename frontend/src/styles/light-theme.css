@@ -1,0 +1,296 @@
+.modal-close-graphite-text { display: none; }
+:root[data-theme="graphite"] .modal-close-graphite-text { display: inline; }
+:root[data-theme="graphite"] :is(.modal-close-button-light-only, .modal-close-button:has(.modal-close-graphite-text) > .modal-close-icon) { display: none; }
+:root[data-theme="graphite"] .modal-heading-light-only { display: contents; }
+
+@media screen {
+  :root[data-theme="sand"] .modal-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding-inline: 0;
+    text-align: start;
+  }
+
+  :root[data-theme="sand"] .modal-heading > :first-child { min-width: 0; }
+  :root[data-theme="sand"] .modal-heading > :is(h2, h3) { margin-block-start: 7px; }
+  :root[data-theme="sand"] .modal-heading :is(h2, h3, p) { text-align: start; }
+
+  :root[data-theme="sand"] :is(.deadline-modal-subtitle, .users-modal-copy, .dashboard-delete-modal-copy) { text-align: start; }
+
+  :root[data-theme="sand"] .modal-heading .modal-close-button {
+    position: static;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 36px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid var(--theme-border);
+    border-radius: 50%;
+    color: var(--theme-text);
+    background: var(--theme-card-background);
+    box-shadow: none;
+    transform: none;
+  }
+
+  :root[data-theme="sand"] .modal-heading .modal-close-button:not(:disabled):hover { background: var(--theme-surface-muted); }
+
+  :root[data-theme="sand"] .rule-editor-scenario > .activity-dialog-actions { display: none; }
+
+  :root[data-theme="sand"] :is(.dashboard-share-notice, .builder-response-settings-modal, .builder-organization-settings-modal) {
+    background: #f4e8d4;
+  }
+
+  :root[data-theme="sand"] .dashboard-share-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #754713;
+  }
+
+  :root[data-theme="sand"] .dashboard-share-notice p { margin: 3px 0 0; }
+
+  :root[data-theme="sand"] .builder-response-settings-modal { border-color: var(--theme-border); }
+  :root[data-theme="sand"] .builder-response-settings-modal > div > span { color: var(--theme-text-muted); }
+
+  :root[data-theme="sand"] .app-shell .sidebar {
+    border-inline-end-color: var(--theme-border);
+  }
+
+  :root[data-theme="sand"] .sidebar .nav-link-active {
+    color: var(--theme-accent-strong);
+    font-weight: 700;
+  }
+
+  :root[data-theme="sand"] :is(.sidebar-nav .sidebar-nav-icon, .notification-card-category .material-symbols-outlined, .rule-scenario .material-symbols-outlined) {
+    color: var(--theme-icon);
+    opacity: 1;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(h1, .dashboard-form-title, .notification-card-title, [role="tab"][aria-selected="true"]) {
+    font-weight: 700;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.button-primary, .templates-use-button,
+    .organizations-toolbar > .responses-export-button:not(.organizations-file-button, .organizations-delete-all-button),
+    .deadline-modal-actions > :is(.deadline-save-button, .deadline-action-save-button, .users-yellow-button)
+  ):not(:disabled) {
+    color: var(--theme-accent-foreground);
+    border-color: var(--theme-action);
+    background: var(--theme-action);
+    font-weight: 650;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.button-primary, .templates-use-button,
+    .organizations-toolbar > .responses-export-button:not(.organizations-file-button, .organizations-delete-all-button),
+    .deadline-modal-actions > :is(.deadline-save-button, .deadline-action-save-button, .users-yellow-button)
+  ):not(:disabled):hover {
+    border-color: var(--theme-action-hover);
+    background: var(--theme-action-hover);
+  }
+
+  :root[data-theme="sand"] .app-shell button:disabled:where(:not(.builder-creator-shell *, .survey-renderer *, .users-status-button.user-status-active)) {
+    color: var(--theme-closed-text);
+    border-color: var(--theme-border);
+    background: var(--theme-closed-background);
+    box-shadow: none;
+    opacity: 1;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]), select, textarea, .dashboard-search-input):where(:not(.builder-creator-shell *, .survey-renderer *)) {
+    border-color: var(--theme-outline);
+  }
+
+  :root[data-theme="sand"] .app-shell .dashboard-toolbar .dashboard-search-input:not(:focus) {
+    border-color: var(--theme-border);
+  }
+
+  :root[data-theme="sand"] .app-shell :is(input, textarea):where(:not(.survey-renderer *))::placeholder {
+    color: var(--theme-text-muted);
+    font-weight: 400;
+    opacity: 1;
+  }
+
+  :root[data-theme="sand"] .deadline-select-placeholder {
+    color: var(--theme-text-muted);
+    font-weight: 400;
+  }
+
+  :root[data-theme="sand"] :is(.deadline-field, .dashboard-share-field, .organization-edit-modal label) > span:not(.deadline-select-placeholder) {
+    font-weight: 600;
+  }
+
+  :root[data-theme="sand"] .app-shell .settings-toggle:not(:disabled) {
+    background: var(--theme-border);
+    box-shadow: inset 0 0 0 1px var(--theme-outline);
+  }
+
+  :root[data-theme="sand"] .app-shell .settings-toggle[aria-checked="true"]:not(:disabled) {
+    background: var(--theme-accent);
+    box-shadow: none;
+  }
+
+  :root[data-theme="sand"] .app-shell input:is([type="checkbox"], [type="radio"]):where(:not(.builder-creator-shell *, .survey-renderer *)) {
+    accent-color: var(--theme-accent);
+  }
+
+  :root[data-theme="sand"] .app-shell :is(a, button, input, select, textarea, [role="tab"]):where(:not(.builder-creator-shell *, .survey-renderer *)):focus-visible {
+    outline: 2px solid var(--theme-focus);
+    outline-offset: 2px;
+  }
+
+  :root[data-theme="sand"] .app-shell .dashboard-responses-link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active) {
+    color: var(--theme-success-text);
+    background: var(--theme-success-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .users-status-button.user-status-active:disabled { opacity: 1; }
+
+  :root[data-theme="sand"] .app-shell .dashboard-status-pill-closed {
+    color: var(--theme-closed-text);
+    background: var(--theme-closed-background);
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .dashboard-status-pill-closed, .users-status-button)::before {
+    margin-inline-end: .2em;
+    font: 15px / 1 "Material Symbols Outlined";
+  }
+
+  :root[data-theme="sand"] .app-shell .dashboard-status-trigger-glossy::before {
+    position: static;
+    flex: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active)::before { content: "\f0be" / ""; }
+  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-closed, .users-status-button.user-status-disabled)::before { content: "\e5cd" / ""; }
+
+  :root[data-theme="sand"] .app-shell .templates-card {
+    background: var(--theme-card-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .templates-card::after { opacity: 1; }
+
+  :root[data-theme="sand"] .app-shell .templates-card-actions { --templates-action-radius: 22px; }
+
+  :root[data-theme="sand"] .form-menu-item-delete:not(:disabled):is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--theme-danger-background) 88%, var(--theme-danger-text));
+  }
+
+  :root[data-theme="sand"] .app-shell .organizations-delete-all-button:not(:disabled) {
+    border-color: var(--theme-danger-border);
+    color: var(--theme-danger-text);
+    background: var(--theme-danger-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .organizations-delete-all-button:not(:disabled):is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--theme-danger-background) 88%, var(--theme-danger-text));
+  }
+
+  :root[data-theme="sand"] .app-shell :is(
+    .organizations-page-card > .organizations-type-switcher,
+    .preferences-page > .section-tabs,
+    .templates-segmented-control
+  ) {
+    width: fit-content;
+    max-width: 100%;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--theme-border);
+    border-radius: 12px;
+    background: var(--theme-surface-muted);
+  }
+
+  :root[data-theme="sand"] .app-shell :is(
+    .organizations-page-card > .organizations-type-switcher,
+    .preferences-page > .section-tabs,
+    .templates-segmented-control
+  )::before {
+    border-radius: 8px;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.organizations-page-card, .preferences-page) .organizations-type-switcher button {
+    border-radius: 8px;
+  }
+
+  :root[data-theme="sand"] .app-shell .preferences-page > .section-tabs { margin-bottom: 0; }
+
+  :root[data-theme="sand"] .app-shell .rule-scenario {
+    border-color: var(--theme-outline);
+    background: var(--theme-card-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .rule-scenario:hover { background: var(--theme-panel-background); }
+  :root[data-theme="sand"] .app-shell .rule-scenario small { color: var(--theme-text-muted); }
+  :root[data-theme="sand"] .app-shell .settings-branding-content { background: var(--theme-card-background); }
+  :root[data-theme="sand"] .app-shell .response-report-summary > div { background: var(--theme-panel-background); }
+  :root[data-theme="sand"] .app-shell .response-report-coverage-note {
+    border-inline-start: 3px solid var(--theme-warning-text);
+    color: var(--theme-warning-text);
+    background: var(--theme-warning-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .response-report-value-track { background: var(--theme-border); }
+  :root[data-theme="sand"] .app-shell .response-report-value-track > span { background: var(--theme-accent); }
+
+  :root[data-theme="sand"] .app-shell .responses-page-table-shell {
+    border-radius: 12px;
+    scrollbar-color: var(--theme-outline) var(--theme-panel-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .responses-page-empty {
+    padding: 24px 16px;
+    border: 1px dashed var(--theme-border);
+    border-radius: 14px;
+    background: var(--theme-surface);
+    box-shadow: none;
+  }
+
+  :root[data-theme="sand"] .app-shell .responses-page-empty h4 { font-size: 1.1rem; }
+
+  :root[data-theme="sand"] .app-shell .responses-page-empty-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 14px;
+    border-radius: 12px;
+    color: var(--theme-warning-text);
+    background: var(--theme-selected-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .users-table-shell { border-radius: 12px; }
+
+  :root[data-theme="sand"] .app-shell :is(.users-table, .organizations-table) :is(th, td) {
+    border-inline-width: 0;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) th {
+    color: var(--theme-text);
+    background: var(--theme-surface);
+    font-weight: 700;
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody td { background: var(--theme-card-background); }
+  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:hover td { background: var(--theme-row-hover); }
+
+  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) td {
+    background: var(--theme-selected-background);
+  }
+
+  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) > td:first-child {
+    box-shadow: inset 3px 0 var(--theme-accent);
+  }
+}

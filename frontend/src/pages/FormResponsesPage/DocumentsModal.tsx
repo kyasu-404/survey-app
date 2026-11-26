@@ -34,7 +34,9 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
   showToast('Задание добавлено в очередь. Окно можно закрыть.','success');
  }
  return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();if(menu)setMenu(null);else onClose();}} aria-labelledby="documents-title">
-  <header><div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div><button type="button" className="app-button" onClick={onClose} aria-label="Закрыть документы">×</button></header>
+  <ModalHeading onClose={onClose} label="Закрыть документы" closeClassName="app-button" graphiteText="×">
+   <div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div>
+  </ModalHeading>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>
   <div ref={templatesPanel} className="office-tab-panel" role="tabpanel" id="documents-panel-templates" aria-labelledby="documents-tab-templates" hidden={tab!=='templates'}>
    <p className="office-muted">Загрузите XLSX или DOCX и выберите места для ответов. Каждый ответ станет отдельным документом.</p>
@@ -73,3 +75,4 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
   <div className="office-tab-panel" role="tabpanel" id="documents-panel-results" aria-labelledby="documents-tab-results" hidden={tab!=='results'}>{tab==='results' && <DocumentResults formId={formId} focusId={focusResult}/>}</div>
  </dialog>;
 }
+import { ModalHeading } from "../../shared/ui/ModalHeading";

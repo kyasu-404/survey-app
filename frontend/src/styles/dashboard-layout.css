@@ -670,6 +670,8 @@
   margin-top: 0;
 }
 
+.responses-page-empty .responses-page-empty-icon { display: none; }
+
 .responses-page-empty-actions {
   display: flex;
   flex-wrap: wrap;
