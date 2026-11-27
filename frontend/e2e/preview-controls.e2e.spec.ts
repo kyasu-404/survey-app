@@ -6,8 +6,15 @@ const buttonStyle = (button: Locator) => button.evaluate(element => {
   return { background: style.backgroundImage, color: style.color, radius: style.borderRadius, height: style.minHeight };
 });
 
+async function expectRoundClose(button: Locator) {
+  await expect(button.locator('[data-icon="close"]')).toBeVisible();
+  await expect(button).toHaveCSS("width", "36px");
+  await expect(button).toHaveCSS("height", "36px");
+  await expect(button).toHaveCSS("border-radius", "50%");
+}
+
 for (const theme of ["sand", "graphite"]) {
-  test(`preview controls match export buttons and use fast entry and exit (${theme})`, async ({ page }, testInfo) => {
+  test(`preview close controls are consistent and use fast entry and exit (${theme})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.addInitScript(theme => localStorage.setItem("survey-app:theme", theme), theme);
     const app = await openSurveyApp(page, { responseCount: 1, elements: [{ type: "text", name: "name", title: "Имя" }] });
@@ -20,9 +27,11 @@ for (const theme of ["sand", "graphite"]) {
     if (theme === "sand") await expect(response).toHaveCSS("background-color", "rgb(255, 255, 255)");
     await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
     await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
-    expect(await buttonStyle(response.getByRole("button", { name: "Закрыть", exact: true }))).toEqual(expected);
+    const closeResponse = response.getByRole("button", { name: "Закрыть", exact: true });
+    if (theme === "sand") await expectRoundClose(closeResponse);
+    else expect(await buttonStyle(closeResponse)).toEqual(expected);
     await expect(response).toHaveCSS("animation-duration", "0.15s");
-    await response.getByRole("button", { name: "Закрыть", exact: true }).click();
+    await closeResponse.click();
     await expect(response).toHaveCount(0);
     const template = { ...app.form, id: "40000000-0000-4000-8000-000000000001", title: "Проверка шаблона", form_type: "template" };
     await page.route("**/list_forms_keyset*", route => route.fulfill({ json: [template] }));
@@ -41,8 +50,10 @@ for (const theme of ["sand", "graphite"]) {
     await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
     await expect.poll(() => preview.evaluate(el => Math.abs(el.getBoundingClientRect().right - innerWidth))).toBeLessThan(1);
     await preview.evaluate(el => { el.scrollTop = el.scrollHeight; });
-    await expect(preview.getByRole("button", { name: "Закрыть", exact: true })).toBeVisible();
-    expect(await buttonStyle(preview.getByRole("button", { name: "Закрыть", exact: true }))).toEqual(expected);
+    const closeTemplate = preview.getByRole("button", { name: "Закрыть", exact: true });
+    await expect(closeTemplate).toBeVisible();
+    if (theme === "sand") await expectRoundClose(closeTemplate);
+    else expect(await buttonStyle(closeTemplate)).toEqual(expected);
     await expect(preview.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", badgeBackground);
     await expect(preview).toHaveCSS("animation-duration", "0.15s");
     await page.screenshot({ path: testInfo.outputPath("template-preview.png") });

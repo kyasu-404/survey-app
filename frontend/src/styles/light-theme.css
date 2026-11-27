@@ -145,6 +145,10 @@
     outline-offset: 2px;
   }
 
+  :root[data-theme="sand"] .app-shell .announcement-compose :is(button, textarea):focus-visible {
+    outline-offset: -2px;
+  }
+
   :root[data-theme="sand"] .app-shell .dashboard-responses-link {
     font-weight: 600;
     text-decoration: none;
@@ -225,6 +229,10 @@
     border-radius: 8px;
   }
 
+  :root[data-theme="sand"] .app-shell .templates-segmented-control .templates-segment {
+    font-weight: 700;
+  }
+
   :root[data-theme="sand"] .app-shell .preferences-page > .section-tabs { margin-bottom: 0; }
 
   :root[data-theme="sand"] .app-shell .rule-scenario {
@@ -281,6 +289,22 @@
     color: var(--theme-text);
     background: var(--theme-surface);
     font-weight: 700;
+  }
+
+  :root[data-theme="sand"] .app-shell .dashboard-forms-table :is(th, td):first-child {
+    padding-inline: 8px;
+  }
+
+  :root[data-theme="sand"] .app-shell .responses-table thead th.responses-table-page-column {
+    background: var(--theme-selected-background);
+  }
+
+  :root[data-theme="sand"] .app-shell .responses-table :is(th, td).responses-table-section-column {
+    border-inline-start-color: var(--theme-outline);
+  }
+
+  :root[data-theme="sand"] .app-shell .responses-table thead th.responses-table-section-column {
+    font-weight: 800;
   }
 
   :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody td { background: var(--theme-card-background); }

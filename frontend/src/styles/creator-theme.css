@@ -264,6 +264,11 @@
 
 :root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu { border-block-end-width: 0; }
 
+/* Account for the matching lower border of the Property Grid header. */
+:root[data-theme="sand"] .builder-creator-shell .svc-top-bar {
+  border-block-end: 1px solid transparent;
+}
+
 :root[data-theme="sand"] .builder-creator-shell .svc-top-bar .svc-tabbed-menu {
   block-size: 100%;
 }

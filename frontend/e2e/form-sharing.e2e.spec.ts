@@ -36,9 +36,15 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await share.click();
     const dialog = page.getByRole("dialog", { name: "Поделиться формой Карточка 1" });
     await expect(dialog).toBeVisible();
-    const heading = await dialog.getByRole("heading", { name: "Поделиться формой", exact: true }).boundingBox();
-    const modal = await dialog.boundingBox();
-    expect(Math.abs(heading!.x + heading!.width / 2 - modal!.x - modal!.width / 2)).toBeLessThan(1);
+    const heading = dialog.getByRole("heading", { name: "Поделиться формой", exact: true });
+    const close = dialog.getByRole("button", { name: "Закрыть окно поделиться" });
+    await expect(heading).toHaveCSS("text-align", "start");
+    await expect(close.locator('[data-icon="close"]')).toBeVisible();
+    const [titleBox, tabsBox, closeBox] = await Promise.all([
+      heading.boundingBox(), dialog.getByRole("tablist").boundingBox(), close.boundingBox(),
+    ]);
+    expect(Math.abs(titleBox!.x - tabsBox!.x)).toBeLessThan(1);
+    expect(closeBox!.x).toBeGreaterThanOrEqual(titleBox!.x + titleBox!.width);
     await expect(dialog.getByRole("textbox", { name: "Ссылка на форму" })).toHaveValue(/\/form\/20000000-/);
     await dialog.getByRole("tab", { name: "QR-код" }).click();
     await expect(dialog.getByAltText("QR-код формы Карточка 1")).toBeVisible();
@@ -62,7 +68,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await expect(code).toHaveValue(/<iframe/);
     await expect(code).toHaveValue(/loading="lazy"/);
     await page.screenshot({ path: testInfo.outputPath("share-modal.png") });
-    await dialog.getByRole("button", { name: "Закрыть окно поделиться" }).click();
+    await close.click();
     await expect(dialog).toHaveCount(0);
     await page.getByRole("button", { name: "Показать таблицу" }).click();
     const row = page.locator(".dashboard-form-table-row").first();

@@ -84,7 +84,7 @@ for (const theme of ["sand", "graphite"]) {
     await expect(card).toHaveCSS("border-radius", "18px");
     await expect(card).toHaveCSS("border-left-width", "1px");
     await expect(card).not.toHaveCSS("box-shadow", "none");
-    await expect(grid.locator(".svc-side-bar__container-header svg use").first()).toHaveCSS("fill", theme === "sand" ? "rgb(109, 101, 95)" : "rgb(196, 199, 197)");
+    await expect(grid.locator(".svc-side-bar__container-header svg use").first()).toHaveCSS("fill", theme === "sand" ? "rgb(95, 86, 76)" : "rgb(196, 199, 197)");
     const layout = await grid.evaluate(el => {
       const card = el.querySelector(".svc-side-bar__container-content")!.getBoundingClientRect();
       const frame = el.closest(".svc-creator__side-bar--right")!.getBoundingClientRect();

@@ -1,5 +1,5 @@
 import { ModalHeading } from "../../../shared/ui/ModalHeading";
-import type { Dispatch, SetStateAction } from "react";
+import { useRef, type Dispatch, type SetStateAction } from "react";
 import type { UserRole } from "../../../entities/user/types";
 import { NEW_PASSWORD_MIN_LENGTH } from "../../../shared/lib/passwordPolicy";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
@@ -16,7 +16,8 @@ type CreateUserFormProps = {
 };
 
 export function CreateUserForm({ isCreatePending, passwordError, newUser, onCreateUser, onCancel, setNewUser }: CreateUserFormProps) {
-  const dialog = useModalSurface();
+  const nameInput = useRef<HTMLInputElement>(null);
+  const dialog = useModalSurface(nameInput);
   const cancel = () => { if (!isCreatePending) onCancel(); };
   return (
     <dialog ref={dialog} className="modal-card card users-create-modal" aria-labelledby="create-user-title"
@@ -31,7 +32,7 @@ export function CreateUserForm({ isCreatePending, passwordError, newUser, onCrea
       </ModalHeading>
       <form onSubmit={event => { event.preventDefault(); onCreateUser(); }}>
         <div className="users-create-grid">
-          <label className="deadline-field"><span>Имя</span><input required autoComplete="name" value={newUser.name} onChange={event => setNewUser(prev => ({ ...prev, name: event.target.value }))} placeholder="Имя" /></label>
+          <label className="deadline-field"><span>Имя</span><input ref={nameInput} required autoComplete="name" value={newUser.name} onChange={event => setNewUser(prev => ({ ...prev, name: event.target.value }))} placeholder="Имя" /></label>
           <label className="deadline-field"><span>Email</span><input required type="email" autoComplete="email" value={newUser.email} onChange={event => setNewUser(prev => ({ ...prev, email: event.target.value }))} placeholder="Email" /></label>
           <label className="deadline-field"><span>Пароль</span><input required type="password" autoComplete="new-password"
             value={newUser.password} onChange={event => setNewUser(prev => ({ ...prev, password: event.target.value }))}

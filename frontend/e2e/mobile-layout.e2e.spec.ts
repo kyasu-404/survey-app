@@ -66,8 +66,9 @@ for (const width of [320, 390]) {
     const confirm = dialog.getByRole("button", { name: "Удалить", exact: true });
     await expect(cancel).toBeVisible();
     await expect(confirm).toBeVisible();
-    await expect.poll(() => dialog.evaluate(async element => {
-      await Promise.all(element.getAnimations().map(animation => animation.finished));
+    const footer = dialog.locator(".dashboard-delete-modal-actions");
+    await expect.poll(() => footer.evaluate(async element => {
+      await Promise.all(element.closest("dialog")!.getAnimations().map(animation => animation.finished));
       const [cancel, confirm] = Array.from(element.querySelectorAll("button"), button => {
         const box = button.getBoundingClientRect();
         const text = document.createRange();

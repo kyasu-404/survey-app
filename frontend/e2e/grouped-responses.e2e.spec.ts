@@ -25,7 +25,7 @@ test("page and section titles stay distinct in responses, HTML, and bordered Exc
   await expect(page.locator(".responses-table th")).toHaveText(["", ...expectedHeaders]);
   await expect(page.locator("th.responses-table-page-column")).toHaveCount(2);
   await expect(page.locator("th.responses-table-section-column")).toHaveCount(2);
-  await expect(page.locator("th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(219, 234, 254)");
+  await expect(page.locator("th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(242, 227, 216)");
   await expect(page.locator("th.responses-table-section-column").first()).toHaveCSS("font-weight", "800");
   await expect(page.locator("td.responses-table-page-column, td.responses-table-section-column")).toHaveText(Array(8).fill(""));
   await page.screenshot({ path: testInfo.outputPath("grouped-responses.png"), fullPage: true });

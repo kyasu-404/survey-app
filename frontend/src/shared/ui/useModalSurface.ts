@@ -1,16 +1,17 @@
 import { lockBodyScroll } from "./lockBodyScroll";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 const controlsSelector = "button, a[href], input, select, textarea, details > summary:first-of-type, [tabindex]";
 const hiddenSelector = '[hidden], [inert], [aria-hidden="true"], details:not([open]) > :not(summary:first-of-type)';
 
-export function useModalSurface() {
+export function useModalSurface(initialFocus?: RefObject<HTMLElement>) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (!element.open) element.showModal();
+    initialFocus?.current?.focus({ preventScroll: true });
     const unlock = lockBodyScroll();
     const keepFocus = (event: KeyboardEvent) => {
       if (event.key !== "Tab" || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -34,6 +35,6 @@ export function useModalSurface() {
       unlock();
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
-  }, []);
+  }, [initialFocus]);
   return dialog;
 }

@@ -153,15 +153,15 @@ test("mobile sharing fits its content and primary actions retain touch targets",
 
 
 for (const theme of ["sand", "graphite"]) {
-  test(`${theme}: blue actions, green success and red errors keep distinct meanings`, async ({ page }, testInfo) => {
+  test(`${theme}: primary actions, green success and red errors keep distinct meanings`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
     const app = await openSurveyApp(page, { responseCount: 0 });
     const colors = theme === "sand"
-      ? { accent: "rgb(11, 87, 208)", success: "rgb(22, 101, 52)", danger: "rgb(185, 28, 28)" }
-      : { accent: "rgb(168, 199, 250)", success: "rgb(129, 201, 149)", danger: "rgb(242, 184, 181)" };
+      ? { primary: "rgb(36, 32, 29)", success: "rgb(22, 101, 52)", danger: "rgb(138, 58, 60)" }
+      : { primary: "rgb(168, 199, 250)", success: "rgb(129, 201, 149)", danger: "rgb(242, 184, 181)" };
     const primary = page.getByRole("link", { name: "Создать форму", exact: true });
-    await expect(primary).toHaveCSS("background-color", colors.accent);
+    await expect(primary).toHaveCSS("background-color", colors.primary);
     expect(await contrast(primary)).toBeGreaterThanOrEqual(4.5);
     const status = page.locator(".dashboard-status-pill-active").first();
     await expect(status).toHaveCSS("color", colors.success);
@@ -306,7 +306,7 @@ for (const theme of ["sand", "graphite"]) {
     await expect(page.locator(".organizations-table tbody tr")).toHaveCount(1);
     expect(await contrast(page.locator(".organizations-delete-all-button .toolbar-icon"))).toBeGreaterThanOrEqual(3);
     const organizationDelete = page.locator(".organization-delete-button");
-    await expect(organizationDelete).toHaveCSS("color", theme === "sand" ? "rgb(185, 28, 28)" : "rgb(242, 184, 181)");
+    await expect(organizationDelete).toHaveCSS("color", theme === "sand" ? "rgb(138, 58, 60)" : "rgb(242, 184, 181)");
     expect(await contrast(organizationDelete)).toBeGreaterThanOrEqual(4.5);
     await page.route("**/api/office/**", route => route.fulfill({ json: { enabled: false } }));
     await page.route("**/functions/v1/mail-admin", route => route.fulfill({ json: {} }));
@@ -347,11 +347,19 @@ for (const theme of ["sand", "graphite"]) {
       const { backgroundColor, borderColor, borderRadius, color, minHeight } = getComputedStyle(element);
       return { backgroundColor, borderColor, borderRadius, color, minHeight };
     });
-    const referenceStyle = await pillStyle(reference);
+    const referenceStyle = theme === "graphite" ? await pillStyle(reference) : null;
     await page.goto("/preferences");
     const notificationTab = page.getByRole("tab", { name: "Уведомления", exact: true });
     await expect(notificationTab).toHaveAttribute("aria-selected", "true");
-    expect(await pillStyle(notificationTab)).toEqual(referenceStyle);
+    if (theme === "sand") {
+      const tabs = page.getByRole("tablist", { name: "Разделы личных настроек" });
+      await expect(tabs).toHaveAttribute("data-indicator-ready", "true");
+      await expect(notificationTab).toHaveCSS("border-radius", "8px");
+      await expect(notificationTab).toHaveCSS("color", "rgb(255, 255, 255)");
+      expect(await tabs.evaluate(el => getComputedStyle(el, "::before").backgroundColor)).toBe("rgb(155, 68, 44)");
+    } else {
+      expect(await pillStyle(notificationTab)).toEqual(referenceStyle);
+    }
     expect((await notificationTab.boundingBox())!.width).toBeLessThan(200);
 
     await notificationTab.press("ArrowRight");
