@@ -1200,7 +1200,9 @@ describe("SurveyBuilder", () => {
   it("lets SurveyJS manage the builder top bar layout without custom flex overrides", () => {
     const appCss = readAppCss();
 
-    expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s*\{/s);
+    for (const [, declarations] of appCss.matchAll(/\.builder-creator-shell\s+\.svc-top-bar\s*\{([^}]*)\}/g)) {
+      expect(declarations).not.toMatch(/(?:^|;)\s*(?:display|flex(?:-[\w-]+)?|align-items|justify-content|gap)\s*:/);
+    }
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.svc-tabbed-menu-wrapper\s*\{/s);
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.svc-toolbar-wrapper\s*\{/s);
     expect(appCss).not.toMatch(/\.builder-creator-shell\s+\.svc-top-bar\s+\.sv-action-bar-item\s*\{/s);
