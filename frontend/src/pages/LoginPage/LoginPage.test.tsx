@@ -43,7 +43,7 @@ describe("LoginPage", () => {
   it("opens the linked response with a welcome toast even when auth state updates during login", async () => {
     vi.mocked(login).mockImplementationOnce(async () => {
       authState.user = { id: "user-1" };
-      return "Анна Иванова";
+      return { displayName: "Анна Иванова", userId: "user-1" };
     });
     const from = {
       pathname: "/dashboard/forms/form-id/responses",
@@ -57,7 +57,7 @@ describe("LoginPage", () => {
     }
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={[{ pathname: "/login", state: { from } }]}>
+      <MemoryRouter initialEntries={[{ pathname: "/login", state: { from, ownerId: "user-1" } }]}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path={from.pathname} element={<Destination />} />
@@ -68,6 +68,24 @@ describe("LoginPage", () => {
     await user.type(screen.getByLabelText("Пароль", { exact: true }), "password");
     await user.click(screen.getByRole("button", { name: "Войти" }));
     expect(await screen.findByText("?response=answer-id#details|Добро пожаловать, Анна Иванова")).toBeInTheDocument();
+  });
+
+  it("does not return a different account to the previous user's route", async () => {
+    authState.user = { id: "other-user" };
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/login", state: {
+        ownerId: "original-user",
+        from: { pathname: "/builder/private", search: "?edit=true", hash: "#draft" },
+      } }]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/dashboard/my" element={<p>Мои формы</p>} />
+          <Route path="/builder/private" element={<p>Чужой черновик</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Мои формы")).toBeInTheDocument();
+    expect(screen.queryByText("Чужой черновик")).not.toBeInTheDocument();
   });
 
   it("renders updated heading, stretched submit button, password visibility toggle, and password-manager attributes", async () => {

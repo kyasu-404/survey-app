@@ -17,6 +17,7 @@ import type {
   SurveyFormSummary,
   SurveySchema,
 } from "../types";
+import { SessionError } from "../../../shared/api/session";
 import { runRequest } from "../../../shared/api/request";
 import {
   createSurveyAssetFormId,
@@ -645,7 +646,7 @@ export async function updateFormSchema(
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+    throw new SessionError("missing");
   }
 
   // Existing custom images belong to the form's gallery. Changing the selected
@@ -756,7 +757,7 @@ export async function deleteForm(id: string) {
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+    throw new SessionError("missing");
   }
 
   const { error, response } = await runRequest(

@@ -39,7 +39,7 @@ describe("login", () => {
     fromProfiles.mockReturnValue(query);
 
     await expect(login("  anna@example.test  ", "  password  "))
-      .resolves.toBe("Анна Иванова");
+      .resolves.toEqual({ displayName: "Анна Иванова", userId: "user-1" });
     expect(authLogin).toHaveBeenCalledWith("anna@example.test", "  password  ");
     expect(fromProfiles).toHaveBeenCalledWith("profiles");
     expect(query.select).toHaveBeenCalledWith("name, is_disabled");
@@ -59,7 +59,7 @@ describe("login", () => {
     fromProfiles.mockReturnValue(query);
 
     await expect(login("anna@example.test", "password"))
-      .resolves.toBe("Анна");
+      .resolves.toEqual({ displayName: "Анна", userId: "user-1" });
   });
 
   it("signs out and rejects when the profile is marked disabled", async () => {

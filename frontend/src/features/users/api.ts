@@ -1,5 +1,6 @@
 import { supabase } from "../../shared/api/supabase";
 import type { UserProfile, UserRole } from "../../entities/user/types";
+import { SessionError } from "../../shared/api/session";
 import { runRequest } from "../../shared/api/request";
 
 type UserAdminAction =
@@ -68,7 +69,7 @@ async function callUserAdminAction<TData = null>(payload: UserAdminAction): Prom
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+    throw new SessionError("missing");
   }
 
   const { data, error, response } = await runRequest(

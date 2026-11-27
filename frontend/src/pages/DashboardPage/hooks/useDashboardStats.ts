@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../../shared/api/session";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardFormsStats } from "../../../entities/survey/api/surveysApi";
@@ -54,7 +55,7 @@ export function useDashboardStats({
     queryKey: formsStatsQueryKey,
     queryFn: ({ signal }) => getDashboardFormsStats(filters.listFilters, { signal }),
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

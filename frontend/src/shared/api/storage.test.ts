@@ -7,7 +7,7 @@ import {
   uploadFileToStorage,
   preparePersonalResponseUploads,
 } from "./storage";
-import { publicSupabaseClient, supabaseClient } from "./client";
+import { apiClient, publicSupabaseClient, supabaseClient } from "./client";
 import { SUPABASE_URL } from "../config/env";
 
 vi.mock("../config/env", async (importOriginal) => ({
@@ -16,9 +16,10 @@ vi.mock("../config/env", async (importOriginal) => ({
 }));
 
 vi.mock("./client", () => ({
+  apiClient: { auth: { getCurrentUser: vi.fn() } },
+  sessionFetch: (...args: Parameters<typeof fetch>) => fetch(...args),
   supabaseClient: {
     auth: {
-      getUser: vi.fn(),
       getSession: vi.fn(),
     },
     storage: {
@@ -94,7 +95,7 @@ describe("storage api", () => {
 
   it("sends the question binding on authenticated uploads that do not use reservations", async () => {
     const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
     vi.stubGlobal("fetch", upload);
     const file = new File(["document"], "report.pdf", { type: "application/pdf" });
     await uploadFileToStorage("form-1", file, { questionName: "documents" });
@@ -198,7 +199,7 @@ describe("storage api", () => {
     const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
     vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage("form-1", new File(["hello"], "answer.txt", { type: "text/plain" }));
@@ -215,7 +216,7 @@ describe("storage api", () => {
     const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
       data: { user: null },
       error: new AuthSessionMissingError(),
     } as never);
@@ -253,7 +254,7 @@ describe("storage api", () => {
       randomUUID: undefined,
       getRandomValues,
     });
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
       data: { user: null },
       error: new AuthSessionMissingError(),
     } as never);
@@ -278,7 +279,7 @@ describe("storage api", () => {
     const upload = vi.fn<(url: string, init: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null));
 
     vi.spyOn(crypto, "randomUUID").mockReturnValue(fileId);
-    vi.mocked(supabaseClient.auth.getUser).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(apiClient.auth.getCurrentUser).mockImplementation(() => new Promise(() => {}));
     vi.stubGlobal("fetch", upload);
 
     const result = await uploadFileToStorage(
@@ -288,7 +289,7 @@ describe("storage api", () => {
     );
 
     expect(upload).toHaveBeenCalledWith(`${SUPABASE_URL}/storage/v1/object/survey-files/public/form-1/${fileId}.txt`, expect.objectContaining({ method: "POST" }));
-    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
+    expect(apiClient.auth.getCurrentUser).not.toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
         path: `public/form-1/${fileId}.txt`,
@@ -297,7 +298,7 @@ describe("storage api", () => {
   });
 
   it("allows deletion of a known anonymous upload only within the same form prefix", async () => {
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({
       data: { user: null },
       error: new AuthApiError("Invalid Refresh Token: Refresh Token Not Found", 400, "invalid_refresh_token"),
     } as never);
@@ -311,7 +312,7 @@ describe("storage api", () => {
       body: { action: "delete-upload", formId: "form-1", path: "public/form-1/file-id.txt", browserId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
       signal: expect.any(AbortSignal),
     }));
-    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
+    expect(apiClient.auth.getCurrentUser).not.toHaveBeenCalled();
 
     await expect(
       removeFileFromStorage("public/form-2/file-id.txt", { allowAnonymous: true, formId: "form-1" }),
@@ -433,7 +434,7 @@ describe("storage api", () => {
   });
 
   it("rejects deletion outside the current user's storage prefix", async () => {
-    vi.mocked(supabaseClient.auth.getUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
+    vi.mocked(apiClient.auth.getCurrentUser).mockResolvedValue({ data: { user: { id: "user-1" } }, error: null } as never);
 
     await expect(removeFileFromStorage("other-user/form-1/file-id.txt")).rejects.toThrow(
       "Нельзя удалить файл другого пользователя",

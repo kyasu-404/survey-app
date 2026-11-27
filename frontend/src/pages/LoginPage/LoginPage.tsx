@@ -15,6 +15,7 @@ export function getSafeLoginTarget(value: unknown) {
   return typeof value === "string"
     && value.startsWith("/")
     && value !== routes.home
+    && value !== routes.login
     && !value.startsWith("//")
     && !value.includes("\\")
     ? value
@@ -95,14 +96,17 @@ export default function LoginPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: Partial<Path> } | null)?.from;
-  const pathname = getSafeLoginTarget(from?.pathname);
-  const targetPath = pathname === from?.pathname
-    ? { pathname, search: from.search, hash: from.hash }
-    : pathname;
+  const returnState = location.state as { from?: Partial<Path>; ownerId?: string | null; sessionMessage?: string } | null;
+  const from = returnState?.from;
+
+  function getTarget(userId: string) {
+    if (returnState?.ownerId !== undefined && returnState.ownerId !== userId) return routes.dashboardMy;
+    const pathname = getSafeLoginTarget(from?.pathname);
+    return pathname === from?.pathname ? { pathname, search: from.search, hash: from.hash } : pathname;
+  }
 
   if (!loading && user && !isSubmitting) {
-    return <Navigate to={targetPath} replace />;
+    return <Navigate to={getTarget(user.id)} replace />;
   }
 
   const emailError = issue?.field === "email" ? issue.message : undefined;
@@ -132,9 +136,9 @@ export default function LoginPage() {
     setIssue(null);
     let didNavigate = false;
     try {
-      const displayName = await login(submittedEmail, submittedPassword);
+      const { displayName, userId } = await login(submittedEmail, submittedPassword);
       didNavigate = true;
-      navigate(targetPath, {
+      navigate(getTarget(userId), {
         replace: true,
         state: { toast: getWelcomeMessage(displayName) },
       });
@@ -155,6 +159,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="card login-card">
         <h1 className="login-title">Вход в систему</h1>
+        {returnState?.sessionMessage && <p role="status">{returnState.sessionMessage}</p>}
         <form
           className="login-form"
           method="post"

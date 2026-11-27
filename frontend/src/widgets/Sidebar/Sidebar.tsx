@@ -42,7 +42,7 @@ export function Sidebar({ onToggle, onNavigate, collapsed = false, isMobile = fa
 
   async function onLogout() {
     try {
-      await logout();
+      await logout(user?.id);
       navigate(routes.login, { replace: true });
     } catch (error) {
       console.error(error);

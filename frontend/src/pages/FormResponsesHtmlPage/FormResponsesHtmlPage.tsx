@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../shared/api/session";
 import { Icon } from "../../shared/ui/Icon";
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
@@ -59,7 +60,7 @@ export default function FormResponsesHtmlPage() {
       return getFormById(id, { signal });
     },
     enabled: Boolean(id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
@@ -76,7 +77,7 @@ export default function FormResponsesHtmlPage() {
       return getAllResponsesByForm(id, { signal });
     },
     enabled: Boolean(id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
@@ -90,7 +91,7 @@ export default function FormResponsesHtmlPage() {
     queryKey: ["education-organizations", "history", id],
     queryFn: ({ signal }) => getOrganizations(undefined, signal, true),
     enabled: Boolean(id && usesOrganizationDirectory),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

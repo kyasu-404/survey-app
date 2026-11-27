@@ -1,7 +1,8 @@
-import { FunctionsHttpError, isAuthError, isAuthSessionMissingError } from "@supabase/supabase-js";
-import { publicSupabaseClient, supabaseClient } from "./client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
+import { apiClient, publicSupabaseClient, sessionFetch, supabaseClient } from "./client";
 import { getOrCreateResponseBrowserId } from "../lib/responseBrowserId";
 import { runRequest } from "./request";
+import { SessionError, sessionErrorFromCode } from "./session";
 import { SUPABASE_ANON_KEY, SUPABASE_STORAGE_BUCKET, SUPABASE_URL } from "../config/env";
 
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
@@ -85,30 +86,17 @@ async function reservePublicStoragePath(formId: string, file: File, options: Upl
 }
 
 async function getCurrentUserId(options: StorageAuthOptions = {}) {
-  const {
-    data: { user },
-    error,
-  } = await runRequest(
-    "auth.getStorageUser",
-    () => supabaseClient.auth.getUser(),
-    { signal: options.signal, context: { allowAnonymous: Boolean(options.allowAnonymous) } },
-  );
-
-  if (error) {
-    if (isAuthSessionMissingError(error)) {
-      return null;
-    }
-
-    // Public form uploads should keep working even if the browser has a stale
-    // persisted session from another part of the app.
-    if (options.allowAnonymous && isAuthError(error)) {
-      return null;
-    }
-
-    throw new Error(`Не удалось проверить пользователя: ${error.message}`);
+  try {
+    const { data: { user } } = await runRequest(
+      "auth.getStorageUser",
+      () => apiClient.auth.getCurrentUser(),
+      { signal: options.signal },
+    );
+    return user?.id ?? null;
+  } catch (error) {
+    if (error instanceof SessionError && error.kind === "missing") return null;
+    throw error;
   }
-
-  return user?.id ?? null;
 }
 
 function looksLikeStoragePath(value: string) {
@@ -386,7 +374,8 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
     "storage.upload",
     async (signal, trace) => {
       signal.throwIfAborted();
-      const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodedPath}`, {
+      const transfer = currentUserId ? sessionFetch : fetch;
+      const response = await transfer(`${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodedPath}`, {
         method: "POST",
         body: multipart,
         signal,
@@ -398,7 +387,9 @@ export async function uploadFileToStorage(formId: string, file: File, options: U
         },
       });
       if (!response.ok) {
-        const error = await response.json().catch(() => null) as { message?: string } | null;
+        const error = await response.json().catch(() => null) as { message?: string; code?: string } | null;
+        const sessionError = sessionErrorFromCode(error?.code);
+        if (sessionError) throw sessionError;
         throw new Error(`Не удалось загрузить файл: ${error?.message ?? response.statusText ?? response.status}`);
       }
     },

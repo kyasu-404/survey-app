@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { officeRequest } from "../../office/api";
 import { exportResponseFilesZip } from "./responseFilesZip";
 
-vi.mock("../../office/api", () => ({ officeRequest: vi.fn() }));
+vi.mock("../../office/api", () => ({ officeRequest: vi.fn(), getOfficeArchiveAuthorization: vi.fn(async () => "Bearer token") }));
 
 describe("native ZIP download", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -16,7 +16,7 @@ describe("native ZIP download", () => {
     });
     expect(await exportResponseFilesZip("form", selected, new AbortController().signal)).toBe(true);
     expect(officeRequest).toHaveBeenLastCalledWith("/forms/form/response-archive", {
-      method: "POST", body: JSON.stringify({ selected }), signal: expect.any(AbortSignal),
+      method: "POST", headers: { Authorization: "Bearer token" }, body: JSON.stringify({ selected }), signal: expect.any(AbortSignal),
     });
     expect(click).toHaveBeenCalledOnce();
   });

@@ -1,8 +1,10 @@
-import { officeRequest } from "../../office/api";
+import { getOfficeArchiveAuthorization, officeRequest } from "../../office/api";
 
 export async function exportResponseFilesZip(formId: string, selected: { id: string; number: number }[] | undefined, signal: AbortSignal) {
+  const authorization = await getOfficeArchiveAuthorization(signal);
   const { ticket } = await officeRequest<{ ticket: string | null }>(`/forms/${encodeURIComponent(formId)}/response-archive`, {
     method: "POST",
+    headers: { Authorization: authorization },
     body: JSON.stringify({ selected }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(90_000)]),
   });

@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../shared/api/session";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -114,7 +115,7 @@ export default function SurveyPage() {
       return getPublicFormById(id, { signal });
     },
     enabled: isPrivatePreview ? Boolean(id) && !isAuthLoading && Boolean(user?.id) : Boolean(id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
@@ -140,7 +141,7 @@ export default function SurveyPage() {
       return getExistingResponse(id, responseBrowserId, signal, personalToken ?? undefined, true);
     },
     enabled: renderMode === "interactive" && Boolean(id) && (!hasPersonalLink || Boolean(personalToken)),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

@@ -1,4 +1,5 @@
 import { apiClient, supabaseClient } from "../../shared/api";
+import { SessionError } from "../../shared/api/session";
 import { runRequest } from "../../shared/api/request";
 import type { StorageCleanupOverview, StorageCleanupRun } from "./types";
 
@@ -25,7 +26,7 @@ async function getFunctionErrorMessage(error: unknown, response?: Response) {
 
 async function callFormAdmin<T>(payload: StorageCleanupAction, timeoutMs = 30_000) {
   const { data: { session } } = await runRequest("auth.getSession", () => apiClient.auth.getCurrentSession());
-  if (!session?.access_token) throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  if (!session?.access_token) throw new SessionError("missing");
 
   const { data, error, response } = await runRequest(
     `functions.form-admin.${payload.action}`,

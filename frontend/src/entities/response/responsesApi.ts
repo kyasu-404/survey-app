@@ -5,6 +5,7 @@ import type {
   UpdateResponseResult,
 } from "./types";
 import { apiClient, publicApiClient, supabaseClient } from "../../shared/api/client";
+import { SessionError } from "../../shared/api/session";
 import { runRequest } from "../../shared/api/request";
 import { timelineBefore, type TimelineCursor } from "../../shared/api/timelinePage";
 
@@ -231,7 +232,7 @@ export async function deleteResponses(formId: string, responseIds: string[]) {
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+    throw new SessionError("missing");
   }
 
   const { error, response } = await runRequest(

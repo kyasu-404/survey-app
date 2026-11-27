@@ -1,8 +1,9 @@
+import { supabaseClient } from "../../shared/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRule, AutomationRun } from "../../entities/automation/model";
 import { countActiveFormRules } from "../../entities/automation/api";
 import { refreshAuthDependentQueries } from "../../app/providers/authCache";
@@ -116,8 +117,16 @@ function renderPage(options: {
 }
 
 describe("AutomationsPage", () => {
+  beforeEach(() => {
+    vi.spyOn(supabaseClient.auth, "getSession").mockImplementation(async () => ({
+      data: { session: { access_token: "test-user-token", user: { id: currentUser.id } } },
+      error: null,
+    } as Awaited<ReturnType<typeof supabaseClient.auth.getSession>>));
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     currentUser.id = "owner";
     showToast.mockClear();
   });

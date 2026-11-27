@@ -1,3 +1,4 @@
+import { authFailure } from "./auth-failure.mjs";
 import { randomUUID } from 'node:crypto';
 import { enqueueGeneration } from './generation-jobs.mjs';
 import { MAX_RESULT_ZIP_BYTES, runOfficeTask } from './office-tasks.mjs';
@@ -78,7 +79,10 @@ export function createApp({pool, supabase, env = process.env}) {
     try { claims=capability(token,'plugin'); id=claims.sub; }
     catch {
       const {data,error}=await supabase.auth.getUser(token);
-      requireValue(!error && data.user,'Сессия истекла. Войдите снова.',401);
+      if (error || !data.user) {
+        const failure = authFailure(error);
+        throw new HttpError(failure.status, failure.message, failure.code);
+      }
       id=data.user.id;
     }
     const profile=(await query('select id,name,role,is_disabled from public.profiles where id=$1',[id]))[0];
@@ -512,7 +516,11 @@ export function createApp({pool, supabase, env = process.env}) {
       // Do not log request bodies, URLs, tokens or Document Server download URLs.
       console.error(JSON.stringify({event:'office-request-error',requestId:id,status:error.status || 500,code:error.code || error.name,message:sanitizeLogMessage(error)}));
       if (res.destroyed) return;
-      if(!res.headersSent) send(res,error.status || 500,{error:1,message:error instanceof HttpError ? error.message : `Не удалось выполнить операцию (${id.slice(0,8)})`});
+      if (!res.headersSent) send(res, error.status || 500, {
+        error: 1,
+        message: error instanceof HttpError ? error.message : `Не удалось выполнить операцию (${id.slice(0,8)})`,
+        ...(error instanceof HttpError && error.code ? { code: error.code } : {}),
+      });
       else res.end();
     }
   };

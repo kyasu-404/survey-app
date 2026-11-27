@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../../shared/api/session";
 import type { FormsCursor, FormsSort } from "../../../entities/survey/types";
 import { createBatchedFormsQuery, getFormsNextCursor } from "../../../entities/survey/model/batchedInfiniteQuery";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -67,7 +68,7 @@ export function useDashboardForms({ filters, isAuthLoading, userId, viewMode, so
     queryFn: fetchList,
     getNextPageParam: getFormsNextCursor,
     enabled: !isAuthLoading && (viewMode === "all" || Boolean(userId)),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

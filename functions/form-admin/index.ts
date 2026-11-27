@@ -1,3 +1,4 @@
+import { authFailure, isUpstreamUnavailable } from "../_shared/auth-failure.mjs";
 import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { analyzeSchemaCompatibility } from "./schemaCompatibility.mjs";
 
@@ -138,14 +139,15 @@ function jsonResponse(
   });
 }
 
-function errorResponse(req: Request, status: number, error: string, requestLogContext: RequestLogContext) {
+function errorResponse(req: Request, status: number, error: string, requestLogContext: RequestLogContext, code?: string) {
   console.error("form-admin action failed", {
     ...requestLogContext,
     status,
     error,
+    ...(code ? { code } : {}),
   });
 
-  return jsonResponse(req, status, { error }, requestLogContext);
+  return jsonResponse(req, status, { error, ...(code ? { code } : {}) }, requestLogContext);
 }
 
 function isUuid(value: unknown): value is string {
@@ -613,14 +615,19 @@ async function handleRequest(req: Request, requestLogContext: RequestLogContext)
   } = await authClient.auth.getUser(jwt);
 
   if (requesterError || !requester) {
-    return errorResponse(req, 401, "Unauthorized", requestLogContext);
+    const failure = authFailure(requesterError);
+    return errorResponse(req, failure.status, failure.message, requestLogContext, failure.code);
   }
 
-  const { data: requesterProfile, error: requesterProfileError } = await adminClient
+  const { data: requesterProfile, error: requesterProfileError, status: profileStatus } = await adminClient
     .from("profiles")
     .select("role, is_disabled")
     .eq("id", requester.id)
     .single();
+
+  if (requesterProfileError && isUpstreamUnavailable(profileStatus)) {
+    return errorResponse(req, 503, "Не удалось проверить права доступа. Повторите запрос.", requestLogContext);
+  }
 
   if (requesterProfileError || requesterProfile?.is_disabled) {
     return errorResponse(req, 403, "Forbidden", { ...requestLogContext, userId: requester.id });

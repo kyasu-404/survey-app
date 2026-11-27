@@ -1,7 +1,11 @@
 import { createHmac, timingSafeEqual, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 
 export class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(status, message, code) {
+    super(message);
+    this.status = status;
+    if (code) this.code = code;
+  }
 }
 export const requireValue = (value, message, status = 400) => { if (!value) throw new HttpError(status, message); };
 export const uuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);

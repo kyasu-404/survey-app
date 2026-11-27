@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../shared/api/session";
 import { Presence } from "../../shared/ui/Presence";
 import {officeRequest} from '../../entities/office/api';
 import onlyofficeIcon from '../../img/onlyoffice-mono.svg';
@@ -289,7 +290,7 @@ export default function FormResponsesPage() {
       return getFormById(id, { signal });
     },
     enabled: Boolean(id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
@@ -306,7 +307,7 @@ export default function FormResponsesPage() {
       return getResponsesByForm(id, { signal, page: basePage, pageSize });
     },
     enabled: Boolean(id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

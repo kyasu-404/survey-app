@@ -1,4 +1,6 @@
 import { apiClient } from "../../shared/api";
+import { isTerminalSessionError } from "../../shared/api/session";
+import { clearSurveyBuilderDraftsForUser } from "../../shared/lib/builderDraftStorage";
 import { runRequest } from "../../shared/api/request";
 
 export async function login(email: string, password: string) {
@@ -10,7 +12,8 @@ export async function login(email: string, password: string) {
   const metadataName = typeof data.user?.user_metadata?.name === "string"
     ? data.user.user_metadata.name.trim()
     : "";
-  if (!data.user?.id) return metadataName;
+  const userId = data.user?.id;
+  if (!userId) throw new Error("Сервер не вернул пользователя после входа.");
 
   let profile: { name?: unknown; is_disabled?: unknown } | null = null;
   try {
@@ -25,13 +28,14 @@ export async function login(email: string, password: string) {
       { timeoutMs: 5_000, context: { userId: data.user.id } },
     );
     profile = result.data ?? null;
-  } catch {
-    return metadataName;
+  } catch (error) {
+    if (isTerminalSessionError(error)) throw error;
+    return { displayName: metadataName, userId };
   }
 
   if (profile?.is_disabled === true) {
     try {
-      await apiClient.auth.logout();
+      await apiClient.auth.logout(userId, "local");
     } catch {
       // Best-effort sign-out if the account is already marked disabled.
     }
@@ -39,7 +43,7 @@ export async function login(email: string, password: string) {
   }
 
   const profileName = typeof profile?.name === "string" ? profile.name.trim() : "";
-  return profileName || metadataName;
+  return { displayName: profileName || metadataName, userId };
 }
 
 export async function register(email: string, password: string) {
@@ -47,9 +51,10 @@ export async function register(email: string, password: string) {
   if (error) throw error;
 }
 
-export async function logout() {
-  const { error } = await apiClient.auth.logout();
+export async function logout(userId?: string) {
+  const { error } = await apiClient.auth.logout(userId);
   if (error) throw error;
+  if (userId) clearSurveyBuilderDraftsForUser(userId);
 }
 
 export async function changeOwnPassword(currentPassword: string, password: string) {

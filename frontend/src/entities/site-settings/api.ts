@@ -1,4 +1,5 @@
 import { apiClient, publicApiClient, supabaseClient, publicSupabaseClient } from "../../shared/api/client";
+import { SessionError } from "../../shared/api/session";
 import { runRequest } from "../../shared/api/request";
 export const EMBEDDING_QUERY_KEY = ["embedding-settings"] as const;
 export const FAVICON_QUERY_KEY = ["app-favicon"] as const;
@@ -37,8 +38,8 @@ export async function getAppFavicon() {
   return favicon(data);
 }
 async function saveFavicon(payload: Record<string,unknown>) {
-  const { data:{session} } = await apiClient.auth.getCurrentSession();
-  if (!session?.access_token) throw new Error("Требуется авторизация");
+  const { data:{session} } = await runRequest("auth.getSession", apiClient.auth.getCurrentSession);
+  if (!session?.access_token) throw new SessionError("missing");
   const { data,error,response } = await runRequest("favicon.save", (signal,trace) => supabaseClient.functions.invoke("app-settings",{
     body:payload,headers:{...trace.headers,Authorization:`Bearer ${session.access_token}`},signal,
   }),{timeoutMs:30_000});

@@ -1,3 +1,4 @@
+import { authReadError, sessionErrorFromCode } from "./session";
 import {
   createRequestTraceContext,
   logError,
@@ -71,9 +72,27 @@ export async function runRequest<T>(
 
   try {
     const result = await Promise.race([
-      withActiveRequestTraceContext(traceContext, () =>
-        Promise.resolve(attachCorrelationHeaders(request(abortController.signal, traceContext), traceContext)),
-      ),
+      withActiveRequestTraceContext(traceContext, () => {
+        abortController.signal.throwIfAborted();
+        return Promise.resolve(attachCorrelationHeaders(request(abortController.signal, traceContext), traceContext));
+      }).then(async result => {
+        const { error, response } = (result ?? {}) as {
+          error?: { name?: string; code?: string; status?: number; message?: string; context?: unknown };
+          response?: Response;
+        };
+        if (error && (operation === "auth.getSession" || operation === "auth.getStorageSession")) {
+          throw authReadError(error);
+        }
+        const failure = sessionErrorFromCode(error?.code);
+        if (failure) throw failure;
+        const http = response ?? error?.context;
+        if (error && http instanceof Response && [401, 503].includes(http.status)) {
+          const body = await http.clone().json().catch(() => null);
+          const failure = sessionErrorFromCode(body?.code);
+          if (failure) throw failure;
+        }
+        return result;
+      }),
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
           abortController.abort();
@@ -82,7 +101,8 @@ export async function runRequest<T>(
       }),
     ]);
 
-    logInfo(`[api] success ${operation}`, {
+    const outcome = result && typeof result === "object" && "error" in result && result.error ? "failed" : "success";
+    logInfo(`[api] ${outcome} ${operation}`, {
       operation,
       requestId: traceContext.requestId,
       traceId: traceContext.traceId,

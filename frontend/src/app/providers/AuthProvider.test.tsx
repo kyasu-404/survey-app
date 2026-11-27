@@ -2,19 +2,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { SessionError } from "../../shared/api/session";
 import { AuthProvider, useAuth } from "./AuthProvider";
 import { loadSurveyBuilderDraft, saveSurveyBuilderDraft } from "../../widgets/SurveyBuilder/builderDraft";
 
-const { getCurrentSession, onAuthStateChange, from } = vi.hoisted(() => ({
+const { getCurrentSession, onAuthStateChange, onSessionEnd, from } = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
   onAuthStateChange: vi.fn(),
+  onSessionEnd: vi.fn(() => () => undefined),
   from: vi.fn(),
 }));
 
 vi.mock("../../shared/api", () => ({
   apiClient: {
     auth: {
-      getCurrentSession,
+      restoreSession: async () => (await getCurrentSession()).data.session?.user ?? null,
+      onSessionEnd,
       onAuthStateChange,
     },
     from,
@@ -97,6 +100,17 @@ describe("AuthProvider", () => {
     await act(async () => { sessionRequest.resolve({ data: { session: { user: { id: "stale-user" } } } }); });
     expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:anonymous:no-profile");
   });
+  it("keeps the protected route in a retryable state when startup cannot contact Auth", async () => {
+    getCurrentSession.mockRejectedValueOnce(new SessionError("unavailable"));
+    onAuthStateChange.mockImplementation(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
+    function Probe() {
+      const { sessionIssue, retrySession } = useAuth();
+      return <button onClick={retrySession}>{sessionIssue?.message ?? "Проверка сессии"}</button>;
+    }
+    renderWithAuthProvider(<Probe />);
+    expect(await screen.findByText(/Сервис авторизации временно недоступен/)).toBeInTheDocument();
+  });
+
   it("marks auth as ready after session restoration before the profile request resolves", async () => {
     const profileRequest = createDeferred<{
       data: {
@@ -198,7 +212,7 @@ describe("AuthProvider", () => {
     expect(clearSpy).not.toHaveBeenCalled();
   });
 
-  it.each(["SIGNED_IN", "INITIAL_SESSION"])("clears the previous profile and private cache before loading another user on %s", async event => {
+  it.each(["SIGNED_IN", "USER_UPDATED"])("clears the previous profile and private cache before loading another user on %s", async event => {
     let authListener: ((event: string, session: { user: { id: string } } | null) => Promise<void>) | undefined;
     const nextProfile = createDeferred<{ data: { id: string; role: string; is_disabled: boolean }; error: null }>();
     const single = vi.fn().mockResolvedValue({ data: { id: "admin", role: "admin", is_disabled: false }, error: null });
@@ -241,7 +255,7 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("auth-state")).toHaveTextContent("ready:admin:no-profile");
   });
 
-  it("removes the signing-out user's local constructor drafts", async () => {
+  it("preserves scoped constructor drafts when an expired or revoked session signs out", async () => {
     const session = { user: { id: "signed-in" } };
     const single = vi.fn().mockResolvedValue({ data: { id: "signed-in", role: "user", is_disabled: false }, error: null });
     let listener!: (event: string, nextSession: typeof session | null) => Promise<void>;
@@ -259,8 +273,8 @@ describe("AuthProvider", () => {
     saveSurveyBuilderDraft("another", undefined, { title: "Чужая", pages: [] });
     try {
       await act(async () => { await listener("SIGNED_OUT", null); });
-      expect(loadSurveyBuilderDraft("signed-in")).toBeNull();
-      expect(loadSurveyBuilderDraft("signed-in", "saved")).toBeNull();
+      expect(loadSurveyBuilderDraft("signed-in")).not.toBeNull();
+      expect(loadSurveyBuilderDraft("signed-in", "saved")).not.toBeNull();
       expect(loadSurveyBuilderDraft("another")).not.toBeNull();
     } finally {
       localStorage.clear();

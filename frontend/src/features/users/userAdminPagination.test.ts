@@ -5,7 +5,7 @@ import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 
 const source = readFileSync(join(process.cwd(), "../functions/user-admin/index.ts"), "utf8");
-const code = ts.transpile(source.replace(/^import .*;\s*/m, ""), { target: ts.ScriptTarget.ES2022 });
+const code = ts.transpile(source.replace(/^import .*;\s*/gm, ""), { target: ts.ScriptTarget.ES2022 });
 
 async function listUsers(failSecondPage = false) {
   const profiles = Array.from({ length: 1005 }, (_, index) => ({ id: String(index), name: `User ${index}` }));

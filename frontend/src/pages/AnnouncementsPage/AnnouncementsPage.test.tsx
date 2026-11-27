@@ -1,7 +1,8 @@
+import { supabaseClient } from "../../shared/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AnnouncementsPage from "./AnnouncementsPage";
 
 vi.mock("../../shared/config/env", () => ({ SUPABASE_URL: "https://supabase.test", SUPABASE_ANON_KEY: "test-key" }));
@@ -34,7 +35,17 @@ function renderPage(published: Omit<typeof row, "expires_at" | "action_label" | 
 }
 
 describe("Административные объявления", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.spyOn(supabaseClient.auth, "getSession").mockImplementation(async () => ({
+      data: { session: { access_token: "test-user-token", user: { id: "admin" } } },
+      error: null,
+    } as Awaited<ReturnType<typeof supabaseClient.auth.getSession>>));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it("ссылается на существующую панель с каждой вкладки", async () => {
     const { user } = renderPage();

@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../../shared/api/session";
 import { useQuery } from "@tanstack/react-query";
 import { getFormById } from "../../../entities/survey/api/surveysApi";
 import { getFormQueryKey } from "../../../entities/survey/model/queryKeys";
@@ -8,7 +9,7 @@ export function useTemplatePreview(previewTemplateCard: SurveyFormSummary | null
     queryKey: getFormQueryKey(previewTemplateCard?.id),
     queryFn: ({ signal }) => getFormById(previewTemplateCard!.id, { signal }),
     enabled: Boolean(previewTemplateCard?.id),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,

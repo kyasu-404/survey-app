@@ -1,4 +1,5 @@
 import { apiClient, supabaseClient } from "../../shared/api";
+import { SessionError } from "../../shared/api/session";
 import { runRequest } from "../../shared/api/request";
 import type { FormMailKind, FormMailDraft, MailComposition, MailPreview, MailActivity, MailBatch, MailJob, QueueMailResult, SmtpSettings, SmtpSettingsDraft } from "./types";
 
@@ -39,7 +40,7 @@ async function getFunctionErrorMessage(error: unknown, response?: Response) {
 
 async function callMailAdmin<T>(payload: MailAdminAction) {
   const { data: { session } } = await runRequest("auth.getSession", () => apiClient.auth.getCurrentSession());
-  if (!session?.access_token) throw new Error("Сессия авторизации не готова. Попробуйте обновить страницу.");
+  if (!session?.access_token) throw new SessionError("missing");
 
   const { data, error, response } = await runRequest(
     `functions.mail-admin.${payload.action}`,

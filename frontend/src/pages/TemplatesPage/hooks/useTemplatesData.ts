@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../../shared/api/session";
 import type { FormsCursor, PaginatedSurveyFormSummaries } from "../../../entities/survey/types";
 import { createBatchedFormsQuery, getFormsNextCursor } from "../../../entities/survey/model/batchedInfiniteQuery";
 import { useEffect, useMemo } from "react";
@@ -78,7 +79,7 @@ export function useTemplatesData({ isAuthLoading, section, userId }: UseTemplate
     queryFn: fetchList,
     getNextPageParam: getFormsNextCursor,
     enabled: !isAuthLoading && (section === "public" || Boolean(userId)),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,

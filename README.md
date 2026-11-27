@@ -54,7 +54,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/supabase_schema.sql
 
 ### Как включить
 
-1. cp -R ./functions/user-admin ./supabase/docker/volumes/functions/
+1. cp -R ./functions/_shared ./functions/user-admin ./supabase/docker/volumes/functions/
 2. cd ./supabase/docker/
 3. docker compose restart functions --no-deps
 
@@ -82,7 +82,7 @@ supabase functions deploy user-admin
 
 ### Как включить
 
-1. `cp -R ./functions/form-admin ./supabase/docker/volumes/functions/`
+1. `cp -R ./functions/_shared ./functions/form-admin ./supabase/docker/volumes/functions/`
 2. cd ./supabase/docker/
 3. docker compose restart functions --no-deps
 
@@ -124,7 +124,7 @@ openssl rand -base64 32
 2. Скопируйте Edge Function, worker и compose-overlay в каталог Supabase:
 
 ```bash
-cp -R ./functions/mail-admin ./supabase/docker/volumes/functions/
+cp -R ./functions/_shared ./functions/mail-admin ./supabase/docker/volumes/functions/
 cp -R ./mail-worker ./supabase/docker/
 cp ./mail-worker/docker-compose.mail-worker.yml ./supabase/docker/docker-compose.mail-worker.yml
 ```
@@ -254,7 +254,7 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop -t 1
 Перенесите изменения Compose-overlay в действующие файлы:
 
 ```bash
-cp -R ./functions/app-settings ./functions/form-admin ./functions/mail-admin ./functions/user-admin ./supabase/docker/volumes/functions/
+cp -R ./functions/_shared ./functions/app-settings ./functions/form-admin ./functions/mail-admin ./functions/user-admin ./supabase/docker/volumes/functions/
 cp -R ./mail-worker ./supabase/docker/
 ```
 

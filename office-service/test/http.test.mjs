@@ -9,7 +9,7 @@ import {encrypt,sign,documentKey} from '../src/security.mjs';
 const key=randomBytes(32),secret='document-server-test-secret',formId=randomUUID(),documentId=randomUUID(),userId=randomUUID();
 const settings={enabled:true,public_url:'https://docs.test',internal_url:'http://onlyoffice',storage_url_override:'',jwt_secret_encrypted:encrypt(secret,key),jwt_header:'AuthorizationJwt',jwt_prefix:'Bearer ',max_file_mb:25,max_table_rows:1000};
 const doc={id:documentId,form_id:formId,version:2,created_by:userId,storage_path:'private/file.docx',name:'Test.docx',file_type:'docx',template_field_count:1};
-async function setup(t,{env={},disabled=false,role='user',result,commandResult,resultsFeed,documentAtRead,resultStream}={}){
+async function setup(t,{env={},disabled=false,role='user',result,commandResult,resultsFeed,documentAtRead,resultStream,authError}={}){
  const statements=[];
  const downloadPaths=[];
  let documentReads=0;
@@ -36,7 +36,7 @@ async function setup(t,{env={},disabled=false,role='user',result,commandResult,r
   const data=new Blob([zipSync({'first.xlsx':strToU8('first'), 'second.xlsx':strToU8('second')})]);
   return Object.assign(Promise.resolve({data}),{asStream:async()=>({data:resultStream?.() ?? data.stream()})});
  },upload(){throw new Error('Unexpected Storage request');}};
- const supabase={storage:{from:()=>store},auth:{getUser:async(token)=>({data:{user:token==='employee' ? {id:userId}:null},error:token==='employee' ? null : new Error()})}};
+ const supabase={storage:{from:()=>store},auth:{getUser:async(token)=>({data:{user:token==='employee' ? {id:userId}:null},error:token==='employee' ? null : authError ?? new Error()})}};
  if(commandResult) {
   const originalFetch=globalThis.fetch;
   t.mock.method(globalThis,'fetch',(url,options)=>String(url)==='http://onlyoffice/command'
@@ -56,6 +56,21 @@ async function setup(t,{env={},disabled=false,role='user',result,commandResult,r
 test('anonymous and disabled employees cannot read documents',async t=>{
  const a=await setup(t);assert.equal((await a.request(`/documents/${documentId}`)).status,401);
  const b=await setup(t,{disabled:true});assert.equal((await b.request(`/documents/${documentId}`,{headers:{Authorization:'Bearer employee'}})).status,403);
+});
+test('employee authentication distinguishes revocation, JWT expiry and Auth unavailability', async t => {
+ const cases=[
+  [{name:'AuthSessionMissingError',status:400},401,'session_not_found'],
+  [{code:'bad_jwt',status:403,message:'invalid JWT: token is expired'},401,'token_expired'],
+  [{name:'AuthRetryableFetchError',status:503},503,'auth_unavailable'],
+ ];
+ for(const [authError,status,code] of cases) {
+  const {request,statements}=await setup(t,{authError});
+  const response=await request(`/documents/${documentId}`,{headers:{Authorization:'Bearer invalid'}});
+  assert.equal(response.status,status);
+  assert.equal((await response.json()).code,code);
+  assert.equal(response.headers.get('Cache-Control'),'no-store');
+  assert.equal(statements.some(({sql})=>sql.includes('public.office_documents')),false);
+ }
 });
 test('plugin capabilities are document scoped, cannot read settings or mint editor configs',async t=>{
  const {request}=await setup(t,{role:'admin'});

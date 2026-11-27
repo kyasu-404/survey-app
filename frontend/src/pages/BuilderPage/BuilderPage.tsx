@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../shared/api/session";
 import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { Presence } from "../../shared/ui/Presence";
 import { useEffect, useId, useRef, useState } from "react";
@@ -97,7 +98,7 @@ export default function BuilderPage() {
     queryKey: getFormQueryKey(id),
     queryFn: ({ signal }) => getFormById(id ?? "", { signal }),
     enabled: Boolean(id && user),
-    retry: 1,
+    retry: canRetryRead,
     staleTime: 30_000,
   });
 

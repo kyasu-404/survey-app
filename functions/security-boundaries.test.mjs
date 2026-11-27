@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
+import { authFailure, isUpstreamUnavailable } from "./_shared/auth-failure.mjs";
 import ts from "../frontend/node_modules/typescript/lib/typescript.js";
 
 function handlerFor(name, environment = {}, client = {}) {
@@ -9,9 +10,9 @@ function handlerFor(name, environment = {}, client = {}) {
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
   let handler;
   const env = { SUPABASE_URL: "https://api.test", SUPABASE_ANON_KEY: "anon", SUPABASE_SERVICE_ROLE_KEY: "service", ...environment };
-  new Function("Deno", "createClient", "crypto", "console", compiled.outputText)(
+  new Function("Deno", "createClient", "crypto", "console", "authFailure", "isUpstreamUnavailable", compiled.outputText)(
     { env: { get: key => env[key] }, serve: callback => { handler = callback; } },
-    () => client, webcrypto, { info() {}, error() {} },
+    () => client, webcrypto, { info() {}, error() {} }, authFailure, isUpstreamUnavailable,
   );
   return (origin, method = "OPTIONS", payload = {}, headers = {}) => handler(new Request("https://api.test/functions", {
     method, headers: { ...(origin === null ? {} : { Origin: origin }), ...headers },
@@ -21,6 +22,32 @@ function handlerFor(name, environment = {}, client = {}) {
 
 for (const [name, key] of [["form-admin", "FORM_ADMIN_ALLOWED_ORIGINS"], ["user-admin", "USER_ADMIN_ALLOWED_ORIGINS"],
   ["mail-admin", "MAIL_ADMIN_ALLOWED_ORIGINS"], ["app-settings", "MAIL_ADMIN_ALLOWED_ORIGINS"]]) {
+  test(`${name}: refuses access on revocation and distinguishes an Auth outage`, async () => {
+    for (const [authError, status, code] of [
+      [{ name: "AuthSessionMissingError" }, 401, "session_not_found"],
+      [{ code: "bad_jwt", status: 403, message: "invalid JWT: token is expired" }, 401, "token_expired"],
+      [{ name: "AuthRetryableFetchError", status: 503 }, 503, "auth_unavailable"],
+    ]) {
+      const request = handlerFor(name, {}, { auth: { getUser: async () => ({ data: { user: null }, error: authError }) } });
+      const response = await request(null, "POST", { action: name === "form-admin" ? "get-cleanup-status" : "list" }, { Authorization: "Bearer test" });
+      assert.equal(response.status, status);
+      assert.equal((await response.json()).code, code);
+    }
+  });
+
+  test(`${name}: reports profile lookup outages separately from permission errors`, async () => {
+    const query = { select: () => query, eq: () => query, single: async () => ({
+      data: null, error: { message: "Unavailable" }, status: 503,
+    }) };
+    const request = handlerFor(name, {}, {
+      auth: { getUser: async () => ({ data: { user: { id: "employee" } }, error: null }) },
+      from: () => query,
+    });
+    const payload = { action: name === "form-admin" ? "get-cleanup-status" : "list" };
+    const response = await request(null, "POST", payload, { Authorization: "Bearer test" });
+    assert.equal(response.status, 503);
+  });
+
   test(`${name}: explicit origins are authoritative for preflight and POST`, async () => {
     const request = handlerFor(name, { [key]: " https://forms.test , http://10.0.0.2:5173 " });
     for (const origin of ["http://172.28.209.57:5173", "http://localhost:5173", "http://127.0.0.1:8000", "https://attacker.test"]) {

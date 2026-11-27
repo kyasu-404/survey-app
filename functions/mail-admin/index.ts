@@ -1,3 +1,4 @@
+import { authFailure, isUpstreamUnavailable } from "../_shared/auth-failure.mjs";
 import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { buildFormMailJobs, getOrganizationMailName, getDefaultMailTemplate, validateMailTemplate, selectMailRecipients } from "./mailContent.mjs";
 
@@ -257,14 +258,20 @@ Deno.serve(async (req) => {
     const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: userData, error: userError } = await authClient.auth.getUser(jwt);
-    if (userError || !userData.user) return json(req, 401, { error: "Сессия недействительна" }, requestId);
+    if (userError || !userData.user) {
+      const failure = authFailure(userError);
+      return json(req, failure.status, { error: failure.message, code: failure.code }, requestId);
+    }
 
-    const { data: profileData, error: profileError } = await adminClient
+    const { data: profileData, error: profileError, status: profileStatus } = await adminClient
       .from("profiles")
       .select("id, name, email, role, is_disabled")
       .eq("id", userData.user.id)
       .single();
     const profile = profileData as RequestProfile | null;
+    if (profileError && isUpstreamUnavailable(profileStatus)) {
+      return json(req, 503, { error: "Не удалось проверить права доступа. Повторите запрос." }, requestId);
+    }
     if (profileError || !profile || profile.is_disabled) return json(req, 403, { error: "Доступ запрещён" }, requestId);
 
     action = asTrimmedString(payload.action);

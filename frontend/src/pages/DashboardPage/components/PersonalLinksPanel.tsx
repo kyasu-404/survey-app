@@ -1,3 +1,4 @@
+import { canRetryRead } from "../../../shared/api/session";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../../app/providers/ToastProvider";
@@ -10,7 +11,7 @@ export function PersonalLinksPanel({ formId, title, isPublic, onCompose }: { for
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const queryKey = ["form-personal-links", formId];
-  const query = useQuery({ queryKey, queryFn: ({ signal }) => getPersonalLinks(formId, signal), retry: 1, refetchOnMount: "always" });
+  const query = useQuery({ queryKey, queryFn: ({ signal }) => getPersonalLinks(formId, signal), retry: canRetryRead, refetchOnMount: "always" });
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const state = query.data;

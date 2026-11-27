@@ -1,3 +1,4 @@
+import { authFailure, isUpstreamUnavailable } from "../_shared/auth-failure.mjs";
 import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 import { XMLParser, XMLValidator, XMLBuilder } from "npm:fast-xml-parser@5.11.1";
 import { validateFavicon, MAX_FAVICON_BYTES } from "./favicon.mjs";
@@ -56,8 +57,14 @@ Deno.serve(async req => {
   try {
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: auth, error: authError } = await admin.auth.getUser(token);
-    if (authError || !auth.user) return json(401, { error: "Сессия недействительна" });
-    const { data: profile, error: profileError } = await admin.from("profiles").select("role,is_disabled").eq("id",auth.user.id).single();
+    if (authError || !auth.user) {
+      const failure = authFailure(authError);
+      return json(failure.status, { error: failure.message, code: failure.code });
+    }
+    const { data: profile, error: profileError, status: profileStatus } = await admin.from("profiles").select("role,is_disabled").eq("id",auth.user.id).single();
+    if (profileError && isUpstreamUnavailable(profileStatus)) {
+      return json(503, { error: "Не удалось проверить права доступа. Повторите запрос." });
+    }
     if (profileError || profile?.role !== "admin" || profile.is_disabled) return json(403, { error: "Настройки доступны только администратору" });
     // Bound actual streamed bytes, not just the untrusted Content-Length header.
     const reader = req.body?.getReader(); let size=0; const chunks: Uint8Array[]=[];
