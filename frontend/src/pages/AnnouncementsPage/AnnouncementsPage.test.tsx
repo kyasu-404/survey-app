@@ -111,7 +111,9 @@ describe("Административные объявления", () => {
     await user.click(await screen.findByRole("button", { name: /Действия объявления/ }));
     await user.click(screen.getByRole("menuitem", { name: label }));
     if (action === "archive") {
-      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Архивировать" }));
+      const dialog = within(screen.getByRole("dialog", { name: "Архивировать объявление?" }));
+      expect(dialog.getByRole("button", { name: "Отмена" })).toHaveFocus();
+      await user.click(dialog.getByRole("button", { name: "Архивировать" }));
     }
     await waitFor(() => expect(requests.find(r => r.path === "change_announcement")?.body).toEqual({
       p_id: row.id, p_action: action, p_expected_updated_at: row.updated_at,

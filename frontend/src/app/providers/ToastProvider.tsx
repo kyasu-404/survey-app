@@ -18,7 +18,6 @@ type Toast = {
   id: number;
   message: string;
   type: ToastType;
-  expiresAt: number;
   action?: ToastAction;
   actionPending?: boolean;
   leaving?: boolean;
@@ -28,23 +27,43 @@ type ToastContextValue = {
   showToast: (message: string, type?: ToastType, options?: ToastOptions) => void;
 };
 
+type ToastTimer = { timeoutId: number; expiresAt?: number };
+type ToastActionFocus = { from: HTMLElement; button?: HTMLButtonElement };
+const LEAVE_DURATION_MS = 180;
+
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const lastToastShownAtRef = useRef<Map<string, number>>(new Map());
-  const timeoutIdsRef = useRef<number[]>([]);
+  const timers = useRef(new Map<number, ToastTimer>());
   const pendingActionsRef = useRef(new Set<number>());
   const nextId = useRef(0);
-  const actionFocus = useRef<{ id: number; from: HTMLElement; button?: HTMLButtonElement }>();
+  const actionFocus = useRef(new Map<number, ToastActionFocus>());
   const toastLayerRef = useRef<HTMLDivElement>(null);
 
   const restoreActionFocus = useCallback((id: number) => {
-    const focus = actionFocus.current;
-    if (focus?.id !== id) return;
-    actionFocus.current = undefined;
+    const focus = actionFocus.current.get(id);
+    if (!focus) return;
+    actionFocus.current.delete(id);
     if (document.activeElement === focus.button && focus.from.isConnected) focus.from.focus({ preventScroll: true });
   }, []);
+
+  const scheduleExpiration = useCallback((id: number, durationMs: number, hasAction: boolean) => {
+    const leaveDuration = hasAction ? LEAVE_DURATION_MS : Math.min(LEAVE_DURATION_MS, durationMs);
+    const leaveAfter = hasAction ? durationMs : durationMs - leaveDuration;
+    const timeoutId = window.setTimeout(() => {
+      // Close the action window before the leaving state commits to the DOM.
+      const removalId = window.setTimeout(() => {
+        timers.current.delete(id);
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+      }, leaveDuration);
+      timers.current.set(id, { timeoutId: removalId });
+      restoreActionFocus(id);
+      setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, leaving: true } : toast));
+    }, leaveAfter);
+    timers.current.set(id, { timeoutId, expiresAt: performance.now() + durationMs });
+  }, [restoreActionFocus]);
 
   const showToast = useCallback((message: string, type: ToastType = "warning", { action, durationMs = 3000 }: ToastOptions = {}) => {
     const now = Date.now();
@@ -61,43 +80,47 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
 
     const id = ++nextId.current;
-    if (action?.focusFrom) actionFocus.current = { id, from: action.focusFrom };
-    setToasts((prev) => [...prev, { id, message, type, action, expiresAt: now + durationMs }]);
+    if (action?.focusFrom) actionFocus.current.set(id, { from: action.focusFrom });
+    setToasts(prev => [...prev, { id, message, type, action }]);
+    scheduleExpiration(id, durationMs, Boolean(action));
+  }, [scheduleExpiration]);
 
-    const leaveId = window.setTimeout(() => {
-      restoreActionFocus(id);
-      setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, leaving: true } : toast));
-      timeoutIdsRef.current = timeoutIdsRef.current.filter(item => item !== leaveId);
-    }, durationMs - (action ? 0 : 180));
-    timeoutIdsRef.current.push(leaveId);
+  async function runAction({ id, action, actionPending, leaving }: Toast) {
+    const timer = timers.current.get(id);
+    if (!action || actionPending || leaving || timer?.expiresAt === undefined) return;
+    const remaining = timer.expiresAt - performance.now();
+    if (remaining <= 0) return;
 
-    const timeoutId = window.setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-      timeoutIdsRef.current = timeoutIdsRef.current.filter((item) => item !== timeoutId);
-    }, durationMs + (action ? 180 : 0));
-
-    timeoutIdsRef.current.push(timeoutId);
-  }, [restoreActionFocus]);
-
-  async function runAction({ id, action, expiresAt }: Toast) {
-    if (!action || Date.now() >= expiresAt || pendingActionsRef.current.has(id)) return;
+    window.clearTimeout(timer.timeoutId);
+    timers.current.delete(id);
     pendingActionsRef.current.add(id);
     setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, actionPending: true } : toast));
+
+    let completed = false;
     try {
-      if (await action.run()) {
-        restoreActionFocus(id);
-        setToasts(prev => prev.filter(toast => toast.id !== id));
-      }
+      completed = await action.run();
     } finally {
-      pendingActionsRef.current.delete(id);
-      setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, actionPending: false } : toast));
+      if (pendingActionsRef.current.delete(id)) {
+        if (completed) {
+          restoreActionFocus(id);
+          setToasts(prev => prev.filter(toast => toast.id !== id));
+        } else {
+          setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, actionPending: false } : toast));
+          scheduleExpiration(id, remaining, true);
+        }
+      }
     }
   }
 
   useEffect(() => {
+    const activeTimers = timers.current;
+    const activeActions = pendingActionsRef.current;
+    const focusTargets = actionFocus.current;
     return () => {
-      timeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
-      timeoutIdsRef.current = [];
+      activeTimers.forEach(timer => window.clearTimeout(timer.timeoutId));
+      activeTimers.clear();
+      activeActions.clear();
+      focusTargets.clear();
     };
   }, []);
 
@@ -107,15 +130,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       if (toasts.length && !layer.matches(":popover-open")) layer.showPopover();
       else if (!toasts.length && layer.matches(":popover-open")) layer.hidePopover();
     }
-    const focus = actionFocus.current;
-    if (focus && !focus.button) {
-      const button = layer?.querySelector<HTMLButtonElement>(`[data-toast-action="${focus.id}"]`);
-      if (button && document.activeElement === focus.from) {
+    for (const [id, focus] of [...actionFocus.current].reverse()) {
+      if (focus.button || document.activeElement !== focus.from) continue;
+      const button = layer?.querySelector<HTMLButtonElement>(`[data-toast-action="${id}"]`);
+      if (button) {
         focus.button = button;
         button.focus({ preventScroll: true });
+        break;
       }
     }
-  }, [toasts.length]);
+  }, [toasts]);
 
   const value = useMemo(() => ({ showToast }), [showToast]);
 

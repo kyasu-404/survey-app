@@ -281,5 +281,15 @@ begin
   assert public.run_notification_cleanup() is null, 'A completed sweep did not restore the daily interval';
 end;
 $$;
+reset role;
+
+insert into survey_automation.notification_cleanup_runs(ran_at, removed_count, completed) values
+  ('2000-02-01T00:00:00Z', 1, false), ('2000-02-01T00:00:00Z', 2, true);
+do $$
+begin
+  assert (select count(distinct id) from survey_automation.notification_cleanup_runs
+    where ran_at = '2000-02-01T00:00:00Z') = 2, 'Cleanup runs sharing a timestamp did not receive distinct IDs';
+end;
+$$;
 
 rollback;

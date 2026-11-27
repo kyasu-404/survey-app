@@ -644,9 +644,14 @@ test("bootstrap has one atomic transaction and one canonical definition per func
   }
 });
 
-test("notification grouping migration and the bootstrap install the same overload and helpers", () => {
-  const migration = readFileSync(new URL("./migrations/202611271300_notification_response_groups.sql", import.meta.url), "utf8");
-  const definitions = [...migration.matchAll(/^create function ([\w.]+)\([\s\S]*?^\$\$;/gim)];
-  assert.equal(definitions.length, 3);
-  for (const [definition, name] of definitions) assert.ok(schema.includes(definition), name);
+test("notification grouping migrations and the bootstrap install the same overload and helpers", () => {
+  const latest = new Map();
+  for (const file of ["202611271300_notification_response_groups.sql", "202611271400_notification_feed_performance.sql"]) {
+    const migration = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
+    for (const [definition, name] of migration.matchAll(/^create (?:or replace )?function ([\w.]+)\([\s\S]*?^\$\$;/gim)) {
+      latest.set(name, definition);
+    }
+  }
+  assert.equal(latest.size, 3);
+  for (const [name, definition] of latest) assert.ok(schema.includes(definition), name);
 });

@@ -1,5 +1,5 @@
 import { ModalHeading } from "../../shared/ui/ModalHeading";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { routes } from "../../app/routes";
@@ -78,7 +78,8 @@ function RuleCard({ rule, userId }: { rule: AutomationRuleListItem; userId: stri
 function ArchiveRuleDialog({ name, pending, error, onClose, onConfirm }: {
   name: string; pending: boolean; error: Error | null; onClose: () => void; onConfirm: () => void;
 }) {
-  const dialog = useModalSurface();
+  const cancel = useRef<HTMLButtonElement>(null);
+  const dialog = useModalSurface(cancel);
   return <dialog ref={dialog} className="card modal-card rule-archive-dialog"
     aria-labelledby="rule-archive-heading" aria-describedby="rule-archive-description"
     onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
@@ -88,7 +89,7 @@ function ArchiveRuleDialog({ name, pending, error, onClose, onConfirm }: {
     <p id="rule-archive-description">Правило «{name}» будет выключено. История срабатываний сохранится.</p>
     {error && <p className="activity-error" role="alert">{getErrorMessage(error, "Не удалось архивировать правило")}</p>}
     <div className="activity-actions">
-      <button type="button" className="app-button" disabled={pending} onClick={onClose}>Отмена</button>
+      <button ref={cancel} type="button" className="app-button" disabled={pending} onClick={onClose}>Отмена</button>
       <button type="button" className="button-primary" disabled={pending} onClick={onConfirm}>
         {pending && <InlineSpinner />} Архивировать
       </button>

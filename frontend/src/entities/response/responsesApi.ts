@@ -305,26 +305,48 @@ export async function fetchResponsesByForm(
   };
 }
 
-/** Read the form in chronological batches without the size limit of the export endpoint. */
 export async function fetchResponsesForSorting(formId: string, signal?: AbortSignal): Promise<SurveyResponse[]> {
-  const responses: SurveyResponse[] = [];
+  try {
+    // The server checks size and returns all rows from one database snapshot.
+    const responses = await fetchAllResponsesByForm(formId, { signal });
+    signal?.throwIfAborted();
+    return responses;
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (isRecord(error) && error.code === "54000") {
+      throw new Error("Сортировка доступна для форм с количеством ответов до 10 000 и общим объёмом до 32 МБ");
+    }
+    throw error;
+  }
+}
+
+/** Resolve chronological numbers without downloading answers outside the selection. */
+export async function fetchSelectedResponseNumbers(formId: string, responseIds: ReadonlySet<string>, signal?: AbortSignal) {
+  const remaining = new Set(responseIds);
+  const selected: Array<{ id: string; number: number }> = [];
+  let number = 0;
   let cursor: TimelineCursor | undefined;
 
-  while (true) {
+  while (remaining.size > 0) {
     signal?.throwIfAborted();
-    const { data, error } = await runRequest("responses.fetchForSorting", (requestSignal) => {
-      const query = apiClient.from("responses").select(SAFE_RESPONSE_LIST_COLUMNS).eq("form_id", formId);
+    const { data, error } = await runRequest("responses.numberSelection", (requestSignal) => {
+      const query = apiClient.from("responses").select("id, created_at").eq("form_id", formId);
       if (cursor) query.or(timelineBefore(cursor));
       return applyAbortSignal(query.order("created_at", { ascending: false }).order("id", { ascending: false }), requestSignal)
-        .limit(MAX_RESPONSES_PAGE_SIZE);
+        .limit(1000);
     }, { signal, context: { formId } });
 
+    signal?.throwIfAborted();
     if (error) throw error;
-    const batch = (data ?? []) as SurveyResponse[];
-    responses.push(...batch);
-    if (batch.length < MAX_RESPONSES_PAGE_SIZE) return responses;
+    const batch = data as TimelineCursor[] | null;
+    if (!batch?.length) break;
+    for (const { id } of batch) {
+      number += 1;
+      if (remaining.delete(id)) selected.push({ id, number });
+    }
     cursor = batch[batch.length - 1];
   }
+  return selected;
 }
 
 export async function fetchAllResponsesByForm(

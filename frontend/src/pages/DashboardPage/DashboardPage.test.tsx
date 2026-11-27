@@ -1583,7 +1583,9 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { name: "Удаление формы" })).toHaveClass("dashboard-delete-modal-title");
     expect(container.querySelector(".dashboard-delete-modal-actions")).toBeInTheDocument();
     expect(container.querySelector(".dashboard-delete-modal-actions .dashboard-danger-button")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    const cancel = within(screen.getByRole("dialog", { name: "Удаление формы" })).getByRole("button", { name: "Отмена" });
+    expect(cancel).toHaveFocus();
+    await userEvent.click(cancel);
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 

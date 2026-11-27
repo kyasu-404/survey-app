@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchAllResponsesByForm, fetchExistingResponse, fetchResponsesByForm, insertResponse, updateResponse } from "./responsesApi";
+import { fetchAllResponsesByForm, fetchExistingResponse, fetchResponsesByForm, fetchResponsesForSorting, fetchSelectedResponseNumbers, insertResponse, updateResponse } from "./responsesApi";
 import { apiClient } from "../../shared/api/client";
 
 vi.mock("../../shared/api/client", () => ({
@@ -222,6 +222,61 @@ describe("fetchResponsesByForm", () => {
   });
 });
 
+
+describe("fetchResponsesForSorting", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("sorts from one complete snapshot without a paginated count", async () => {
+    const rows = Array.from({ length: 105 }, (_, index) => ({ id: String(index), data: {} }));
+    vi.mocked(apiClient.rpc).mockResolvedValue({ data: rows, error: null } as never);
+
+    await expect(fetchResponsesForSorting("form-1")).resolves.toEqual(rows);
+    expect(apiClient.rpc).toHaveBeenCalledExactlyOnceWith("export_form_responses", { p_form_id: "form-1", p_response_ids: null });
+    expect(apiClient.from).not.toHaveBeenCalled();
+  });
+
+  it("reports the sorting limit and never returns a partial snapshot", async () => {
+    vi.mocked(apiClient.rpc).mockResolvedValue({ data: null, error: { code: "54000", message: "Слишком большая выгрузка" } } as never);
+
+    await expect(fetchResponsesForSorting("form-1")).rejects.toThrow("Сортировка доступна для форм с количеством ответов до 10 000 и общим объёмом до 32 МБ");
+    expect(apiClient.from).not.toHaveBeenCalled();
+  });
+
+  it("does not request a snapshot after cancellation", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(fetchResponsesForSorting("form-1", controller.signal)).rejects.toThrow();
+    expect(apiClient.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchSelectedResponseNumbers", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("numbers selected responses across short batches without loading answer data", async () => {
+    const created_at = "2026-04-08T11:30:00.000Z";
+    const query = {
+      select: vi.fn(() => query), eq: vi.fn(() => query), order: vi.fn(() => query),
+      abortSignal: vi.fn(() => query), or: vi.fn(() => query),
+      limit: vi.fn().mockResolvedValueOnce({
+        data: [{ id: "r4", created_at }, { id: "r3", created_at }], error: null,
+      }).mockResolvedValueOnce({
+        data: [{ id: "r2", created_at }, { id: "r1", created_at }], error: null,
+      }),
+    };
+    vi.mocked(apiClient.from).mockReturnValue(query as never);
+
+    await expect(fetchSelectedResponseNumbers("form-1", new Set(["r1", "r3"]))).resolves.toEqual([
+      { id: "r3", number: 2 }, { id: "r1", number: 4 },
+    ]);
+    expect(query.select).toHaveBeenCalledWith("id, created_at");
+    expect(query.or).toHaveBeenCalledExactlyOnceWith(
+      `created_at.lt.${created_at},and(created_at.eq.${created_at},id.lt.r3)`,
+    );
+    expect(query.limit).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe("fetchAllResponsesByForm", () => {
   afterEach(() => vi.clearAllMocks());

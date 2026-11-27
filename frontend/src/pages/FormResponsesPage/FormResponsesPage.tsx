@@ -14,7 +14,9 @@ import {
   hasOrganizationQuestion,
   normalizeOrganizationTypes,
 } from "../../entities/organization/model";
-import { deleteResponses, getAllResponsesByForm, getResponsesByForm, getResponsesForSorting } from "../../entities/response/api";
+import {
+  deleteResponses, getAllResponsesByForm, getResponsesByForm, getResponsesForSorting, getSelectedResponseNumbers,
+} from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
@@ -312,7 +314,7 @@ export default function FormResponsesPage() {
   });
 
   const pageResponses = responsesQuery.data?.data ?? EMPTY_RESPONSES;
-  const pageContainsAllResponses = pageResponses.length === responsesQuery.data?.count;
+  const pageContainsAllResponses = responsesQuery.data?.page === 1 && pageResponses.length === responsesQuery.data.count;
   const needsSortSnapshot = Boolean(id && sort && responsesQuery.data && !pageContainsAllResponses);
   const sortSnapshot = useQuery({
     queryKey: sortQueryKey,
@@ -326,10 +328,13 @@ export default function FormResponsesPage() {
   const isStartingSort = needsSortSnapshot && sortSnapshot.isPending;
 
   useEffect(() => {
-    if (!needsSortSnapshot || !sortSnapshot.error || isAbortError(sortSnapshot.error)) return;
-    if (!sortSnapshot.data) setSort(null);
+    if (!needsSortSnapshot || sortSnapshot.fetchStatus !== "idle" || !sortSnapshot.error || isAbortError(sortSnapshot.error)) return;
+    if (!sortSnapshot.data) {
+      setPage(basePage);
+      setSort(null);
+    }
     showToast(getErrorMessage(sortSnapshot.error, "Не удалось отсортировать ответы"), "error");
-  }, [needsSortSnapshot, sortSnapshot.data, sortSnapshot.error, showToast]);
+  }, [basePage, needsSortSnapshot, showToast, sortSnapshot.data, sortSnapshot.error, sortSnapshot.fetchStatus]);
 
   const usesOrganizationDirectory = Boolean(
     formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
@@ -549,10 +554,9 @@ export default function FormResponsesPage() {
         );
         selected = numberedSelection(pageResponses, pageOffset);
         if (selected.length !== selectedResponseIds.size) {
-          const chronologicalResponses = sortedResponses && sortSource
-            ? sortSource
-            : await getResponsesForSorting(id, controller.signal);
-          selected = numberedSelection(chronologicalResponses, 0);
+          selected = sortedResponses && sortSource
+            ? numberedSelection(sortSource, 0)
+            : await getSelectedResponseNumbers(id, selectedResponseIds, controller.signal);
         }
         if (selected.length !== selectedResponseIds.size) {
           showToast("Список ответов обновился. Выберите ответы для выгрузки ещё раз.", "warning");
@@ -664,10 +668,14 @@ export default function FormResponsesPage() {
   };
 
   const cycleSort = (key: string) => {
+    setPage(1);
     if (sort?.key === key && sort.direction === "descending") {
       setSort(null);
       void queryClient.cancelQueries({ queryKey: sortQueryKey, exact: true });
       return;
+    }
+    if (!sort && queryClient.getQueryState(sortQueryKey)?.status === "error") {
+      void queryClient.resetQueries({ queryKey: sortQueryKey, exact: true });
     }
     setSort({ key, direction: sort?.key === key ? "descending" : "ascending", basePage });
   };
@@ -937,7 +945,7 @@ export default function FormResponsesPage() {
             {totalPages > 1 && (
               <nav aria-label="Страницы ответов" className="responses-pagination">
                 <button type="button" className="button" disabled={page <= 1 || isPaginationBusy} onClick={() => setPage(current => current - 1)}>Назад</button>
-                <span aria-live="polite">Страница {page} из {totalPages}</span>
+                <span aria-live="polite">Страница {sortedResponses ? page : responsePageNumber} из {totalPages}</span>
                 <button type="button" className="button" disabled={page >= totalPages || isPaginationBusy} onClick={() => setPage(current => current + 1)}>Далее</button>
               </nav>
             )}

@@ -19,7 +19,7 @@ test("200 loaded form cards refresh with one keyset request", async ({ page }) =
   expect(pageErrors).toEqual([]);
 });
 
-test("sorts responses across cursor batches and shows sort controls in both themes", async ({ page }, testInfo) => {
+test("sorts a complete response snapshot and shows sort controls in both themes", async ({ page }, testInfo) => {
   const responseData = Array.from({ length: 105 }, (_, i) => ({ name: `Строка ${i + 1}`, score: i === 0 ? 10 : i === 104 ? 2 : undefined }));
   const { formId, pageErrors } = await openSurveyApp(page, {
     responseCount: responseData.length,

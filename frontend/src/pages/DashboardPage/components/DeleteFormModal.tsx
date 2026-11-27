@@ -1,5 +1,5 @@
 import { ModalHeading } from "../../../shared/ui/ModalHeading";
-import { useId } from "react";
+import { useId, useRef } from "react";
 import { InlineSpinner } from "../../../shared/ui/InlineSpinner";
 import { useModalSurface } from "../../../shared/ui/useModalSurface";
 import type { SurveyFormSummary } from "../../../entities/survey/types";
@@ -12,7 +12,8 @@ type DeleteFormModalProps = {
 };
 
 export function DeleteFormModal({ form, isPending, onCancel, onConfirm }: DeleteFormModalProps) {
-  const dialog = useModalSurface();
+  const cancel = useRef<HTMLButtonElement>(null);
+  const dialog = useModalSurface(cancel);
   const titleId = useId();
   const descriptionId = useId();
   return (
@@ -24,7 +25,7 @@ export function DeleteFormModal({ form, isPending, onCancel, onConfirm }: Delete
       </ModalHeading>
       <p className="dashboard-delete-modal-copy" id={descriptionId}>Удалить форму «{form.title}»? Это действие нельзя отменить.</p>
       <div className="dashboard-delete-modal-actions">
-        <button type="button" className="app-button" onClick={onCancel} disabled={isPending}>
+        <button ref={cancel} type="button" className="app-button" onClick={onCancel} disabled={isPending}>
           Отмена
         </button>
         <button type="button" className="dashboard-danger-button" onClick={onConfirm} disabled={isPending}>

@@ -83,6 +83,7 @@ function NotificationCenter({ userId }: { userId: string }) {
   useTimelineHeadRefresh({
     queryKey, pageCount: feed.data?.pages.length ?? 0, interval: 30_000,
     fetchPage: signal => getNotifications(category, read, undefined, signal),
+    getItemKey: notificationFeedItemKey,
   });
   const { mark, acknowledge } = useNotificationActions(userId);
   const { remove, pending: removalPending } = useNotificationRemoval(userId);

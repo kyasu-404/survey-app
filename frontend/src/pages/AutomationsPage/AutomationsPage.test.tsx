@@ -552,6 +552,7 @@ describe("AutomationsPage", () => {
     const { requests, user } = renderPage({ entry: "/automations/rule" });
     await user.click(await screen.findByRole("button", { name: "Архивировать" }));
     const dialog = within(screen.getByRole("dialog", { name: "Архивировать правило?" }));
+    expect(dialog.getByRole("button", { name: "Отмена" })).toHaveFocus();
     await user.click(dialog.getByRole("button", { name: "Архивировать" }));
     expect(await screen.findByText("В архиве")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Редактировать" })).not.toBeInTheDocument();

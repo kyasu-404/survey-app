@@ -1,4 +1,5 @@
 import { Icon } from "../../shared/ui/Icon";
+import { ModalHeading } from "../../shared/ui/ModalHeading";
 import { MoreHorizontalIcon } from "../../shared/ui/MoreHorizontalIcon";
 import { ViewportMenu } from "../../shared/ui/ViewportMenu";
 import { useModalSurface } from "../../shared/ui/useModalSurface";
@@ -75,4 +76,3 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
   <div className="office-tab-panel" role="tabpanel" id="documents-panel-results" aria-labelledby="documents-tab-results" hidden={tab!=='results'}>{tab==='results' && <DocumentResults formId={formId} focusId={focusResult}/>}</div>
  </dialog>;
 }
-import { ModalHeading } from "../../shared/ui/ModalHeading";

@@ -242,6 +242,7 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop -t 1
 11. `202611232230_review_followup.sql`
 12. `202611271200_notification_cleanup.sql`
 13. `202611271300_notification_response_groups.sql`
+14. `202611271400_notification_feed_performance.sql`
 
 Применяйте файлы по одному с `psql -v ON_ERROR_STOP=1`. Перед запуском сервисов
 проверьте присутствие `public.notifications` в публикации `supabase_realtime`.

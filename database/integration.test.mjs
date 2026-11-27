@@ -118,6 +118,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const reviewFollowupFixes = await source("./migrations/202611232230_review_followup.sql");
     const notificationCleanupMigration = await source("./migrations/202611271200_notification_cleanup.sql");
     const notificationGroupsMigration = await source("./migrations/202611271300_notification_response_groups.sql");
+    const notificationFeedPerformanceMigration = await source("./migrations/202611271400_notification_feed_performance.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -228,6 +229,21 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
           await db.query("rollback");
         }
         await db.query(notificationGroupsMigration);
+        await db.query(`
+          insert into survey_automation.notification_cleanup_runs(ran_at,removed_count,completed)
+          values ('2000-01-01T00:00:00Z',17,false), ('2000-01-02T00:00:00Z',23,true)
+        `);
+        await db.query(notificationFeedPerformanceMigration);
+        const { rows: cleanupRuns } = await db.query(`
+          select id, ran_at, removed_count, completed
+          from survey_automation.notification_cleanup_runs order by ran_at
+        `);
+        assert.equal(new Set(cleanupRuns.map(row => row.id)).size, 2);
+        assert.deepEqual(cleanupRuns.map(({ ran_at, removed_count, completed }) =>
+          [ran_at.toISOString(), removed_count, completed]), [
+          ["2000-01-01T00:00:00.000Z", 17, false],
+          ["2000-01-02T00:00:00.000Z", 23, true],
+        ]);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
@@ -243,6 +259,7 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/announcements.sql");
       await runPsql(database, "./tests/notification_cleanup.sql");
       await runPsql(database, "./tests/notification_groups.sql");
+      if (process.env.SURVEY_TEST_SCALE === "1") await runPsql(database, "./tests/notification_group_performance.sql");
       await runPsql(database, "./tests/review_regressions.sql");
       await runPsql(database, "./tests/full_code_review_fixes.sql");
       await runPsql(database, "./tests/review_followup.sql");

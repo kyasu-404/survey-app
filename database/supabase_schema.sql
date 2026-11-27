@@ -4006,12 +4006,17 @@ create table survey_automation.notification_event_keys (
   event_key text not null,
   primary key (user_id, event_key)
 );
+comment on table survey_automation.notification_event_keys is
+  'Permanent per-account event deduplication; keys outlive the notification and cascade on account deletion.';
 
 create table survey_automation.notification_cleanup_runs (
-  ran_at timestamptz primary key,
+  ran_at timestamptz not null,
   removed_count integer not null,
-  completed boolean not null
+  completed boolean not null,
+  id bigint generated always as identity primary key
 );
+create index notification_cleanup_runs_completed_at
+on survey_automation.notification_cleanup_runs (ran_at desc) where completed;
 
 alter table survey_automation.notification_event_keys enable row level security;
 alter table survey_automation.notification_cleanup_runs enable row level security;
@@ -4040,6 +4045,8 @@ create index notifications_user_category on public.notifications (user_id, categ
   where deleted_at is null;
 create index notifications_user_unread on public.notifications (user_id, created_at desc, id desc)
   where read_at is null and deleted_at is null and category not in ('automation_triggered', 'automation_succeeded');
+create index notifications_user_read on public.notifications (user_id, created_at desc, id desc)
+where deleted_at is null and read_at is not null and category not in ('automation_triggered', 'automation_succeeded');
 create index notifications_cleanup_deleted on public.notifications (deleted_at, id)
   where deleted_at is not null;
 create index notifications_cleanup_read on public.notifications (read_at, id)
@@ -6032,14 +6039,14 @@ $$;
 
 revoke all on function survey_automation.notification_timezone(text) from public, anon, authenticated, service_role;
 
-create function public.list_notification_feed(
+create or replace function public.list_notification_feed(
   p_category text, p_read text, p_before_at timestamptz, p_before_id uuid, p_limit integer, p_timezone text
 )
 returns table (
   id uuid, category text, title text, message text, form_id uuid, response_id uuid, rule_id uuid,
   created_at timestamptz, read_at timestamptz, announcement jsonb, response_group jsonb
 )
-language plpgsql stable security definer set search_path = '' as $$
+language plpgsql stable security definer set search_path = '' set plan_cache_mode = force_custom_plan as $$
 declare
   actor uuid := auth.uid();
   local_zone text;
@@ -6055,51 +6062,57 @@ begin
   end if;
 
   return query
-  -- Rank all matching responses before applying the cursor so a group cannot split across pages.
-  with matching_responses as (
-    select n.id, n.category, n.form_id, n.created_at, n.read_at, (n.created_at at time zone local_zone)::date as local_day
+  with personal_page as (
+    select n.id, n.category, n.title, n.message, n.form_id, n.response_id, n.rule_id,
+      n.created_at, n.read_at, null::jsonb as announcement, d.local_day
     from public.notifications n
-    where local_zone is not null and n.user_id = actor and n.deleted_at is null and n.form_id is not null
-      and n.category in ('response_received', 'response_updated')
+    cross join lateral (
+      select case when n.category in ('response_received', 'response_updated') and n.form_id is not null
+        then (n.created_at at time zone local_zone)::date end as local_day
+    ) d
+    where n.user_id = actor and n.deleted_at is null
+      and n.category not in ('automation_triggered', 'automation_succeeded')
       and (p_category is null or n.category = p_category)
       and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
-  ), ranked_responses as (
-    select m.id, m.created_at, m.local_day,
-      row_number() over (calendar_group order by m.created_at desc, m.id desc) as position,
-      count(*) over calendar_group as event_count,
-      count(*) filter (where m.read_at is null) over calendar_group as unread_count
-    from matching_responses m
-    window calendar_group as (partition by m.form_id, m.category, m.local_day)
-  ), personal_candidates as (
-    select r.id, r.created_at,
-      jsonb_build_object(
-        'day', to_char(r.local_day, 'YYYY-MM-DD'), 'count', r.event_count, 'unread_count', r.unread_count
-      ) as response_group
-    from ranked_responses r
-    where r.position = 1 and (p_before_at is null or (r.created_at, r.id) < (p_before_at, p_before_id))
+      and (p_before_at is null or (n.created_at, n.id) < (p_before_at, p_before_id))
+      -- The existence check sees matching rows above the cursor so a group cannot repeat on another page.
+      and case when d.local_day is null then true else not exists (
+        select 1 from public.notifications newer
+        where newer.user_id = actor and newer.deleted_at is null and newer.form_id = n.form_id
+          and newer.category in ('response_received', 'response_updated') and newer.category = n.category
+          and (newer.created_at, newer.id) > (n.created_at, n.id)
+          and newer.created_at < (d.local_day::timestamp at time zone 'UTC') + interval '48 hours'
+          and (newer.created_at at time zone local_zone)::date = d.local_day
+          and (p_read = 'all' or (p_read = 'unread' and newer.read_at is null) or (p_read = 'read' and newer.read_at is not null))
+      ) end
+    order by n.created_at desc, n.id desc limit page_size
+  ), candidates as (
+    select p.* from personal_page p
     union all
-    (select n.id, n.created_at, null::jsonb as response_group
-     from public.notifications n
-     where n.user_id = actor and n.deleted_at is null
-       and n.category not in ('automation_triggered', 'automation_succeeded')
-       and not (n.category in ('response_received', 'response_updated') and n.form_id is not null)
-       and (p_category is null or n.category = p_category)
-       and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
-       and (p_before_at is null or (n.created_at, n.id) < (p_before_at, p_before_id))
-     order by n.created_at desc, n.id desc limit page_size)
-  ), personal_page as (
-    select c.id, c.response_group
-    from personal_candidates c order by c.created_at desc, c.id desc limit page_size
-  ), combined as (
-    select n.id, n.category, n.title, n.message, n.form_id, n.response_id, n.rule_id,
-      n.created_at, n.read_at, null::jsonb as announcement, p.response_group
-    from personal_page p join public.notifications n on n.id = p.id
-    union all
-    select a.*, null::jsonb as response_group
+    select a.*, null::date as local_day
     from public.list_notification_feed('announcement', p_read, p_before_at, p_before_id, page_size) a
     where p_category is null or p_category = 'announcement'
+  ), page as materialized (
+    select c.* from candidates c order by c.created_at desc, c.id desc limit page_size
   )
-  select c.* from combined c order by c.created_at desc, c.id desc limit page_size;
+  select p.id, p.category, p.title, p.message, p.form_id, p.response_id, p.rule_id,
+    p.created_at, p.read_at, p.announcement,
+    case when p.local_day is not null then jsonb_build_object(
+      'day', to_char(p.local_day, 'YYYY-MM-DD'), 'count', totals.event_count, 'unread_count', totals.unread_count
+    ) end as response_group
+  from page p
+  left join lateral (
+    select count(*) as event_count, count(*) filter (where n.read_at is null) as unread_count
+    from public.notifications n
+    where p.local_day is not null
+      and n.user_id = actor and n.deleted_at is null and n.form_id = p.form_id
+      and n.category in ('response_received', 'response_updated') and n.category = p.category
+      and n.created_at >= (p.local_day::timestamp at time zone 'UTC') - interval '24 hours'
+      and n.created_at < (p.local_day::timestamp at time zone 'UTC') + interval '48 hours'
+      and (n.created_at at time zone local_zone)::date = p.local_day
+      and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
+  ) totals on p.local_day is not null
+  order by p.created_at desc, p.id desc;
 end;
 $$;
 

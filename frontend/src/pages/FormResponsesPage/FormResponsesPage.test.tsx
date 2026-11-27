@@ -73,9 +73,17 @@ vi.mock("../../entities/response/api", () => {
     deleteResponses,
     getResponsesByForm: async (id: string, options: { page: number; pageSize: number; signal?: AbortSignal }) => {
       snapshot = await loadResponseRows(id, options);
-      return { data: snapshot.slice((options.page - 1) * options.pageSize, options.page * options.pageSize), count: snapshot.length, totalPages: Math.max(1, Math.ceil(snapshot.length / options.pageSize)) };
+      return {
+        data: snapshot.slice((options.page - 1) * options.pageSize, options.page * options.pageSize),
+        count: snapshot.length,
+        page: options.page,
+        pageSize: options.pageSize,
+        totalPages: Math.max(1, Math.ceil(snapshot.length / options.pageSize)),
+      };
     },
     getResponsesForSorting: async () => snapshot,
+    getSelectedResponseNumbers: async (_id: string, ids: ReadonlySet<string>) =>
+      snapshot.flatMap((row, index) => ids.has(row.id) ? [{ id: row.id, number: index + 1 }] : []),
     getAllResponsesByForm: async (_id: string, options?: { responseIds?: string[] }) => options?.responseIds ? snapshot.filter(row => options.responseIds!.includes(row.id)) : snapshot,
   };
 });
@@ -1133,6 +1141,147 @@ describe("FormResponsesPage", () => {
     expect(screen.getByText("Выбрано: 1")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Далее" }));
     expect(await screen.findByRole("checkbox", { name: "Выбрать Ответ Анна" })).toBeChecked();
+  });
+
+  it("retries a failed global sort on one header click", async () => {
+    const user = userEvent.setup();
+    const responses = createFullResponsePage(1, 60);
+    const retry = createDeferred<SurveyResponse[]>();
+    const fetchSort = vi.spyOn(responseApi, "getResponsesForSorting")
+      .mockRejectedValueOnce(new Error("Сортировка временно недоступна"))
+      .mockReturnValueOnce(retry.promise);
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    loadResponseRows.mockResolvedValue(responses);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    try {
+      const header = await screen.findByRole("columnheader", { name: "Имя" });
+      const button = within(header).getByRole("button");
+      await user.click(button);
+      await waitFor(() => expect(showToast).toHaveBeenCalledWith("Сортировка временно недоступна", "error"));
+      await waitFor(() => expect(button).toHaveAttribute("title", "По возрастанию"));
+
+      await user.click(button);
+      expect(fetchSort).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+      expect(showToast).toHaveBeenCalledTimes(1);
+      retry.resolve(responses);
+      await waitFor(() => expect(header).toHaveAttribute("aria-sort", "ascending"));
+    } finally {
+      retry.resolve(responses);
+      fetchSort.mockRestore();
+    }
+  });
+
+  it("ignores a cached sort error while a new attempt is loading", async () => {
+    const user = userEvent.setup();
+    const responses = createFullResponsePage(1, 60);
+    const client = createQueryClient();
+    const queryKey = getFormResponsesQueryKey("form-1", "sort-snapshot");
+    client.setQueryData(queryKey, responses);
+    await expect(client.fetchQuery({
+      queryKey,
+      queryFn: async () => { throw new Error("Ошибка прошлой загрузки"); },
+    })).rejects.toThrow("Ошибка прошлой загрузки");
+    await client.invalidateQueries({ queryKey, refetchType: "none" });
+
+    const pending = createDeferred<SurveyResponse[]>();
+    const fetchSort = vi.spyOn(responseApi, "getResponsesForSorting").mockReturnValue(pending.promise);
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    loadResponseRows.mockResolvedValue(responses);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={client}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    try {
+      const header = await screen.findByRole("columnheader", { name: "Имя" });
+      await user.click(within(header).getByRole("button"));
+      expect(fetchSort).toHaveBeenCalledOnce();
+      expect(showToast).not.toHaveBeenCalled();
+      pending.resolve(responses);
+      await waitFor(() => expect(header).toHaveAttribute("aria-sort", "ascending"));
+    } finally {
+      pending.resolve(responses);
+      fetchSort.mockRestore();
+    }
+  });
+
+  it("returns to the first page when the active sort changes", async () => {
+    const user = userEvent.setup();
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    loadResponseRows.mockResolvedValue(createFullResponsePage(1, 60));
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    await screen.findByText("Ответ 50");
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+    await screen.findByText("Ответ 60");
+    await user.click(screen.getByRole("button", { name: "Имя" }));
+    await waitFor(() => expect(screen.getByRole("columnheader", { name: "Имя" })).toHaveAttribute("aria-sort", "ascending"));
+    expect(screen.getByText("Страница 1 из 2")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+    expect(screen.getByText("Страница 2 из 2")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Имя" }));
+    expect(screen.getByRole("columnheader", { name: "Имя" })).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByText("Страница 1 из 2")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+    await user.click(screen.getByRole("button", { name: "Дата ответа" }));
+    expect(screen.getByRole("columnheader", { name: "Дата ответа" })).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByText("Страница 1 из 2")).toBeVisible();
+  });
+
+  it("loads a complete snapshot even if a later page appears to match the total", async () => {
+    const user = userEvent.setup();
+    const responses = createFullResponsePage(1, 60);
+    const fetchPage = vi.spyOn(responseApi, "getResponsesByForm").mockImplementation(async (_id, options) => {
+      const page = options?.page ?? 1;
+      return page === 1
+        ? { data: responses.slice(0, 50), count: 60, page, pageSize: 50, totalPages: 2 }
+        : { data: [responses[59]], count: 1, page, pageSize: 50, totalPages: 2 };
+    });
+    const fetchSort = vi.spyOn(responseApi, "getResponsesForSorting").mockResolvedValue([responses[0], responses[59]]);
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    try {
+      await screen.findByText("Ответ 50");
+      await user.click(screen.getByRole("button", { name: "Далее" }));
+      await screen.findByText("Ответ 60");
+      await user.click(screen.getByRole("button", { name: "Имя" }));
+      expect(await screen.findByText("Ответов: 2")).toBeVisible();
+      expect(screen.getByText("Ответ 1")).toBeVisible();
+      expect(fetchSort).toHaveBeenCalledOnce();
+    } finally {
+      fetchPage.mockRestore();
+      fetchSort.mockRestore();
+    }
   });
 
   it("cancels a pending global sort when its direction is cleared", async () => {
