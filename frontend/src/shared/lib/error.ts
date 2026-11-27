@@ -16,33 +16,114 @@ export function isAbortError(error: unknown) {
   );
 }
 
+function getErrorText(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.trim();
+  }
+
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    return error.message.trim();
+  }
+
+  return "";
+}
+
 export function getAuthErrorMessage(error: unknown) {
   const fallbackMessage = "Не удалось выполнить вход. Проверьте данные и попробуйте снова.";
 
-  if (!(error instanceof Error)) {
+  if (typeof error !== "object" || error === null) {
     return fallbackMessage;
   }
 
-  const normalizedMessage = error.message.trim().toLowerCase();
+  const details = error as {
+    code?: unknown;
+    status?: unknown;
+    name?: unknown;
+    message?: unknown;
+  };
+  const code = typeof details.code === "string" ? details.code.trim().toLowerCase() : "";
+  const status = typeof details.status === "number" ? details.status : undefined;
+  const name = typeof details.name === "string" ? details.name : "";
+  const normalizedMessage = getErrorText(error).toLowerCase();
 
-  if (normalizedMessage.includes("invalid login credentials")) {
+  if (
+    code === "invalid_credentials" ||
+    name === "AuthInvalidCredentialsError" ||
+    normalizedMessage.includes("invalid login credentials") ||
+    normalizedMessage.includes("invalid_credentials")
+  ) {
     return "Неверная почта или пароль.";
   }
 
-  if (normalizedMessage.includes("email not confirmed")) {
+  if (
+    code === "user_banned" ||
+    normalizedMessage.includes("user is banned") ||
+    normalizedMessage.includes("user has been banned") ||
+    normalizedMessage.includes("user_banned")
+  ) {
+    return "Учётная запись отключена. Обратитесь к администратору.";
+  }
+
+  if (code === "email_not_confirmed" || normalizedMessage.includes("email not confirmed")) {
     return "Подтвердите адрес электронной почты перед входом.";
   }
 
-  if (normalizedMessage.includes("network") || normalizedMessage.includes("fetch")) {
-    return "Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.";
-  }
-
-  if (normalizedMessage.includes("too many requests")) {
+  if (
+    code === "over_request_rate_limit" ||
+    status === 429 ||
+    normalizedMessage.includes("too many requests") ||
+    normalizedMessage.includes("rate limit")
+  ) {
     return "Слишком много попыток входа. Подождите немного и попробуйте снова.";
   }
 
-  if (normalizedMessage.includes("user not found")) {
+  if (
+    code === "email_address_invalid" ||
+    normalizedMessage.includes("unable to validate email") ||
+    normalizedMessage.includes("invalid email")
+  ) {
+    return "Укажите корректный адрес электронной почты.";
+  }
+
+  if (code === "email_provider_disabled" || code === "provider_disabled") {
+    return "Вход по электронной почте временно отключён. Обратитесь к администратору.";
+  }
+
+  if (code === "captcha_failed" || normalizedMessage.includes("captcha")) {
+    return "Не удалось пройти проверку безопасности. Попробуйте ещё раз.";
+  }
+
+  if (code === "user_not_found" || normalizedMessage.includes("user not found")) {
     return "Пользователь с такой почтой не найден.";
+  }
+
+  if (
+    name === "RequestTimeoutError" ||
+    code === "request_timeout" ||
+    code === "hook_timeout" ||
+    code === "hook_timeout_after_retry" ||
+    status === 408 ||
+    status === 504 ||
+    normalizedMessage.includes("timeout") ||
+    normalizedMessage.includes("timed out") ||
+    normalizedMessage.includes("таймаут")
+  ) {
+    return "Сервер не успел ответить. Проверьте подключение и попробуйте снова.";
+  }
+
+  if (
+    name === "AuthRetryableFetchError" ||
+    status === 0 ||
+    normalizedMessage.includes("network") ||
+    normalizedMessage.includes("fetch") ||
+    normalizedMessage.includes("load failed") ||
+    normalizedMessage.includes("offline")
+  ) {
+    return "Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.";
+  }
+
+  if ((status !== undefined && status >= 500) || code === "unexpected_failure") {
+    return "Сервис авторизации временно недоступен. Попробуйте позже.";
   }
 
   return fallbackMessage;

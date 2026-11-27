@@ -7,7 +7,9 @@ import PreferencesPage from "./PreferencesPage";
 
 const { updateCurrentUserPassword } = vi.hoisted(() => ({ updateCurrentUserPassword: vi.fn() }));
 vi.mock("../../shared/api", () => ({ apiClient: { auth: { updateCurrentUserPassword } } }));
-vi.mock("../../app/providers/AuthProvider", () => ({ useAuth: () => ({ user: { id: "viewer" } }) }));
+vi.mock("../../app/providers/AuthProvider", () => ({
+  useAuth: () => ({ user: { id: "viewer", email: "viewer@example.com" }, profile: { email: "viewer@example.com" } }),
+}));
 vi.mock("../../app/providers/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../entities/notification/api", () => ({
   getNotificationPreferences: vi.fn().mockResolvedValue(["response_received"]),
@@ -42,8 +44,21 @@ describe("personal settings", () => {
     await user.keyboard("{ArrowRight}");
     expect(tabs[1]).toHaveFocus();
     const panel = screen.getByRole("tabpanel", { name: "Безопасность" });
+    const hiddenUsername = panel.querySelector<HTMLInputElement>('input[name="username"]');
+    expect(hiddenUsername).not.toBeNull();
+    expect(hiddenUsername).toHaveAttribute("autocomplete", "username");
+    expect(hiddenUsername).toHaveValue("viewer@example.com");
     expect(within(panel).getByLabelText("Текущий пароль")).toHaveAttribute("autocomplete", "current-password");
+    expect(within(panel).getByLabelText("Текущий пароль")).toHaveAttribute("name", "current-password");
     expect(within(panel).getByLabelText("Новый пароль", { exact: true })).toHaveAttribute("autocomplete", "new-password");
+    expect(within(panel).getByLabelText("Новый пароль", { exact: true })).toHaveAttribute("name", "new-password");
+    expect(within(panel).getByLabelText("Повторите новый пароль")).toHaveAttribute("autocomplete", "new-password");
+    expect(within(panel).getByLabelText("Повторите новый пароль")).toHaveAttribute("name", "confirm-password");
+
+    const currentPasswordInput = within(panel).getByLabelText("Текущий пароль");
+    await user.click(currentPasswordInput);
+    await user.paste("pasted-current-password");
+    expect(currentPasswordInput).toHaveValue("pasted-current-password");
   });
 
   it("explains missing fields, short and mismatched passwords without submitting them", async () => {

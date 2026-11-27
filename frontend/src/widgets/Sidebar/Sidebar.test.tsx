@@ -186,4 +186,12 @@ describe("Sidebar", () => {
     expect(surfaceOverrides).not.toMatch(/\.sidebar \.nav-link,[^{]+\{[^}]*background:\s*#ffffff;/s);
     expect(surfaceOverrides).toMatch(/\.sidebar-toggle-button,[^{]+\.sidebar \.logout-button:focus-visible\s*\{[^}]*border:\s*1px solid var\(--theme-border\);[^}]*background:\s*var\(--theme-surface-light\);/s);
   });
+
+  it("matches the sidebar profile avatar background to the active menu item highlight in the sand theme", () => {
+    const css = readAppCss();
+
+    expect(css).toMatch(
+      /:root\[data-theme="sand"\] \.sidebar \.sidebar-account-avatar\s*\{[^}]*background:\s*color-mix\(in srgb,\s*var\(--theme-selected-background\) 94%,\s*var\(--theme-accent-emphasis\)\);/s,
+    );
+  });
 });

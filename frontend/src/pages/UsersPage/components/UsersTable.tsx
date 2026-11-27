@@ -9,7 +9,7 @@ type UsersTableProps = {
   isDeletePending: boolean;
   isRoleChangePending: boolean;
   isStatusChangePending: boolean;
-  onOpenPasswordModal: (userId: string, title: string) => void;
+  onOpenPasswordModal: (userId: string, title: string, email: string) => void;
   onRequestDelete: (userId: string, userName: string) => void;
   onRequestRoleChange: (
     userId: string,
@@ -106,7 +106,7 @@ export function UsersTable({
                     {isOwnUser
                       ? <Link className="app-button users-yellow-button" to={routes.settingsSecurity}>Сменить пароль</Link>
                       : <button type="button" className="users-yellow-button"
-                          onClick={() => onOpenPasswordModal(profile.id, `Смена пароля: ${profile.name || profile.email}`)}>
+                          onClick={() => onOpenPasswordModal(profile.id, `Смена пароля: ${profile.name || profile.email}`, profile.email)}>
                           Сменить пароль
                         </button>}
                     <button

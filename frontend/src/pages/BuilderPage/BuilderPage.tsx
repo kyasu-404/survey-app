@@ -39,7 +39,7 @@ function AnsweredFormWarningModal({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading onClose={onCancel} disabled={isCopying} lightOnly>
+        <ModalHeading onClose={onCancel} disabled={isCopying}>
           <h3 id={titleId} className="builder-reset-title">У формы уже есть ответы</h3>
         </ModalHeading>
         <p className="builder-template-subtitle">

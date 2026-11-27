@@ -26,7 +26,7 @@ export function TemplatePreviewModal({ isLoading, onClose, previewTemplate, prev
         aria-modal="true"
         tabIndex={-1}
       >
-        <ModalHeading className="template-preview-header" onClose={onClose} closeClassName="responses-export-button" graphiteText="Закрыть">
+        <ModalHeading className="template-preview-header" onClose={onClose} closeClassName="responses-export-button">
           <div>
             <span className="dashboard-status-pill dashboard-status-pill-template">Шаблон</span>
           </div>

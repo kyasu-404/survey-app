@@ -448,5 +448,34 @@ describe("UsersPage", () => {
     expect(screen.getByRole("heading", { name: "Смена пароля: Мария" })).toHaveClass("users-modal-title");
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveClass("users-neutral-button");
     expect(screen.getByRole("button", { name: "Сохранить" })).toHaveClass("users-yellow-button");
+
+    const passwordDialog = screen.getByRole("dialog", { name: "Смена пароля: Мария" });
+    const hiddenUsername = passwordDialog.querySelector<HTMLInputElement>('input[name="username"]');
+    expect(hiddenUsername).not.toBeNull();
+    expect(hiddenUsername).toHaveAttribute("autocomplete", "username");
+    expect(hiddenUsername).toHaveValue("maria@example.com");
+    const newPasswordInput = within(passwordDialog).getByLabelText("Новый пароль");
+    expect(newPasswordInput).toHaveAttribute("name", "new-password");
+    expect(newPasswordInput).toHaveAttribute("autocomplete", "new-password");
+
+    const user = userEvent.setup();
+    await user.click(newPasswordInput);
+    await user.paste("pasted-new-password-123");
+    expect(newPasswordInput).toHaveValue("pasted-new-password-123");
+
+    await user.click(screen.getByRole("button", { name: "Отмена" }));
+    await user.click(screen.getByRole("button", { name: "+ Добавить пользователя" }));
+    const createDialog = document.querySelector<HTMLDialogElement>("dialog.users-create-modal");
+    expect(createDialog).not.toBeNull();
+    if (!createDialog) throw new Error("Expected create user dialog");
+
+    expect(within(createDialog).getByLabelText("Имя")).toHaveAttribute("autocomplete", "name");
+    expect(within(createDialog).getByLabelText("Email")).toHaveAttribute("autocomplete", "username");
+    const createPasswordInput = within(createDialog).getByLabelText("Пароль");
+    expect(createPasswordInput).toHaveAttribute("name", "new-password");
+    expect(createPasswordInput).toHaveAttribute("autocomplete", "new-password");
+    await user.click(createPasswordInput);
+    await user.paste("pasted-user-password-123");
+    expect(createPasswordInput).toHaveValue("pasted-user-password-123");
   });
 });

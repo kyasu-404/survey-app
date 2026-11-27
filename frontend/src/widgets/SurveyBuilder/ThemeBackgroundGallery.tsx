@@ -155,7 +155,7 @@ export function ThemeBackgroundGallery({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading className="theme-background-modal-header" onClose={onClose} closeClassName="theme-background-close" graphiteText="Закрыть">
+        <ModalHeading className="theme-background-modal-header" onClose={onClose} closeClassName="theme-background-close">
           <div>
             <h3 id={titleId}>Галерея фонов</h3>
             <p>Общие фоны доступны всем. Пользовательские принадлежат этой форме.</p>

@@ -253,7 +253,7 @@ button.dashboard-qr-download-button:focus-visible {
   white-space: normal;
 }
 
-:root[data-theme="sand"] .responses-table th.responses-table-date-column {
+:root[data-theme] .responses-table th.responses-table-date-column {
   white-space: nowrap;
 }
 

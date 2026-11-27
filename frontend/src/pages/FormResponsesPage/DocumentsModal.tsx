@@ -35,7 +35,7 @@ export function DocumentsModal({formId,onClose,selectedResponseIds=[]}:{formId:s
   showToast('Задание добавлено в очередь. Окно можно закрыть.','success');
  }
  return <dialog ref={dialog} className="office-dialog" onCancel={event=>{event.preventDefault();if(menu)setMenu(null);else onClose();}} aria-labelledby="documents-title">
-  <ModalHeading onClose={onClose} label="Закрыть документы" closeClassName="app-button" graphiteText="×">
+  <ModalHeading onClose={onClose} label="Закрыть документы" closeClassName="app-button">
    <div><p className="office-eyebrow">Документы формы</p><h2 id="documents-title">Документы</h2></div>
   </ModalHeading>
   <SectionTabs id="documents" label="Документы формы" tabs={[{value:'templates',label:'Макеты'},{value:'results',label:'Результат'}]} value={tab} onChange={value=>{setTab(value);setMenu(null);}}/>

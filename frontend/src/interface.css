@@ -76,7 +76,7 @@
     color: var(--theme-selected-text);
     font-weight: 500;
   }
-  :root[data-theme="sand"] .sidebar .nav-link-active { text-decoration: none; }
+  :root[data-theme] .sidebar .nav-link-active { text-decoration: none; }
 
   :root .sidebar-account-trigger {
     width: 48px;
@@ -316,7 +316,7 @@
   /* Shared dialog actions: neutral cancel, blue confirmation, semantic removal.
      Override the legacy gradients for both dashboard and Creator dialogs. */
   :root .app-shell .deadline-modal-actions > button,
-  :root[data-theme="sand"] .app-shell .users-create-modal .deadline-modal-actions > .button-primary {
+  :root[data-theme] .app-shell .users-create-modal .deadline-modal-actions > .button-primary {
     justify-content: center;
     min-height: 40px;
     padding: 9px 16px;
@@ -407,18 +407,34 @@
   :root .app-shell .section-tabs button[aria-selected="true"] { color: var(--theme-accent-foreground); }
   :root .app-shell .animated-tabs::before { box-shadow: none; }
 
-  :root[data-theme="graphite"] .app-shell a:not(.nav-link):not(.button-primary) { color: var(--theme-accent); }
+  :root[data-theme="graphite"] .app-shell a:not(.nav-link, .button-primary, .app-button, .button-link, .form-menu-item) { color: var(--theme-accent); }
   :root[data-theme="graphite"] .dashboard-toolbar .dashboard-search-input { background: var(--theme-control-background); }
   :root[data-theme="graphite"] .app-shell button.dashboard-status-trigger-glossy.dashboard-status-pill-active,
   :root[data-theme="graphite"] .app-shell button.dashboard-status-trigger-glossy.dashboard-status-pill-active:is(:hover, :focus-visible) { color: var(--theme-active-text); }
-  :root[data-theme="graphite"] .app-shell button.responses-export-button,
-  :root[data-theme="graphite"] .app-shell button.dashboard-qr-download-button,
-  :root[data-theme="graphite"] .app-shell button.responses-export-button:is(:hover, :focus-visible),
-  :root[data-theme="graphite"] .app-shell button.dashboard-qr-download-button:is(:hover, :focus-visible) {
+  :root[data-theme="graphite"] .app-shell button.responses-export-button:not(.modal-close-button, .organizations-delete-all-button, :disabled),
+  :root[data-theme="graphite"] .app-shell button.dashboard-qr-download-button:not(:disabled) {
     color: var(--theme-text);
     border-color: var(--theme-border);
     background: var(--theme-surface-light);
     box-shadow: none;
+  }
+  :root[data-theme="graphite"] .app-shell button.responses-export-button:not(.modal-close-button, .organizations-delete-all-button, :disabled):is(:hover, :focus-visible),
+  :root[data-theme="graphite"] .app-shell button.dashboard-qr-download-button:not(:disabled):is(:hover, :focus-visible) {
+    color: var(--theme-text);
+    border-color: var(--theme-outline);
+    background: var(--theme-container-high);
+    box-shadow: none;
+  }
+  :root[data-theme="graphite"] .app-shell .organizations-toolbar > button.responses-export-button:not(.organizations-file-button, .organizations-delete-all-button):not(:disabled) {
+    color: var(--theme-accent-foreground);
+    border-color: var(--theme-action);
+    background: var(--theme-action);
+    font-weight: 650;
+  }
+  :root[data-theme="graphite"] .app-shell .organizations-toolbar > button.responses-export-button:not(.organizations-file-button, .organizations-delete-all-button):not(:disabled):is(:hover, :focus-visible) {
+    color: var(--theme-accent-foreground);
+    border-color: var(--theme-action-hover);
+    background: var(--theme-action-hover);
   }
   :root[data-theme="graphite"] .app-shell :is(.organizations-table, .users-table, .responses-table) tbody td {
     color: var(--theme-text);
@@ -431,14 +447,16 @@
     background: var(--theme-card-background);
   }
   :root[data-theme="graphite"] .app-shell :is(.organizations-table, .users-table, .responses-table) thead th {
-    color: var(--theme-text-muted);
+    color: var(--theme-text);
     border-color: var(--theme-border);
     background: var(--theme-surface);
   }
   :root[data-theme="graphite"] .app-shell .responses-table thead th.responses-table-page-column { color: var(--theme-text); background: #1e3a5f; }
   :root[data-theme="graphite"] .app-shell :is(.organizations-table, .users-table, .responses-table) tbody tr:hover td,
-  :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody .responses-table-row-clickable:is(:hover, :focus-visible) td { background: var(--theme-container-high); }
+  :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody .responses-table-row-clickable:is(:hover, :focus-visible) td { background: var(--theme-row-hover); }
   :root[data-theme="graphite"] .responses-page-table-shell .responses-table tbody td:is(.responses-table-page-column, .responses-table-section-column) { color: var(--theme-text); background: var(--theme-surface-muted); }
+  :root[data-theme="graphite"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) td { background: var(--theme-row-selected); }
+  :root[data-theme="graphite"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) > td:first-child { box-shadow: inset 3px 0 var(--theme-accent); }
   :root[data-theme="graphite"] .app-shell .users-role-chip-static { color: var(--theme-text-muted); }
   :root .app-shell :is(.responses-export-button, .dashboard-qr-download-button) img.toolbar-icon { filter: brightness(0); }
   :root[data-theme="graphite"] .app-shell :is(.responses-export-button, .dashboard-qr-download-button) img.toolbar-icon { filter: brightness(0) invert(1); }
@@ -512,12 +530,16 @@
   :root[data-theme="graphite"] .builder-creator-shell .svc-tab-designer .svc-designer-header { border-bottom: 1px solid var(--creator-border); }
 
   .login-fields label { margin-bottom: -7px; font-size: 13px; font-weight: 500; }
+  .app-shell-login .login-fields input[aria-invalid="true"] { border-color: #dc2626; }
   :root .app-shell-login .login-card { border-radius: 22px; box-shadow: 0 8px 32px #18181b0d; }
-  :root .app-shell-login .login-title { font-weight: 500; }
+  :root .app-shell-login .login-title,
+  :root[data-theme] .app-shell-login .login-title { font-weight: 500; }
+  :root .app-shell-login .login-submit-button,
+  :root .app-shell-login .login-submit-button:is(:hover, :focus-visible) { width: 100%; min-height: 44px; }
   :root .app-shell-login .button-primary { color: #ffffff; background: #303134; }
   :root .app-shell-login .button-primary:is(:hover, :focus-visible) { color: #ffffff; background: #202124; }
+  :root .app-shell-login .login-password-toggle:focus-visible { outline: 2px solid #303134; outline-offset: 2px; }
 
-  :root[data-theme="graphite"] .dashboard-page-header h1 { font-size: 28px; }
   :root[data-theme="graphite"] .dashboard-forms-grid > .dashboard-form-card {
     box-shadow: 0 1px 2px #0003;
     transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
@@ -570,8 +592,8 @@
   :root .app-shell .response-preview-drawer { position: fixed; inset: 0 0 0 auto; margin: 0 0 0 auto; width: min(820px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 20px 0 0 20px; color: var(--theme-text); box-shadow: -8px 0 32px #0003; }
   :root .app-shell .builder-creator-shell .svc-question__content { border: 1px solid var(--creator-border); border-radius: 14px; box-shadow: none; }
   :root .app-shell .builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) { border-color: var(--creator-accent) !important; box-shadow: inset 4px 0 0 var(--creator-accent) !important; }
-  :root[data-theme="sand"] .app-shell .builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) { box-shadow: 0 0 0 1px var(--creator-accent) !important; }
-  :root[data-theme="sand"] .builder-creator-shell .svc-question__content--selected::after { box-shadow: none; }
+  :root[data-theme] .app-shell .builder-creator-shell .svc-question__content--selected:not(.svc-question__content--dragged) { box-shadow: 0 0 0 1px var(--creator-accent) !important; }
+  :root[data-theme] .builder-creator-shell .svc-question__content--selected::after { box-shadow: none; }
   .builder-creator-shell .svc-creator {
     --property-grid-card-gap: 12px;
     --property-grid-card-top-gap: 10px;

@@ -18,7 +18,7 @@ export function ResponsePreviewSheet({ form, response, label, initialPageNo, onC
       const r = event.currentTarget.getBoundingClientRect();
       if (event.clientX < r.left || event.clientX > r.right) onClose();
     }}>
-    <ModalHeading className="response-preview-header" onClose={onClose} closeClassName="responses-export-button" graphiteText="Закрыть">
+    <ModalHeading className="response-preview-header" onClose={onClose} closeClassName="responses-export-button">
       <span className="dashboard-status-pill dashboard-status-pill-active">Ответ</span>
     </ModalHeading>
     <SurveyRuntimeSurface className="response-preview-body response-preview-builder-palette">

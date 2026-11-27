@@ -105,7 +105,7 @@ export function ResponseReportModal({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading className="response-report-header" onClose={onClose} disabled={isConfirmationOpen} closeClassName="responses-export-button" graphiteText="Закрыть">
+        <ModalHeading className="response-report-header" onClose={onClose} disabled={isConfirmationOpen} closeClassName="responses-export-button">
           <div>
             <p>Аналитика формы</p>
             <h2 id={titleId}>Отчёт по ответам</h2>

@@ -23,7 +23,9 @@ export function PasswordModal({
   onPasswordChange,
 }: PasswordModalProps) {
   const titleId = useId();
+  const passwordId = useId();
   const dialogRef = useLegacyModalDialog({ onClose: onCancel, disabled: isPending });
+  const targetEmail = modal.email.trim();
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !isPending && onCancel()}>
@@ -36,19 +38,38 @@ export function PasswordModal({
         tabIndex={-1}
       >
         <form
+          method="post"
           onSubmit={(event) => {
             event.preventDefault();
             if (!isPending && !passwordError) onChangePassword();
           }}
         >
-          <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+          <ModalHeading onClose={onCancel} disabled={isPending}>
             <h3 id={titleId} className="users-modal-title">{modal.title}</h3>
           </ModalHeading>
-          <label className="deadline-field">
+          {targetEmail && (
+            <input
+              type="email"
+              name="username"
+              autoComplete="username"
+              value={targetEmail}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
+          )}
+          <label className="deadline-field" htmlFor={passwordId}>
             <span>Новый пароль</span>
             <input
+              id={passwordId}
+              name="new-password"
               type="password"
               autoComplete="new-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
               value={modal.password}
               onChange={(event) => onPasswordChange(event.target.value)}
               placeholder={`Минимум ${NEW_PASSWORD_MIN_LENGTH} символов`}

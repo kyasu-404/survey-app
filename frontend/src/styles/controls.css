@@ -370,16 +370,71 @@ textarea {
   gap: 12px;
 }
 
+.login-password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-password-field input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.login-password-field input::-ms-reveal,
+.login-password-field input::-ms-clear {
+  display: none;
+}
+
+.login-password-toggle {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #52525b;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.login-password-toggle:hover {
+  background: rgba(24, 24, 27, 0.06);
+  color: #18181b;
+}
+
+.login-field-error {
+  margin: -6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+
 .login-actions {
   margin-top: 18px;
+}
+
+.login-submit-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .login-message {
   margin-top: 14px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(20, 20, 20, 0.08);
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .login-message-success {
@@ -388,8 +443,9 @@ textarea {
 }
 
 .login-message-error {
-  background: rgba(20, 20, 20, 0.92);
-  color: #ffffff;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .dashboard-main-card,

@@ -27,7 +27,7 @@ export function DeadlineModal({ editor, isPending, onCancel, onClear, onSave, on
         aria-labelledby={titleId}
       >
         <form noValidate onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-          <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+          <ModalHeading onClose={onCancel} disabled={isPending}>
             <h3 id={titleId} className="deadline-modal-title">Дедлайн формы</h3>
           </ModalHeading>
           <p className="deadline-modal-subtitle">{editor.form.title}</p>

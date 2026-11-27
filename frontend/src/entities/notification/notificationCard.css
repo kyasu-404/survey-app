@@ -157,7 +157,7 @@
   text-underline-offset: 3px;
 }
 
-:root[data-theme="sand"] .notification-card-actions :is(a, .announcement-action) {
+:root[data-theme] .notification-card-actions :is(a, .announcement-action) {
   text-decoration: none;
 }
 

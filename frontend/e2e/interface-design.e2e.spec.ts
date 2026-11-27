@@ -96,6 +96,8 @@ for (const theme of ["sand", "graphite"]) {
     await expect(bar).toContainText("Выбрано: 2");
     expect(await contrast(bar.locator(".responses-selection-count"))).toBeGreaterThanOrEqual(4.5);
     expect(await contrast(bar.getByRole("button", { name: "Удалить", exact: true }))).toBeGreaterThanOrEqual(4.5);
+    const selectedCell = page.locator(".responses-table tbody tr").first().locator("td").first();
+    await expect(selectedCell).toHaveCSS("box-shadow", theme === "sand" ? "rgb(155, 68, 44) 3px 0px 0px 0px inset" : "rgb(168, 199, 250) 3px 0px 0px 0px inset");
     await page.screenshot({ path: testInfo.outputPath(`response-selection-${theme}.png`) });
     page.once("dialog", dialog => dialog.accept());
     await bar.getByRole("button", { name: "Удалить", exact: true }).click();
@@ -170,7 +172,13 @@ for (const theme of ["sand", "graphite"]) {
     await expect(status).toHaveCSS("color", colors.success);
     expect(await contrast(status)).toBeGreaterThanOrEqual(4.5);
     await page.locator(".dashboard-actions-menu-shell .form-menu-trigger").first().click();
-    expect(await contrast(page.locator(".form-menu-item:not(.form-menu-item-danger)").first())).toBeGreaterThanOrEqual(4.5);
+    const regularMenuItem = page.locator(".form-menu-item:not(.form-menu-item-danger)").first();
+    const regularMenuColor = await regularMenuItem.evaluate(el => getComputedStyle(el).color);
+    expect(await contrast(regularMenuItem)).toBeGreaterThanOrEqual(4.5);
+    const automationsItem = page.getByRole("menuitem", { name: /Автоматизации/ });
+    if (await automationsItem.count()) {
+      await expect(automationsItem).toHaveCSS("color", regularMenuColor);
+    }
     const deleteItem = page.locator(".form-menu-item-danger").first();
     await expect(deleteItem).toHaveCSS("color", colors.danger);
     expect(await contrast(deleteItem)).toBeGreaterThanOrEqual(4.5);
@@ -273,6 +281,8 @@ for (const theme of ["sand", "graphite"]) {
     }] }));
     await page.goto("/users");
     await expect(page.locator(".users-table tbody tr")).toHaveCount(1);
+    await expect(page.locator(".users-table-shell")).toHaveCSS("border-radius", "12px");
+    await expect(page.locator(".users-table tbody td").nth(1)).toHaveCSS("border-left-width", "0px");
     const addUser = page.getByRole("button", { name: "+ Добавить пользователя", exact: true });
     await expect(page.getByPlaceholder("Имя", { exact: true })).toHaveCount(0);
     await addUser.click();
@@ -304,10 +314,24 @@ for (const theme of ["sand", "graphite"]) {
     expect(await contrast(htmlIcon)).toBeGreaterThanOrEqual(3);
     await page.goto("/organizations");
     await expect(page.locator(".organizations-table tbody tr")).toHaveCount(1);
+    const orgTabs = page.getByRole("tablist", { name: "Типы образовательных учреждений" });
+    const orgTable = page.locator(".organizations-table-shell");
+    expect((await orgTabs.boundingBox())!.width).toBeLessThan((await orgTable.boundingBox())!.width * 0.7);
+    const orgAddButton = page.getByRole("button", { name: "Добавить +", exact: true });
+    await expect(orgAddButton).toHaveCSS("background-color", theme === "sand" ? "rgb(36, 32, 29)" : "rgb(168, 199, 250)");
+    expect(await contrast(orgAddButton)).toBeGreaterThanOrEqual(4.5);
+    const orgDeleteAllButton = page.getByRole("button", { name: "Удалить все", exact: true });
+    await expect(orgDeleteAllButton).toHaveCSS("color", theme === "sand" ? "rgb(138, 58, 60)" : "rgb(242, 184, 181)");
+    expect(await contrast(orgDeleteAllButton)).toBeGreaterThanOrEqual(4.5);
     expect(await contrast(page.locator(".organizations-delete-all-button .toolbar-icon"))).toBeGreaterThanOrEqual(3);
     const organizationDelete = page.locator(".organization-delete-button");
     await expect(organizationDelete).toHaveCSS("color", theme === "sand" ? "rgb(138, 58, 60)" : "rgb(242, 184, 181)");
     expect(await contrast(organizationDelete)).toBeGreaterThanOrEqual(4.5);
+    await orgAddButton.click();
+    const orgModal = page.getByRole("dialog", { name: "Добавление организации", exact: true });
+    await expect(orgModal.getByRole("button", { name: "Закрыть", exact: true })).toHaveCSS("border-radius", "50%");
+    await orgModal.getByRole("button", { name: "Закрыть", exact: true }).click();
+    await expect(orgModal).toHaveCount(0);
     await page.route("**/api/office/**", route => route.fulfill({ json: { enabled: false } }));
     await page.route("**/functions/v1/mail-admin", route => route.fulfill({ json: {} }));
     await page.route("**/functions/v1/form-admin", route => route.request().postDataJSON().action === "get-cleanup-status"
@@ -315,6 +339,27 @@ for (const theme of ["sand", "graphite"]) {
     await page.goto("/settings");
     await page.getByRole("tab", { name: "Очистка файлов", exact: true }).click();
     await expect(page.locator(".settings-page-card")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    expect(app.pageErrors).toEqual([]);
+  });
+
+  test(`${theme}: closed status pill has no hover glow and remains distinct from its card`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(id => localStorage.setItem("survey-app:theme", id), theme);
+    const app = await openSurveyApp(page, { responseCount: 0 });
+    await page.route("**/list_forms_keyset*", route => route.fulfill({ json: [{ ...app.form, is_public: false }] }));
+    await page.goto("/dashboard");
+    const card = page.locator(".dashboard-form-card").first();
+    const closedButton = page.locator("button.dashboard-status-pill-closed").first();
+    await expect(closedButton).toBeVisible();
+    const cardBg = await card.evaluate(el => getComputedStyle(el).backgroundColor);
+    const idleBg = await closedButton.evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(idleBg).not.toBe(cardBg);
+    await expect(closedButton).toHaveCSS("box-shadow", "none");
+    expect(await contrast(closedButton)).toBeGreaterThanOrEqual(4.5);
+    await closedButton.hover();
+    await expect(closedButton).toHaveCSS("box-shadow", "none");
+    await expect.poll(() => closedButton.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(idleBg);
+    expect(await contrast(closedButton)).toBeGreaterThanOrEqual(4.5);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -339,27 +384,16 @@ for (const theme of ["sand", "graphite"]) {
       await expect(surface).toHaveCSS("box-shadow", "none");
     }
 
-    await page.goto("/settings/announcements");
-    const reference = page.getByRole("navigation", { name: "Администрирование", exact: true })
-      .getByRole("link", { name: "Объявления", exact: true });
-    await expect(reference).toBeVisible();
-    const pillStyle = (control: Locator) => control.evaluate(element => {
-      const { backgroundColor, borderColor, borderRadius, color, minHeight } = getComputedStyle(element);
-      return { backgroundColor, borderColor, borderRadius, color, minHeight };
-    });
-    const referenceStyle = theme === "graphite" ? await pillStyle(reference) : null;
     await page.goto("/preferences");
     const notificationTab = page.getByRole("tab", { name: "Уведомления", exact: true });
     await expect(notificationTab).toHaveAttribute("aria-selected", "true");
-    if (theme === "sand") {
-      const tabs = page.getByRole("tablist", { name: "Разделы личных настроек" });
-      await expect(tabs).toHaveAttribute("data-indicator-ready", "true");
-      await expect(notificationTab).toHaveCSS("border-radius", "8px");
-      await expect(notificationTab).toHaveCSS("color", "rgb(255, 255, 255)");
-      expect(await tabs.evaluate(el => getComputedStyle(el, "::before").backgroundColor)).toBe("rgb(155, 68, 44)");
-    } else {
-      expect(await pillStyle(notificationTab)).toEqual(referenceStyle);
-    }
+    const tabs = page.getByRole("tablist", { name: "Разделы личных настроек" });
+    await expect(tabs).toHaveAttribute("data-indicator-ready", "true");
+    await expect(notificationTab).toHaveCSS("border-radius", "8px");
+    await expect(notificationTab).toHaveCSS("color", theme === "sand" ? "rgb(255, 255, 255)" : "rgb(6, 46, 111)");
+    expect(await tabs.evaluate(el => getComputedStyle(el, "::before").backgroundColor)).toBe(
+      theme === "sand" ? "rgb(155, 68, 44)" : "rgb(168, 199, 250)",
+    );
     expect((await notificationTab.boundingBox())!.width).toBeLessThan(200);
 
     await notificationTab.press("ArrowRight");

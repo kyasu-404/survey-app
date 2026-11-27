@@ -109,10 +109,14 @@
   border-bottom: 2px solid var(--creator-accent);
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__panel {
+:root[data-theme] .builder-creator-shell .svc-toolbox__panel {
   border-radius: 16px;
-  background: var(--theme-card-background);
+  background: var(--creator-panel);
   box-shadow: inset 0 0 0 1px var(--creator-border);
+}
+
+:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__panel {
+  background: var(--theme-card-background);
 }
 
 :root[data-theme="sand"] .builder-creator-shell .svc-side-bar__container-content {
@@ -167,25 +171,32 @@
   transform: translateX(2px);
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item {
+:root[data-theme] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
   transform: none;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:hover {
+:root[data-theme] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:hover {
   background: var(--creator-question-type-hover) !important;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:focus-visible {
+:root[data-theme] .builder-creator-shell .svc-toolbox__tool:not(.svc-toolbox__tool--disabled) .svc-toolbox__item:focus-visible {
   outline: 2px solid var(--creator-text);
   outline-offset: -2px;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-dropdown-action--convertTo {
+:root[data-theme] .builder-creator-shell .svc-dropdown-action--convertTo {
   --ctr-survey-question-panel-toolbar-item-background-color-hovered: var(--creator-question-type-hover);
   --ctr-list-item-background-color-hovered: var(--creator-question-type-hover);
+}
+
+:root[data-theme="graphite"] .builder-creator-shell .svc-creator {
+  --creator-question-type-hover: var(--creator-hover);
+  --ctr-menu-item-border-color-selected: transparent !important;
+  --ctr-toolbox-item-background-color-hovered: var(--creator-question-type-hover) !important;
+  --ctr-button-contextual-button-background-color-hovered: var(--creator-question-type-hover) !important;
 }
 
 :root[data-theme="sand"] .builder-creator-shell .svc-creator {
@@ -252,7 +263,7 @@
   background: var(--creator-panel-muted) !important;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu .svc-tabbed-menu-item {
+:root[data-theme] .builder-creator-shell .svc-tabbed-menu .svc-tabbed-menu-item {
   min-height: 40px;
   margin: 5px 2px;
   padding: 8px 14px;
@@ -262,41 +273,45 @@
   text-decoration: none;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu { border-block-end-width: 0; }
+:root[data-theme] .builder-creator-shell .svc-tabbed-menu { border-block-end-width: 0; }
 
 /* Account for the matching lower border of the Property Grid header. */
-:root[data-theme="sand"] .builder-creator-shell .svc-top-bar {
+:root[data-theme] .builder-creator-shell .svc-top-bar {
   border-block-end: 1px solid transparent;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-top-bar .svc-tabbed-menu {
+:root[data-theme] .builder-creator-shell .svc-top-bar .svc-tabbed-menu {
   block-size: 100%;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover {
+:root[data-theme] .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover {
   background: var(--creator-panel) !important;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item--selected {
+:root[data-theme="graphite"] .builder-creator-shell .svc-tabbed-menu-item:not(.svc-tabbed-menu-item--selected):hover {
+  background: var(--creator-hover) !important;
+}
+
+:root[data-theme] .builder-creator-shell .svc-tabbed-menu-item--selected {
   background: var(--creator-selected) !important;
-  color: var(--creator-text) !important;
+  color: var(--theme-selected-text) !important;
   font-weight: 650;
 }
 
-:root[data-theme="sand"] .builder-creator-shell :is(.svc-tabbed-menu-item, .svc-question__content):focus-visible {
+:root[data-theme] .builder-creator-shell :is(.svc-tabbed-menu-item, .svc-question__content):focus-visible {
   outline: 2px solid var(--theme-focus);
   outline-offset: 3px;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-tabbed-menu-item--selected::after {
+:root[data-theme] .builder-creator-shell .svc-tabbed-menu-item--selected::after {
   content: none;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__category-header {
+:root[data-theme] .builder-creator-shell .svc-toolbox__category-header {
   background: color-mix(in srgb, var(--creator-panel-muted) 88%, var(--creator-text)) !important;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .svc-toolbox__category-header:not(.svc-toolbox__category-header--collapsed) {
+:root[data-theme] .builder-creator-shell .svc-toolbox__category-header:not(.svc-toolbox__category-header--collapsed) {
   background: color-mix(in srgb, var(--creator-panel-muted) 82%, var(--creator-text)) !important;
 }
 
@@ -306,7 +321,12 @@
   font-weight: 650;
 }
 
-:root[data-theme="sand"] .builder-creator-shell .spg-panel__title:focus-visible {
+:root[data-theme="graphite"] .builder-creator-shell .spg-panel__title[aria-expanded="true"] {
+  background: var(--creator-hover) !important;
+  font-weight: 650;
+}
+
+:root[data-theme] .builder-creator-shell .spg-panel__title:focus-visible {
   outline: 2px solid var(--creator-accent);
   outline-offset: -3px;
 }
@@ -340,16 +360,16 @@
   --ctr-editor-border-color: var(--creator-border-strong) !important;
 }
 
-:root[data-theme="sand"] .app-shell .builder-creator-shell .svc-search {
+:root[data-theme] .app-shell .builder-creator-shell .svc-search {
   border-color: var(--creator-border-strong) !important;
 }
 
-:root[data-theme="sand"] .app-shell .builder-creator-shell .svc-search:focus-within {
+:root[data-theme] .app-shell .builder-creator-shell .svc-search:focus-within {
   border-color: var(--creator-accent) !important;
   box-shadow: inset 0 0 0 1px var(--creator-accent);
 }
 
-:root[data-theme="sand"] .app-shell .builder-creator-shell :is(
+:root[data-theme] .app-shell .builder-creator-shell :is(
   .svc-search__input, .spg-input, .spg-input-container__input, .spg-dropdown__filter-string-input,
   .svc-tab-designer :is(.sd-input, .sd-dropdown__filter-string-input, .sd-tagbox__filter-string-input)
 ):focus-visible {

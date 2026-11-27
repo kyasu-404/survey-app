@@ -1,10 +1,6 @@
-.modal-close-graphite-text { display: none; }
-:root[data-theme="graphite"] .modal-close-graphite-text { display: inline; }
-:root[data-theme="graphite"] :is(.modal-close-button-light-only, .modal-close-button:has(.modal-close-graphite-text) > .modal-close-icon) { display: none; }
-:root[data-theme="graphite"] .modal-heading-light-only { display: contents; }
-
+/* Shared refined interface layout and component styling for both sand and graphite themes. */
 @media screen {
-  :root[data-theme="sand"] .modal-heading {
+  :root[data-theme] .modal-heading {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -13,13 +9,13 @@
     text-align: start;
   }
 
-  :root[data-theme="sand"] .modal-heading > :first-child { min-width: 0; }
-  :root[data-theme="sand"] .modal-heading > :is(h2, h3) { margin-block-start: 7px; }
-  :root[data-theme="sand"] .modal-heading :is(h2, h3, p) { text-align: start; }
+  :root[data-theme] .modal-heading > :first-child { min-width: 0; }
+  :root[data-theme] .modal-heading > :is(h2, h3) { margin-block-start: 7px; }
+  :root[data-theme] .modal-heading :is(h2, h3, p) { text-align: start; }
 
-  :root[data-theme="sand"] :is(.deadline-modal-subtitle, .users-modal-copy, .dashboard-delete-modal-copy) { text-align: start; }
+  :root[data-theme] :is(.deadline-modal-subtitle, .users-modal-copy, .dashboard-delete-modal-copy) { text-align: start; }
 
-  :root[data-theme="sand"] .modal-heading .modal-close-button {
+  :root[data-theme] .modal-heading button.modal-close-button {
     position: static;
     display: inline-grid;
     place-items: center;
@@ -37,30 +33,50 @@
     transform: none;
   }
 
-  :root[data-theme="sand"] .modal-heading .modal-close-button:not(:disabled):hover { background: var(--theme-surface-muted); }
+  :root[data-theme] .modal-heading button.modal-close-button:not(:disabled):hover {
+    border-color: var(--theme-outline);
+    color: var(--theme-text);
+    background: var(--theme-surface-muted);
+    box-shadow: none;
+    transform: none;
+  }
 
-  :root[data-theme="sand"] .rule-editor-scenario > .activity-dialog-actions { display: none; }
+  :root[data-theme="graphite"] .modal-heading button.modal-close-button:not(:disabled):hover {
+    background: var(--theme-container-high);
+  }
+
+  :root[data-theme] .rule-editor-scenario > .activity-dialog-actions { display: none; }
 
   :root[data-theme="sand"] :is(.dashboard-share-notice, .builder-response-settings-modal, .builder-organization-settings-modal) {
     background: #f4e8d4;
   }
 
-  :root[data-theme="sand"] .dashboard-share-notice {
+  :root[data-theme] .dashboard-share-notice {
     display: flex;
     align-items: flex-start;
     gap: 10px;
     padding: 12px;
     border-radius: 10px;
-    color: #754713;
+    color: var(--theme-warning-text);
+    background: var(--theme-warning-background);
   }
 
-  :root[data-theme="sand"] .dashboard-share-notice p { margin: 3px 0 0; }
+  :root[data-theme="sand"] .dashboard-share-notice {
+    color: #754713;
+    background: #f4e8d4;
+  }
 
-  :root[data-theme="sand"] .builder-response-settings-modal { border-color: var(--theme-border); }
-  :root[data-theme="sand"] .builder-response-settings-modal > div > span { color: var(--theme-text-muted); }
+  :root[data-theme] .dashboard-share-notice p { margin: 3px 0 0; }
 
-  :root[data-theme="sand"] .app-shell .sidebar {
+  :root[data-theme] .builder-response-settings-modal { border-color: var(--theme-border); }
+  :root[data-theme] .builder-response-settings-modal > div > span { color: var(--theme-text-muted); }
+
+  :root[data-theme] .app-shell .sidebar {
     border-inline-end-color: var(--theme-border);
+  }
+
+  :root[data-theme] .sidebar .nav-link.nav-link-active {
+    font-weight: 700;
   }
 
   :root[data-theme="sand"] .sidebar .nav-link.nav-link-active {
@@ -69,16 +85,25 @@
     font-weight: 700;
   }
 
-  :root[data-theme="sand"] :is(.sidebar-nav .sidebar-nav-icon, .notification-card-category .material-symbols-outlined, .rule-scenario .material-symbols-outlined) {
+  :root[data-theme="sand"] .sidebar .sidebar-account-avatar {
+    background: color-mix(in srgb, var(--theme-selected-background) 94%, var(--theme-accent-emphasis));
+  }
+
+  :root[data-theme] :is(.sidebar-nav .nav-link:not(.nav-link-active) .sidebar-nav-icon, .notification-card-category .material-symbols-outlined, .rule-scenario .material-symbols-outlined) {
     color: var(--theme-icon);
     opacity: 1;
   }
 
-  :root[data-theme="sand"] .app-shell :is(h1, .dashboard-form-title, .notification-card-title, [role="tab"][aria-selected="true"]) {
+  :root[data-theme="sand"] .sidebar-nav .nav-link-active .sidebar-nav-icon {
+    color: var(--theme-icon);
+    opacity: 1;
+  }
+
+  :root[data-theme] .app-shell :is(h1, .dashboard-form-title, .notification-card-title, [role="tab"][aria-selected="true"]) {
     font-weight: 700;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.button-primary, .templates-use-button,
+  :root[data-theme] .app-shell :is(.button-primary, .templates-use-button,
     .organizations-toolbar > .responses-export-button:not(.organizations-file-button, .organizations-delete-all-button),
     .deadline-modal-actions > :is(.deadline-save-button, .deadline-action-save-button, .users-yellow-button)
   ):not(:disabled) {
@@ -88,123 +113,157 @@
     font-weight: 650;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.button-primary, .templates-use-button,
+  :root[data-theme] .app-shell :is(.button-primary, .templates-use-button,
     .organizations-toolbar > .responses-export-button:not(.organizations-file-button, .organizations-delete-all-button),
     .deadline-modal-actions > :is(.deadline-save-button, .deadline-action-save-button, .users-yellow-button)
   ):not(:disabled):hover {
+    color: var(--theme-accent-foreground);
     border-color: var(--theme-action-hover);
     background: var(--theme-action-hover);
   }
 
-  :root[data-theme="sand"] .app-shell button:disabled:where(:not(.builder-creator-shell *, .survey-renderer *, .users-status-button.user-status-active)) {
-    color: var(--theme-closed-text);
+  :root[data-theme] .app-shell button:disabled:where(:not(.builder-creator-shell *, .survey-renderer *, .users-status-button.user-status-active)) {
+    color: var(--theme-disabled-text);
     border-color: var(--theme-border);
-    background: var(--theme-closed-background);
+    background: var(--theme-disabled-background);
     box-shadow: none;
     opacity: 1;
   }
 
-  :root[data-theme="sand"] .app-shell :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]), select, textarea, .dashboard-search-input):where(:not(.builder-creator-shell *, .survey-renderer *)) {
+  :root[data-theme] .app-shell :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]), select, textarea, .dashboard-search-input):where(:not(.builder-creator-shell *, .survey-renderer *)) {
     border-color: var(--theme-outline);
   }
 
-  :root[data-theme="sand"] .app-shell .dashboard-toolbar .dashboard-search-input:not(:focus) {
+  :root[data-theme] .app-shell .dashboard-toolbar .dashboard-search-input:not(:focus) {
     border-color: var(--theme-border);
   }
 
-  :root[data-theme="sand"] .app-shell :is(input, textarea):where(:not(.survey-renderer *))::placeholder {
+  :root[data-theme] .app-shell :is(input, textarea):where(:not(.survey-renderer *))::placeholder {
     color: var(--theme-text-muted);
     font-weight: 400;
     opacity: 1;
   }
 
-  :root[data-theme="sand"] .deadline-select-placeholder {
+  :root[data-theme] .deadline-select-placeholder {
     color: var(--theme-text-muted);
     font-weight: 400;
   }
 
-  :root[data-theme="sand"] :is(.deadline-field, .dashboard-share-field, .organization-edit-modal label) > span:not(.deadline-select-placeholder) {
+  :root[data-theme] :is(.deadline-field, .dashboard-share-field, .organization-edit-modal label) > span:not(.deadline-select-placeholder) {
     font-weight: 600;
   }
 
-  :root[data-theme="sand"] .app-shell .settings-toggle:not(:disabled) {
+  :root[data-theme] .app-shell .settings-toggle:not(:disabled) {
     background: var(--theme-border);
     box-shadow: inset 0 0 0 1px var(--theme-outline);
   }
 
-  :root[data-theme="sand"] .app-shell .settings-toggle[aria-checked="true"]:not(:disabled) {
+  :root[data-theme] .app-shell .settings-toggle[aria-checked="true"]:not(:disabled) {
     background: var(--theme-accent);
     box-shadow: none;
   }
 
-  :root[data-theme="sand"] .app-shell input:is([type="checkbox"], [type="radio"]):where(:not(.builder-creator-shell *, .survey-renderer *)) {
+  :root[data-theme="graphite"] .app-shell .settings-toggle[aria-checked="true"]:not(:disabled) > span {
+    background: var(--theme-accent-foreground);
+  }
+
+  :root[data-theme] .app-shell input:is([type="checkbox"], [type="radio"]):where(:not(.builder-creator-shell *, .survey-renderer *)) {
     accent-color: var(--theme-accent);
   }
 
-  :root[data-theme="sand"] .app-shell :is(a, button, input, select, textarea, [role="tab"]):where(:not(.builder-creator-shell *, .survey-renderer *)):focus-visible {
+  :root[data-theme] .app-shell :is(a, button, input, select, textarea, [role="tab"]):where(:not(.builder-creator-shell *, .survey-renderer *)):focus-visible {
     outline: 2px solid var(--theme-focus);
     outline-offset: 2px;
   }
 
-  :root[data-theme="sand"] .app-shell .announcement-compose :is(button, textarea):focus-visible {
+  :root[data-theme] .app-shell .announcement-compose :is(button, textarea):focus-visible {
     outline-offset: -2px;
   }
 
-  :root[data-theme="sand"] .app-shell .dashboard-responses-link {
+  :root[data-theme] .app-shell .dashboard-responses-link {
     font-weight: 600;
     text-decoration: none;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active) {
+  :root[data-theme] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active) {
     color: var(--theme-success-text);
     background: var(--theme-success-background);
   }
 
-  :root[data-theme="sand"] .app-shell .users-status-button.user-status-active:disabled { opacity: 1; }
+  :root[data-theme] .app-shell .users-status-button.user-status-active:disabled { opacity: 1; }
 
-  :root[data-theme="sand"] .app-shell .dashboard-status-pill-closed {
+  :root[data-theme] .app-shell .dashboard-status-pill-closed,
+  :root[data-theme] .app-shell button.dashboard-status-trigger-glossy.dashboard-status-pill-closed,
+  :root[data-theme] .app-shell button.dashboard-status-trigger-glossy.dashboard-status-pill-closed:is(:hover, :focus-visible) {
+    color: var(--theme-closed-text);
+    border: 0;
+    border-color: transparent;
+    background: var(--theme-closed-background);
+    box-shadow: none;
+    transform: none;
+  }
+
+  :root[data-theme] .app-shell button.dashboard-status-trigger.dashboard-status-pill-closed:not(:disabled):is(:hover, :focus-visible) {
+    background: var(--theme-closed-hover);
+  }
+
+  :root[data-theme] .app-shell button.dashboard-status-trigger.dashboard-status-pill-active:not(:disabled):is(:hover, :focus-visible) {
+    background: var(--theme-active-hover);
+  }
+
+  :root[data-theme="graphite"] .app-shell .dashboard-status-pill-template {
     color: var(--theme-closed-text);
     background: var(--theme-closed-background);
   }
 
-  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .dashboard-status-pill-closed, .users-status-button)::before {
+  :root[data-theme] .app-shell :is(.dashboard-status-pill-active, .dashboard-status-pill-closed, .users-status-button)::before {
     margin-inline-end: .2em;
     font: 15px / 1 "Material Symbols Outlined";
   }
 
-  :root[data-theme="sand"] .app-shell .dashboard-status-trigger-glossy::before {
+  :root[data-theme] .app-shell .dashboard-status-trigger-glossy::before {
     position: static;
     flex: none;
     border-radius: 0;
     background: none;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active)::before { content: "\f0be" / ""; }
-  :root[data-theme="sand"] .app-shell :is(.dashboard-status-pill-closed, .users-status-button.user-status-disabled)::before { content: "\e5cd" / ""; }
+  :root[data-theme] .app-shell :is(.dashboard-status-pill-active, .users-status-button.user-status-active)::before { content: "\f0be" / ""; }
+  :root[data-theme] .app-shell :is(.dashboard-status-pill-closed, .users-status-button.user-status-disabled)::before { content: "\e5cd" / ""; }
 
-  :root[data-theme="sand"] .app-shell .templates-card {
+  :root[data-theme] .app-shell .templates-card {
     background: var(--theme-card-background);
   }
 
-  :root[data-theme="sand"] .app-shell .templates-card::after { opacity: 1; }
+  :root[data-theme="graphite"] .app-shell .templates-gallery-grid > .templates-card {
+    border: 1px solid var(--theme-border);
+  }
 
-  :root[data-theme="sand"] .app-shell .templates-card-actions { --templates-action-radius: 22px; }
+  :root[data-theme="graphite"] .app-shell .templates-card-author {
+    color: var(--theme-warning-text);
+  }
 
-  :root[data-theme="sand"] .form-menu-item-delete:not(:disabled):is(:hover, :focus-visible) {
+  :root[data-theme] .app-shell .templates-card::after { opacity: 1; }
+
+  :root[data-theme] .app-shell .templates-card-actions { --templates-action-radius: 22px; }
+
+  :root[data-theme] .form-menu-item-delete:not(:disabled):is(:hover, :focus-visible) {
     background: color-mix(in srgb, var(--theme-danger-background) 88%, var(--theme-danger-text));
   }
 
-  :root[data-theme="sand"] .app-shell .organizations-delete-all-button:not(:disabled) {
+  :root[data-theme] .app-shell .organizations-delete-all-button:not(:disabled) {
     border-color: var(--theme-danger-border);
     color: var(--theme-danger-text);
     background: var(--theme-danger-background);
   }
 
-  :root[data-theme="sand"] .app-shell .organizations-delete-all-button:not(:disabled):is(:hover, :focus-visible) {
+  :root[data-theme] .app-shell .organizations-delete-all-button:not(:disabled):is(:hover, :focus-visible) {
+    border-color: var(--theme-danger-border);
+    color: var(--theme-danger-text);
     background: color-mix(in srgb, var(--theme-danger-background) 88%, var(--theme-danger-text));
   }
 
-  :root[data-theme="sand"] .app-shell :is(
+  :root[data-theme] .app-shell :is(
     .organizations-page-card > .organizations-type-switcher,
     .preferences-page > .section-tabs,
     .templates-segmented-control
@@ -218,7 +277,7 @@
     background: var(--theme-surface-muted);
   }
 
-  :root[data-theme="sand"] .app-shell :is(
+  :root[data-theme] .app-shell :is(
     .organizations-page-card > .organizations-type-switcher,
     .preferences-page > .section-tabs,
     .templates-segmented-control
@@ -226,40 +285,71 @@
     border-radius: 8px;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.organizations-page-card, .preferences-page) .organizations-type-switcher button {
+  :root[data-theme] .app-shell :is(.organizations-page-card, .preferences-page) .organizations-type-switcher button {
     border-radius: 8px;
   }
 
-  :root[data-theme="sand"] .app-shell .templates-segmented-control .templates-segment {
+  :root[data-theme] .app-shell :is(
+    .organizations-type-switcher button.active,
+    .organizations-type-switcher button[aria-selected="true"],
+    .templates-segmented-control .templates-segment-active,
+    .response-report-tabs button.active
+  ) {
+    color: var(--theme-accent-foreground);
+  }
+
+  :root[data-theme] .app-shell .templates-segmented-control .templates-segment {
     font-weight: 700;
   }
 
-  :root[data-theme="sand"] .app-shell .preferences-page > .section-tabs { margin-bottom: 0; }
+  :root[data-theme] .app-shell .preferences-page > .section-tabs { margin-bottom: 0; }
 
-  :root[data-theme="sand"] .app-shell .rule-scenario {
+  :root[data-theme] .app-shell .rule-scenario {
     border-color: var(--theme-outline);
     background: var(--theme-card-background);
   }
 
-  :root[data-theme="sand"] .app-shell .rule-scenario:hover { background: var(--theme-panel-background); }
-  :root[data-theme="sand"] .app-shell .rule-scenario small { color: var(--theme-text-muted); }
-  :root[data-theme="sand"] .app-shell .settings-branding-content { background: var(--theme-card-background); }
-  :root[data-theme="sand"] .app-shell .response-report-summary > div { background: var(--theme-panel-background); }
-  :root[data-theme="sand"] .app-shell .response-report-coverage-note {
+  :root[data-theme] .app-shell .rule-scenario:hover { background: var(--theme-panel-background); }
+  :root[data-theme="graphite"] .app-shell .rule-scenario:hover { background: var(--theme-container-high); }
+  :root[data-theme] .app-shell .rule-scenario small { color: var(--theme-text-muted); }
+  :root[data-theme] .app-shell .settings-branding-content { background: var(--theme-card-background); }
+  :root[data-theme] .app-shell .settings-cleanup-confirmation-actions > button {
+    min-height: 40px;
+    padding: 9px 16px;
+  }
+  :root[data-theme] .app-shell .response-report-summary > div { background: var(--theme-panel-background); }
+  :root[data-theme] .app-shell .response-report-coverage-note {
     border-inline-start: 3px solid var(--theme-warning-text);
     color: var(--theme-warning-text);
     background: var(--theme-warning-background);
   }
 
-  :root[data-theme="sand"] .app-shell .response-report-value-track { background: var(--theme-border); }
-  :root[data-theme="sand"] .app-shell .response-report-value-track > span { background: var(--theme-accent); }
+  :root[data-theme="sand"] .app-shell .response-report-coverage-note {
+    border-color: rgba(217, 119, 6, 0.3);
+    border-inline-start: 3px solid #b45309;
+    color: #78350f;
+    background: #fef3c7;
+  }
 
-  :root[data-theme="sand"] .app-shell .responses-page-table-shell {
+  :root[data-theme] .app-shell .response-report-value-track { background: var(--theme-border); }
+  :root[data-theme] .app-shell .response-report-value-track > span { background: var(--theme-accent); }
+
+  :root[data-theme="graphite"] .app-shell :is(.response-report-complete, .response-report-status.submitted) {
+    color: var(--theme-success-text);
+    background: var(--theme-success-background);
+  }
+
+  :root[data-theme="graphite"] .app-shell .response-report-status.missing {
+    color: var(--theme-danger-text);
+    background: var(--theme-danger-background);
+  }
+
+  :root[data-theme] .app-shell .responses-page-table-shell {
     border-radius: 12px;
     scrollbar-color: var(--theme-outline) var(--theme-panel-background);
   }
 
-  :root[data-theme="sand"] .app-shell .responses-page-empty {
+  :root[data-theme] .app-shell .responses-page-empty {
     padding: 24px 16px;
     border: 1px dashed var(--theme-border);
     border-radius: 14px;
@@ -267,9 +357,9 @@
     box-shadow: none;
   }
 
-  :root[data-theme="sand"] .app-shell .responses-page-empty h4 { font-size: 1.1rem; }
+  :root[data-theme] .app-shell .responses-page-empty h4 { font-size: 1.1rem; }
 
-  :root[data-theme="sand"] .app-shell .responses-page-empty-icon {
+  :root[data-theme] .app-shell .responses-page-empty-icon {
     display: inline-grid;
     place-items: center;
     width: 44px;
@@ -280,19 +370,23 @@
     background: var(--theme-selected-background);
   }
 
-  :root[data-theme="sand"] .app-shell .users-table-shell { border-radius: 12px; }
+  :root[data-theme="graphite"] .app-shell .responses-page-empty-icon {
+    color: var(--theme-selected-text);
+  }
 
-  :root[data-theme="sand"] .app-shell :is(.users-table, .organizations-table) :is(th, td) {
+  :root[data-theme] .app-shell .users-table-shell { border-radius: 12px; }
+
+  :root[data-theme] .app-shell :is(.users-table, .organizations-table) :is(th, td) {
     border-inline-width: 0;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) th {
+  :root[data-theme] .app-shell :is(.responses-table, .dashboard-forms-table) th {
     color: var(--theme-text);
     background: var(--theme-surface);
     font-weight: 700;
   }
 
-  :root[data-theme="sand"] .app-shell .dashboard-forms-table :is(th, td):first-child {
+  :root[data-theme] .app-shell .dashboard-forms-table :is(th, td):first-child {
     padding-inline: 8px;
   }
 
@@ -300,22 +394,22 @@
     background: var(--theme-selected-background);
   }
 
-  :root[data-theme="sand"] .app-shell .responses-table :is(th, td).responses-table-section-column {
+  :root[data-theme] .app-shell .responses-table :is(th, td).responses-table-section-column {
     border-inline-start-color: var(--theme-outline);
   }
 
-  :root[data-theme="sand"] .app-shell .responses-table thead th.responses-table-section-column {
+  :root[data-theme] .app-shell .responses-table thead th.responses-table-section-column {
     font-weight: 800;
   }
 
-  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody td { background: var(--theme-card-background); }
-  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:hover td { background: var(--theme-row-hover); }
+  :root[data-theme] .app-shell :is(.responses-table, .dashboard-forms-table) tbody td { background: var(--theme-card-background); }
+  :root[data-theme] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:hover td { background: var(--theme-row-hover); }
 
-  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) td {
-    background: var(--theme-selected-background);
+  :root[data-theme] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) td {
+    background: var(--theme-row-selected);
   }
 
-  :root[data-theme="sand"] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) > td:first-child {
+  :root[data-theme] .app-shell :is(.responses-table, .dashboard-forms-table) tbody tr:has(> td > input[type="checkbox"]:checked) > td:first-child {
     box-shadow: inset 3px 0 var(--theme-accent);
   }
 }

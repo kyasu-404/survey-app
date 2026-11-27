@@ -127,9 +127,10 @@ export function useUsersAdminActions() {
     }
   };
 
-  const openPasswordModal = (userId: string, title: string) => {
+  const openPasswordModal = (userId: string, title: string, email: string) => {
     setPasswordModal({
       userId,
+      email,
       title,
       password: "",
     });

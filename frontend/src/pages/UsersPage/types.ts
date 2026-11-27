@@ -9,6 +9,7 @@ export type NewUserForm = {
 
 export type PasswordModalState = {
   userId: string;
+  email: string;
   title: string;
   password: string;
 };

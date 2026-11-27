@@ -6,7 +6,7 @@ test.describe("core survey flows", () => {
   test("login page is reachable without privileged test credentials", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("heading", { name: "Авторизация" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Вход в систему" })).toBeVisible();
     await expect(page.getByPlaceholder("Электронная почта")).toBeVisible();
     await expect(page.getByPlaceholder("Пароль")).toBeVisible();
   });
@@ -17,7 +17,7 @@ test.describe("credentialed survey flow", () => {
 
   test("registration/login/create/fill/result scenario", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: "Авторизация" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Вход в систему" })).toBeVisible();
 
     // Login
     await page.getByPlaceholder("Электронная почта").fill(process.env.E2E_TEST_EMAIL!);

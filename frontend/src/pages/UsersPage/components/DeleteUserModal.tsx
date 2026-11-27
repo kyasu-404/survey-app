@@ -25,7 +25,7 @@ export function DeleteUserModal({ isPending, modal, onCancel, onConfirm }: Delet
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+        <ModalHeading onClose={onCancel} disabled={isPending}>
           <h3 id={titleId} className="users-modal-title">Удаление пользователя</h3>
         </ModalHeading>
         <p className="users-modal-copy">Вы уверены, что хотите удалить пользователя {modal.userName}?</p>

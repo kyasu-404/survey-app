@@ -25,7 +25,7 @@ export function TemplateDeleteModal({ isPending, onCancel, onConfirm, template }
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+        <ModalHeading onClose={onCancel} disabled={isPending}>
           <h3 id={titleId} className="dashboard-delete-modal-title">Удаление шаблона</h3>
         </ModalHeading>
         <p className="dashboard-delete-modal-copy">Удалить шаблон «{template.title}»? Это действие нельзя отменить.</p>

@@ -33,7 +33,7 @@ function ArchiveDialog({ row, onConfirm, onCancel }: { row: AdminAnnouncement; o
   const dialog = useModalSurface(cancel);
   return <dialog ref={dialog} className="card modal-card activity-rule-dialog announcement-archive-dialog"
     aria-labelledby="archive-title" onCancel={event => { event.preventDefault(); onCancel(); }}>
-    <ModalHeading onClose={onCancel} lightOnly>
+    <ModalHeading onClose={onCancel}>
       <h2 id="archive-title">Архивировать объявление?</h2>
     </ModalHeading>
     <p>«{row.title}» будет доступно администраторам в архиве. Для новой публикации можно будет создать копию.</p>

@@ -246,6 +246,10 @@
   box-shadow: 0 0 0 3px var(--theme-accent-soft);
 }
 
+:root[data-theme="graphite"] .settings-page-card .settings-field :is(input:not([type="checkbox"]), select, textarea) {
+  color-scheme: dark;
+}
+
 .settings-page-card .settings-field input::placeholder,
 .settings-page-card .settings-field textarea::placeholder {
   color: #94a3b8;

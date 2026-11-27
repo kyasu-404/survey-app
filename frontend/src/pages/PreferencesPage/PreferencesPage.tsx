@@ -1,7 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { NotificationPreferences } from "../../entities/notification/NotificationPreferences";
-import { useTheme } from "../../shared/theme/ThemeProvider";
 import { SectionTabs } from "../../shared/ui/SectionTabs";
 import { PasswordSettings } from "./PasswordSettings";
 import "./preferences.css";
@@ -13,7 +12,6 @@ const tabs = [
 
 export default function PreferencesPage() {
   const { user } = useAuth();
-  const { themeId } = useTheme();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") === "security" ? "security" : "notifications";
 
@@ -21,7 +19,7 @@ export default function PreferencesPage() {
     <section className="activity-page preferences-page">
       <header className="activity-heading"><h1>Настройки</h1></header>
       {user && <>
-        <SectionTabs id="preferences" label="Разделы личных настроек" tabs={tabs} value={tab} compact={themeId === "graphite"}
+        <SectionTabs id="preferences" label="Разделы личных настроек" tabs={tabs} value={tab}
           onChange={next => setParams(current => {
             const updated = new URLSearchParams(current);
             if (next === "security") updated.set("tab", "security");

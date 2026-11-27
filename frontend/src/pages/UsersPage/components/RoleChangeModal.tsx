@@ -28,7 +28,7 @@ export function RoleChangeModal({ isPending, modal, onCancel, onConfirm }: RoleC
         aria-describedby="users-role-change-description"
         tabIndex={-1}
       >
-        <ModalHeading onClose={onCancel} disabled={isPending} lightOnly>
+        <ModalHeading onClose={onCancel} disabled={isPending}>
           <h3 id="users-role-change-title" className="users-modal-title">
             Смена роли пользователя
           </h3>

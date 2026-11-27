@@ -83,7 +83,7 @@ function ArchiveRuleDialog({ name, pending, error, onClose, onConfirm }: {
   return <dialog ref={dialog} className="card modal-card rule-archive-dialog"
     aria-labelledby="rule-archive-heading" aria-describedby="rule-archive-description"
     onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
-    <ModalHeading onClose={onClose} disabled={pending} lightOnly>
+    <ModalHeading onClose={onClose} disabled={pending}>
       <h2 id="rule-archive-heading">Архивировать правило?</h2>
     </ModalHeading>
     <p id="rule-archive-description">Правило «{name}» будет выключено. История срабатываний сохранится.</p>

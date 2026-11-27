@@ -2,7 +2,9 @@ import { apiClient } from "../../shared/api";
 import { runRequest } from "../../shared/api/request";
 
 export async function login(email: string, password: string) {
-  const { data, error } = await apiClient.auth.login(email, password);
+  const normalizedEmail = email.trim();
+  const { data, error } = await runRequest("auth.login", () =>
+    apiClient.auth.login(normalizedEmail, password));
   if (error) throw error;
 
   const metadataName = typeof data.user?.user_metadata?.name === "string"
@@ -10,17 +12,34 @@ export async function login(email: string, password: string) {
     : "";
   if (!data.user?.id) return metadataName;
 
+  let profile: { name?: unknown; is_disabled?: unknown } | null = null;
   try {
-    const { data: profile } = await apiClient
-      .from("profiles")
-      .select("name")
-      .eq("id", data.user.id)
-      .maybeSingle();
-    const profileName = typeof profile?.name === "string" ? profile.name.trim() : "";
-    return profileName || metadataName;
+    const result = await runRequest(
+      "profiles.loadDisplayName",
+      () =>
+        apiClient
+          .from("profiles")
+          .select("name, is_disabled")
+          .eq("id", data.user.id)
+          .maybeSingle(),
+      { timeoutMs: 5_000, context: { userId: data.user.id } },
+    );
+    profile = result.data ?? null;
   } catch {
     return metadataName;
   }
+
+  if (profile?.is_disabled === true) {
+    try {
+      await apiClient.auth.logout();
+    } catch {
+      // Best-effort sign-out if the account is already marked disabled.
+    }
+    throw Object.assign(new Error("User is banned"), { code: "user_banned", status: 403 });
+  }
+
+  const profileName = typeof profile?.name === "string" ? profile.name.trim() : "";
+  return profileName || metadataName;
 }
 
 export async function register(email: string, password: string) {

@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useAuth } from "../../app/providers/AuthProvider";
 import { changeOwnPassword } from "../../features/auth/api";
 import { getNewPasswordError, NEW_PASSWORD_MIN_LENGTH } from "../../shared/lib/passwordPolicy";
 import { InlineSpinner } from "../../shared/ui/InlineSpinner";
 
 const fields = [
-  { key: "current", label: "Текущий пароль", autoComplete: "current-password" },
-  { key: "password", label: "Новый пароль", autoComplete: "new-password" },
-  { key: "confirmation", label: "Повторите новый пароль", autoComplete: "new-password" },
+  { key: "current", name: "current-password", label: "Текущий пароль", autoComplete: "current-password" },
+  { key: "password", name: "new-password", label: "Новый пароль", autoComplete: "new-password" },
+  { key: "confirmation", name: "confirm-password", label: "Повторите новый пароль", autoComplete: "new-password" },
 ] as const;
 
 type PasswordField = typeof fields[number]["key"];
@@ -54,6 +55,8 @@ function describePasswordError(error: unknown): PasswordIssue {
 
 export function PasswordSettings() {
   const prefix = useId();
+  const { user, profile } = useAuth();
+  const accountUsername = (profile?.email ?? user?.email ?? "").trim();
   const form = useRef<HTMLFormElement>(null);
   const inFlight = useRef(false);
   const [values, setValues] = useState(emptyValues);
@@ -69,15 +72,35 @@ export function PasswordSettings() {
     event.preventDefault();
     if (inFlight.current) return;
 
+    const formData = new FormData(event.currentTarget);
+    const submittedValues: PasswordValues = {
+      current: typeof formData.get("current-password") === "string"
+        ? String(formData.get("current-password"))
+        : values.current,
+      password: typeof formData.get("new-password") === "string"
+        ? String(formData.get("new-password"))
+        : values.password,
+      confirmation: typeof formData.get("confirm-password") === "string"
+        ? String(formData.get("confirm-password"))
+        : values.confirmation,
+    };
+    if (
+      submittedValues.current !== values.current ||
+      submittedValues.password !== values.password ||
+      submittedValues.confirmation !== values.confirmation
+    ) {
+      setValues(submittedValues);
+    }
+
     setChanged(false);
-    const validation = validatePassword(values);
+    const validation = validatePassword(submittedValues);
     setIssue(validation);
     if (validation) return;
 
     inFlight.current = true;
     setPending(true);
     try {
-      await changeOwnPassword(values.current, values.password);
+      await changeOwnPassword(submittedValues.current, submittedValues.password);
       setValues(emptyValues);
       setChanged(true);
     } catch (error) {
@@ -93,14 +116,27 @@ export function PasswordSettings() {
   return <section className="password-settings" aria-labelledby={prefix + "-heading"}>
     <h2 id={prefix + "-heading"}>Смена пароля</h2>
     <p className="activity-muted">Измените пароль для входа в свою учётную запись.</p>
-    <form ref={form} noValidate onSubmit={submit} className="password-settings-form">
-      {fields.map(({ key, label, autoComplete }) => {
+    <form ref={form} method="post" noValidate onSubmit={submit} className="password-settings-form">
+      {accountUsername && (
+        <input
+          type="email"
+          name="username"
+          autoComplete="username"
+          value={accountUsername}
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          className="sr-only"
+        />
+      )}
+      {fields.map(({ key, name, label, autoComplete }) => {
         const id = prefix + "-" + key;
         const fieldError = issue?.field === key ? issue.message : undefined;
         return <div key={key}>
           <label className="activity-field" htmlFor={id}>
             {label}
-            <input id={id} name={key} type="password" autoComplete={autoComplete} value={values[key]}
+            <input id={id} name={name} type="password" autoComplete={autoComplete}
+              autoCapitalize="none" autoCorrect="off" spellCheck={false} value={values[key]}
               required disabled={pending} aria-invalid={fieldError ? true : undefined}
               aria-describedby={fieldError ? id + "-error" : undefined}
               placeholder={key === "password" ? `Не менее ${NEW_PASSWORD_MIN_LENGTH} символов` : undefined}

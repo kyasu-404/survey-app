@@ -1,11 +1,6 @@
 import { test, expect, type Locator } from "@playwright/test";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
-const buttonStyle = (button: Locator) => button.evaluate(element => {
-  const style = getComputedStyle(element);
-  return { background: style.backgroundImage, color: style.color, radius: style.borderRadius, height: style.minHeight };
-});
-
 async function expectRoundClose(button: Locator) {
   await expect(button.locator('[data-icon="close"]')).toBeVisible();
   await expect(button).toHaveCSS("width", "36px");
@@ -20,7 +15,6 @@ for (const theme of ["sand", "graphite"]) {
     const app = await openSurveyApp(page, { responseCount: 1, elements: [{ type: "text", name: "name", title: "Имя" }] });
     await page.route("**/api/office/status", route => route.fulfill({ json: { enabled: false } }));
     await page.goto(`/dashboard/forms/${app.formId}/responses`);
-    const expected = await buttonStyle(page.getByRole("button", { name: "Скачать XLSX", exact: true }));
     await page.getByRole("button", { name: /Открыть/ }).first().click();
     const response = page.locator(".response-preview-drawer");
     await expect(response).toBeVisible();
@@ -28,8 +22,7 @@ for (const theme of ["sand", "graphite"]) {
     await expect(page.locator("html")).toHaveCSS("scrollbar-gutter", "auto");
     await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
     const closeResponse = response.getByRole("button", { name: "Закрыть", exact: true });
-    if (theme === "sand") await expectRoundClose(closeResponse);
-    else expect(await buttonStyle(closeResponse)).toEqual(expected);
+    await expectRoundClose(closeResponse);
     await expect(response).toHaveCSS("animation-duration", "0.15s");
     await closeResponse.click();
     await expect(response).toHaveCount(0);
@@ -42,6 +35,8 @@ for (const theme of ["sand", "graphite"]) {
     const cardHeader = page.locator(".templates-card-header").filter({ has: card });
     const badgeBackground = await cardHeader.locator(".dashboard-status-pill-template").evaluate(el => getComputedStyle(el).backgroundColor);
     expect(badgeBackground).not.toBe("rgba(0, 0, 0, 0)");
+    await expect(page.locator(".templates-use-button").first()).toHaveCSS("border-radius", "22px");
+    await expect(page.locator(".templates-share-button").first()).toHaveCSS("border-radius", "22px");
     await card.click();
     const preview = page.getByRole("dialog", { name: "Превью шаблона Проверка шаблона", exact: true });
     await expect(preview).toBeVisible();
@@ -52,8 +47,7 @@ for (const theme of ["sand", "graphite"]) {
     await preview.evaluate(el => { el.scrollTop = el.scrollHeight; });
     const closeTemplate = preview.getByRole("button", { name: "Закрыть", exact: true });
     await expect(closeTemplate).toBeVisible();
-    if (theme === "sand") await expectRoundClose(closeTemplate);
-    else expect(await buttonStyle(closeTemplate)).toEqual(expected);
+    await expectRoundClose(closeTemplate);
     await expect(preview.locator(".dashboard-status-pill-template")).toHaveCSS("background-color", badgeBackground);
     await expect(preview).toHaveCSS("animation-duration", "0.15s");
     await page.screenshot({ path: testInfo.outputPath("template-preview.png") });

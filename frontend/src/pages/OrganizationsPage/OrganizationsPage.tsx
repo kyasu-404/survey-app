@@ -74,7 +74,7 @@ function OrganizationEditModal({
             if (!isSaving) void onSave();
           }}
         >
-          <ModalHeading onClose={onClose} disabled={isSaving} lightOnly>
+          <ModalHeading onClose={onClose} disabled={isSaving}>
             <h3 id={titleId} className="users-modal-title">{editingOrganization ? "Изменить организацию" : "Добавить организацию"}</h3>
           </ModalHeading>
           <label>

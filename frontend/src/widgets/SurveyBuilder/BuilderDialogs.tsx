@@ -28,7 +28,7 @@ export function BuilderResetDialog({ isSurveyMutationBusy, isTemplateBusy, setIs
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading onClose={() => setIsResetConfirmOpen(false)} disabled={isBusy} lightOnly>
+        <ModalHeading onClose={() => setIsResetConfirmOpen(false)} disabled={isBusy}>
           <h3 id={titleId} className="builder-reset-title">Сбросить конструктор?</h3>
         </ModalHeading>
         <p className="builder-template-subtitle">
@@ -81,7 +81,7 @@ export function BuilderCompatibilityDialog({ compatibilityDialog, isCompatibilit
           : "Предупреждение об изменениях формы"}
         tabIndex={-1}
       >
-        <ModalHeading onClose={handleCloseCompatibilityDialog} disabled={isBusy} lightOnly>
+        <ModalHeading onClose={handleCloseCompatibilityDialog} disabled={isBusy}>
           <h3 id={titleId} className="builder-reset-title">
             {compatibilityDialog.result.status === "blocked"
               ? "Некоторые изменения несовместимы с полученными ответами"
@@ -215,7 +215,7 @@ export function BuilderFormSettingsDialog({ postSaveSettings, setPostSaveSetting
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <ModalHeading onClose={closePostSaveSettings} disabled={isPostSaveSettingsSaving} lightOnly>
+        <ModalHeading onClose={closePostSaveSettings} disabled={isPostSaveSettingsSaving}>
           <h3 id={titleId} className="deadline-modal-title">Настройки формы</h3>
         </ModalHeading>
         <p className="deadline-modal-subtitle">{postSaveSettings.title}</p>
