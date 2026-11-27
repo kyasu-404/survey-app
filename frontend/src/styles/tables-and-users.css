@@ -191,6 +191,7 @@ button.dashboard-qr-download-button:focus-visible {
   max-height: min(68vh, 720px);
   overflow: auto;
   border-radius: 0;
+  box-shadow: none;
 }
 
 .responses-page-header-copy {
@@ -212,13 +213,28 @@ button.dashboard-qr-download-button:focus-visible {
 .responses-page-table-shell .responses-table {
   width: max-content;
   min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* The scroll container draws the outline, including the rounded corners. */
+.responses-page-table-shell .responses-table :is(th, td) {
+  border-block-start-width: 0;
+  border-inline-end-width: 0;
+}
+
+.responses-page-table-shell .responses-table tr > :first-child {
+  border-inline-start-width: 0;
+}
+
+.responses-page-table-shell .responses-table tbody tr:last-child > td {
+  border-block-end-width: 0;
 }
 
 .responses-table-header-pinned thead {
   position: sticky;
   top: 0;
   z-index: 2;
-  box-shadow: 0 1px 0 var(--theme-border);
 }
 
 .responses-table th,
@@ -239,6 +255,55 @@ button.dashboard-qr-download-button:focus-visible {
 
 :root[data-theme="sand"] .responses-table th.responses-table-date-column {
   white-space: nowrap;
+}
+
+.responses-table-sortable {
+  position: relative;
+}
+
+.responses-sort-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  cursor: pointer;
+}
+
+.responses-table .responses-table-date-column .responses-sort-button {
+  white-space: nowrap;
+}
+
+.responses-table[aria-busy="true"] .responses-sort-button {
+  cursor: progress;
+}
+
+.responses-sort-button::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.responses-table .responses-sort-button:focus-visible {
+  outline: 2px solid var(--theme-focus, var(--theme-accent));
+  outline-offset: 2px;
+}
+
+.responses-sort-icon {
+  color: var(--theme-text-muted);
+  user-select: none;
+}
+
+.responses-table-sortable[aria-sort] .responses-sort-icon {
+  --icon-weight: 500;
+  color: var(--theme-accent-emphasis, var(--theme-accent));
 }
 
 .responses-table .response-signature-image {
@@ -305,13 +370,55 @@ button.dashboard-qr-download-button:focus-visible {
   display: block;
 }
 
-.responses-table-checkbox-column input {
-  display: block;
+.responses-table-checkbox-column input[type="checkbox"] {
+  appearance: none;
+  display: grid;
+  place-items: center;
   width: 18px;
   height: 18px;
   margin: 0 auto;
-  accent-color: #f97316;
+  padding: 0;
+  border: 1px solid var(--theme-outline, var(--theme-text-muted));
+  border-radius: 5px;
+  background: var(--theme-control-background);
+  box-shadow: none;
+  color: var(--theme-card-background);
   cursor: pointer;
+}
+
+.responses-table-checkbox-column input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent);
+}
+
+.responses-table-checkbox-column input[type="checkbox"]:checked::after {
+  content: "";
+  width: 8px;
+  height: 4px;
+  border: solid currentColor;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.responses-table-checkbox-column input[type="checkbox"]:indeterminate::after {
+  content: "";
+  width: 8px;
+  border-bottom: 2px solid currentColor;
+}
+
+.responses-table-checkbox-column input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--theme-focus, var(--theme-accent));
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .responses-table-checkbox-column input[type="checkbox"] {
+    appearance: auto;
+  }
+
+  .responses-table-checkbox-column input[type="checkbox"]::after {
+    display: none;
+  }
 }
 
 .survey-response-already-submitted {

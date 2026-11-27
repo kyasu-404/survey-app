@@ -87,9 +87,12 @@ export async function openSurveyApp(page: Page, options: { baseURL?: string; pro
         return route.fulfill({ json: p_response_ids ? responses.filter(row => p_response_ids.includes(row.id)) : responses });
       }
       if (table === "responses") {
-        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const beforeId = url.searchParams.get("or")?.match(/,id\.lt\.([\w-]+)\)\)$/)?.[1];
+        const offset = beforeId
+          ? responses.findIndex(response => response.id === beforeId) + 1
+          : Number(url.searchParams.get("offset") ?? 0);
         const limit = Number(url.searchParams.get("limit") ?? 100);
-        if (offset > 0 && offset >= responses.length) {
+        if (!beforeId && offset > 0 && offset >= responses.length) {
           return route.fulfill({ status: 416, json: { code: "PGRST103", message: "Requested range not satisfiable" } });
         }
         const rows = responses.slice(offset, offset + limit);

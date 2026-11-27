@@ -75,6 +75,7 @@ vi.mock("../../entities/response/api", () => {
       snapshot = await loadResponseRows(id, options);
       return { data: snapshot.slice((options.page - 1) * options.pageSize, options.page * options.pageSize), count: snapshot.length, totalPages: Math.max(1, Math.ceil(snapshot.length / options.pageSize)) };
     },
+    getResponsesForSorting: async () => snapshot,
     getAllResponsesByForm: async (_id: string, options?: { responseIds?: string[] }) => options?.responseIds ? snapshot.filter(row => options.responseIds!.includes(row.id)) : snapshot,
   };
 });
@@ -1076,6 +1077,113 @@ describe("FormResponsesPage", () => {
     ]);
 
     await waitFor(() => expect(screen.getByText("Анна")).toBeInTheDocument());
+  });
+
+  it("cycles global sorting and keeps selection and pinning as rows move between pages", async () => {
+    const user = userEvent.setup();
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [
+        { type: "text", name: "name", title: "Имя" },
+        { type: "text", inputType: "number", name: "score", title: "Баллы" },
+      ] }] },
+    });
+    const responses = [
+      { ...createResponse(1, "Анна"), data: { name: "Анна", score: "10" } },
+      ...createFullResponsePage(1, 49).map((_, index) => createResponse(index + 2)),
+      { ...createResponse(51, "Борис"), data: { name: "Борис", score: 2 } },
+    ];
+    loadResponseRows.mockResolvedValue(responses);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    const header = await screen.findByRole("columnheader", { name: "Баллы" });
+    const firstResponse = () => screen.getAllByRole("row")[1];
+    expect(within(firstResponse()).getByText("Анна")).toBeVisible();
+    expect(screen.queryByText("Борис")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Закрепить заголовки" }));
+    await user.click(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" }));
+
+    const sortButton = within(header).getByRole("button", { name: "Баллы" });
+    sortButton.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(header).toHaveAttribute("aria-sort", "ascending"));
+    expect(within(firstResponse()).getByText("Борис")).toBeVisible();
+    expect(within(firstResponse()).getByText("2")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Выбрать Ответ Анна" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Открепить заголовки" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(sortButton);
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(within(firstResponse()).getByText("Анна")).toBeVisible();
+    expect(within(firstResponse()).getByText("10")).toBeVisible();
+    await user.click(sortButton);
+    expect(header).not.toHaveAttribute("aria-sort");
+    expect(within(firstResponse()).getByText("Анна")).toBeVisible();
+    expect(screen.queryByText("Борис")).not.toBeInTheDocument();
+
+    const nameSort = screen.getByRole("button", { name: "Имя" });
+    await user.click(nameSort);
+    await user.click(nameSort);
+    await waitFor(() => expect(screen.getByRole("columnheader", { name: "Имя" })).toHaveAttribute("aria-sort", "descending"));
+    expect(screen.queryByText("Анна")).not.toBeInTheDocument();
+    expect(screen.getByText("Выбрано: 1")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+    expect(await screen.findByRole("checkbox", { name: "Выбрать Ответ Анна" })).toBeChecked();
+  });
+
+  it("cancels a pending global sort when its direction is cleared", async () => {
+    const user = userEvent.setup();
+    const pendingResponses = createDeferred<SurveyResponse[]>();
+    const fetchSort = vi.spyOn(responseApi, "getResponsesForSorting").mockReturnValue(pendingResponses.promise);
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    loadResponseRows.mockResolvedValue(createFullResponsePage(1, 60));
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    try {
+      const header = await screen.findByRole("button", { name: "Имя" });
+      await user.click(header);
+      expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
+      await user.click(header);
+      await user.click(header);
+      expect(fetchSort.mock.calls[0][1]?.aborted).toBe(true);
+      await user.click(screen.getByRole("button", { name: "Далее" }));
+      expect(await screen.findByText("Ответ 60")).toBeVisible();
+    } finally {
+      pendingResponses.resolve([]);
+      fetchSort.mockRestore();
+    }
+  });
+
+  it("clears the selection of a removed row when a regular page refreshes", async () => {
+    const responses = createFullResponsePage(1, 60);
+    getFormById.mockResolvedValue({
+      ...invitationForm,
+      schema: { pages: [{ elements: [{ type: "text", name: "name", title: "Имя" }] }] },
+    });
+    loadResponseRows.mockResolvedValue(responses);
+    render(<MemoryRouter initialEntries={["/forms/form-1/responses"]}>
+      <QueryClientProvider client={createQueryClient()}><Routes>
+        <Route path="/forms/:id/responses" element={<FormResponsesPage />} />
+      </Routes></QueryClientProvider>
+    </MemoryRouter>);
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Выбрать Ответ Ответ 1" }));
+    expect(screen.getByText("Выбрано: 1")).toBeVisible();
+    loadResponseRows.mockResolvedValue(responses.slice(1));
+    act(() => emitRealtimeChange("responses"));
+    await screen.findByText("Ответов: 59");
+    expect(screen.queryByText("Выбрано: 1")).not.toBeInTheDocument();
   });
 
   it("paginates 200 answers and exports a full snapshot only on demand", async () => {

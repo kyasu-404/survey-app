@@ -9,7 +9,7 @@ export type { ResponsesTableColumn, ResponsesColumnGroup };
 import { DEFAULT_ORGANIZATION_QUESTION_TITLE, ORGANIZATION_QUESTION_TYPE } from "../../organization/model";
 import type { SurveyResponse } from "../types";
 import type { SurveyQuestion, SurveySchema } from "../../survey/types";
-import { answerCommentKey, hasAnswerComment, formatSimpleAnswer, formatMatrixAnswer, readableValue, COMPLEX_ANSWER_TYPES } from "../../../shared/lib/answerValue";
+import { answerCommentKey, hasAnswerComment, hasAnswerValue, formatSimpleAnswer, formatMatrixAnswer, readableValue, COMPLEX_ANSWER_TYPES } from "../../../shared/lib/answerValue";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../../shared/lib/signatureImage";
 import { RESPONSES_HTML_LAYOUT_CSS } from "../../../shared/lib/responsesHtmlLayout";
 import { sectionSiblings } from "../../survey/model/surveyHierarchy";
@@ -225,10 +225,93 @@ function renderResponseHtmlCell(column: ResponsesTableColumn, value: string) {
   )}</span>${timePart ? `<span class="responses-table-date-line">${escapeHtml(timePart)}</span>` : ""}</span>`;
 }
 
+export type ResponseTableSort = { key: string; direction: "ascending" | "descending" };
+
+const RESPONSE_SORT_COLLATOR = new Intl.Collator("ru", { sensitivity: "base" });
+const NUMBER_INPUT_TYPES = new Set(["number", "integer", "range", "rating"]);
+const DATE_INPUT_TYPES = new Set(["date", "datetime", "datetime-local"]);
+
+function dateSortValue(value: string) {
+  const timestamp = Date.parse(value);
+  // Date.parse discards sub-millisecond precision from PostgreSQL timestamps.
+  const fraction = value.match(/T\d{2}:\d{2}:\d{2}(\.\d+)/)?.[1];
+  return timestamp + (fraction ? Number("0." + fraction.slice(4)) : 0);
+}
+
+function timeSortValue(value: string) {
+  const parts = value.match(/^(\d{2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?$/);
+  if (!parts) return NaN;
+  const [, hours, minutes, seconds = "0"] = parts;
+  if (+hours > 23 || +minutes > 59 || +seconds >= 60) return NaN;
+  return +hours * 3600 + +minutes * 60 + +seconds;
+}
+
+function answerSortValue(
+  question: SurveyQuestion | undefined,
+  value: unknown,
+  organizationLabels: Map<string, string> | undefined,
+  data: SurveyResponse["data"],
+  commentSuffix: string | undefined,
+): number | string | null {
+  if (!hasAnswerValue(value)) {
+    const comment = question && hasAnswerComment(question) && data[answerCommentKey(question, commentSuffix)];
+    if (typeof comment !== "string" || !comment.trim()) return null;
+  }
+  const text = typeof value === "string" ? value.trim() : "";
+  const inputType = question && (typeof question.inputType === "string" ? question.inputType : question.type);
+  let numericValue = NaN;
+  if (inputType && NUMBER_INPUT_TYPES.has(inputType)) {
+    if (typeof value === "number") numericValue = value;
+    else if (/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i.test(text)) numericValue = Number(text.replace(",", "."));
+  } else if (inputType && DATE_INPUT_TYPES.has(inputType) && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(text)) {
+    // Local date-times are wall-clock values. Give them a stable time base.
+    const isLocalDateTime = text.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    numericValue = dateSortValue(isLocalDateTime ? text + "Z" : text);
+  } else if (inputType === "time") {
+    numericValue = timeSortValue(text);
+  } else if (inputType === "boolean" && question) {
+    if (value === (question.valueTrue ?? true)) numericValue = 1;
+    else if (value === (question.valueFalse ?? false)) numericValue = 0;
+  } else if (inputType === "expression" && typeof value === "number") {
+    numericValue = value;
+  } else if (inputType === "signaturepad") {
+    return text ? 1 : null;
+  }
+  if (Number.isFinite(numericValue)) return numericValue;
+
+  const label = formatAnswerValue(question, value, organizationLabels, data, commentSuffix).trim();
+  return label || null;
+}
+
+export function sortResponsesForTable(
+  responses: SurveyResponse[],
+  schema: SurveySchema,
+  sort: ResponseTableSort,
+  organizationLabels?: Map<string, string>,
+): SurveyResponse[] {
+  const valueName = sort.key.slice("answer:".length);
+  const isDate = sort.key === RESPONSE_DATE_KEY;
+  const question = isDate ? undefined : getQuestionMeta(schema).questionMap.get(valueName);
+  const direction = sort.direction === "ascending" ? 1 : -1;
+  return responses.map(response => {
+    const value = Object.prototype.hasOwnProperty.call(response.data, valueName) ? response.data[valueName] : undefined;
+    const key = isDate
+      ? dateSortValue(response.created_at)
+      : answerSortValue(question, value, organizationLabels, response.data, schema.commentSuffix);
+    return { response, key: typeof key === "number" && !Number.isFinite(key) ? null : key };
+  }).sort(({ key: a }, { key: b }) => {
+    if (a === null || b === null) return Number(a === null) - Number(b === null);
+    if (typeof a === "number" && typeof b === "number") return direction * (a - b);
+    if (typeof a === "number" || typeof b === "number") return direction * (typeof a === "number" ? -1 : 1);
+    return direction * RESPONSE_SORT_COLLATOR.compare(a, b);
+  }).map(({ response }) => response);
+}
+
 export function formatResponsesForTable(
   responses: SurveyResponse[],
   schema: SurveySchema,
   organizationLabels?: Map<string, string>,
+  columnResponses = responses,
 ): ResponsesTable {
   const { columns: schemaColumns, seenNames, questionMap } = getQuestionMeta(schema);
   // Include legacy/extra answer keys once, across all responses, after schema columns.
@@ -236,7 +319,7 @@ export function formatResponsesForTable(
     { key: RESPONSE_DATE_KEY, header: RESPONSE_DATE_HEADER, isDate: true },
     ...schemaColumns,
   ];
-  responses.forEach((response) => Object.keys(response.data).forEach((name) => {
+  columnResponses.forEach((response) => Object.keys(response.data).forEach((name) => {
     if (seenNames.has(name)) return;
     columns.push({ key: `answer:${name}`, header: name });
     seenNames.add(name);

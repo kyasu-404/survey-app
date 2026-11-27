@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { claimAnnouncementPrompt, listAnnouncementPrompts, type AnnouncementPrompt } from "../../entities/announcement/promptApi";
-import { notificationStatusEvent } from "../../entities/notification/useNotificationActions";
+import { notificationStatusEvent } from "../../entities/notification/useNotifications";
 
 const openDialogSelector = 'dialog[open], [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
 

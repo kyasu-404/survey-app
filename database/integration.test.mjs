@@ -116,6 +116,8 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
     const formClosedMigration = await source("./migrations/202611231600_form_closed_automation.sql");
     const fullReviewFixesMigration = await source("./migrations/202611232200_full_code_review_fixes.sql");
     const reviewFollowupFixes = await source("./migrations/202611232230_review_followup.sql");
+    const notificationCleanupMigration = await source("./migrations/202611271200_notification_cleanup.sql");
+    const notificationGroupsMigration = await source("./migrations/202611271300_notification_response_groups.sql");
     for (const upgrade of [false, true]) {
       const database = "survey_personal_check_" + randomUUID().replaceAll("-", "");
       await admin.query("create database " + database + " template template0"); databases.push(database);
@@ -206,6 +208,26 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
         );
         assert.equal(legacySubmit.status, "submitted");
         assert.deepEqual((await db.query("select theme from public.forms where id=$1", [form])).rows[0].theme, legacyTheme);
+
+        await db.query(`
+          insert into public.notifications(user_id,category,event_key,title,message)
+          values($1,'form_status','before-notification-retention','Existing notification','Migration fixture')
+        `, [owner]);
+        await db.query(notificationCleanupMigration);
+        await db.query("begin");
+        try {
+          await db.query("update public.notifications set read_at=now()-interval '91 days' where event_key='before-notification-retention'");
+          await db.query("set local role service_role");
+          assert.equal((await db.query("select public.run_notification_cleanup() removed")).rows[0].removed, 1);
+          await db.query("reset role");
+          await db.query(`
+            select survey_automation.notify($1,'form_status','before-notification-retention','Repeated event','Migration fixture')
+          `, [owner]);
+          assert.equal((await db.query("select 1 from public.notifications where event_key='before-notification-retention'")).rowCount, 0);
+        } finally {
+          await db.query("rollback");
+        }
+        await db.query(notificationGroupsMigration);
       }
       await runPsql(database, "./tests/final_review_fixes.sql");
       await runPsql(database, "./tests/review_corrections.sql");
@@ -219,6 +241,8 @@ test("PostgreSQL: bootstrap, additive migration and attachment/deletion contenti
       await runPsql(database, "./tests/automation_review_fixes.sql");
       await runPsql(database, "./tests/form_closed_automation.sql");
       await runPsql(database, "./tests/announcements.sql");
+      await runPsql(database, "./tests/notification_cleanup.sql");
+      await runPsql(database, "./tests/notification_groups.sql");
       await runPsql(database, "./tests/review_regressions.sql");
       await runPsql(database, "./tests/full_code_review_fixes.sql");
       await runPsql(database, "./tests/review_followup.sql");

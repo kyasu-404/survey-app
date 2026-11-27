@@ -18,6 +18,7 @@
   "drive_file_rename_outline": "e9a2",
   "edit": "f097",
   "edit_document": "f88c",
+  "expand_less": "e5ce",
   "expand_more": "e5cf",
   "filter_list": "e152",
   "folder": "e2c7",
@@ -35,6 +36,7 @@
   "settings": "e8b8",
   "share": "e80d",
   "table_chart": "e265",
+  "unfold_more": "e5d7",
   "upload": "f09b",
   "view_agenda": "e8e9"
 }

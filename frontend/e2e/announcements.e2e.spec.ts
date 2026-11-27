@@ -170,6 +170,7 @@ test("shows banner and entry modal once, then keeps them in the personal feed", 
   await page.getByLabel("Статус").selectOption("read");
   await expect(page.getByRole("heading", { name: "Важное изменение" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Справка обновлена" })).toBeVisible();
+  await page.getByRole("button", { name: "Важное изменение", exact: true }).click();
   await page.getByRole("button", { name: "Ознакомился" }).click();
   await expect(page.getByText("Ознакомление подтверждено")).toBeVisible();
   expect(app.pageErrors).toEqual([]);

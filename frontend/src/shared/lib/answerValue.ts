@@ -2,6 +2,15 @@
 export type AnswerDefinition = Record<string, unknown>;
 export const COMPLEX_ANSWER_TYPES = new Set(["paneldynamic", "matrix", "matrixdropdown", "matrixdynamic", "multipletext", "ranking", "comment"]);
 export const isAnswerRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
+export function hasAnswerValue(value: unknown, depth = 0): boolean {
+  if (depth > 32) return false;
+  if (value === null || typeof value === "undefined") return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(item => hasAnswerValue(item, depth + 1));
+  if (typeof value === "object") return Object.values(value).some(item => hasAnswerValue(item, depth + 1));
+  return true;
+}
+
 export const answerText = (value: unknown, depth = 0): string => {
   if (depth > 32) return "[Значение превышает допустимую сложность]";
   if (Array.isArray(value)) return value.map(item => answerText(item, depth + 1)).join(", ");

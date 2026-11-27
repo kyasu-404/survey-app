@@ -91,6 +91,29 @@ test("runs process_automations with the public origin and reports healthy", asyn
   }]);
 });
 
+test("checks notification retention separately when scheduled Storage cleanup fails", async (t) => {
+  const requests = [];
+  const worker = await startWorker(t, "https://forms.example.test", async (req, res) => {
+    if (req.url.endsWith("/begin_storage_cleanup_run")) {
+      res.writeHead(503).end("{}");
+    } else if (req.url.endsWith("/run_notification_cleanup")) {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      requests.push({ method: req.method, body: JSON.parse(body) });
+      res.end("12");
+    } else {
+      res.end("[]");
+    }
+  });
+
+  const { status, state } = await worker.healthAfterPoll(current =>
+    current.lastAutomationPollAt && current.lastSuccessfulPollAt && current.lastCleanupError && current.lastNotificationCleanupAt);
+  assert.equal(status, 200);
+  assert.equal(state.lastNotificationCleanupCount, 12);
+  assert.equal(state.lastNotificationCleanupError, null);
+  assert.deepEqual(requests, [{ method: "POST", body: {} }]);
+});
+
 async function startSmtpSink(t) {
   let messages = 0;
   const connections = new Set();

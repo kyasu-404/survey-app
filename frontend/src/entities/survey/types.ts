@@ -6,6 +6,9 @@ export type SurveyQuestion = {
   type: string;
   name: string;
   valueName?: string;
+  inputType?: string;
+  valueTrue?: unknown;
+  valueFalse?: unknown;
   title?: string;
   isRequired?: boolean;
   showNumber?: boolean;

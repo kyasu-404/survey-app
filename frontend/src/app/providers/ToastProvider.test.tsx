@@ -13,6 +13,11 @@ function ToastHarness() {
       <button type="button" onClick={() => showToast("Сохранено", "success")}>
         success toast
       </button>
+      <button type="button" onClick={() => showToast("Удалено", "success", { durationMs: 10_000, action: {
+        label: "Отменить удаление", run: async () => true,
+      } })}>
+        undo toast
+      </button>
     </>
   );
 }
@@ -63,6 +68,23 @@ describe("ToastProvider", () => {
     });
 
     expect(screen.queryByText("Сохранено")).not.toBeInTheDocument();
+  });
+
+  it("preserves distinct undo actions and expires them after the ten-second undo window", async () => {
+    vi.useFakeTimers();
+    render(<ToastProvider><ToastHarness /></ToastProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "undo toast" }));
+    fireEvent.click(screen.getByRole("button", { name: "undo toast" }));
+    const actions = screen.getAllByRole("button", { name: "Отменить удаление" });
+    expect(actions).toHaveLength(2);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
+    expect(actions[0]).toBeEnabled();
+    await act(async () => { fireEvent.click(actions[0]); });
+    expect(screen.getByRole("button", { name: "Отменить удаление" })).toBe(actions[1]);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(181); });
+    expect(screen.queryByRole("button", { name: "Отменить удаление" })).not.toBeInTheDocument();
   });
 
   it("clears pending timeouts on unmount", () => {

@@ -3995,12 +3995,55 @@ create table public.notifications (
   rule_id uuid,
   created_at timestamptz not null default clock_timestamp(),
   read_at timestamptz,
+  deleted_at timestamptz,
+  undoable boolean not null default false check (not undoable or deleted_at is not null),
   unique (user_id, event_key)
 );
-create index notifications_user_list on public.notifications (user_id, created_at desc, id desc);
-create index notifications_user_category on public.notifications (user_id, category, created_at desc, id desc);
+
+-- Keep an identity after retention removes the notification content.
+create table survey_automation.notification_event_keys (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  event_key text not null,
+  primary key (user_id, event_key)
+);
+
+create table survey_automation.notification_cleanup_runs (
+  ran_at timestamptz primary key,
+  removed_count integer not null,
+  completed boolean not null
+);
+
+alter table survey_automation.notification_event_keys enable row level security;
+alter table survey_automation.notification_cleanup_runs enable row level security;
+revoke all on survey_automation.notification_event_keys, survey_automation.notification_cleanup_runs
+  from public, anon, authenticated, service_role;
+
+-- The unique claim covers all insert paths, including producers running as service_role.
+create function survey_automation.claim_notification_event_key()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  insert into survey_automation.notification_event_keys (user_id, event_key)
+  values (new.user_id, new.event_key)
+  on conflict (user_id, event_key) do nothing;
+  if found then return new; end if;
+  return null;
+end;
+$$;
+
+revoke all on function survey_automation.claim_notification_event_key() from public, anon, authenticated, service_role;
+create trigger notifications_claim_event_key before insert on public.notifications
+for each row execute function survey_automation.claim_notification_event_key();
+
+create index notifications_user_list on public.notifications (user_id, created_at desc, id desc)
+  where deleted_at is null;
+create index notifications_user_category on public.notifications (user_id, category, created_at desc, id desc)
+  where deleted_at is null;
 create index notifications_user_unread on public.notifications (user_id, created_at desc, id desc)
-  where read_at is null and category not in ('automation_triggered', 'automation_succeeded');
+  where read_at is null and deleted_at is null and category not in ('automation_triggered', 'automation_succeeded');
+create index notifications_cleanup_deleted on public.notifications (deleted_at, id)
+  where deleted_at is not null;
+create index notifications_cleanup_read on public.notifications (read_at, id)
+  where deleted_at is null and read_at is not null;
 
 alter table public.automation_rules enable row level security;
 alter table public.automation_runs enable row level security;
@@ -4021,6 +4064,7 @@ create policy automation_runs_owner on public.automation_runs for select to auth
   using (exists (select from public.automation_rules r where r.id=rule_id));
 create policy notification_preferences_owner on public.notification_preferences for select to authenticated
   using (user_id=(select auth.uid()) and (select public.request_is_enabled()));
+-- Keep owner SELECT access for Realtime UPDATE delivery. The feed filters deleted rows.
 create policy notifications_owner on public.notifications for select to authenticated
   using (user_id=(select auth.uid()) and (select public.request_is_enabled())
     and category not in ('automation_triggered', 'automation_succeeded'));
@@ -5312,12 +5356,29 @@ create table survey_announcements.recipient_state (
   presented_at timestamptz,
   read_at timestamptz,
   acknowledged_at timestamptz,
+  hidden_at timestamptz,
   primary key (announcement_id, user_id)
 );
 create index announcement_recipient_user on survey_announcements.recipient_state (user_id);
 
 alter table survey_announcements.announcements enable row level security;
 alter table survey_announcements.recipient_state enable row level security;
+
+create function survey_announcements.reset_unacknowledged_hides()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  update survey_announcements.recipient_state
+  set hidden_at = null
+  where announcement_id = new.id and hidden_at is not null and acknowledged_at is null;
+  return new;
+end;
+$$;
+
+revoke all on function survey_announcements.reset_unacknowledged_hides() from public, anon, authenticated, service_role;
+create trigger announcements_reset_unacknowledged_hides
+after update of require_acknowledgement on survey_announcements.announcements
+for each row when (new.require_acknowledgement and not old.require_acknowledgement)
+execute function survey_announcements.reset_unacknowledged_hides();
 
 -- Eligibility is evaluated at read time, including scheduled announcements and newly eligible profiles.
 create function survey_announcements.is_visible(
@@ -5602,7 +5663,8 @@ begin
     (select n.id, n.category, n.title, n.message, n.form_id, n.response_id, n.rule_id,
        n.created_at, n.read_at, null::jsonb as announcement
      from viewer v join public.notifications n on n.user_id = v.user_id
-     where v.role_name is not null and n.category not in ('automation_triggered', 'automation_succeeded')
+     where v.role_name is not null and n.deleted_at is null
+       and n.category not in ('automation_triggered', 'automation_succeeded')
        and (p_category is null or n.category = p_category)
        and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
        and (p_before_at is null or (n.created_at, n.id) < (p_before_at, p_before_id))
@@ -5617,6 +5679,7 @@ begin
        and a.status = 'published'
        and a.publish_at <= now() and coalesce(a.expires_at, 'infinity'::timestamptz) > now()
        and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, v.role_name)
+       and s.hidden_at is null
        and (p_read = 'all' or (p_read = 'unread' and s.read_at is null) or (p_read = 'read' and s.read_at is not null))
        and (p_before_at is null or (a.publish_at, a.id) < (p_before_at, p_before_id))
      order by a.publish_at desc, a.id desc limit (select size from page_size))
@@ -5630,13 +5693,15 @@ returns bigint language sql stable security definer set search_path = '' as $$
   with viewer as (select auth.uid() as user_id, public.request_role() as role_name)
   select
     (select count(*) from viewer v join public.notifications n on n.user_id = v.user_id
-     where v.role_name is not null and n.category not in ('automation_triggered', 'automation_succeeded') and n.read_at is null)
+     where v.role_name is not null and n.deleted_at is null
+       and n.category not in ('automation_triggered', 'automation_succeeded') and n.read_at is null)
     +
     (select count(*) from viewer v cross join survey_announcements.announcements a
      left join survey_announcements.recipient_state s on s.announcement_id = a.id and s.user_id = v.user_id
      where a.status = 'published'
        and a.publish_at <= now() and coalesce(a.expires_at, 'infinity'::timestamptz) > now()
        and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, v.role_name)
+       and s.hidden_at is null
        and s.read_at is null);
 $$;
 
@@ -5651,16 +5716,16 @@ begin
   if actor_role is null then raise exception 'Нет доступа' using errcode = '42501'; end if;
   update public.notifications set read_at = now()
   where user_id = actor and category not in ('automation_triggered', 'automation_succeeded')
-    and read_at is null and (p_id is null or id = p_id);
+    and deleted_at is null and read_at is null and (p_id is null or id = p_id);
   get diagnostics personal_count = row_count;
 
   insert into survey_announcements.recipient_state as s (announcement_id, user_id, read_at)
   select a.id, actor, now() from survey_announcements.announcements a
   left join survey_announcements.recipient_state existing on existing.announcement_id = a.id and existing.user_id = actor
-  where (p_id is null or a.id = p_id) and existing.read_at is null and a.status = 'published'
+  where (p_id is null or a.id = p_id) and existing.read_at is null and existing.hidden_at is null and a.status = 'published'
     and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, actor_role)
   order by a.id
-  on conflict (announcement_id, user_id) do update set read_at = excluded.read_at where s.read_at is null;
+  on conflict (announcement_id, user_id) do update set read_at = excluded.read_at where s.read_at is null and s.hidden_at is null;
   get diagnostics announcement_count = row_count;
   return personal_count + announcement_count;
 end;
@@ -5685,7 +5750,7 @@ begin
 end;
 $$;
 
-create function public.list_announcement_prompts(p_visible_ids uuid[] default '{}'::uuid[])
+create or replace function public.list_announcement_prompts(p_visible_ids uuid[] default '{}'::uuid[])
 returns table (
   id uuid, title text, message text, action_label text, action_url text, display_mode text,
   require_acknowledgement boolean, read_at timestamptz, acknowledged_at timestamptz, expires_at timestamptz,
@@ -5698,7 +5763,7 @@ language sql stable security definer set search_path = '' as $$
     select a.*, s.read_at, s.acknowledged_at, s.presented_at
     from viewer v cross join survey_announcements.announcements a
     left join survey_announcements.recipient_state s on s.announcement_id = a.id and s.user_id = v.user_id
-    where a.status = 'published' and a.display_mode in ('banner', 'modal')
+    where a.status = 'published' and a.display_mode in ('banner', 'modal') and s.hidden_at is null
       and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, v.role_name)
   ), next_by_mode as (
     select distinct on (e.display_mode) e.id from eligible e
@@ -5712,7 +5777,7 @@ language sql stable security definer set search_path = '' as $$
   order by e.publish_at desc, e.id desc;
 $$;
 
-create function public.claim_announcement_prompt(p_id uuid, p_mode text)
+create or replace function public.claim_announcement_prompt(p_id uuid, p_mode text)
 returns boolean language plpgsql security definer set search_path = '' as $$
 begin
   perform from survey_announcements.announcements a
@@ -5724,10 +5789,138 @@ begin
   insert into survey_announcements.recipient_state as s (announcement_id, user_id, presented_at)
   values (p_id, auth.uid(), now())
   on conflict (announcement_id, user_id) do update set presented_at = excluded.presented_at
-  where s.presented_at is null and s.read_at is null;
+  where s.presented_at is null and s.read_at is null and s.hidden_at is null;
   return found;
 end;
 $$;
+
+create function public.delete_notification(p_id uuid)
+returns timestamptz language plpgsql security definer set search_path = '' as $$
+declare deletion_time timestamptz;
+begin
+  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode = '42501'; end if;
+
+  update public.notifications set deleted_at = clock_timestamp(), undoable = true
+  where id = p_id and user_id = auth.uid() and deleted_at is null
+    and category not in ('automation_triggered', 'automation_succeeded')
+  returning deleted_at into deletion_time;
+  return deletion_time;
+end;
+$$;
+
+create function public.restore_notification(p_id uuid, p_deleted_at timestamptz)
+returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode = '42501'; end if;
+
+  update public.notifications set deleted_at = null, undoable = false
+  where id = p_id and user_id = auth.uid() and deleted_at = p_deleted_at and undoable
+    and category not in ('automation_triggered', 'automation_succeeded')
+    and deleted_at >= clock_timestamp() - interval '20 seconds';
+  return found;
+end;
+$$;
+
+create function public.delete_read_notifications(p_category text default null)
+returns integer language plpgsql security definer set search_path = '' as $$
+declare removed integer;
+begin
+  if not public.request_is_enabled() then raise exception 'Нет доступа' using errcode = '42501'; end if;
+
+  update public.notifications set deleted_at = statement_timestamp()
+  where user_id = auth.uid() and deleted_at is null and read_at is not null
+    and category not in ('automation_triggered', 'automation_succeeded')
+    and (p_category is null or category = p_category);
+  get diagnostics removed = row_count;
+  return removed;
+end;
+$$;
+
+create function public.hide_announcement(p_id uuid)
+returns boolean language plpgsql security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+  actor_role text := public.request_role();
+  requires_ack boolean;
+begin
+  if actor_role is null then raise exception 'Нет доступа' using errcode = '42501'; end if;
+
+  select a.require_acknowledgement into requires_ack
+  from survey_announcements.announcements a
+  where a.id = p_id and survey_announcements.is_visible(a.status, a.publish_at, a.expires_at, a.audience, actor_role)
+  for share;
+  if not found then return false; end if;
+
+  if requires_ack then
+    update survey_announcements.recipient_state
+    set hidden_at = now()
+    where announcement_id = p_id and user_id = actor and hidden_at is null and acknowledged_at is not null;
+  else
+    insert into survey_announcements.recipient_state as s (announcement_id, user_id, hidden_at)
+    values (p_id, actor, now())
+    on conflict (announcement_id, user_id) do update set hidden_at = excluded.hidden_at
+    where s.hidden_at is null;
+  end if;
+  return found;
+end;
+$$;
+
+create function public.run_notification_cleanup()
+returns integer language plpgsql security definer set search_path = '' as $$
+declare
+  run_time timestamptz;
+  batch_size_per_group constant integer := 2500;
+  deleted_items integer;
+  read_items integer;
+  sweep_complete boolean;
+begin
+  if not pg_try_advisory_xact_lock(hashtextextended('survey_automation.run_notification_cleanup', 0)) then
+    return null;
+  end if;
+
+  run_time := clock_timestamp();
+  if exists (select from survey_automation.notification_cleanup_runs
+    where completed and ran_at > run_time - interval '24 hours') then
+    return null;
+  end if;
+
+  with candidates as (
+    select id from public.notifications
+    where deleted_at <= run_time - interval '7 days'
+    order by deleted_at, id
+    limit batch_size_per_group for update skip locked
+  )
+  delete from public.notifications n using candidates c where n.id = c.id;
+  get diagnostics deleted_items = row_count;
+
+  with candidates as (
+    select id from public.notifications
+    where deleted_at is null and read_at <= run_time - interval '90 days'
+    order by read_at, id
+    limit batch_size_per_group for update skip locked
+  )
+  delete from public.notifications n using candidates c where n.id = c.id;
+  get diagnostics read_items = row_count;
+
+  sweep_complete := not exists (
+    select from public.notifications where deleted_at <= run_time - interval '7 days'
+  ) and not exists (
+    select from public.notifications where deleted_at is null and read_at <= run_time - interval '90 days'
+  );
+  insert into survey_automation.notification_cleanup_runs (ran_at, removed_count, completed)
+  values (run_time, deleted_items + read_items, sweep_complete);
+  return deleted_items + read_items;
+end;
+$$;
+
+revoke all on function public.delete_notification(uuid), public.restore_notification(uuid, timestamptz),
+  public.delete_read_notifications(text), public.hide_announcement(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.delete_notification(uuid), public.restore_notification(uuid, timestamptz),
+  public.delete_read_notifications(text), public.hide_announcement(uuid) to authenticated;
+
+revoke all on function public.run_notification_cleanup() from public, anon, authenticated, service_role;
+grant execute on function public.run_notification_cleanup() to service_role;
 
 revoke all on all tables in schema survey_announcements from public, anon, authenticated;
 revoke all on all functions in schema survey_announcements from public, anon, authenticated;
@@ -5825,6 +6018,142 @@ grant select, insert, update, delete on table
   public.office_generation_results,
   public.office_storage_cleanup
 to office_service;
+
+create index notifications_response_group_items
+on public.notifications (user_id, category, form_id, created_at desc, id desc)
+where deleted_at is null and form_id is not null and category in ('response_received', 'response_updated');
+
+create function survey_automation.notification_timezone(p_timezone text)
+returns text language sql stable set search_path = '' as $$
+  select coalesce((
+    select z.name from pg_catalog.pg_timezone_names z where z.name = p_timezone limit 1
+  ), 'UTC');
+$$;
+
+revoke all on function survey_automation.notification_timezone(text) from public, anon, authenticated, service_role;
+
+create function public.list_notification_feed(
+  p_category text, p_read text, p_before_at timestamptz, p_before_id uuid, p_limit integer, p_timezone text
+)
+returns table (
+  id uuid, category text, title text, message text, form_id uuid, response_id uuid, rule_id uuid,
+  created_at timestamptz, read_at timestamptz, announcement jsonb, response_group jsonb
+)
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+  local_zone text;
+  page_size integer := least(greatest(coalesce(p_limit, 26), 1), 101);
+begin
+  if (p_before_at is null) <> (p_before_id is null) then
+    raise exception 'Укажите дату и идентификатор для следующей страницы' using errcode = '22023';
+  end if;
+  if not public.request_is_enabled() or p_read is null or p_read not in ('all', 'unread', 'read') then return; end if;
+
+  if p_category is null or p_category in ('response_received', 'response_updated') then
+    local_zone := survey_automation.notification_timezone(p_timezone);
+  end if;
+
+  return query
+  -- Rank all matching responses before applying the cursor so a group cannot split across pages.
+  with matching_responses as (
+    select n.id, n.category, n.form_id, n.created_at, n.read_at, (n.created_at at time zone local_zone)::date as local_day
+    from public.notifications n
+    where local_zone is not null and n.user_id = actor and n.deleted_at is null and n.form_id is not null
+      and n.category in ('response_received', 'response_updated')
+      and (p_category is null or n.category = p_category)
+      and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
+  ), ranked_responses as (
+    select m.id, m.created_at, m.local_day,
+      row_number() over (calendar_group order by m.created_at desc, m.id desc) as position,
+      count(*) over calendar_group as event_count,
+      count(*) filter (where m.read_at is null) over calendar_group as unread_count
+    from matching_responses m
+    window calendar_group as (partition by m.form_id, m.category, m.local_day)
+  ), personal_candidates as (
+    select r.id, r.created_at,
+      jsonb_build_object(
+        'day', to_char(r.local_day, 'YYYY-MM-DD'), 'count', r.event_count, 'unread_count', r.unread_count
+      ) as response_group
+    from ranked_responses r
+    where r.position = 1 and (p_before_at is null or (r.created_at, r.id) < (p_before_at, p_before_id))
+    union all
+    (select n.id, n.created_at, null::jsonb as response_group
+     from public.notifications n
+     where n.user_id = actor and n.deleted_at is null
+       and n.category not in ('automation_triggered', 'automation_succeeded')
+       and not (n.category in ('response_received', 'response_updated') and n.form_id is not null)
+       and (p_category is null or n.category = p_category)
+       and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
+       and (p_before_at is null or (n.created_at, n.id) < (p_before_at, p_before_id))
+     order by n.created_at desc, n.id desc limit page_size)
+  ), personal_page as (
+    select c.id, c.response_group
+    from personal_candidates c order by c.created_at desc, c.id desc limit page_size
+  ), combined as (
+    select n.id, n.category, n.title, n.message, n.form_id, n.response_id, n.rule_id,
+      n.created_at, n.read_at, null::jsonb as announcement, p.response_group
+    from personal_page p join public.notifications n on n.id = p.id
+    union all
+    select a.*, null::jsonb as response_group
+    from public.list_notification_feed('announcement', p_read, p_before_at, p_before_id, page_size) a
+    where p_category is null or p_category = 'announcement'
+  )
+  select c.* from combined c order by c.created_at desc, c.id desc limit page_size;
+end;
+$$;
+
+create function public.list_notification_group_items(
+  p_category text, p_form_id uuid, p_day date, p_read text, p_timezone text,
+  p_before_at timestamptz, p_before_id uuid, p_limit integer
+)
+returns table (
+  id uuid, category text, title text, message text, form_id uuid, response_id uuid, rule_id uuid,
+  created_at timestamptz, read_at timestamptz, announcement jsonb
+)
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+  local_zone text;
+  start_at timestamptz;
+  end_at timestamptz;
+begin
+  if (p_before_at is null) <> (p_before_id is null) then
+    raise exception 'Укажите дату и идентификатор для следующей страницы' using errcode = '22023';
+  end if;
+  if not public.request_is_enabled()
+    or p_category is null or p_category not in ('response_received', 'response_updated')
+    or p_form_id is null or p_day is null or not isfinite(p_day)
+    or p_read is null or p_read not in ('all', 'unread', 'read') then
+    return;
+  end if;
+
+  -- Bound the index scan in UTC. The local-date check also handles repeated or skipped midnights.
+  begin
+    start_at := (p_day::timestamp at time zone 'UTC') - interval '24 hours';
+    end_at := (p_day::timestamp at time zone 'UTC') + interval '48 hours';
+  exception when datetime_field_overflow then return;
+  end;
+  local_zone := survey_automation.notification_timezone(p_timezone);
+
+  return query
+  select n.id, n.category, n.title, n.message, n.form_id, n.response_id, n.rule_id,
+    n.created_at, n.read_at, null::jsonb
+  from public.notifications n
+  where n.user_id = actor and n.deleted_at is null and n.form_id = p_form_id
+    and n.category in ('response_received', 'response_updated') and n.category = p_category
+    and n.created_at >= start_at and n.created_at < end_at and (n.created_at at time zone local_zone)::date = p_day
+    and (p_read = 'all' or (p_read = 'unread' and n.read_at is null) or (p_read = 'read' and n.read_at is not null))
+    and (p_before_at is null or (n.created_at, n.id) < (p_before_at, p_before_id))
+  order by n.created_at desc, n.id desc limit least(greatest(coalesce(p_limit, 26), 1), 101);
+end;
+$$;
+
+revoke all on function public.list_notification_feed(text, text, timestamptz, uuid, integer, text),
+  public.list_notification_group_items(text, uuid, date, text, text, timestamptz, uuid, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function public.list_notification_feed(text, text, timestamptz, uuid, integer, text),
+  public.list_notification_group_items(text, uuid, date, text, text, timestamptz, uuid, integer) to authenticated;
 
 notify pgrst, 'reload schema';
 commit;

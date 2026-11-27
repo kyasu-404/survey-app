@@ -22,7 +22,11 @@ test("page and section titles stay distinct in responses, HTML, and bordered Exc
   await page.goto(`/dashboard/forms/${formId}/responses`);
   await expect(page.getByText("Ответов: 2", { exact: true })).toBeVisible();
   const expectedHeaders = ["Дата ответа", "Страница", "Раздел", "Имя", "Пункт 1", "Комментарий", "Страница", "Раздел", ...questionPairs.slice(2).map(q => q.title)];
-  await expect(page.locator(".responses-table th")).toHaveText(["", ...expectedHeaders]);
+  const liveHeaders = page.locator(".responses-table").getByRole("columnheader");
+  await expect(liveHeaders).toHaveCount(expectedHeaders.length + 1);
+  for (const [index, name] of expectedHeaders.entries()) {
+    await expect(liveHeaders.nth(index + 1)).toHaveAccessibleName(name);
+  }
   await expect(page.locator("th.responses-table-page-column")).toHaveCount(2);
   await expect(page.locator("th.responses-table-section-column")).toHaveCount(2);
   await expect(page.locator("th.responses-table-page-column").first()).toHaveCSS("background-color", "rgb(242, 227, 216)");

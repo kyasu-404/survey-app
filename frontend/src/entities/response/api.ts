@@ -9,6 +9,8 @@ import {
   type PaginatedResponses,
 } from "./responsesApi";
 
+export { fetchResponsesForSorting as getResponsesForSorting } from "./responsesApi";
+
 export async function getExistingResponse(
   formId: string,
   browserId: string,

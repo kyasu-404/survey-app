@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 import type { AutomationRule, AutomationRun } from "../src/entities/automation/model";
-import type { Notification } from "../src/entities/notification/model";
+import type { Notification, NotificationFeedItem } from "../src/entities/notification/model";
 import { openSurveyApp } from "./fixtures/surveyApp";
 
 async function expectVisibleFocusOutline(field: Locator, scrollArea: string) {
@@ -228,6 +228,252 @@ test("a direct response link opens the answer after signing in again", async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
+test("shows the full notification badge in expanded, collapsed and mobile navigation", async ({ page }, testInfo) => {
+  await openSurveyApp(page, { responseCount: 0 });
+  let unread = 1;
+  await page.route("**/rest/v1/rpc/notification_unread_count", route => route.fulfill({ json: unread }));
+  await page.goto("/notifications");
+
+  const sidebar = page.getByRole("navigation", { name: "Основная навигация" });
+  const checkBadge = async (navigation: Locator, count: number, text: string) => {
+    const badge = navigation.getByRole("link", { name: `Уведомления, непрочитанных: ${count}` }).locator(".notification-counter");
+    await expect(badge).toHaveText(text);
+    await expect(badge).toBeVisible();
+    await expect.poll(() => badge.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const label = range.getBoundingClientRect();
+      const link = element.closest("a")!.getBoundingClientRect();
+      return label.left >= box.left && label.right <= box.right && label.top >= box.top && label.bottom <= box.bottom
+        && box.left >= link.left && box.right <= link.right && box.top >= link.top && box.bottom <= link.bottom;
+    })).toBe(true);
+    return badge;
+  };
+
+  const singleDigit = await checkBadge(sidebar, 1, "1");
+  await page.evaluate(async () => { await document.fonts.ready; });
+  await singleDigit.screenshot({ path: testInfo.outputPath("notification-count-one.png"), scale: "css" });
+
+  unread = 99;
+  await page.reload();
+  await checkBadge(sidebar, 99, "99");
+  unread = 124;
+  await page.reload();
+  const expanded = await checkBadge(sidebar, 124, "99+");
+  await expanded.screenshot({ path: testInfo.outputPath("notification-count-expanded.png"), scale: "css" });
+
+  await page.getByRole("button", { name: "Свернуть меню", exact: true }).click();
+  await expect(page.locator(".app-shell")).toHaveClass(/app-shell-sidebar-rail/);
+  const collapsed = await checkBadge(sidebar, 124, "99+");
+  await collapsed.screenshot({ path: testInfo.outputPath("notification-count-collapsed.png"), scale: "css" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const compact = await checkBadge(page.locator(".mobile-app-header"), 124, "99+");
+  await compact.screenshot({ path: testInfo.outputPath("notification-count-mobile.png"), scale: "css" });
+});
+
+test("collapses response notices into a day group and keeps it open when the latest item is removed", async ({ page }, testInfo) => {
+  const { formId } = await openSurveyApp(page, { responseCount: 0 });
+  const day = "2026-11-27";
+  let members: Notification[] = Array.from({ length: 27 }, (_, index) => ({
+    id: `notice-${index + 1}`, category: "response_received", title: `Ответ ${index + 1}`, message: "Анкета",
+    form_id: formId, response_id: `response-${index + 1}`, rule_id: null, announcement: null, read_at: null,
+    created_at: new Date(Date.UTC(2026, 10, 27, 12, 59 - index)).toISOString(),
+  }));
+  const status: Notification = { ...members[0], id: "status", category: "form_status",
+    title: "Форма закрыта", response_id: null, read_at: members[0].created_at };
+  let groupReads = 0;
+  await page.route("**/rest/v1/rpc/list_notification_feed", route => {
+    const { p_timezone } = route.request().postDataJSON();
+    expect(p_timezone).toEqual(expect.any(String));
+    const grouped: NotificationFeedItem = {
+      ...members[0], response_group: { day, count: members.length, unread_count: members.length },
+    };
+    return route.fulfill({ json: [grouped, status] });
+  });
+  await page.route("**/rest/v1/rpc/list_notification_group_items", route => {
+    const { p_before_at, p_before_id, p_limit, ...scope } = route.request().postDataJSON();
+    expect(scope).toEqual({
+      p_category: "response_received", p_form_id: formId, p_day: day, p_read: "all", p_timezone: expect.any(String),
+    });
+    const start = p_before_id === null ? 0 : members.findIndex(item => item.id === p_before_id) + 1;
+    if (start) expect(p_before_at).toBe(members[start - 1].created_at);
+    groupReads++;
+    return route.fulfill({ json: members.slice(start, start + p_limit) });
+  });
+  await page.route("**/rest/v1/rpc/notification_unread_count", route => route.fulfill({ json: members.length }));
+  await page.route("**/rest/v1/rpc/delete_notification", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_id: "notice-1" });
+    members = members.slice(1);
+    return route.fulfill({ json: "2026-11-27T13:01:00.123456+00:00" });
+  });
+
+  await page.goto("/notifications");
+  const group = page.getByRole("button", { name: /новых ответов · Анкета/ });
+  await expect(group).toHaveText(/27 новых ответов · Анкета/);
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  const latest = page.getByRole("article", { name: "Ответ 1", exact: true });
+  await expect(latest).toHaveCount(0);
+  const statusRow = page.getByRole("article", { name: status.title });
+  await expect(statusRow).toBeVisible();
+  const expectCompact = async (row: typeof statusRow) => {
+    await expect.poll(async () => (await row.boundingBox())?.height ?? Infinity).toBeLessThanOrEqual(52);
+    await expect.poll(() => row.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  };
+  await expectCompact(group);
+  await expectCompact(statusRow);
+  expect(groupReads).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("response-notifications-grouped.png") });
+
+  await group.focus();
+  await page.keyboard.press("Enter");
+  await expectCompact(latest);
+  const disclosure = latest.getByRole("button", { name: "Ответ 1", exact: true });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  const answer = latest.getByRole("link", { name: "Открыть ответ" });
+  await expect(answer).toHaveAttribute("href", `/dashboard/forms/${formId}/responses?response=response-1`);
+  await disclosure.click();
+  await expect(answer).toHaveCount(0);
+  await expectCompact(latest);
+  await latest.getByRole("button", { name: "Удалить уведомление" }).click();
+  await expect(group).toHaveText(/26 новых ответов · Анкета/);
+  await expect(group).toHaveAttribute("aria-expanded", "true");
+  await expect(latest).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Уведомления, непрочитанных: 26" })).toBeVisible();
+  await page.getByRole("button", { name: "Ещё в группе" }).click();
+  const lastRow = page.getByRole("article", { name: "Ответ 27", exact: true });
+  await expect(lastRow).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expectCompact(lastRow);
+  await expectCompact(statusRow);
+  await expectCompact(group);
+  await group.click();
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("article", { name: "Ответ 27", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("response-notifications-grouped-mobile.png") });
+
+  await page.evaluate(() => localStorage.setItem("survey-app:theme", "graphite"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "graphite");
+  await expectCompact(group);
+  await expectCompact(statusRow);
+  await page.screenshot({ path: testInfo.outputPath("response-notifications-grouped-mobile-dark.png") });
+});
+
+test("deletes personal notifications with undo, clears scoped read items and hides an acknowledged announcement", async ({ page }) => {
+  const { form } = await openSurveyApp(page, { responseCount: 0 });
+  const createdAt = "2026-11-27T12:00:00Z";
+  const deleteToken = "2026-11-27T12:30:21.123456+00:00";
+  const unreadId = "5abe2313-04c6-4cf8-8fd2-e970e99a6441";
+  const readId = "8e6e1cf1-c339-40bb-b329-74e2ca3e25c3";
+  const otherId = "d08c3605-4130-451c-ade0-297a4d0ae39a";
+  const announcementId = "0479488c-e881-42ca-8ed5-3222a42c60a1";
+  const item = (id: string, title: string, fields: Partial<Notification> = {}): Notification => ({
+    id, title, message: "Тестовое уведомление", category: "response_received", created_at: createdAt,
+    form_id: null, response_id: null, rule_id: null, read_at: null, announcement: null, ...fields,
+  });
+  const notice = item(announcementId, "Важное объявление", {
+    category: "announcement",
+    announcement: {
+      action_label: null, action_url: null, display_mode: "feed", require_acknowledgement: true, acknowledged_at: null,
+    },
+  });
+  const peerNotice = item("78701d90-c3b7-4da1-b687-c0bc327dc6f0", "Служебное объявление", {
+    category: "announcement", read_at: createdAt,
+    announcement: {
+      action_label: null, action_url: null, display_mode: "feed", require_acknowledgement: false, acknowledged_at: null,
+    },
+  });
+  const notifications = [
+    item(unreadId, "Новый ответ"),
+    item(readId, "Прочитанный ответ", { read_at: createdAt }),
+    item(otherId, "Форма закрыта", { category: "form_status", read_at: createdAt }),
+    notice,
+    peerNotice,
+  ];
+  const hidden = new Set<string>();
+  const visible = () => notifications.filter(entry => !hidden.has(entry.id));
+  await page.route("**/rest/v1/rpc/list_notification_feed", route => {
+    const { p_category, p_read } = route.request().postDataJSON();
+    return route.fulfill({ json: visible().filter(entry => (!p_category || entry.category === p_category)
+      && (p_read === "all" || (p_read === "read" ? Boolean(entry.read_at) : !entry.read_at))) });
+  });
+  await page.route("**/rest/v1/rpc/notification_unread_count", route => route.fulfill({ json: visible().filter(entry => !entry.read_at).length }));
+  await page.route("**/rest/v1/rpc/delete_notification", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_id: unreadId });
+    hidden.add(unreadId);
+    return route.fulfill({ json: deleteToken });
+  });
+  await page.route("**/rest/v1/rpc/restore_notification", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_id: unreadId, p_deleted_at: deleteToken });
+    return route.fulfill({ json: hidden.delete(unreadId) });
+  });
+  await page.route("**/rest/v1/rpc/delete_read_notifications", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_category: "response_received" });
+    hidden.add(readId);
+    return route.fulfill({ json: 1 });
+  });
+  await page.route("**/rest/v1/rpc/acknowledge_announcement", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_id: announcementId });
+    notice.read_at = createdAt;
+    notice.announcement!.acknowledged_at = createdAt;
+    return route.fulfill({ json: null });
+  });
+  await page.route("**/rest/v1/rpc/hide_announcement", route => {
+    expect(route.request().postDataJSON()).toEqual({ p_id: announcementId });
+    expect(notice.announcement!.acknowledged_at).toBe(createdAt);
+    hidden.add(announcementId);
+    return route.fulfill({ json: true });
+  });
+
+  await page.goto("/notifications");
+  const unreadCard = page.getByRole("article", { name: "Новый ответ", exact: true });
+  const announcement = page.getByRole("article", { name: "Важное объявление", exact: true });
+  const unreadBadge = (count: number) => page.getByRole("link", { name: `Уведомления, непрочитанных: ${count}`, exact: true });
+  await expect(unreadBadge(2)).toBeVisible();
+  await unreadCard.getByRole("button", { name: "Удалить уведомление", exact: true }).click();
+  await expect(unreadCard).toHaveCount(0);
+  await expect(unreadBadge(1)).toBeVisible();
+  await page.getByRole("button", { name: "Отменить удаление", exact: true }).click();
+  await expect(unreadCard).toBeVisible();
+  await expect(unreadBadge(2)).toBeVisible();
+
+  await page.getByLabel("Категория").selectOption("response_received");
+  await page.getByRole("button", { name: "Удалить прочитанные", exact: true }).click();
+  const bulk = page.getByRole("dialog", { name: "Удалить прочитанные уведомления?" });
+  await bulk.getByRole("button", { name: "Удалить прочитанные", exact: true }).click();
+  await expect(bulk).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "Прочитанный ответ", exact: true })).toHaveCount(0);
+  await expect(unreadCard).toBeVisible();
+  await page.getByLabel("Категория").selectOption("");
+  await expect(page.getByRole("article", { name: "Форма закрыта", exact: true })).toBeVisible();
+
+  await announcement.getByRole("button", { name: notice.title, exact: true }).click();
+  await expect(announcement.getByRole("button", { name: "Скрыть у себя", exact: true })).toHaveCount(0);
+  await announcement.getByRole("button", { name: "Ознакомился", exact: true }).click();
+  await announcement.getByRole("button", { name: "Скрыть у себя", exact: true }).click();
+  await expect(announcement).toHaveCount(0);
+  await expect(unreadBadge(1)).toBeVisible();
+
+  const peerTab = await page.context().newPage();
+  await peerTab.route("**/notification-peer-test", route => route.fulfill({ contentType: "text/html", body: "<!doctype html>" }));
+  await peerTab.goto(new URL("/notification-peer-test", page.url()).href);
+  const peerCard = page.getByRole("article", { name: peerNotice.title, exact: true });
+  await expect(peerCard).toBeVisible();
+  hidden.add(peerNotice.id);
+  await peerTab.evaluate((userId) => {
+    const channel = new BroadcastChannel(`survey:announcement-hidden:${userId}`);
+    channel.postMessage("peer-tab");
+    channel.close();
+  }, form.author_id);
+  await expect(peerCard).toHaveCount(0);
+  await peerTab.close();
+});
+
 test("receives notifications live, marks them read, opens a specific answer and saves preferences", async ({ page }, testInfo) => {
   const app = await openSurveyApp(page, { responseCount: 60, elements: [{ type: "text", name: "name", title: "Имя" }] });
   const response = app.responses[58];
@@ -274,6 +520,7 @@ test("receives notifications live, marks them read, opens a specific answer and 
   await expect(page.getByText("Непрочитанных: 0")).toBeVisible();
 
   await page.getByLabel("Категория").selectOption("response_received");
+  await page.getByRole("button", { name: "Новый ответ", exact: true }).click();
   await page.getByRole("link", { name: "Открыть ответ" }).click();
   await expect(page).toHaveURL(new RegExp("[?]response=" + response.id));
   const preview = page.getByRole("dialog", { name: "Ответ на форму" });

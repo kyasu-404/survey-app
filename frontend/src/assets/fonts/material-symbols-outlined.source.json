@@ -16,10 +16,10 @@
     ]
   },
   "repositoryCommit": "10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7",
-  "cssUrl": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined%3Aopsz%2Cwght%2CFILL%4020..24%2C400..500%2C0..1&icon_names=add%2Cadmin_panel_settings%2Carrow_back%2Carrow_forward%2Cbolt%2Cbookmark%2Ccheck_circle%2Cchevron_left%2Cchevron_right%2Cclose%2Ccontent_copy%2Cdark_mode%2Cdashboard_customize%2Cdelete%2Cdescription%2Cdownload%2Cdrive_file_rename_outline%2Cedit%2Cedit_document%2Cexpand_more%2Cfilter_list%2Cfolder%2Cgroup%2Cinfo%2Clight_mode%2Clogout%2Cmenu%2Cmore_horiz%2Cnotifications%2Crefresh%2Cschedule%2Cschool%2Csearch%2Csettings%2Cshare%2Ctable_chart%2Cupload%2Cview_agenda&display=block",
-  "fontUrl": "https://fonts.gstatic.com/l/font?kit=kJESBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzBwG-RpA6RzaxHMO1W2aE-UujWzhKV2nsHuwLAkDTP0lbLo0mfvfFZvJ5-U8qiKyHFxz-yBu5vjePtkMswPpW_cy1TeOQcQNe0UoGzKcdWI_4P6OvmoqMDfg&skey=b8dc2088854b122f&v=v385",
-  "sha256": "fea339aaf487cdc09130e6764a2a3cf25918c476bf6d9657a1ea4659e159302c",
-  "bytes": 23604,
+  "cssUrl": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined%3Aopsz%2Cwght%2CFILL%4020..24%2C400..500%2C0..1&icon_names=add%2Cadmin_panel_settings%2Carrow_back%2Carrow_forward%2Cbolt%2Cbookmark%2Ccheck_circle%2Cchevron_left%2Cchevron_right%2Cclose%2Ccontent_copy%2Cdark_mode%2Cdashboard_customize%2Cdelete%2Cdescription%2Cdownload%2Cdrive_file_rename_outline%2Cedit%2Cedit_document%2Cexpand_less%2Cexpand_more%2Cfilter_list%2Cfolder%2Cgroup%2Cinfo%2Clight_mode%2Clogout%2Cmenu%2Cmore_horiz%2Cnotifications%2Crefresh%2Cschedule%2Cschool%2Csearch%2Csettings%2Cshare%2Ctable_chart%2Cunfold_more%2Cupload%2Cview_agenda&display=block",
+  "fontUrl": "https://fonts.gstatic.com/l/font?kit=kJESBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzBwG-RpA6RzaxHMO1W2aE-UujWzhKV2nsHuwLAkDTP0lbLo0mfvfFZvJ5-U8qiKyHFxz-yBu5vjePtkMswPpW_cy1TeOQcQNe0UoGzKcddK_4P6OvmoqMDfg&skey=b8dc2088854b122f&v=v387",
+  "sha256": "1bd3ca65c12353b26a8c9ba6769548c3652c042436b64355ede700317f6ee820",
+  "bytes": 23216,
   "codepointIndexSha256": "a7404d9e5a1b63f496cf05ace45d386075886b5a7f123fba9f29527cb6006fde",
   "codepoints": {
     "add": "e145",
@@ -41,6 +41,7 @@
     "drive_file_rename_outline": "e9a2",
     "edit": "f097",
     "edit_document": "f88c",
+    "expand_less": "e5ce",
     "expand_more": "e5cf",
     "filter_list": "e152",
     "folder": "e2c7",
@@ -58,6 +59,7 @@
     "settings": "e8b8",
     "share": "e80d",
     "table_chart": "e265",
+    "unfold_more": "e5d7",
     "upload": "f09b",
     "view_agenda": "e8e9"
   }

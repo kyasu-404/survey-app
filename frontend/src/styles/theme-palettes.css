@@ -66,6 +66,7 @@
     --theme-icon: #2b2724;
     --theme-shadow-color: rgb(41 33 25 / 7%);
     --theme-accent: #9b442c;
+    --theme-accent-emphasis: #aa4127;
     --theme-accent-strong: #7d3523;
     --theme-accent-soft: var(--theme-selected-background);
     --theme-accent-gradient: var(--theme-accent);

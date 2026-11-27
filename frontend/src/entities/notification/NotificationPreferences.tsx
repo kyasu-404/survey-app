@@ -41,7 +41,7 @@ export function NotificationPreferences({ userId, onSaved }: { userId: string; o
   return <form onSubmit={submit} className="activity-preferences">
     <fieldset aria-labelledby={headingId} disabled={save.isPending}>
       <h2 id={headingId}>Уведомления в приложении</h2>
-      <p className="activity-muted">Выберите события, о которых хотите узнавать. Объявления администрации видны всегда.</p>
+      <p className="activity-muted">Выберите, о каких событиях получать личные уведомления.</p>
       {Object.entries(preferenceCategories).map(([id, label]) => {
         const category = id as PreferenceCategory;
         return <label key={id} className="activity-checkbox">
@@ -51,6 +51,7 @@ export function NotificationPreferences({ userId, onSaved }: { userId: string; o
         </label>;
       })}
     </fieldset>
+    <p className="activity-muted">Прочитанные личные уведомления хранятся 90 дней после прочтения.</p>
     <button type="submit" className="button-primary" disabled={!dirty || save.isPending}>
       {save.isPending ? "Сохранение…" : "Сохранить"}
     </button>

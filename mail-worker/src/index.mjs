@@ -58,6 +58,9 @@ const state = {
   lastCleanupSuccessAt: null,
   lastCleanupResult: null,
   lastCleanupError: null,
+  lastNotificationCleanupAt: null,
+  lastNotificationCleanupCount: null,
+  lastNotificationCleanupError: null,
   lastAutomationPollAt: null,
   lastAutomationError: appOrigin ? null : "Задайте PUBLIC_APP_URL в виде http(s)://host[:port] для обработки автоматизаций",
 };
@@ -168,6 +171,26 @@ async function cleanupStorage() {
   }
 }
 
+async function cleanupNotifications() {
+  try {
+    const removed = await callRpc("run_notification_cleanup", {});
+    if (removed !== null && (!Number.isSafeInteger(removed) || removed < 0)) {
+      throw new Error("Unexpected notification cleanup result");
+    }
+    state.lastNotificationCleanupError = null;
+    // PostgreSQL returns null when another worker owns the run or the most
+    // recent cleanup is still within the daily interval.
+    if (removed !== null) {
+      state.lastNotificationCleanupAt = new Date().toISOString();
+      state.lastNotificationCleanupCount = removed;
+      console.info("scheduled notification cleanup completed", { removed });
+    }
+  } catch (error) {
+    state.lastNotificationCleanupError = error instanceof Error ? error.message : String(error);
+    console.error("scheduled notification cleanup failed", { message: state.lastNotificationCleanupError });
+  }
+}
+
 function assertEnvironment() {
   if (!supabaseUrl || !/^https?:\/\//.test(supabaseUrl)) throw new Error("SUPABASE_URL is required");
   if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required");
@@ -193,9 +216,10 @@ function schedulePoll() {
 }
 
 let activeCleanup = Promise.resolve();
+let activeNotificationCleanup = null;
 function scheduleCleanup() {
-  if (state.cleanupBusy) return;
-  activeCleanup = cleanupStorage();
+  if (!state.cleanupBusy) activeCleanup = cleanupStorage();
+  activeNotificationCleanup ??= cleanupNotifications().finally(() => { activeNotificationCleanup = null; });
 }
 
 let activeAutomations = Promise.resolve();
@@ -270,7 +294,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
         if (!state.pendingAcknowledgements) break;
       }
     };
-    await Promise.all([activePoll.then(flushPendingWithRetries), activeCleanup, activeAutomations, activeExpiredUploads]);
+    await Promise.all([activePoll.then(flushPendingWithRetries), activeCleanup, activeNotificationCleanup, activeAutomations, activeExpiredUploads]);
     const { pendingAcknowledgements } = state;
     if (pendingAcknowledgements) {
       console.error("mail worker stopped with pending acknowledgements", { pendingAcknowledgements });

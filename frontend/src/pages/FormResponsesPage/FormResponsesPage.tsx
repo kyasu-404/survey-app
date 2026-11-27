@@ -14,7 +14,7 @@ import {
   hasOrganizationQuestion,
   normalizeOrganizationTypes,
 } from "../../entities/organization/model";
-import { deleteResponses, getAllResponsesByForm, getResponsesByForm } from "../../entities/response/api";
+import { deleteResponses, getAllResponsesByForm, getResponsesByForm, getResponsesForSorting } from "../../entities/response/api";
 import type { SurveyResponse } from "../../entities/response/types";
 import { getFormById } from "../../entities/survey/api/surveysApi";
 import { getDeadlineStatePatch } from "../../entities/survey/model/deadlineState";
@@ -31,9 +31,9 @@ import { getErrorMessage, isAbortError } from "../../shared/lib/error";
 import { exportToExcel } from "../../shared/lib/export";
 import { hasArchiveFileQuestions } from "../../entities/response/lib/responseFiles";
 import { createQueryRefreshScheduler } from "../../shared/lib/queryRefresh";
-import type { ResponsesTableRow, ResponsesTableColumn } from "../../entities/response/lib/responsesExport";
+import type { ResponsesTableRow, ResponsesTableColumn, ResponseTableSort } from "../../entities/response/lib/responsesExport";
 import { getSignatureImage, SIGNATURE_UNAVAILABLE } from "../../shared/lib/signatureImage";
-import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY } from "../../entities/response/lib/responsesExport";
+import { formatResponsesForTable, getResponseColumnClassName, RESPONSE_DATE_KEY, sortResponsesForTable } from "../../entities/response/lib/responsesExport";
 import { createResponseReport, type ResponseReport } from "../../entities/response/lib/responseReport";
 import { Skeleton } from "../../shared/ui/Skeleton";
 import { ResponsePreviewSheet } from "./ResponsePreviewSheet";
@@ -42,6 +42,8 @@ import { useNewResponseHighlights } from "./useNewResponseHighlights";
 import { createRealtimeRecovery } from "../../shared/lib/realtimeRecovery";
 
 const ShareFormModal = lazy(() => import("../DashboardPage/components/ShareFormModal").then(module => ({ default: module.ShareFormModal })));
+
+const EMPTY_RESPONSES: SurveyResponse[] = [];
 
 type SelectedResponsePreview = {
   label: string;
@@ -226,9 +228,13 @@ export default function FormResponsesPage() {
   const zipControllerRef = useRef<AbortController | null>(null);
   const reportControllerRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<(ResponseTableSort & { basePage: number }) | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const pageSize = 50;
-  const responsesQueryKey = getFormResponsesQueryKey(id, "page", page, pageSize);
+  const basePage = sort?.basePage ?? page;
+  const responsesQueryKey = getFormResponsesQueryKey(id, "page", basePage, pageSize);
+  const sortQueryKey = getFormResponsesQueryKey(id, "sort-snapshot");
+  const previousPage = useRef<{ formId: string | undefined; page: number; responses: SurveyResponse[] }>();
   const [searchParams] = useSearchParams();
   const linkedResponseId = searchParams.get("response");
   const linkedResponseQuery = useQuery({
@@ -254,6 +260,7 @@ export default function FormResponsesPage() {
 
   useEffect(() => {
     setPage(1);
+    setSort(null);
     setSelectedResponsePreview(null);
     setSelectedResponseIds(new Set());
     setResponseReport(null);
@@ -291,10 +298,10 @@ export default function FormResponsesPage() {
     queryKey: responsesQueryKey,
     queryFn: async ({ signal }) => {
       if (!id) {
-        return { data: [], count: 0, page, pageSize, totalPages: 1 };
+        return { data: [], count: 0, page: basePage, pageSize, totalPages: 1 };
       }
 
-      return getResponsesByForm(id, { signal, page, pageSize });
+      return getResponsesByForm(id, { signal, page: basePage, pageSize });
     },
     enabled: Boolean(id),
     retry: 1,
@@ -303,6 +310,26 @@ export default function FormResponsesPage() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
+
+  const pageResponses = responsesQuery.data?.data ?? EMPTY_RESPONSES;
+  const pageContainsAllResponses = pageResponses.length === responsesQuery.data?.count;
+  const needsSortSnapshot = Boolean(id && sort && responsesQuery.data && !pageContainsAllResponses);
+  const sortSnapshot = useQuery({
+    queryKey: sortQueryKey,
+    queryFn: ({ signal }) => getResponsesForSorting(id!, signal),
+    enabled: needsSortSnapshot,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const sortSource = pageContainsAllResponses ? pageResponses : sortSnapshot.data;
+  const isStartingSort = needsSortSnapshot && sortSnapshot.isPending;
+
+  useEffect(() => {
+    if (!needsSortSnapshot || !sortSnapshot.error || isAbortError(sortSnapshot.error)) return;
+    if (!sortSnapshot.data) setSort(null);
+    showToast(getErrorMessage(sortSnapshot.error, "Не удалось отсортировать ответы"), "error");
+  }, [needsSortSnapshot, sortSnapshot.data, sortSnapshot.error, showToast]);
 
   const usesOrganizationDirectory = Boolean(
     formQuery.data && hasOrganizationQuestion(formQuery.data.schema),
@@ -319,8 +346,7 @@ export default function FormResponsesPage() {
     staleTime: 30_000,
   });
 
-  const responses = responsesQuery.data?.data ?? [];
-  const highlightedResponses = useNewResponseHighlights(id, page, responsesQuery.data?.data, responsesQuery.data?.count ?? 0);
+  const highlightedResponses = useNewResponseHighlights(id, basePage, responsesQuery.data?.data, responsesQuery.data?.count ?? 0);
   const directoryLabels = useMemo(
     () => new Map(
       (organizationsQuery.data ?? []).map((organization) => [
@@ -331,20 +357,31 @@ export default function FormResponsesPage() {
     [organizationsQuery.data],
   );
   const organizationLabels = usesOrganizationDirectory ? directoryLabels : undefined;
+  const schema = formQuery.data?.schema;
+  const sortedResponses = useMemo(
+    () => sort && sortSource && schema ? sortResponsesForTable(sortSource, schema, sort, organizationLabels) : undefined,
+    [organizationLabels, schema, sort, sortSource],
+  );
+  const totalResponses = sortedResponses?.length ?? responsesQuery.data?.count ?? 0;
+  const totalPages = sortedResponses ? Math.max(1, Math.ceil(totalResponses / pageSize)) : responsesQuery.data?.totalPages ?? 1;
+  const offset = (Math.min(page, totalPages) - 1) * pageSize;
+  const responses = useMemo(
+    () => sortedResponses ? sortedResponses.slice(offset, offset + pageSize) : pageResponses,
+    [offset, pageResponses, pageSize, sortedResponses],
+  );
   const { rows, columns } = useMemo(
-    () => (formQuery.data
-      ? formatResponsesForTable(responses, formQuery.data.schema, organizationLabels)
-      : { rows: [], columns: [] }),
-    [formQuery.data, organizationLabels, responses],
+    () => schema
+      ? formatResponsesForTable(responses, schema, organizationLabels, sortedResponses ? sortSource : responses)
+      : { rows: [], columns: [] },
+    [organizationLabels, responses, schema, sortedResponses, sortSource],
   );
 
-  const isLoading =
-    (!formQuery.data || !responsesQuery.data) && (formQuery.isLoading || responsesQuery.isLoading);
-  const isRefreshing = formQuery.isFetching || responsesQuery.isFetching || (usesOrganizationDirectory && organizationsQuery.isFetching);
-  const combinedError = [formQuery.error, responsesQuery.error, usesOrganizationDirectory ? organizationsQuery.error : null]
+  const isLoading = (!schema || (!responsesQuery.data && !sortedResponses)) && (formQuery.isLoading || responsesQuery.isLoading);
+  const isPaginationBusy = isStartingSort || (!sortedResponses && (
+    formQuery.isFetching || responsesQuery.isFetching || (usesOrganizationDirectory && organizationsQuery.isFetching)
+  ));
+  const combinedError = [formQuery.error, sortedResponses ? null : responsesQuery.error, usesOrganizationDirectory ? organizationsQuery.error : null]
     .find((error) => error && !isAbortError(error)) ?? null;
-  const totalResponses = responsesQuery.data?.count ?? 0;
-  const totalPages = responsesQuery.data?.totalPages ?? 1;
   const form = formQuery.data;
   const canShareForm = Boolean(form?.is_public && !isTemplateForm(form) && !getDeadlineStatePatch(form));
   const canInviteOrganizations = canShareForm && Boolean(
@@ -356,13 +393,28 @@ export default function FormResponsesPage() {
   const selectedVisibleResponses = responses.filter((response) => selectedResponseIds.has(response.id)).length;
   const allVisibleResponsesSelected = responses.length > 0 && selectedVisibleResponses === responses.length;
 
+  const responsePageNumber = responsesQuery.data?.page ?? basePage;
+  const completeResponses = pageContainsAllResponses ? pageResponses
+    : needsSortSnapshot && !sortSnapshot.isFetching && !sortSnapshot.isStale ? sortSnapshot.data : undefined;
   useEffect(() => {
-    const visibleResponseIds = new Set(responses.map((response) => response.id));
-    setSelectedResponseIds((current) => {
-      const next = new Set([...current].filter((responseId) => visibleResponseIds.has(responseId)));
+    if (!responsesQuery.data) return;
+    const previous = previousPage.current;
+    previousPage.current = { formId: id, page: responsePageNumber, responses: pageResponses };
+    const refreshedPage = !sort && previous?.formId === id && previous?.page === responsePageNumber
+      && previous.responses !== pageResponses ? previous.responses : undefined;
+
+    // A page change or reordering can hide selected rows. Only reconcile a
+    // complete response list or the rows displaced by an actual page refresh.
+    if (!completeResponses && !refreshedPage) return;
+    const validIds = new Set((completeResponses ?? pageResponses).map(response => response.id));
+    const refreshedIds = refreshedPage ? new Set(refreshedPage.map(response => response.id)) : undefined;
+    setSelectedResponseIds(current => {
+      const next = new Set([...current].filter(responseId =>
+        validIds.has(responseId) || (!completeResponses && !refreshedIds?.has(responseId)),
+      ));
       return next.size === current.size ? current : next;
     });
-  }, [responses]);
+  }, [completeResponses, id, pageResponses, responsePageNumber, responsesQuery.data, sort]);
 
   useEffect(() => {
     if (!id) {
@@ -455,14 +507,18 @@ export default function FormResponsesPage() {
   });
 
   useEffect(() => {
-    if (!responsesQuery.data) return;
+    if (sortedResponses) {
+      if (page > totalPages) setPage(totalPages);
+      return;
+    }
+    if (sort || !responsesQuery.data) return;
     const resolvedPage = "page" in responsesQuery.data ? responsesQuery.data.page : page;
     if (typeof resolvedPage === "number" && resolvedPage !== page) {
       queryClient.setQueryData(getFormResponsesQueryKey(id, "page", resolvedPage, pageSize), responsesQuery.data);
       setPage(resolvedPage);
     }
     else if (page > totalPages) setPage(totalPages);
-  }, [responsesQuery.data, page, totalPages, queryClient, id, pageSize]);
+  }, [responsesQuery.data, page, totalPages, queryClient, id, pageSize, sort, sortedResponses]);
 
   const handleExport = async () => {
     if (!id || !formQuery.data || isExporting) return;
@@ -481,18 +537,28 @@ export default function FormResponsesPage() {
   const handleExportFiles = async () => {
     if (!id || !formQuery.data || !responsesQuery.data || zipControllerRef.current) return;
     const responsePage = responsesQuery.data;
-    const pageOffset = ((responsePage.page ?? page) - 1) * (responsePage.pageSize ?? pageSize);
-    const selected = selectedResponseIds.size ? responses.flatMap((response, index) =>
-      selectedResponseIds.has(response.id) ? [{ id: response.id, number: pageOffset + index + 1 }] : [],
-    ) : undefined;
-    if (selected && selected.length !== selectedResponseIds.size) {
-      showToast("Список ответов обновился. Выберите ответы для выгрузки ещё раз.", "warning");
-      return;
-    }
+    const pageOffset = ((responsePage.page ?? basePage) - 1) * (responsePage.pageSize ?? pageSize);
     const controller = new AbortController();
     zipControllerRef.current = controller;
     setIsPreparingZip(true);
     try {
+      let selected: Array<{ id: string; number: number }> | undefined;
+      if (selectedResponseIds.size) {
+        const numberedSelection = (items: SurveyResponse[], offset: number) => items.flatMap((response, index) =>
+          selectedResponseIds.has(response.id) ? [{ id: response.id, number: offset + index + 1 }] : [],
+        );
+        selected = numberedSelection(pageResponses, pageOffset);
+        if (selected.length !== selectedResponseIds.size) {
+          const chronologicalResponses = sortedResponses && sortSource
+            ? sortSource
+            : await getResponsesForSorting(id, controller.signal);
+          selected = numberedSelection(chronologicalResponses, 0);
+        }
+        if (selected.length !== selectedResponseIds.size) {
+          showToast("Список ответов обновился. Выберите ответы для выгрузки ещё раз.", "warning");
+          return;
+        }
+      }
       const { exportResponseFilesZip } = await import("../../entities/response/lib/responseFilesZip");
       const started = await exportResponseFilesZip(id, selected, controller.signal);
       if (controller.signal.aborted) return;
@@ -587,9 +653,23 @@ export default function FormResponsesPage() {
   };
 
   const toggleAllVisibleResponses = () => {
-    setSelectedResponseIds(
-      allVisibleResponsesSelected ? new Set() : new Set(responses.map((response) => response.id)),
-    );
+    setSelectedResponseIds(current => {
+      const next = new Set(current);
+      responses.forEach(({ id }) => {
+        if (allVisibleResponsesSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
+  const cycleSort = (key: string) => {
+    if (sort?.key === key && sort.direction === "descending") {
+      setSort(null);
+      void queryClient.cancelQueries({ queryKey: sortQueryKey, exact: true });
+      return;
+    }
+    setSort({ key, direction: sort?.key === key ? "descending" : "ascending", basePage });
   };
 
   const handleDeleteSelectedResponses = async () => {
@@ -614,7 +694,11 @@ export default function FormResponsesPage() {
       showToast(getErrorMessage(error, "Не удалось удалить ответы"), "error");
     } finally {
       // A later batch may fail after earlier batches have already been deleted.
-      await Promise.all([formQuery.refetch(), responsesQuery.refetch()]);
+      await Promise.all([
+        formQuery.refetch(),
+        responsesQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: sortQueryKey }),
+      ]);
       setIsDeletingResponses(false);
     }
   };
@@ -752,7 +836,7 @@ export default function FormResponsesPage() {
 
         {!isLoading && !combinedError && !!rows.length && (
           <div className="responses-page-table-shell" role="region" aria-label="Таблица ответов, прокрутка по горизонтали" tabIndex={0}>
-            <table className={`responses-table${isHeaderPinned ? " responses-table-header-pinned" : ""}`}>
+            <table className={`responses-table${isHeaderPinned ? " responses-table-header-pinned" : ""}`} aria-busy={isStartingSort || undefined}>
               <thead>
                 <tr>
                   <th className="responses-table-checkbox-column">
@@ -775,10 +859,19 @@ export default function FormResponsesPage() {
                       />
                     </div>
                   </th>
-                  {columns.map((column) => {
+                  {columns.map(column => {
+                    const className = getResponseColumnClassName(column);
+                    if (column.kind) return <th key={column.key} className={className}>{column.header}</th>;
+                    const columnSort = sort?.key === column.key ? sort.direction : undefined;
+                    const direction = sortedResponses ? columnSort : undefined;
+                    const sortIcon = direction === "ascending" ? "expand_less" : direction === "descending" ? "expand_more" : "unfold_more";
+                    const nextAction = columnSort === "ascending" ? "По убыванию" : columnSort === "descending" ? "Сбросить сортировку" : "По возрастанию";
                     return (
-                      <th key={column.key} className={getResponseColumnClassName(column) || undefined}>
-                        {column.header}
+                      <th key={column.key} scope="col" className={`${className} responses-table-sortable`.trim()} aria-sort={direction}>
+                        <button type="button" className="responses-sort-button" onClick={() => cycleSort(column.key)} title={nextAction}>
+                          <span>{column.header}</span>
+                          <Icon name={sortIcon} size={16} className="responses-sort-icon" />
+                        </button>
                       </th>
                     );
                   })}
@@ -843,9 +936,9 @@ export default function FormResponsesPage() {
             <p className="responses-page-total" aria-live="polite">Ответов: {totalResponses}</p>
             {totalPages > 1 && (
               <nav aria-label="Страницы ответов" className="responses-pagination">
-                <button type="button" className="button" disabled={page <= 1 || isRefreshing} onClick={() => setPage(current => current - 1)}>Назад</button>
+                <button type="button" className="button" disabled={page <= 1 || isPaginationBusy} onClick={() => setPage(current => current - 1)}>Назад</button>
                 <span aria-live="polite">Страница {page} из {totalPages}</span>
-                <button type="button" className="button" disabled={page >= totalPages || isRefreshing} onClick={() => setPage(current => current + 1)}>Далее</button>
+                <button type="button" className="button" disabled={page >= totalPages || isPaginationBusy} onClick={() => setPage(current => current + 1)}>Далее</button>
               </nav>
             )}
           </div>

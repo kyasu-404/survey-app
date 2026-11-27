@@ -1,4 +1,4 @@
-import { answerLabel, answerCommentKey, formatSimpleAnswer, hasAnswerComment, matrixCellDefinition, readableValue } from "../../../shared/lib/answerValue";
+import { answerLabel, answerCommentKey, formatSimpleAnswer, hasAnswerComment, hasAnswerValue as isAnswered, matrixCellDefinition, readableValue } from "../../../shared/lib/answerValue";
 import { ORGANIZATION_QUESTION_TYPE } from "../../organization/model";
 import type { EducationOrganization } from "../../organization/types";
 import type { SurveyResponse } from "../types";
@@ -77,15 +77,6 @@ const MONTH_FORMAT = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "nu
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isAnswered(value: unknown, depth = 0): boolean {
-  if (depth > 32) return false;
-  if (value === null || typeof value === "undefined") return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.some(item => isAnswered(item, depth + 1));
-  if (typeof value === "object") return Object.values(value).some(item => isAnswered(item, depth + 1));
-  return true;
 }
 
 function formatNumber(value: number) {

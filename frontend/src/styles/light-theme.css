@@ -63,8 +63,9 @@
     border-inline-end-color: var(--theme-border);
   }
 
-  :root[data-theme="sand"] .sidebar .nav-link-active {
-    color: var(--theme-accent-strong);
+  :root[data-theme="sand"] .sidebar .nav-link.nav-link-active {
+    background: color-mix(in srgb, var(--theme-selected-background) 94%, var(--theme-accent-emphasis));
+    color: color-mix(in srgb, var(--theme-accent-strong) 60%, var(--theme-accent-emphasis));
     font-weight: 700;
   }
 

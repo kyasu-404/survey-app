@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createResponsesHtmlDocument, formatResponsesForTable, RESPONSE_DATE_KEY, type ResponsesTableRow } from "./responsesExport";
+import { createResponsesHtmlDocument, formatResponsesForTable, sortResponsesForTable, RESPONSE_DATE_KEY, type ResponsesTableRow } from "./responsesExport";
 
 // Older HTML style fixtures use display names as keys; production supplies explicit columns.
 function createTestHtmlDocument(input: { title: string; rows: ResponsesTableRow[]; generatedAt: Date }) {
@@ -10,6 +10,37 @@ function createTestHtmlDocument(input: { title: string; rows: ResponsesTableRow[
 }
 
 describe("responsesExport", () => {
+  it.each([
+    [{ type: "text" }, ["2", "10", ""], ["r2", "r1", "r3"]],
+    [{ type: "text", inputType: "number" }, ["10", 0, "  "], ["r2", "r1", "r3"]],
+    [{ type: "text", inputType: "date" }, ["2026-02-01", "2026-01-31", null], ["r2", "r1", "r3"]],
+    [{ type: "text", inputType: "datetime-local" }, ["2026-02-01T10:00", "2026-02-01T09:59", undefined], ["r2", "r1", "r3"]],
+    [{ type: "text", inputType: "time" }, ["12:00:01", "12:00", null], ["r2", "r1", "r3"]],
+    [{ type: "boolean", valueTrue: "yes", valueFalse: "no" }, ["yes", "no", null], ["r2", "r1", "r3"]],
+    [{ type: "rating" }, [10, 2, null], ["r2", "r1", "r3"]],
+    [{ type: "dropdown", choices: [{ value: "a", text: "Яблоко" }, { value: "z", text: "Абрикос" }] }, ["a", "z", []], ["r2", "r1", "r3"]],
+    [{ type: "file" }, [[{ name: "Яблоко.txt" }], [{ name: "Абрикос.txt" }], []], ["r2", "r1", "r3"]],
+    [{ type: "paneldynamic", templateElements: [{ type: "text", name: "child" }] }, [[{ child: "Я" }], [{ child: "А" }], [{}]], ["r2", "r1", "r3"]],
+    [{ type: "matrixdropdown" }, [{ row: { cell: "Я" } }, { row: { cell: "А" } }, { row: {} }], ["r2", "r1", "r3"]],
+    [{ type: "multipletext" }, [{ item: "Я" }, { item: "А" }, { item: "" }], ["r2", "r1", "r3"]],
+  ])("sorts %j using the schema and keeps empty values last", (question, values, expected) => {
+    const schema = { pages: [{ elements: [{ ...question, name: "q1", valueName: "saved" }] }] };
+    const responses = values.map((value, index) => ({
+      id: `r${index + 1}`, form_id: "f", created_at: "2026-01-01T00:00:00Z", data: { saved: value },
+    }));
+    const key = "answer:saved";
+    expect(sortResponsesForTable(responses, schema, { key, direction: "ascending" }).map(row => row.id)).toEqual(expected);
+    expect(sortResponsesForTable(responses, schema, { key, direction: "descending" }).map(row => row.id)).toEqual(["r1", "r2", "r3"]);
+    expect(responses.map(row => row.id)).toEqual(["r1", "r2", "r3"]);
+  });
+
+  it("compares response timestamps across months and preserves the order of equal values", () => {
+    const responses = ["2026-02-01T10:00:00.000002Z", "2026-02-01T10:00:00.000001Z", "2026-02-01T10:00:00.000001Z", "2026-01-31T12:00:00Z"]
+      .map((created_at, index) => ({ id: `r${index + 1}`, form_id: "f", created_at, data: {} }));
+    expect(sortResponsesForTable(responses, { pages: [] }, { key: RESPONSE_DATE_KEY, direction: "ascending" }).map(row => row.id))
+      .toEqual(["r4", "r2", "r3", "r1"]);
+  });
+
   it("keeps repeated page and section titles as blank separators with distinct identities and resets groups on each page", () => {
     const title = "<Раздел>";
     const table = formatResponsesForTable([

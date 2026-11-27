@@ -196,6 +196,20 @@
   border-color: #fcd34d;
 }
 
+.toast-action {
+  margin-inline-start: 12px;
+  padding: 4px 6px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-action[aria-disabled="true"] { opacity: .6; cursor: default; }
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

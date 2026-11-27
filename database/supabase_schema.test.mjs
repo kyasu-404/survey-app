@@ -619,6 +619,7 @@ test("review migrations and the bootstrap install identical function definitions
     "202611231600_form_closed_automation.sql",
     "202611232200_full_code_review_fixes.sql",
     "202611232230_review_followup.sql",
+    "202611271200_notification_cleanup.sql",
   ];
   const latest = new Map();
   for (const file of migrations) {
@@ -635,8 +636,17 @@ test("bootstrap has one atomic transaction and one canonical definition per func
   assert.equal([...schema.matchAll(/^commit;$/gim)].length, 1);
   assert.doesNotMatch(schema, /update public\.forms set schema = schema/i);
   const names = [...schema.matchAll(/create (?:or replace )?function public\.(\w+)\(/gi)].map(match => match[1]);
-  assert.equal(new Set(names).size, names.length, "Duplicate bootstrap function definitions");
+  const nonOverloadedNames = names.filter(name => name !== "list_notification_feed");
+  assert.equal(new Set(nonOverloadedNames).size, nonOverloadedNames.length, "Duplicate bootstrap function definitions");
+  assert.equal(names.length - nonOverloadedNames.length, 2, "Expected a legacy and a grouped notification feed");
   for (const name of ["list_missing_form_organizations", "list_missing_form_organizations_snapshot", "enqueue_mail_reminder_batch"]) {
     assert.doesNotMatch(schema, new RegExp(`function public\\.${name}\\(`, "i"));
   }
+});
+
+test("notification grouping migration and the bootstrap install the same overload and helpers", () => {
+  const migration = readFileSync(new URL("./migrations/202611271300_notification_response_groups.sql", import.meta.url), "utf8");
+  const definitions = [...migration.matchAll(/^create function ([\w.]+)\([\s\S]*?^\$\$;/gim)];
+  assert.equal(definitions.length, 3);
+  for (const [definition, name] of definitions) assert.ok(schema.includes(definition), name);
 });

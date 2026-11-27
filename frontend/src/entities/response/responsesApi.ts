@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { apiClient, publicApiClient, supabaseClient } from "../../shared/api/client";
 import { runRequest } from "../../shared/api/request";
+import { timelineBefore, type TimelineCursor } from "../../shared/api/timelinePage";
 
 export const RESPONSES_PAGE_SIZE = 50;
 export const MAX_CLIENT_RESPONSE_EXPORT = 10_000;
@@ -302,6 +303,28 @@ export async function fetchResponsesByForm(
     pageSize,
     totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
   };
+}
+
+/** Read the form in chronological batches without the size limit of the export endpoint. */
+export async function fetchResponsesForSorting(formId: string, signal?: AbortSignal): Promise<SurveyResponse[]> {
+  const responses: SurveyResponse[] = [];
+  let cursor: TimelineCursor | undefined;
+
+  while (true) {
+    signal?.throwIfAborted();
+    const { data, error } = await runRequest("responses.fetchForSorting", (requestSignal) => {
+      const query = apiClient.from("responses").select(SAFE_RESPONSE_LIST_COLUMNS).eq("form_id", formId);
+      if (cursor) query.or(timelineBefore(cursor));
+      return applyAbortSignal(query.order("created_at", { ascending: false }).order("id", { ascending: false }), requestSignal)
+        .limit(MAX_RESPONSES_PAGE_SIZE);
+    }, { signal, context: { formId } });
+
+    if (error) throw error;
+    const batch = (data ?? []) as SurveyResponse[];
+    responses.push(...batch);
+    if (batch.length < MAX_RESPONSES_PAGE_SIZE) return responses;
+    cursor = batch[batch.length - 1];
+  }
 }
 
 export async function fetchAllResponsesByForm(

@@ -158,6 +158,8 @@ STORAGE_CLEANUP_INTERVAL_HOURS=24
 STORAGE_CLEANUP_CHECK_INTERVAL_MS=3600000
 ```
 
+По тому же расписанию проверок mail-worker запускает очистку личных уведомлений. База данных обрабатывает записи ограниченными порциями и ждёт 24 часа после завершения очистки. Прочитанные уведомления удаляются через 90 дней после прочтения, вручную удалённые — через 7 дней. В журнале воркера доступны результат и число удалённых уведомлений.
+
 Переменная `SERVICE_ROLE_KEY` уже находится в стандартном `.env` Supabase. Overlay передаёт её воркеру внутри Docker-сети; не копируйте этот ключ во frontend и не публикуйте порт health-check воркера наружу.
 
 4. Из каталога `SUPABASE_DOCKER_DIR` пересоздайте Edge Runtime и запустите worker:
@@ -238,6 +240,8 @@ docker compose -f docker-compose.yml -f docker-compose.mail-worker.yml stop -t 1
 9. `202611231600_form_closed_automation.sql`
 10. `202611232200_full_code_review_fixes.sql`
 11. `202611232230_review_followup.sql`
+12. `202611271200_notification_cleanup.sql`
+13. `202611271300_notification_response_groups.sql`
 
 Применяйте файлы по одному с `psql -v ON_ERROR_STOP=1`. Перед запуском сервисов
 проверьте присутствие `public.notifications` в публикации `supabase_realtime`.

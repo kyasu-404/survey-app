@@ -31,5 +31,40 @@ export type Notification = {
   announcement: AnnouncementDetails | null;
 };
 
+type ResponseNotificationCategory = "response_received" | "response_updated";
+
+type ResponseGroupSummary = {
+  day: string;
+  count: number;
+  unread_count: number;
+};
+
+export type NotificationFeedItem = Notification & {
+  response_group?: ResponseGroupSummary | null;
+};
+
+export type GroupedResponseNotification = Notification & {
+  category: ResponseNotificationCategory;
+  form_id: string;
+  response_group: ResponseGroupSummary;
+};
+
+export type ResponseNotificationGroupKey = {
+  category: ResponseNotificationCategory;
+  formId: string;
+  day: string;
+};
+
+export function isGroupedResponseNotification(item: NotificationFeedItem): item is GroupedResponseNotification {
+  return (item.category === "response_received" || item.category === "response_updated")
+    && Boolean(item.form_id && item.response_group && item.response_group.count > 1);
+}
+
+export function notificationFeedItemKey(item: NotificationFeedItem) {
+  return item.response_group
+    ? `response-group:${item.category}:${item.form_id}:${item.response_group.day}`
+    : item.id;
+}
+
 export const notificationKey = (userId?: string) => ["notifications", userId] as const;
 export const notificationPreferencesKey = (userId?: string) => ["notification-preferences", userId] as const;

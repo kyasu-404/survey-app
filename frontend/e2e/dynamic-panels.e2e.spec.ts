@@ -33,7 +33,12 @@ test("dynamic panel records stay readable in answers, XLSX, HTML, print and stat
   await expect(cell).toHaveText(expected);
   await expect(cell).toHaveCSS("white-space", "pre-wrap");
   expect((await cell.boundingBox())!.height).toBeGreaterThan(200);
-  await expect(page.locator(".responses-table th")).toHaveText(["", "Дата ответа", "Сведения", "Кадры", "Сотрудники", "Примечание"]);
+  const expectedHeaders = ["Дата ответа", "Сведения", "Кадры", "Сотрудники", "Примечание"];
+  const liveHeaders = page.locator(".responses-table").getByRole("columnheader");
+  await expect(liveHeaders).toHaveCount(expectedHeaders.length + 1);
+  for (const [index, name] of expectedHeaders.entries()) {
+    await expect(liveHeaders.nth(index + 1)).toHaveAccessibleName(name);
+  }
   await page.screenshot({ path: testInfo.outputPath("dynamic-panel-answers.png"), fullPage: true });
   const xlsxDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать XLSX", exact: true }).click();
