@@ -41,7 +41,7 @@ test("preview keeps files local, allows required-file navigation and returns to 
   const scrollBefore = await scrollAtClick.evaluate(position => position.top);
   await scrollAtClick.dispose();
   expect(scrollBefore).toBeGreaterThan(0);
-  await expect(page.getByText("Открыт предпросмотр формы", { exact: true })).toHaveClass("toast toast-warning");
+  await expect(page.locator(".toast", { has: page.getByText("Открыт предпросмотр формы", { exact: true }) })).toHaveClass("toast toast-warning");
   await expect(page.locator(".survey-preview-toolbar").getByRole("button", { name: "Назад", exact: true })).toBeVisible();
 
   const chooser = page.waitForEvent("filechooser");
